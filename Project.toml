@@ -1,0 +1,13 @@
+name = "FastIsostasy"
+uuid = "80efc11e-3694-4407-a4bf-24e5955cde3d"
+authors = ["Jan Swierczek-Jereczek"]
+version = "0.1.0"
+
+[compat]
+julia = "1"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]
