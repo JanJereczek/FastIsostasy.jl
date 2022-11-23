@@ -1,1 +1,3 @@
 # FastIsostasy
+
+The vertical load applied to Earth's surface can vary over time, e.g. due to changes in ice-sheet volume. This leads to changes in the vertical displacement of the lithosphere lying over the asthenosphere. It represents an important control for ice sheet dynamics and coastline evolution. The present package performs the computation of this displacement based on a scheme described in [1]. It relies on FFT and allows a very fast computation.
