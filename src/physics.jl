@@ -21,17 +21,33 @@ Perform forward-stepping of isostasy models given:
 - `tools` some pre-computed tools.
 Formula (11) of Bueler et al. 2007.
 """
-function forwardstep_isostasy(
+@inline function forwardstep_isostasy(
     dt::T,
     U::Matrix{T},
     sigma_zz::Matrix{T},
     tools::IntegratorTools,
 ) where {T<:AbstractFloat}
 
-    num = tools.num_factor * (tools.forward_fft * U) + dt .* (tools.forward_fft * sigma_zz )
+    num = tools.num_factor .* (tools.forward_fft * U) + dt .* (tools.forward_fft * sigma_zz )
     return real.(tools.inverse_fft * ( num ./ tools.denum ))
 end
 
+@inline function forward_isostasy!(
+    t_vec::AbstractVector{T},
+    u3D::Array{T, 3},
+    sigma_zz::Matrix{T},
+    tools::IntegratorTools,
+) where {T}
+
+    for i in eachindex(t_vec)[2:end]
+        u3D[:, :, i] = forwardstep_isostasy(
+            t_vec[i]-t_vec[i-1],
+            u3D[:, :, i-1],
+            sigma_zz,
+            tools,
+        )
+    end
+end
 """
 
     init_integrator_tools(
@@ -78,11 +94,20 @@ function get_fourier_coeffs(
     d::DomainParams,
 )
     raw_coeffs = T.( (π/d.L) .* vcat(0:d.N/2, d.N/2-1:-1:1) )
-    x_coeffs, y_coeffs = meshgrid(raw_coeffs, raw_coeffs)
-    laplacian_coeffs = x_coeffs .^ 2 + y_coeffs .^ 2
+    # x_coeffs, y_coeffs = get_freq_coeffs(d.N, d.L), get_freq_coeffs(d.N, d.L)
+    x_coeffs, y_coeffs = raw_coeffs, raw_coeffs
+    X_coeffs, Y_coeffs = meshgrid(x_coeffs, y_coeffs)
+    laplacian_coeffs = X_coeffs .^ 2 + Y_coeffs .^ 2
     pseudodiff_coeffs = sqrt.(laplacian_coeffs)
     biharmonic_coeffs = laplacian_coeffs .^ 2
     return pseudodiff_coeffs, biharmonic_coeffs
+end
+
+function get_freq_coeffs(
+    N::Int,
+    L::T,
+) where {T<:AbstractFloat}
+    return fftfreq( N, L/(N*T(π)) )
 end
 
 """
@@ -103,8 +128,8 @@ function get_cranknicholson_factors(
     p::SolidEarthParams,
     c::PhysicalConstants,
 ) where {T<:AbstractFloat}
-    term1 = 2 * p.mantle_viscosity .* pseudodiff_coeffs
-    term2 = (dt/2) .* ( c.g .* p.rho_mantle .+ p.lithosphere_rigidity .* biharmonic_coeffs )
+    term1 = (2 * p.mantle_viscosity) .* pseudodiff_coeffs
+    term2 = (dt/2) .* ( p.rho_mantle * c.g .+ p.lithosphere_rigidity .* biharmonic_coeffs )
     num_factor = term1 - term2
     denum = term1 + term2
     return num_factor, denum

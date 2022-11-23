@@ -14,5 +14,9 @@ export init_domain
 export init_integrator_tools
 export meshgrid
 export forwardstep_isostasy
+export forward_isostasy!
+
+export DomainParams
+export PhysicalConstants
 
 end
