@@ -1,6 +1,6 @@
 module FastIsostasy
 
-using FFTW
+using FFTW, FastGaussQuadrature
 
 include("constants.jl")
 include("solidearth_params.jl")
