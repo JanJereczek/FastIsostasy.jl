@@ -1,6 +1,9 @@
 module FastIsostasy
 
-using FFTW, FastGaussQuadrature
+using FFTW
+using FastGaussQuadrature
+using LinearAlgebra
+using Interpolations
 
 include("constants.jl")
 include("solidearth_params.jl")
@@ -12,11 +15,11 @@ export init_physical_constants
 export init_solidearth_params
 export init_domain
 export init_integrator_tools
-export meshgrid
+export compute_elastic_response
 export forwardstep_isostasy
 export forward_isostasy!
 
-export DomainParams
+export ComputationDomain
 export PhysicalConstants
 
 end
