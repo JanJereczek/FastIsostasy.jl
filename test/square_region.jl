@@ -7,12 +7,12 @@ function mask_disc(X::Matrix{T}, Y::Matrix{T}, R::T) where {T<:AbstractFloat}
 end
 
 function generate_uniform_disc_load(
-    d::DomainParams,
+    Omega::ComputationDomain,
     c::PhysicalConstants,
     R::T,
     H::T,
 ) where {T<:AbstractFloat}
-    D = mask_disc(d.X, d.Y, R)
+    D = mask_disc(Omega.X, Omega.Y, R)
     return -D .* (c.rho_ice * c.g * H)
 end
 
@@ -26,25 +26,25 @@ timespan = T.([0, 1e3]) * T(c.seconds_per_year)     # (s)
 dt = T(1) * T(c.seconds_per_year)                   # (s)
 t_vec = timespan[1]:dt:timespan[2]                  # (s)
 
-L = T(2e6)              # half-length of the square domain (m)
-N = 2^8                 # number of cells on domain (1)
-d = init_domain(L, N)   # domain parameters
+L = T(2e6)                  # half-length of the square domain (m)
+N = 2^8                     # number of cells on domain (1)
+Omega = init_domain(L, N)   # domain parameters
 
-u3D = zeros( T, (size(d.X)..., length(t_vec)) )
+u3D = zeros( T, (size(Omega.X)..., length(t_vec)) )
 R = T(1000e3)
 H = T(1000)
 sigma_zz_zero = copy(u3D[:, :, 1])   # first, test a zero-load field (N/m^2)
-sigma_zz_disc = generate_uniform_disc_load(d, c, R, H)
+sigma_zz_disc = generate_uniform_disc_load(Omega, c, R, H)
 
-tools = init_integrator_tools(dt, u3D[:, :, 1], d, p, c)
-@time forward_isostasy!(t_vec, u3D, sigma_zz_disc, tools)
+tools = init_integrator_tools(dt, Omega, p, c)
+@time forward_isostasy!(t_vec, u3D, sigma_zz_disc, tools, c)
 
 ncols = 2
 fig = Figure(resolution=(1600, 900))
 ax1 = Axis(fig[1, 1])
 ax2 = Axis3(fig[1, 2])
 hm = heatmap!(ax1, sigma_zz_disc)
-sf = surface!(ax2, d.X, d.Y, u3D[:,:,end])
+sf = surface!(ax2, Omega.X, Omega.Y, u3D[:,:,end])
 Colorbar(
     fig[2,1],
     hm,
