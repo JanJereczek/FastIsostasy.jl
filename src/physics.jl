@@ -1,4 +1,5 @@
 struct IntegratorTools{T<:AbstractFloat}
+    loadresponse::Matrix{T}
     fourier_loadresponse::Matrix{Complex{T}}
     num_factor::Matrix{T}
     denum::Matrix{T}
@@ -18,7 +19,7 @@ end
 Return a `struct` containing integrator tools to perform forward-stepping. Takes a 2D
 field `X`, domain parameters `Omega` and solid-Earth parameters `p` as input.
 """
-function init_integrator_tools(
+@inline function init_integrator_tools(
     dt::T,
     Omega::ComputationDomain,
     p::SolidEarthParams,
@@ -37,8 +38,7 @@ function init_integrator_tools(
         c,
     )
     p1, p2 = plan_twoway_fft(Omega.X)
-    fourier_loadresponse = p1 * loadresponse
-    return IntegratorTools(fourier_loadresponse, num_factor, denum, p1, p2)
+    return IntegratorTools(loadresponse, p1 * loadresponse, num_factor, denum, p1, p2)
 end
 
 """
@@ -50,11 +50,12 @@ end
         tools::IntegratorTools,
     ) where {T<:AbstractFloat}
 
-Perform forward-stepping of isostasy models given:
+Perform forward-stepping of isostasy model given:
 - `dt` the time step in seconds
 - `U` the current vertical displacement
 - `sigma_zz` the current vertical load
-- `tools` some pre-computed tools.
+- `tools` some pre-computed tools
+- `c` the physical constants of the problem.
 Formula (11) of Bueler et al. 2007.
 """
 @inline function forwardstep_isostasy(
@@ -71,6 +72,26 @@ Formula (11) of Bueler et al. 2007.
     return u_viscous + u_elastic
 end
 
+function apply_bc(u::Matrix{T}) where {T<:AbstractFloat}
+    return u .- T( ( sum(u[1,:]) + sum(u[:,1]) ) / sum(size(u)) )
+end
+
+"""
+
+    function forward_isostasy!(
+        dt::T,
+        U::Matrix{T},
+        sigma_zz::Matrix{T},
+        tools::IntegratorTools,
+    ) where {T<:AbstractFloat}
+
+Integrates isostasy model given:
+- `t_vec` the time vector in seconds
+- `U` the current vertical displacement
+- `sigma_zz` the current vertical load
+- `tools` some pre-computed tools
+- `c` the physical constants of the problem.
+"""
 @inline function forward_isostasy!(
     t_vec::AbstractVector{T},
     u3D::Array{T, 3},
@@ -105,7 +126,6 @@ Return coefficients resulting from transforming PDE into Fourier space.
     Omega::ComputationDomain,
 )
     raw_coeffs = T.( (π/Omega.L) .* vcat(0:Omega.N/2, Omega.N/2-1:-1:1) )
-    # x_coeffs, y_coeffs = get_freq_coeffs(Omega.N, Omega.L), get_freq_coeffs(Omega.N, Omega.L)
     x_coeffs, y_coeffs = raw_coeffs, raw_coeffs
     X_coeffs, Y_coeffs = meshgrid(x_coeffs, y_coeffs)
     laplacian_coeffs = X_coeffs .^ 2 + Y_coeffs .^ 2
@@ -113,6 +133,8 @@ Return coefficients resulting from transforming PDE into Fourier space.
     biharmonic_coeffs = laplacian_coeffs .^ 2
     return pseudodiff_coeffs, biharmonic_coeffs
 end
+
+# TODO bloody tweak that they do!
 
 function get_freq_coeffs(
     N::Int,
@@ -169,6 +191,7 @@ Use pre-computed integration tools to accelerate computation.
     tools::IntegratorTools,
     load::Matrix{T},
 ) where {T<:AbstractFloat}
-    fourier_u_elastic = tools.fourier_loadresponse * ( tools.forward_fft * load )
+    # Note: here a element-wise multiplication is applied!
+    fourier_u_elastic = tools.fourier_loadresponse .* ( tools.forward_fft * load )
     return real.( tools.inverse_fft * ( fourier_u_elastic ) )
 end
