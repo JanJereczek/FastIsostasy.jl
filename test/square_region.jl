@@ -1,20 +1,10 @@
 push!(LOAD_PATH, "../")
 using FastIsostasy
 using CairoMakie
-
-function mask_disc(X::Matrix{T}, Y::Matrix{T}, R::T) where {T<:AbstractFloat}
-    return T.(X .^ 2 + Y .^ 2 .< R^2)
-end
-
-function generate_uniform_disc_load(
-    Omega::ComputationDomain,
-    c::PhysicalConstants,
-    R::T,
-    H::T,
-) where {T<:AbstractFloat}
-    D = mask_disc(Omega.X, Omega.Y, R)
-    return -D .* (c.rho_ice * c.g * H)
-end
+using Test
+using DelimitedFiles
+using SpecialFunctions
+include("helpers.jl")
 
 # function main()
 T = Float32
@@ -26,17 +16,45 @@ timespan = T.([0, 1e3]) * T(c.seconds_per_year)     # (s)
 dt = T(1) * T(c.seconds_per_year)                   # (s)
 t_vec = timespan[1]:dt:timespan[2]                  # (s)
 
-L = T(2e6)                  # half-length of the square domain (m)
-N = 2^8                     # number of cells on domain (1)
+L = T(2000e3)               # half-length of the square domain (m)
+N = 2^6                     # number of cells on domain (1)
 Omega = init_domain(L, N)   # domain parameters
 
 u3D = zeros( T, (size(Omega.X)..., length(t_vec)) )
-R = T(1000e3)
-H = T(1000)
+R = T(1000e3)               # ice disc radius (m)
+H = T(1000)                 # ice disc thickness (m)
+
+@testset "analytic solution" begin
+    sol = analytic_solution(T(0), T(50000 * c.seconds_per_year), c, p, H, R)
+    @test isapprox( sol, -1000*c.rho_ice/p.rho_mantle, rtol=T(1e-2) )
+end
+
 sigma_zz_zero = copy(u3D[:, :, 1])   # first, test a zero-load field (N/m^2)
 sigma_zz_disc = generate_uniform_disc_load(Omega, c, R, H)
-
 tools = init_integrator_tools(dt, Omega, p, c)
+
+@testset "symmetry of load response" begin
+    @test isapprox( tools.loadresponse, tools.loadresponse', rtol = T(1e-6) )
+    @test isapprox( tools.loadresponse, reverse(tools.loadresponse, dims=1), rtol = T(1e-6) )
+    @test isapprox( tools.loadresponse, reverse(tools.loadresponse, dims=2), rtol = T(1e-6) )
+end
+
+@testset "similarity to matlab code" begin
+    matlab_integrated_green = readdlm("data/integrated_green.txt", ',', T)
+    matlab_fft_integrated_green = readdlm("data/fft_integrated_green.txt", ',', Complex{T})
+
+    approx_green = isapprox.(tools.loadresponse, matlab_integrated_green, rtol=T(5e-2))
+    @test sum(approx_green) == prod(size(tools.loadresponse) )
+
+    # @test sum( isapprox.( tools.fourier_loadresponse, matlab_fft_integrated_green, rtol = T(5e-2) ) ) == prod(size(tools.loadresponse))
+end
+
+@testset "homogenous response to zero load" begin
+    forward_isostasy!(t_vec, u3D, sigma_zz_zero, tools, c)
+    @test sum( isapprox.(u3D, T(0)) ) == prod(size(u3D))
+end
+
+
 @time forward_isostasy!(t_vec, u3D, sigma_zz_disc, tools, c)
 
 ncols = 2
@@ -59,7 +77,7 @@ Colorbar(
     vertical = false,
     width = Relative(0.8),
 )
-save("example_deformation.png", fig)
+save("plots/example_deformation.png", fig)
 # end
 
 # main()
