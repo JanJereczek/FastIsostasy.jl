@@ -187,8 +187,8 @@ function Quad2D(
     return sum
 end
 
-function Quad1D(f::Function, n::Int, x1::T, x2::T) where {T<:AbstractFloat}
-    x, w = gausslegendre( n )
+function quadrature1D(f::Function, n::Int, x1::T, x2::T) where {T<:AbstractFloat}
+    x, w = get_quad_coeffs(T, n)
     m, p = get_lin_transform_2_norm(x1, x2)
     sum = 0
     for i=1:n
