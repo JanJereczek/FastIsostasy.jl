@@ -4,6 +4,7 @@ using FFTW
 using FastGaussQuadrature
 using LinearAlgebra
 using Interpolations
+using DSP: conv
 
 include("constants.jl")
 include("solidearth_params.jl")
@@ -16,6 +17,7 @@ export init_solidearth_params
 export init_domain
 export init_integrator_tools
 export quadrature1D
+export meshgrid
 export compute_elastic_response
 export forwardstep_isostasy
 export forward_isostasy!
