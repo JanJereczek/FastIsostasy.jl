@@ -6,32 +6,35 @@ Return a 2D meshgrid spanned by `x, y`.
 """
 function meshgrid(x::AbstractVector{T}, y::AbstractVector{T}) where {T<:AbstractFloat}
     one_x, one_y = ones(T, length(x)), ones(T, length(y))
-    return one_y * x', reverse((one_x * y')', dims=1)
+    return one_y * x', (one_x * y')'
 end
 
 """
 
-    init_domain(L::AbstractFloat, N::Int)
+    init_domain(L::AbstractFloat, n::Int)
 
-Initialize a square computational domain with length `2*L` and `N^2` grid cells.
+Initialize a square computational domain with length `2*L` and `2^n+1` grid cells.
 """
-function init_domain(L::T, N::Int) where {T<:AbstractFloat}
+function init_domain(L::T, n::Int) where {T<:AbstractFloat}
+    N = 2^n+1
+    N2 = Int(floor(N/2))
     h = T(2*L) / N
     x = collect(-L+h/2:h:L-h/2)
     X, Y = meshgrid(x, x)
     distance, loadresponse_coeffs = get_loadresponse_coeffs(T)
     loadresponse_matrix, loadresponse_function = build_loadresponse_matrix(X, Y, distance, loadresponse_coeffs)
-    return ComputationDomain(L, N, h, x, X, Y, loadresponse_matrix, loadresponse_function)
+    return ComputationDomain(L, N, N2, h, x, X, Y, loadresponse_matrix, loadresponse_function)
 end
 
 struct ComputationDomain{T<:AbstractFloat}
     L::T
     N::Int
+    N2::Int
     h::T
     x::Vector{T}
-    X::Matrix{T}
-    Y::Matrix{T}
-    loadresponse_matrix::Matrix{T}
+    X::AbstractMatrix{T}
+    Y::AbstractMatrix{T}
+    loadresponse_matrix::AbstractMatrix{T}
     loadresponse_function::Function
 end
 
@@ -41,11 +44,12 @@ end
 
 function get_loadresponse_coeffs(T::Type)
     # Earth's radius
-    a = 6.371e6
+    a = 6.371e6 # equator
+    a = 6.357e6 # pole
 
     # Angles of table A3 of
     # Deformation of the Earth by surface Loads, Farrell 1972
-    θ = [0.0001, 0.001, 0.01, 0.02, 0.03, 0.04, 0.06, 0.08, 0.1,
+    θ = [0.0, 0.0001, 0.001, 0.01, 0.02, 0.03, 0.04, 0.06, 0.08, 0.1,
          0.16,   0.2,   0.25, 0.3,  0.4,  0.5,  0.6,  0.8,  1.0,
          1.2,    1.6,   2.0,  2.5,  3.0,  4.0,  5.0,  6.0,  7.0,
          8.0,    9.0,   10.0, 12.0, 16.0, 20.0, 25.0, 30.0, 40.0,
@@ -91,8 +95,8 @@ is subsequently transformed back into the time domain.
 Use pre-computed integration tools to accelerate computation.
 """
 function build_loadresponse_matrix(
-    X::Matrix{T},
-    Y::Matrix{T},
+    X::AbstractMatrix{T},
+    Y::AbstractMatrix{T},
     distance::Vector{T},
     loadresponse_coeffs::Vector{T},
 ) where {T<:AbstractFloat}
@@ -140,20 +144,20 @@ function get_integrated_loadresponse(
     h = Omega.h
     N = Omega.N
     integrated_loadresponse = similar(Omega.X)
-    Nx2 = Int(N/2)
-    Ny2 = Int(N/2)
+    Nx2 = Int(floor(N/2))
+    Ny2 = Int(floor(N/2))
 
     @inline for i = 1:N, j = 1:N
         p = i - Nx2 - 1
         q = j - Ny2 - 1
-        integrated_loadresponse[i, j] = Quad2D(
+        integrated_loadresponse[i, j] = quadrature2D(
             Omega.loadresponse_function,
             quad_support,
             quad_coeffs,
-            p*h,
-            p*h+h,
-            q*h,
-            q*h+h,
+            p*h-h/2,
+            p*h+h/2,
+            q*h-h/2,
+            q*h+h/2,
         )
     end
     return integrated_loadresponse
@@ -164,7 +168,7 @@ function get_quad_coeffs(T::Type, n::Int)
     return T.(x), T.(w)
 end
 
-function Quad2D(
+function quadrature2D(
     f::Function,
     x::Vector{T},
     w::Vector{T},
