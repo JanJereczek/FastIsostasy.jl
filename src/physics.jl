@@ -1,8 +1,8 @@
 struct IntegratorTools{T<:AbstractFloat}
-    loadresponse::Matrix{T}
-    fourier_loadresponse::Matrix{Complex{T}}
-    num_factor::Matrix{T}
-    denum::Matrix{T}
+    loadresponse::AbstractMatrix{T}
+    fourier_loadresponse::AbstractMatrix{Complex{T}}
+    num_factor::AbstractMatrix{T}
+    denum::AbstractMatrix{T}
     forward_fft::FFTW.FFTWPlan
     inverse_fft::AbstractFFTs.ScaledPlan
 end
@@ -11,7 +11,7 @@ end
 
     init_integrator_tools(
         dt::T,
-        X::Matrix{T},
+        X::AbstractMatrix{T},
         Omega::ComputationDomain,
         p::SolidEarthParams,
     ) where {T<:AbstractFloat}
@@ -31,6 +31,7 @@ field `X`, domain parameters `Omega` and solid-Earth parameters `p` as input.
     loadresponse = get_integrated_loadresponse(Omega, quad_support, quad_coeffs)
     pseudodiff_coeffs, biharmonic_coeffs = get_fourier_coeffs(T, Omega)
     num_factor, denum = get_cranknicholson_factors(
+        Omega,
         dt,
         pseudodiff_coeffs,
         biharmonic_coeffs,
@@ -45,8 +46,8 @@ end
 
     function forwardstep_isostasy(
         dt::T,
-        U::Matrix{T},
-        sigma_zz::Matrix{T},
+        U::AbstractMatrix{T},
+        sigma_zz::AbstractMatrix{T},
         tools::IntegratorTools,
     ) where {T<:AbstractFloat}
 
@@ -59,20 +60,27 @@ Perform forward-stepping of isostasy model given:
 Formula (11) of Bueler et al. 2007.
 """
 @inline function forwardstep_isostasy(
+    Omega::ComputationDomain,
     dt::T,
-    U::Matrix{T},
-    sigma_zz::Matrix{T},
+    u_elastic::AbstractMatrix{T},
+    u_viscous::AbstractMatrix{T},
+    sigma_zz::AbstractMatrix{T},
     tools::IntegratorTools,
     c::PhysicalConstants,
 ) where {T<:AbstractFloat}
 
-    num = tools.num_factor .* (tools.forward_fft * U) + dt .* (tools.forward_fft * sigma_zz )
-    u_viscous = real.(tools.inverse_fft * ( num ./ tools.denum ))
-    u_elastic = compute_elastic_response(tools, sigma_zz ./ c.g )
-    return u_viscous + u_elastic
-end
+    # load Ψ is defined as mass per surface area --> Ψ = - σ_zz / g
+    # because σ_zz = rho_ice * g * H
+    u_elastic_next = compute_elastic_response(Omega, tools, -sigma_zz ./ c.g )
 
-function apply_bc(u::Matrix{T}) where {T<:AbstractFloat}
+    # TODO FFT the load at t = tn + Δt / 2 giving ( hat_σ_zz )_pq
+    num = tools.num_factor .* (tools.forward_fft * u_viscous) + ( tools.forward_fft * (dt .*sigma_zz) )
+    u_viscous_next = real.(tools.inverse_fft * ( num ./ tools.denum ))   # FIXME should be symmetric
+    return u_elastic_next, apply_bc(u_viscous_next)
+end
+# TODO make non-allocating version of this and combine with iterator.
+
+function apply_bc(u::AbstractMatrix{T}) where {T<:AbstractFloat}
     return u .- T( ( sum(u[1,:]) + sum(u[:,1]) ) / sum(size(u)) )
 end
 
@@ -80,8 +88,8 @@ end
 
     function forward_isostasy!(
         dt::T,
-        U::Matrix{T},
-        sigma_zz::Matrix{T},
+        U::AbstractMatrix{T},
+        sigma_zz::AbstractMatrix{T},
         tools::IntegratorTools,
     ) where {T<:AbstractFloat}
 
@@ -93,24 +101,27 @@ Integrates isostasy model given:
 - `c` the physical constants of the problem.
 """
 @inline function forward_isostasy!(
+    Omega::ComputationDomain,
     t_vec::AbstractVector{T},
-    u3D::Array{T, 3},
-    sigma_zz::Matrix{T},
+    u3D_elastic::Array{T, 3},
+    u3D_viscous::Array{T, 3},
+    sigma_zz::AbstractMatrix{T},
     tools::IntegratorTools,
     c::PhysicalConstants,
 ) where {T}
 
     for i in eachindex(t_vec)[2:end]
-        u3D[:, :, i] = forwardstep_isostasy(
+        u3D_elastic[:, :, i], u3D_viscous[:, :, i] = forwardstep_isostasy(
+            Omega,
             t_vec[i]-t_vec[i-1],
-            u3D[:, :, i-1],
+            u3D_elastic[:, :, i-1],
+            u3D_viscous[:, :, i-1],
             sigma_zz,
             tools,
             c,
         )
     end
 end
-
 
 """
 
@@ -125,7 +136,9 @@ Return coefficients resulting from transforming PDE into Fourier space.
     T::Type,
     Omega::ComputationDomain,
 )
-    raw_coeffs = T.( (π/Omega.L) .* vcat(0:Omega.N/2, Omega.N/2-1:-1:1) )
+    mu = T(π / Omega.L)
+    raw_coeffs = mu .* T.( vcat(0:Omega.N2, Omega.N2-1:-1:0) )
+    # raw_coeffs = T.( fftfreq( Omega.N, 2*Omega.L/Omega.N) )
     x_coeffs, y_coeffs = raw_coeffs, raw_coeffs
     X_coeffs, Y_coeffs = meshgrid(x_coeffs, y_coeffs)
     laplacian_coeffs = X_coeffs .^ 2 + Y_coeffs .^ 2
@@ -146,6 +159,7 @@ end
 """
 
     get_cranknicholson_factors(
+        Omega::ComputationDomain,
         dt::T,
         pseudodiff_coeffs,
         biharmonic_coeffs,
@@ -155,14 +169,17 @@ end
 Return two terms arising in the Crank-Nicholson scheme when applied to thepresent case.
 """
 function get_cranknicholson_factors(
+    Omega::ComputationDomain,
     dt::T,
-    pseudodiff_coeffs::Matrix{T},
-    biharmonic_coeffs::Matrix{T},
+    pseudodiff_coeffs::AbstractMatrix{T},
+    biharmonic_coeffs::AbstractMatrix{T},
     p::SolidEarthParams,
     c::PhysicalConstants,
 ) where {T<:AbstractFloat}
+    # mu already included in differential coeffs
+    beta = ( p.rho_mantle * c.g .+ p.lithosphere_rigidity .* biharmonic_coeffs )
     term1 = (2 * p.mantle_viscosity) .* pseudodiff_coeffs
-    term2 = (dt/2) .* ( p.rho_mantle * c.g .+ p.lithosphere_rigidity .* biharmonic_coeffs )
+    term2 = (dt/2) .* beta
     num_factor = term1 - term2
     denum = term1 + term2
     return num_factor, denum
@@ -170,17 +187,17 @@ end
 
 """
 
-    plan_twoway_fft(X::Matrix{T}) where {T<:AbstractFloat}
+    plan_twoway_fft(X::AbstractMatrix{T}) where {T<:AbstractFloat}
 
 Return forward-FFT and inverse-FFT plan to apply on array with same dimensions as `X`.
 """
-function plan_twoway_fft(X::Matrix{T}) where {T<:AbstractFloat}
+function plan_twoway_fft(X::AbstractMatrix{T}) where {T<:AbstractFloat}
     return plan_fft(X), plan_ifft(X)
 end
 
 """
 
-    compute_elastic_response(tools::IntegratorTools, load::Matrix{T})
+    compute_elastic_response(tools::IntegratorTools, load::AbstractMatrix{T})
 
 Compute the elastic response of the solid Earth by convoluting the load with the
 Green's function (elements obtained from Farell 1972). In the Fourier space, this
@@ -188,8 +205,16 @@ corresponds to a product which is subsequently transformed back into the time do
 Use pre-computed integration tools to accelerate computation.
 """
 @inline function compute_elastic_response(
+    Omega::ComputationDomain,
     tools::IntegratorTools,
-    load::Matrix{T},
+    load::AbstractMatrix{T},
+) where {T<:AbstractFloat}
+    return conv(load, tools.loadresponse)[Omega.N2+1:end-Omega.N2, Omega.N2+1:end-Omega.N2]
+end
+
+@inline function fft_compute_elastic_response(
+    tools::IntegratorTools,
+    load::AbstractMatrix{T},
 ) where {T<:AbstractFloat}
     # Note: here a element-wise multiplication is applied!
     fourier_u_elastic = tools.fourier_loadresponse .* ( tools.forward_fft * load )
