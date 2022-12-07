@@ -13,22 +13,39 @@ function generate_uniform_disc_load(
     return -D .* (c.rho_ice * c.g * H)
 end
 
-function analytic_solution(
+@inline function analytic_solution(
     r::T,
     t::T,
     c::PhysicalConstants,
     p::SolidEarthParams,
     H0::T,
-    R0::T;
-    n_quad_support=10_000_000::Int,
+    R0::T,
+    domains::Vector{T};
+    n_quad_support=1_000::Int,
 ) where {T<:AbstractFloat}
     scaling = c.rho_ice * c.g * H0 * R0
-    integrand_rt(kappa) = analytic_integrand(kappa, r, t, c, p, R0)
-    # lines(0:0.01:1, integrand_rt.(0f0:1f-2:1f0))
-    return scaling .* quadrature1D( integrand_rt, n_quad_support, T(0), T(1) )
+    if t == T(Inf)
+        equilibrium_integrand_r(kappa) = equilibrium_integrand(kappa, r, c, p, R0)
+        return scaling .* looped_quadrature1D( equilibrium_integrand_r, domains, n_quad_support )
+    else
+        transient_integrand_r(kappa) = analytic_integrand(kappa, r, t, c, p, R0)
+        return scaling .* looped_quadrature1D( transient_integrand_r, domains, n_quad_support )
+    end
 end
 
-function analytic_integrand(
+function looped_quadrature1D( 
+    f::Function,
+    domains::Vector{T},
+    n::Int,
+) where{T<:Real}
+    integral = T(0)
+    for i in eachindex(domains)[1:end-1]
+        integral += quadrature1D( f, n, domains[i], domains[i+1] )
+    end
+    return integral
+end
+
+@inline function analytic_integrand(
     kappa::T,
     r::T,
     t::T,
@@ -37,7 +54,21 @@ function analytic_integrand(
     R0::T,
 ) where {T<:AbstractFloat}
     beta = p.rho_mantle * c.g + p.lithosphere_rigidity * kappa ^ 4
-    j1 = besselj1(kappa * R0)
     j0 = besselj0(kappa * r)
+    j1 = besselj1(kappa * R0)
     return (exp(-beta*t/(2*p.mantle_viscosity*kappa))-1) * j0 * j1 / beta
+end
+
+@inline function equilibrium_integrand(
+    kappa::T,
+    r::T,
+    c::PhysicalConstants,
+    p::SolidEarthParams,
+    R0::T,
+) where {T<:AbstractFloat}
+    beta = p.rho_mantle * c.g + p.lithosphere_rigidity * kappa ^ 4
+    j0 = besselj0(kappa * r)
+    j1 = besselj1(kappa * R0)
+    # integrand of inverse Hankel transform when t-->infty
+    return - j0 * j1 / beta
 end

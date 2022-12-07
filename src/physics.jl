@@ -75,10 +75,9 @@ Formula (11) of Bueler et al. 2007.
 
     # TODO FFT the load at t = tn + Δt / 2 giving ( hat_σ_zz )_pq
     num = tools.num_factor .* (tools.forward_fft * u_viscous) + ( tools.forward_fft * (dt .*sigma_zz) )
-    u_viscous_next = real.(tools.inverse_fft * ( num ./ tools.denum ))   # FIXME should be symmetric
+    u_viscous_next = real.(tools.inverse_fft * ( num ./ tools.denum ))
     return u_elastic_next, apply_bc(u_viscous_next)
 end
-# TODO make non-allocating version of this and combine with iterator.
 
 function apply_bc(u::AbstractMatrix{T}) where {T<:AbstractFloat}
     return u .- T( ( sum(u[1,:]) + sum(u[:,1]) ) / sum(size(u)) )
@@ -147,8 +146,6 @@ Return coefficients resulting from transforming PDE into Fourier space.
     return pseudodiff_coeffs, biharmonic_coeffs
 end
 
-# TODO bloody tweak that they do!
-
 function get_freq_coeffs(
     N::Int,
     L::T,
@@ -178,7 +175,7 @@ function get_cranknicholson_factors(
 ) where {T<:AbstractFloat}
     # mu already included in differential coeffs
     beta = ( p.rho_mantle * c.g .+ p.lithosphere_rigidity .* biharmonic_coeffs )
-    term1 = (2 * p.mantle_viscosity) .* pseudodiff_coeffs
+    term1 = (2 * p.mantle_viscosity) .* pseudodiff_coeffs # .* p.visc_scaling
     term2 = (dt/2) .* beta
     num_factor = term1 - term2
     denum = term1 + term2
