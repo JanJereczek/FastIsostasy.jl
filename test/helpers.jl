@@ -21,7 +21,7 @@ end
     H0::T,
     R0::T,
     domains::Vector{T};
-    n_quad_support=1_000::Int,
+    n_quad_support=5::Int,
 ) where {T<:AbstractFloat}
     scaling = c.rho_ice * c.g * H0 * R0
     if t == T(Inf)
@@ -53,10 +53,10 @@ end
     p::SolidEarthParams,
     R0::T,
 ) where {T<:AbstractFloat}
-    beta = p.rho_mantle * c.g + p.lithosphere_rigidity * kappa ^ 4
+    beta = mean(p.mantle_density) * c.g + mean(p.lithosphere_rigidity) * kappa ^ 4
     j0 = besselj0(kappa * r)
     j1 = besselj1(kappa * R0)
-    return (exp(-beta*t/(2*p.mantle_viscosity*kappa))-1) * j0 * j1 / beta
+    return (exp(-beta*t/(2*mean(p.halfspace_viscosity)*kappa))-1) * j0 * j1 / beta
 end
 
 @inline function equilibrium_integrand(
@@ -66,9 +66,13 @@ end
     p::SolidEarthParams,
     R0::T,
 ) where {T<:AbstractFloat}
-    beta = p.rho_mantle * c.g + p.lithosphere_rigidity * kappa ^ 4
+    beta = mean(p.mantle_density) * c.g + mean(p.lithosphere_rigidity) * kappa ^ 4
     j0 = besselj0(kappa * r)
     j1 = besselj1(kappa * R0)
     # integrand of inverse Hankel transform when t-->infty
     return - j0 * j1 / beta
+end
+
+function the_conv(A, B)
+    return real.(ifft( fft(A) .* fft(B) ))
 end
