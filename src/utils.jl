@@ -16,14 +16,30 @@ end
 Initialize a square computational domain with length `2*L` and `2^n+1` grid cells.
 """
 function init_domain(L::T, n::Int) where {T<:AbstractFloat}
-    N = 2^n+1
+    N = 2^n
+#     N = 2^n+1
     N2 = Int(floor(N/2))
     h = T(2*L) / N
-    x = collect(-L+h/2:h:L-h/2)
+    x = collect(-L+h:h:L)
+#     x = collect(-L+h/2:h:L-h/2)
     X, Y = meshgrid(x, x)
     distance, loadresponse_coeffs = get_loadresponse_coeffs(T)
     loadresponse_matrix, loadresponse_function = build_loadresponse_matrix(X, Y, distance, loadresponse_coeffs)
-    return ComputationDomain(L, N, N2, h, x, X, Y, loadresponse_matrix, loadresponse_function)
+    pseudodiff_coeffs, biharmonic_coeffs = get_fourier_coeffs(L, N2)
+
+    return ComputationDomain(
+        L,
+        N,
+        N2,
+        h,
+        x,
+        X,
+        Y,
+        loadresponse_matrix,
+        loadresponse_function,
+        pseudodiff_coeffs,
+        biharmonic_coeffs,
+    )
 end
 
 struct ComputationDomain{T<:AbstractFloat}
@@ -36,8 +52,183 @@ struct ComputationDomain{T<:AbstractFloat}
     Y::AbstractMatrix{T}
     loadresponse_matrix::AbstractMatrix{T}
     loadresponse_function::Function
+    pseudodiff_coeffs::AbstractMatrix{T}
+    biharmonic_coeffs::AbstractMatrix{T}
 end
 
+@inline function get_fourier_coeffs(
+    L::T,
+    N2::Int,
+) where {T<:Real}
+    mu = T(π / L)
+    raw_coeffs = mu .* T.( vcat(0:N2, N2-1:-1:1) )
+    x_coeffs, y_coeffs = raw_coeffs, raw_coeffs
+    X_coeffs, Y_coeffs = meshgrid(x_coeffs, y_coeffs)
+    laplacian_coeffs = X_coeffs .^ 2 + Y_coeffs .^ 2
+    pseudodiff_coeffs = sqrt.(laplacian_coeffs)
+    biharmonic_coeffs = laplacian_coeffs .^ 2
+    return pseudodiff_coeffs, biharmonic_coeffs
+end
+#####################################################
+############### Physical constants ##################
+#####################################################
+
+g = 9.81                                    # m/s^2
+seconds_per_year = 60 * 60 * 24 * 365       # s
+rho_ice = 0.910e3                           # kg/m^3
+
+function init_physical_constants(T::Type)
+    return PhysicalConstants(T(g), T(seconds_per_year), T(rho_ice))
+end
+
+struct PhysicalConstants{T<:AbstractFloat}
+    g::T
+    seconds_per_year::T
+    rho_ice::T
+end
+
+#####################################################
+############# Solid Earth parameters ################
+#####################################################
+
+mantle_density = 3.3e3              # kg/m^3
+lithosphere_rigidity = 5e24         # N*m
+halfspace_viscosity = 1e21          # Pa*s (Ivins 2022, Fig 12 WAIS)
+channel_viscosity = 1e19            # Pa*s (Ivins 2022, Fig 10 WAIS)
+channel_begin = 88e3                # 88 km: beginning of asthenosphere (Bueler 2007).
+halfspace_begin = 400e3             # 400 km: beginning of homogenous half-space (Ivins 2022, Fig 12).
+
+# function init_solidearth_params(
+#     T::Type,
+#     Omega::ComputationDomain;
+#     lithosphere_rigidity=fill(T(lithosphere_rigidity), Omega.N, Omega.N),
+#     mantle_density=fill(T(mantle_density), Omega.N, Omega.N),
+#     halfspace_viscosity=fill(T(halfspace_viscosity), Omega.N, Omega.N),
+# )
+#     return SolidEarthParams(lithosphere_rigidity, mantle_density, halfspace_viscosity)
+# end
+
+function init_solidearth_params(
+    T::Type,
+    Omega::ComputationDomain;
+    lithosphere_rigidity = fill(T(lithosphere_rigidity), Omega.N, Omega.N),
+    mantle_density = fill(T(mantle_density), Omega.N, Omega.N),
+    channel_viscosity = fill(T(channel_viscosity), Omega.N, Omega.N),
+    halfspace_viscosity = fill(T(halfspace_viscosity), Omega.N, Omega.N),
+    channel_begin = fill(T(channel_begin), Omega.N, Omega.N),
+    halfspace_begin = fill(T(halfspace_begin), Omega.N, Omega.N),
+)
+
+    channel_thickness = halfspace_begin - channel_begin
+    viscosity_ratio = get_viscosity_ratio(channel_viscosity, halfspace_viscosity)
+    viscosity_scaling = three_layer_scaling.(Omega.pseudodiff_coeffs, viscosity_ratio, channel_thickness)
+
+    return SolidEarthParams(
+        lithosphere_rigidity,
+        mantle_density,
+        channel_viscosity,
+        halfspace_viscosity,
+        viscosity_ratio,
+        viscosity_scaling,
+        channel_begin,
+        halfspace_begin,
+        channel_thickness,
+    )
+end
+
+# struct SolidEarthParams{T<:AbstractFloat}
+#     mantle_density::AbstractMatrix{T}
+#     lithosphere_rigidity::AbstractMatrix{T}
+#     halfspace_viscosity::AbstractMatrix{T}
+# end
+
+struct SolidEarthParams{T<:AbstractFloat}
+    lithosphere_rigidity::AbstractMatrix{T}
+    mantle_density::AbstractMatrix{T}
+    channel_viscosity::AbstractMatrix{T}
+    halfspace_viscosity::AbstractMatrix{T}
+    viscosity_ratio::AbstractMatrix{T}
+    viscosity_scaling::AbstractMatrix{T}
+    channel_begin::AbstractMatrix{T}
+    halfspace_begin::AbstractMatrix{T}
+    channel_thickness::AbstractMatrix{T}
+end
+
+"""
+
+(Bueler 2007) below equation 15.
+"""
+function three_layer_scaling(
+    kappa::T,
+    visc_ratio::T,
+    Tc::T,
+) where {T<:AbstractFloat}
+
+    C, S = hyperbolic_channel_coeffs(Tc, kappa)
+    
+    num1 = 2 * visc_ratio * C * S
+    num2 = (1 - visc_ratio ^ 2) * Tc^2 * kappa ^ 2
+    num3 = visc_ratio ^ 2 * S ^ 2 + C ^ 2
+
+    denum1 = (visc_ratio + 1/visc_ratio) * C * S
+    denum2 = (visc_ratio - 1/visc_ratio) * Tc * kappa
+    denum3 = S^2 + C^2
+    return (num1 + num2 + num3) / (denum1 + denum2 + denum3)
+end
+
+"""
+
+(Bueler 2007) paragraph below equation 15.
+"""
+function get_viscosity_ratio(
+    channel_viscosity::Matrix{T},
+    halfspace_viscosity::Matrix{T},
+) where {T<:AbstractFloat}
+    return channel_viscosity ./ halfspace_viscosity
+end
+
+function hyperbolic_channel_coeffs(
+    Tc::T,
+    kappa::T,
+) where {T<:AbstractFloat}
+    return cosh(Tc * kappa), sinh(Tc * kappa)
+end
+
+#####################################################
+############## Geometric utilities ##################
+#####################################################
+
+"""
+
+    get_r(x, y)
+
+Get euclidean distance of point (x, y) to origin.
+"""
+get_r(x::T, y::T) where {T<:Real} = LinearAlgebra.norm([x, y])
+
+radialgauss(sigma::T, r::T) where {T<:Real} = exp(-0.5*(r/sigma)^2) /(sigma * sqrt(2*π))
+
+function normalize_matrix!(M::Matrix{T}) where {T<:Real}
+    M ./= sum(M)
+end
+
+"""
+
+    gaussian_filter()
+
+"""
+function radial_gaussian_mean(
+    M::AbstractMatrix{T},
+    X::AbstractMatrix{T},
+    Y::AbstractMatrix{T},
+    i::Int,
+    j::Int,
+    radial_distribution::Function,
+) where {T<:Real}
+    mask = radial_distribution.(get_r.(X .- X[i, j], Y .- Y[i, j]))
+    normalize_matrix!(mask)
+    return sum(mask .* M)
+end
 #####################################################
 ############## Load response matrix #################
 #####################################################
@@ -76,14 +267,6 @@ function get_loadresponse_coeffs(T::Type)
             0.848,  1.676,  2.083,  2.057,  1.643];
     return T.(rm), T.(GE)
 end
-
-"""
-
-    get_r(x, y)
-
-Get euclidean distance of point (x, y) to origin.
-"""
-get_r(x::T, y::T) where {T<:AbstractFloat} = LinearAlgebra.norm([x, y])
 
 """
 
@@ -154,10 +337,14 @@ function get_integrated_loadresponse(
             Omega.loadresponse_function,
             quad_support,
             quad_coeffs,
-            p*h-h/2,
-            p*h+h/2,
-            q*h-h/2,
-            q*h+h/2,
+            p*h,
+            p*h+h,
+            q*h,
+            q*h+h,
+            # p*h-h/2,
+            # p*h+h/2,
+            # q*h-h/2,
+            # q*h+h/2,
         )
     end
     return integrated_loadresponse
@@ -211,3 +398,10 @@ end
 function lin_transform_2_norm(y::T, m::T, p::T) where {T<:AbstractFloat}
     return (y-p)/m
 end
+
+function get_minreal_maximag_ratio(M::Matrix{Complex{T}}) where {T<:AbstractFloat}
+    return minimum(abs.(real.(M))) / maximum(abs.(imag.(M)))
+end
+
+cyclic_conv(f,g) = ifft(fft(f) .* fft(g)) ./ prod(size(f))
+# FastCyclicDeconv1D(f,g) = fft(ifft(f) .* fft(g)) ./ prod(size(f))
