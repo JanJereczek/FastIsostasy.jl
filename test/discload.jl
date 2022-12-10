@@ -58,12 +58,12 @@ function main(n::Int)           # 2^n cells on domain (1)
     end
 
     @testset "homogeneous response to zero load" begin
-        forward_isostasy!(Omega, t_vec, u3D_elastic, u3D_viscous, sigma_zz_zero, tools, c)
+        forward_isostasy!(Omega, t_vec, u3D_elastic, u3D_viscous, sigma_zz_zero, tools, p, c)
         @test sum( isapprox.(u3D_elastic, T(0)) ) == prod(size(u3D))
         @test sum( isapprox.(u3D_viscous, T(0)) ) == prod(size(u3D))
     end
 
-    @time forward_isostasy!(Omega, t_vec, u3D_elastic, u3D_viscous, sigma_zz_disc, tools, c)
+    @time forward_isostasy!(Omega, t_vec, u3D_elastic, u3D_viscous, sigma_zz_disc, tools, p, c)
     jldsave(
         "data/numerical_solution_N$(Omega.N).jld2",
         u3D_elastic = u3D_elastic,

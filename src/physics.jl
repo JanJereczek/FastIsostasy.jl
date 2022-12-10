@@ -62,12 +62,13 @@ end
 
 """
 
-    function forwardstep_isostasy(
+    forwardstep_isostasy(
         Omega::ComputationDomain,
         dt::T,
         u_viscous::AbstractMatrix{T},
         sigma_zz::AbstractMatrix{T},
         tools::PrecomputedTerms,
+        p::SolidEarthParams,
         c::PhysicalConstants,
     ) where {T<:AbstractFloat}
 
@@ -79,33 +80,54 @@ Forward-stepping of isostasy model based on Formula (11) of Bueler et al. 2007.
     u_viscous::AbstractMatrix{T},
     sigma_zz::AbstractMatrix{T},
     tools::PrecomputedTerms,
+    p::SolidEarthParams,
     c::PhysicalConstants,
 ) where {T<:AbstractFloat}
 
     # load Ψ is defined as mass per surface area --> Ψ = - σ_zz / g
     # because σ_zz = rho_ice * g * H
     u_elastic_next = compute_elastic_response(Omega, tools, -sigma_zz ./ c.g ) # zeros(T, Omega.N, Omega.N) # 
-    u_viscous_next = compute_viscous_response(
-        dt,
-        u_viscous,
-        sigma_zz,
-        tools,
-    )
+    fields = [
+        p.mantle_density,
+        p.channel_thickness,
+        p.channel_viscosity,
+        p.halfspace_viscosity,
+        p.lithosphere_rigidity,
+    ]
+    solidearth_variance = [var(M) for M in fields]
+    if sum(solidearth_variance) > 1e20
+        u_viscous_next = compute_heterogeneous_viscous_response(
+            Omega,
+            dt,
+            u_viscous,
+            sigma_zz,
+            tools,
+            p,
+        )
+    else
+        u_viscous_next = compute_viscous_response(
+            dt,
+            u_viscous,
+            sigma_zz,
+            tools,
+        )
+    end
 
     return u_elastic_next, apply_bc(u_viscous_next)
 end
 
-function get_radial_gaussian_means(
-    L::Vector{Matrix{T}},
-    Omega::ComputationDomain,
-    i::Int,
-    j::Int,
-    kernel::Function,
-) where {T<:Real}
-    return [radial_gaussian_mean(M, Omega.X, Omega.Y, i, j, kernel) for M in L]
+function compute_viscous_response(
+    dt::T,
+    u_viscous::AbstractMatrix{T},
+    sigma_zz::AbstractMatrix{T},
+    tools::PrecomputedTerms,
+) where {T<:AbstractFloat}
+    # TODO FFT the load at t = tn + Δt / 2 giving ( hat_σ_zz )_pq
+    num = tools.fourier_right_term .* (tools.forward_fft * u_viscous) + ( tools.forward_fft * (dt .* sigma_zz) )
+    return real.(tools.inverse_fft * ( num ./ tools.fourier_left_term ))
 end
 
-function compute_viscous_response_heterogeneous(
+function compute_heterogeneous_viscous_response(
     Omega::ComputationDomain,
     dt::T,
     u_viscous::AbstractMatrix{T},
@@ -151,6 +173,17 @@ function compute_viscous_response_heterogeneous(
     return u_viscous_next
 end
 
+function get_radial_gaussian_means(
+    L::Vector{Matrix{T}},
+    Omega::ComputationDomain,
+    i::Int,
+    j::Int,
+    kernel::Function,
+) where {T<:Real}
+    return [radial_gaussian_mean(M, Omega.X, Omega.Y, i, j, kernel) for M in L]
+end
+
+
 struct LocalFields{T<:AbstractFloat}
     lithosphere_rigidity
     mantle_density
@@ -158,16 +191,7 @@ struct LocalFields{T<:AbstractFloat}
     viscosity_scaling
 end
 
-function compute_viscous_response(
-    dt::T,
-    u_viscous::AbstractMatrix{T},
-    sigma_zz::AbstractMatrix{T},
-    tools::PrecomputedTerms,
-) where {T<:AbstractFloat}
-    # TODO FFT the load at t = tn + Δt / 2 giving ( hat_σ_zz )_pq
-    num = tools.fourier_right_term .* (tools.forward_fft * u_viscous) + ( tools.forward_fft * (dt .* sigma_zz) )
-    return real.(tools.inverse_fft * ( num ./ tools.fourier_left_term ))
-end
+
 
 function apply_bc(u::AbstractMatrix{T}) where {T<:AbstractFloat}
     return u .- T( ( sum(u[1,:]) + sum(u[:,1]) ) / sum(size(u)) )
@@ -176,18 +200,16 @@ end
 """
 
     function forward_isostasy!(
-        dt::T,
-        U::AbstractMatrix{T},
+        Omega::ComputationDomain,
+        t_vec::AbstractVector{T},
+        u3D_elastic::Array{T, 3},
+        u3D_viscous::Array{T, 3},
         sigma_zz::AbstractMatrix{T},
         tools::PrecomputedTerms,
+        c::PhysicalConstants,
     ) where {T<:AbstractFloat}
 
-Integrates isostasy model given:
-- `t_vec` the time vector in seconds
-- `U` the current vertical displacement
-- `sigma_zz` the current vertical load
-- `tools` some pre-computed tools
-- `c` the physical constants of the problem.
+Integrates isostasy model over provided time vector.
 """
 @inline function forward_isostasy!(
     Omega::ComputationDomain,
@@ -206,6 +228,7 @@ Integrates isostasy model given:
             u3D_viscous[:, :, i-1],
             sigma_zz,
             tools,
+            p,
             c,
         )
     end
@@ -213,14 +236,14 @@ end
 
 """
 
-    get_fourier_coeffs(
+    get_differential_fourier(
         T::Type,
         Omega::ComputationDomain,
     )
 
 Return coefficients resulting from transforming PDE into Fourier space.
 """
-@inline function get_fourier_coeffs(
+@inline function get_differential_fourier(
     T::Type,
     Omega::ComputationDomain,
 )
@@ -246,9 +269,8 @@ end
     get_cranknicholson_factors(
         Omega::ComputationDomain,
         dt::T,
-        pseudodiff_coeffs,
-        biharmonic_coeffs,
-        p::SolidEarthParams,
+        p::Union{LocalFields, SolidEarthParams},
+        c::PhysicalConstants,
     )
 
 Return two terms arising in the Crank-Nicholson scheme when applied to thepresent case.
@@ -262,25 +284,6 @@ function get_cranknicholson_factors(
     # mu already included in differential coeffs
     beta = ( p.mantle_density * c.g .+ p.lithosphere_rigidity .* Omega.biharmonic_coeffs )
     term1 = (2 .* p.halfspace_viscosity .* p.viscosity_scaling) .* Omega.pseudodiff_coeffs
-    term2 = (dt/2) .* beta
-    fourier_left_term = term1 + term2
-    fourier_right_term = term1 - term2
-    return fourier_left_term, fourier_right_term
-end
-
-function get_cranknicholson_factors(
-    Omega::ComputationDomain,
-    dt::T,
-    pseudodiff_coeffs::AbstractMatrix{T},
-    biharmonic_coeffs::AbstractMatrix{T},
-    mantle_density::T,
-    halfspace_viscosity::T,
-    lithosphere_rigidity::T,
-    c::PhysicalConstants,
-) where {T<:AbstractFloat}
-    # mu already included in differential coeffs
-    beta = ( mantle_density .* c.g .+ lithosphere_rigidity .* biharmonic_coeffs )
-    term1 = (2 .* halfspace_viscosity) .* pseudodiff_coeffs # .* p.visc_scaling
     term2 = (dt/2) .* beta
     fourier_left_term = term1 + term2
     fourier_right_term = term1 - term2
@@ -326,3 +329,5 @@ end
     fourier_u_elastic = tools.fourier_loadresponse .* ( tools.forward_fft * load )
     return real.( tools.inverse_fft * ( fourier_u_elastic ) )
 end
+
+cyclic_conv(f,g) = ifft(fft(f) .* fft(g)) ./ prod(size(f))

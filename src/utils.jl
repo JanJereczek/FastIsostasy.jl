@@ -25,7 +25,7 @@ function init_domain(L::T, n::Int) where {T<:AbstractFloat}
     X, Y = meshgrid(x, x)
     distance, loadresponse_coeffs = get_loadresponse_coeffs(T)
     loadresponse_matrix, loadresponse_function = build_loadresponse_matrix(X, Y, distance, loadresponse_coeffs)
-    pseudodiff_coeffs, biharmonic_coeffs = get_fourier_coeffs(L, N2)
+    pseudodiff_coeffs, biharmonic_coeffs = get_differential_fourier(L, N2)
 
     return ComputationDomain(
         L,
@@ -56,7 +56,15 @@ struct ComputationDomain{T<:AbstractFloat}
     biharmonic_coeffs::AbstractMatrix{T}
 end
 
-@inline function get_fourier_coeffs(
+"""
+    get_differential_fourier(
+        L::T,
+        N2::Int,
+    )
+
+Compute the matrices capturing the differential operators in the fourier space.
+"""
+@inline function get_differential_fourier(
     L::T,
     N2::Int,
 ) where {T<:Real}
@@ -77,6 +85,11 @@ g = 9.81                                    # m/s^2
 seconds_per_year = 60 * 60 * 24 * 365       # s
 rho_ice = 0.910e3                           # kg/m^3
 
+"""
+    init_physical_constants(T::Type)
+
+Return struct containing physical constants.
+"""
 function init_physical_constants(T::Type)
     return PhysicalConstants(T(g), T(seconds_per_year), T(rho_ice))
 end
@@ -98,16 +111,21 @@ channel_viscosity = 1e19            # Pa*s (Ivins 2022, Fig 10 WAIS)
 channel_begin = 88e3                # 88 km: beginning of asthenosphere (Bueler 2007).
 halfspace_begin = 400e3             # 400 km: beginning of homogenous half-space (Ivins 2022, Fig 12).
 
-# function init_solidearth_params(
-#     T::Type,
-#     Omega::ComputationDomain;
-#     lithosphere_rigidity=fill(T(lithosphere_rigidity), Omega.N, Omega.N),
-#     mantle_density=fill(T(mantle_density), Omega.N, Omega.N),
-#     halfspace_viscosity=fill(T(halfspace_viscosity), Omega.N, Omega.N),
-# )
-#     return SolidEarthParams(lithosphere_rigidity, mantle_density, halfspace_viscosity)
-# end
+"""
 
+    init_solidearth_params(
+        T::Type,
+        Omega::ComputationDomain;
+        lithosphere_rigidity,
+        mantle_density,
+        channel_viscosity,
+        halfspace_viscosity,
+        channel_begin,
+        halfspace_begin,
+    )
+
+Return struct containing solid-Earth parameters.
+"""
 function init_solidearth_params(
     T::Type,
     Omega::ComputationDomain;
@@ -136,12 +154,6 @@ function init_solidearth_params(
     )
 end
 
-# struct SolidEarthParams{T<:AbstractFloat}
-#     mantle_density::AbstractMatrix{T}
-#     lithosphere_rigidity::AbstractMatrix{T}
-#     halfspace_viscosity::AbstractMatrix{T}
-# end
-
 struct SolidEarthParams{T<:AbstractFloat}
     lithosphere_rigidity::AbstractMatrix{T}
     mantle_density::AbstractMatrix{T}
@@ -156,7 +168,33 @@ end
 
 """
 
-(Bueler 2007) below equation 15.
+    get_viscosity_ratio(
+        channel_viscosity::Matrix{T},
+        halfspace_viscosity::Matrix{T},
+    )
+
+Return the viscosity ratio between channel and half-space as specified in
+Bueler (2007) below equation 15.
+
+"""
+function get_viscosity_ratio(
+    channel_viscosity::Matrix{T},
+    halfspace_viscosity::Matrix{T},
+) where {T<:AbstractFloat}
+    return channel_viscosity ./ halfspace_viscosity
+end
+
+"""
+
+    three_layer_scaling(
+        kappa::T,
+        visc_ratio::T,
+        Tc::T,
+    )
+
+Return the viscosity scaling for three-layer model as given in
+Bueler (2007) below equation 15.
+
 """
 function three_layer_scaling(
     kappa::T,
@@ -174,17 +212,6 @@ function three_layer_scaling(
     denum2 = (visc_ratio - 1/visc_ratio) * Tc * kappa
     denum3 = S^2 + C^2
     return (num1 + num2 + num3) / (denum1 + denum2 + denum3)
-end
-
-"""
-
-(Bueler 2007) paragraph below equation 15.
-"""
-function get_viscosity_ratio(
-    channel_viscosity::Matrix{T},
-    halfspace_viscosity::Matrix{T},
-) where {T<:AbstractFloat}
-    return channel_viscosity ./ halfspace_viscosity
 end
 
 function hyperbolic_channel_coeffs(
@@ -402,6 +429,3 @@ end
 function get_minreal_maximag_ratio(M::Matrix{Complex{T}}) where {T<:AbstractFloat}
     return minimum(abs.(real.(M))) / maximum(abs.(imag.(M)))
 end
-
-cyclic_conv(f,g) = ifft(fft(f) .* fft(g)) ./ prod(size(f))
-# FastCyclicDeconv1D(f,g) = fft(ifft(f) .* fft(g)) ./ prod(size(f))
