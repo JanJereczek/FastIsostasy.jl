@@ -3,8 +3,6 @@ struct PrecomputedTerms{T<:AbstractFloat}
     fourier_loadresponse::AbstractMatrix{Complex{T}}
     fourier_left_term::AbstractMatrix{T}
     fourier_right_term::AbstractMatrix{T}
-    left_term::AbstractMatrix{Complex{T}}
-    right_term::AbstractMatrix{Complex{T}}
     forward_fft::FFTW.FFTWPlan
     inverse_fft::AbstractFFTs.ScaledPlan
 end
@@ -40,21 +38,12 @@ physical constants `c` as input.
         c,
     )
     p1, p2 = plan_twoway_fft(Omega.X)
-    left_term = p2 * fourier_left_term
-    right_term = p2 * fourier_right_term
-    left_realimag_ratio = get_minreal_maximag_ratio(left_term)
-    right_realimag_ratio = get_minreal_maximag_ratio(left_term)
-    println("Minimum real modulus divided by maximum imaginary modulus: \n
-        left: $left_realimag_ratio \n
-        right: $right_realimag_ratio"
-    )
+
     return PrecomputedTerms(
         loadresponse,
         p1 * loadresponse,
         fourier_left_term,
         fourier_right_term,
-        left_term,
-        right_term,
         p1,
         p2,
     )
@@ -70,9 +59,11 @@ end
         tools::PrecomputedTerms,
         p::SolidEarthParams,
         c::PhysicalConstants,
+        viscous_solver="Euler"::String,
+        dt_refine=100::Int,
     ) where {T<:AbstractFloat}
 
-Forward-stepping of isostasy model based on Formula (11) of Bueler et al. 2007.
+Forward-stepping of GIA model.
 """
 @inline function forwardstep_isostasy(
     Omega::ComputationDomain,
@@ -81,42 +72,58 @@ Forward-stepping of isostasy model based on Formula (11) of Bueler et al. 2007.
     sigma_zz::AbstractMatrix{T},
     tools::PrecomputedTerms,
     p::SolidEarthParams,
-    c::PhysicalConstants,
+    c::PhysicalConstants;
+    viscous_solver="Euler"::String,
+    dt_refine=100::Int,
 ) where {T<:AbstractFloat}
 
     # load Ψ is defined as mass per surface area --> Ψ = - σ_zz / g
     # because σ_zz = rho_ice * g * H
-    u_elastic_next = compute_elastic_response(Omega, tools, -sigma_zz ./ c.g ) # zeros(T, Omega.N, Omega.N) # 
-    fields = [
-        p.mantle_density,
-        p.channel_thickness,
-        p.channel_viscosity,
-        p.halfspace_viscosity,
-        p.lithosphere_rigidity,
-    ]
-    solidearth_variance = [var(M) for M in fields]
-    if sum(solidearth_variance) > 1e20
-        u_viscous_next = compute_heterogeneous_viscous_response(
-            Omega,
+    u_elastic_next = compute_elastic_response(Omega, tools, -sigma_zz ./ c.g )
+
+    if viscous_solver == "Euler"
+
+        t_internal = range(0, stop = dt, length = dt_refine)
+        dt_internal = t_internal[2] - t_internal[1]
+        u_internal = zeros(T, size(Omega.X)..., dt_refine)
+        u_internal[:, :, 1] = u_viscous
+        for i in eachindex(t_internal)[2:end]
+            u_internal[:, :, i] = apply_bc(euler_viscous_response(
+                Omega,
+                dt_internal,
+                u_internal[:, :, i-1],
+                sigma_zz,
+                tools,
+                c,
+                p,
+            ))
+        end
+        u_viscous_next = u_internal[:, :, end]
+    
+    elseif viscous_solver == "CrankNicholson"
+        u_viscous_next = apply_bc( cranknicholson_viscous_response(
             dt,
             u_viscous,
             sigma_zz,
             tools,
-            p,
-        )
-    else
-        u_viscous_next = compute_viscous_response(
-            dt,
-            u_viscous,
-            sigma_zz,
-            tools,
-        )
+        ) )
     end
 
-    return u_elastic_next, apply_bc(u_viscous_next)
+    return u_elastic_next, u_viscous_next
 end
 
-function compute_viscous_response(
+"""
+
+    cranknicholson_viscous_response(
+        dt::T,
+        u_viscous::AbstractMatrix{T},
+        sigma_zz::AbstractMatrix{T},
+        tools::PrecomputedTerms,
+    )
+
+Return viscous response in the case of homogeneous solid-Earth parameters.
+"""
+@inline function cranknicholson_viscous_response(
     dt::T,
     u_viscous::AbstractMatrix{T},
     sigma_zz::AbstractMatrix{T},
@@ -127,73 +134,69 @@ function compute_viscous_response(
     return real.(tools.inverse_fft * ( num ./ tools.fourier_left_term ))
 end
 
-function compute_heterogeneous_viscous_response(
+"""
+
+    cranknicholson_viscous_response(
+        dt::T,
+        u_viscous::AbstractMatrix{T},
+        sigma_zz::AbstractMatrix{T},
+        tools::PrecomputedTerms,
+    )
+
+Return viscous response in the case of homogeneous solid-Earth parameters.
+"""
+@inline function euler_viscous_response(
     Omega::ComputationDomain,
     dt::T,
-    u_viscous::AbstractMatrix{T},
+    u_current::AbstractMatrix{T},
     sigma_zz::AbstractMatrix{T},
     tools::PrecomputedTerms,
+    c::PhysicalConstants,
     p::SolidEarthParams,
 ) where {T<:AbstractFloat}
 
-    u_viscous_next = zeros(size(u_viscous))
-    std_dev = 100e3                         # (m)
-    radial_distr(r) = radialgauss(std_dev, r)
-    for i in axes(sigma_zz, 1), j in axes(sigma_zz, 2)
-        
-        sigma_pointload = zeros(size(sigma_zz))
-        sigma_pointload[i, j] = sigma_zz[i, j]
+    u_fourier_current = tools.forward_fft * u_current
+    biharmonic_u = Omega.biharmonic_coeffs .* u_fourier_current
+    loadgravity_term = sigma_zz - p.mantle_density .* c.g .* u_current
+    rigidity_term = p.lithosphere_rigidity .* (tools.inverse_fft * biharmonic_u)
+    lgr_term = loadgravity_term - rigidity_term
 
-        fields = [
-            p.lithosphere_rigidity,
-            p.mantle_density,
-            p.halfspace_viscosity,
-            p.viscosity_scaling,
-        ]
-
-        local_fields = LocalFields(get_radial_gaussian_means(
-            fields,
-            Omega,
-            i,
-            j,
-            kernel,
-        )...)
-
-        fourier_left, fourier_right = get_cranknicholson_factors(
-            Omega,
-            dt,
-            local_fields,
-            c,
-        )
-
-        num = fourier_right .* (tools.forward_fft * u_viscous) +
-            ( tools.forward_fft * (dt .* sigma_pointload) )
-        u_viscous_next += real.(tools.inverse_fft * ( num ./ fourier_left ))
-    end
-    return u_viscous_next
+    eta_scaled = 2 .* p.halfspace_viscosity .* p.viscosity_scaling
+    viscous_lgr = tools.forward_fft * ( lgr_term ./ eta_scaled )
+    u_fourier_next = u_fourier_current + (dt ./ ( Omega.pseudodiff_coeffs .+ 1e-20 ) ) .* viscous_lgr
+    return real.(tools.inverse_fft * u_fourier_next)
 end
 
-function get_radial_gaussian_means(
+"""
+
+    get_kernel_means(
+        L::Vector{Matrix{T}},
+        Omega::ComputationDomain,
+        i::Int,
+        j::Int,
+        kernel::Function,
+    )
+
+Return viscous response in the case of heterogeneous solid-Earth parameters.
+"""
+@inline function get_kernel_means(
     L::Vector{Matrix{T}},
     Omega::ComputationDomain,
     i::Int,
     j::Int,
     kernel::Function,
 ) where {T<:Real}
-    return [radial_gaussian_mean(M, Omega.X, Omega.Y, i, j, kernel) for M in L]
+    return [kernel_mean(M, Omega.X, Omega.Y, i, j, kernel) for M in L]
 end
-
 
 struct LocalFields{T<:AbstractFloat}
-    lithosphere_rigidity
-    mantle_density
-    halfspace_viscosity
-    viscosity_scaling
+    lithosphere_rigidity::T
+    mantle_density::T
+    halfspace_viscosity::T
+    viscosity_scaling::T
 end
 
-
-
-function apply_bc(u::AbstractMatrix{T}) where {T<:AbstractFloat}
+@inline function apply_bc(u::AbstractMatrix{T}) where {T<:AbstractFloat}
     return u .- T( ( sum(u[1,:]) + sum(u[:,1]) ) / sum(size(u)) )
 end
 
@@ -206,6 +209,7 @@ end
         u3D_viscous::Array{T, 3},
         sigma_zz::AbstractMatrix{T},
         tools::PrecomputedTerms,
+        p::SolidEarthParams,
         c::PhysicalConstants,
     ) where {T<:AbstractFloat}
 
@@ -218,6 +222,7 @@ Integrates isostasy model over provided time vector.
     u3D_viscous::Array{T, 3},
     sigma_zz::AbstractMatrix{T},
     tools::PrecomputedTerms,
+    p::SolidEarthParams,
     c::PhysicalConstants,
 ) where {T}
 
@@ -257,7 +262,7 @@ Return coefficients resulting from transforming PDE into Fourier space.
     return pseudodiff_coeffs, biharmonic_coeffs
 end
 
-function get_freq_coeffs(
+@inline function get_freq_coeffs(
     N::Int,
     L::T,
 ) where {T<:AbstractFloat}
@@ -275,7 +280,7 @@ end
 
 Return two terms arising in the Crank-Nicholson scheme when applied to thepresent case.
 """
-function get_cranknicholson_factors(
+@inline function get_cranknicholson_factors(
     Omega::ComputationDomain,
     dt::T,
     p::Union{LocalFields, SolidEarthParams},
@@ -296,7 +301,7 @@ end
 
 Return forward-FFT and inverse-FFT plan to apply on array with same dimensions as `X`.
 """
-function plan_twoway_fft(X::AbstractMatrix{T}) where {T<:AbstractFloat}
+@inline function plan_twoway_fft(X::AbstractMatrix{T}) where {T<:AbstractFloat}
     return plan_fft(X), plan_ifft(X)
 end
 
@@ -320,14 +325,3 @@ Use pre-computed integration tools to accelerate computation.
         return conv(load, tools.loadresponse)[Omega.N2+1:end-Omega.N2, Omega.N2+1:end-Omega.N2]
     end
 end
-
-@inline function fft_compute_elastic_response(
-    tools::PrecomputedTerms,
-    load::AbstractMatrix{T},
-) where {T<:AbstractFloat}
-    # Note: here a element-wise multiplication is applied!
-    fourier_u_elastic = tools.fourier_loadresponse .* ( tools.forward_fft * load )
-    return real.( tools.inverse_fft * ( fourier_u_elastic ) )
-end
-
-cyclic_conv(f,g) = ifft(fft(f) .* fft(g)) ./ prod(size(f))
