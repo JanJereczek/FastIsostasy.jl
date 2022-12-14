@@ -73,11 +73,6 @@ end
     return - j0 * j1 / beta
 end
 
-@inline function the_conv(A, B)
-    return real.(ifft( fft(A) .* fft(B) ))
-end
-
-
 @inline function plot_response(
     Omega::ComputationDomain,
     sigma::Matrix{T},
