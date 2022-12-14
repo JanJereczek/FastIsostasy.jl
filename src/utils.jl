@@ -4,7 +4,7 @@
 
 Return a 2D meshgrid spanned by `x, y`.
 """
-function meshgrid(x::AbstractVector{T}, y::AbstractVector{T}) where {T<:AbstractFloat}
+@inline function meshgrid(x::AbstractVector{T}, y::AbstractVector{T}) where {T<:AbstractFloat}
     one_x, one_y = ones(T, length(x)), ones(T, length(y))
     return one_y * x', (one_x * y')'
 end
@@ -15,7 +15,7 @@ end
 
 Initialize a square computational domain with length `2*L` and `2^n+1` grid cells.
 """
-function init_domain(L::T, n::Int) where {T<:AbstractFloat}
+@inline function init_domain(L::T, n::Int) where {T<:AbstractFloat}
     N = 2^n
 #     N = 2^n+1
     N2 = Int(floor(N/2))
@@ -90,7 +90,7 @@ rho_ice = 0.910e3                           # kg/m^3
 
 Return struct containing physical constants.
 """
-function init_physical_constants(T::Type)
+@inline function init_physical_constants(T::Type)
     return PhysicalConstants(T(g), T(seconds_per_year), T(rho_ice))
 end
 
@@ -126,7 +126,7 @@ halfspace_begin = 400e3             # 400 km: beginning of homogenous half-space
 
 Return struct containing solid-Earth parameters.
 """
-function init_solidearth_params(
+@inline function init_solidearth_params(
     T::Type,
     Omega::ComputationDomain;
     lithosphere_rigidity = fill(T(lithosphere_rigidity), Omega.N, Omega.N),
@@ -139,7 +139,11 @@ function init_solidearth_params(
 
     channel_thickness = halfspace_begin - channel_begin
     viscosity_ratio = get_viscosity_ratio(channel_viscosity, halfspace_viscosity)
-    viscosity_scaling = three_layer_scaling.(Omega.pseudodiff_coeffs, viscosity_ratio, channel_thickness)
+    viscosity_scaling = three_layer_scaling(
+        Omega.pseudodiff_coeffs,       # κ
+        viscosity_ratio,
+        channel_thickness,
+    )
 
     return SolidEarthParams(
         lithosphere_rigidity,
@@ -177,7 +181,7 @@ Return the viscosity ratio between channel and half-space as specified in
 Bueler (2007) below equation 15.
 
 """
-function get_viscosity_ratio(
+@inline function get_viscosity_ratio(
     channel_viscosity::Matrix{T},
     halfspace_viscosity::Matrix{T},
 ) where {T<:AbstractFloat}
@@ -196,25 +200,35 @@ Return the viscosity scaling for three-layer model as given in
 Bueler (2007) below equation 15.
 
 """
-function three_layer_scaling(
-    kappa::T,
-    visc_ratio::T,
-    Tc::T,
+@inline function three_layer_scaling(
+    kappa::Matrix{T},
+    visc_ratio::Matrix{T},
+    channel_thickness::Matrix{T},
 ) where {T<:AbstractFloat}
 
-    C, S = hyperbolic_channel_coeffs(Tc, kappa)
-    
-    num1 = 2 * visc_ratio * C * S
-    num2 = (1 - visc_ratio ^ 2) * Tc^2 * kappa ^ 2
-    num3 = visc_ratio ^ 2 * S ^ 2 + C ^ 2
+    visc_scaling = zeros(T, size(kappa)...)
+    for i in axes(kappa, 1), j in axes(kappa, 2)
 
-    denum1 = (visc_ratio + 1/visc_ratio) * C * S
-    denum2 = (visc_ratio - 1/visc_ratio) * Tc * kappa
-    denum3 = S^2 + C^2
-    return (num1 + num2 + num3) / (denum1 + denum2 + denum3)
+        k = π / 2e6 # kappa[i, j]
+        vr = visc_ratio[i, j]
+        Tc = channel_thickness[i, j]     # Lingle-Clark: in km
+
+        C, S = hyperbolic_channel_coeffs(Tc, k)
+        
+        num1 = 2 * vr * C * S
+        num2 = (1 - vr ^ 2) * Tc^2 * k ^ 2
+        num3 = vr ^ 2 * S ^ 2 + C ^ 2
+
+        denum1 = (vr + 1/vr) * C * S
+        denum2 = (vr - 1/vr) * Tc * k
+        denum3 = S^2 + C^2
+        
+        visc_scaling[i, j] = (num1 + num2 + num3) / (denum1 + denum2 + denum3)
+    end
+    return visc_scaling
 end
 
-function hyperbolic_channel_coeffs(
+@inline function hyperbolic_channel_coeffs(
     Tc::T,
     kappa::T,
 ) where {T<:AbstractFloat}
@@ -235,16 +249,18 @@ get_r(x::T, y::T) where {T<:Real} = LinearAlgebra.norm([x, y])
 
 radialgauss(sigma::T, r::T) where {T<:Real} = exp(-0.5*(r/sigma)^2) /(sigma * sqrt(2*π))
 
-function normalize_matrix!(M::Matrix{T}) where {T<:Real}
+@inline function normalize_matrix!(M::Matrix{T}) where {T<:Real}
     M ./= sum(M)
 end
 
 """
 
-    gaussian_filter()
+    kernel_mean(M, X, Y, i, j, radial_distribution)
 
+Return mean of matrix M at indices `i ,j` and based on `kernel`. 
+M is defined over 2D spatial coordinates `X, Y`.
 """
-function radial_gaussian_mean(
+@inline function kernel_mean(
     M::AbstractMatrix{T},
     X::AbstractMatrix{T},
     Y::AbstractMatrix{T},
@@ -256,10 +272,18 @@ function radial_gaussian_mean(
     normalize_matrix!(mask)
     return sum(mask .* M)
 end
+
 #####################################################
 ############## Load response matrix #################
 #####################################################
 
+"""
+
+    get_loadresponse_coeffs(T)
+
+Return the load response coefficients with type `T` and listed in table A3 of
+Farrell (1972).
+"""
 function get_loadresponse_coeffs(T::Type)
     # Earth's radius
     a = 6.371e6 # equator
@@ -304,7 +328,7 @@ Compute the load response matrix of the solid Earth based on Green's function
 is subsequently transformed back into the time domain.
 Use pre-computed integration tools to accelerate computation.
 """
-function build_loadresponse_matrix(
+@inline function build_loadresponse_matrix(
     X::AbstractMatrix{T},
     Y::AbstractMatrix{T},
     distance::Vector{T},
@@ -325,7 +349,7 @@ function build_loadresponse_matrix(
     return loadresponse_matrix, loadresponse_function
 end
 
-function compute_loadresponse_entry(
+@inline function compute_loadresponse_entry(
     r::T,
     rm::Vector{T},
     loadresponse_coeffs::Vector{T},
@@ -345,7 +369,14 @@ end
 ############# Quadrature computation ################
 #####################################################
 
-function get_integrated_loadresponse(
+"""
+
+    get_integrated_loadresponse(Omega, quad_support, quad_coeffs)
+
+Integrate load response over field by using 2D quadrature with specified
+support points and associated coefficients.
+"""
+@inline function get_integrated_loadresponse(
     Omega::ComputationDomain,
     quad_support::Vector{T},
     quad_coeffs::Vector{T},
@@ -354,12 +385,10 @@ function get_integrated_loadresponse(
     h = Omega.h
     N = Omega.N
     integrated_loadresponse = similar(Omega.X)
-    Nx2 = Int(floor(N/2))
-    Ny2 = Int(floor(N/2))
 
     @inline for i = 1:N, j = 1:N
-        p = i - Nx2 - 1
-        q = j - Ny2 - 1
+        p = i - Omega.N2 - 1
+        q = j - Omega.N2 - 1
         integrated_loadresponse[i, j] = quadrature2D(
             Omega.loadresponse_function,
             quad_support,
@@ -377,7 +406,14 @@ function get_integrated_loadresponse(
     return integrated_loadresponse
 end
 
-function get_quad_coeffs(T::Type, n::Int)
+"""
+
+    get_quad_coeffs(T, n)
+
+Return support points and associated coefficients with specified Type
+for Gauss-Legendre quadrature.
+"""
+@inline function get_quad_coeffs(T::Type, n::Int)
     x, w = gausslegendre( n )
     return T.(x), T.(w)
 end
@@ -393,39 +429,65 @@ function quadrature2D(
 ) where {T<:AbstractFloat}
 
     n = length(x)
-    mx, px = get_lin_transform_2_norm(x1, x2)
-    my, py = get_lin_transform_2_norm(y1, y2)
+    mx, px = get_normalized_lin_transform(x1, x2)
+    my, py = get_normalized_lin_transform(y1, y2)
     sum = T(0)
     @inline for i=1:n, j=1:n
         sum = sum + f(
-            lin_transform_2_norm(x[i], mx, px),
-            lin_transform_2_norm(x[j], my, py),
+            normalized_lin_transform(x[i], mx, px),
+            normalized_lin_transform(x[j], my, py),
         ) * w[i] * w[j] / mx / my
     end
     return sum
 end
 
-function quadrature1D(f::Function, n::Int, x1::T, x2::T) where {T<:AbstractFloat}
+"""
+
+    quadrature1D(f, n, x1, x2)
+
+Compute 1D Gauss-Legendre quadrature of `f` between `x1` and `x2`
+based on `n` support points.
+"""
+@inline function quadrature1D(f::Function, n::Int, x1::T, x2::T) where {T<:AbstractFloat}
     x, w = get_quad_coeffs(T, n)
-    m, p = get_lin_transform_2_norm(x1, x2)
+    m, p = get_normalized_lin_transform(x1, x2)
     sum = 0
     for i=1:n
-        sum = sum + f(lin_transform_2_norm(x[i], m, p)) * w[i] / m
+        sum = sum + f(normalized_lin_transform(x[i], m, p)) * w[i] / m
     end
     return sum
 end
 
-function get_lin_transform_2_norm(x1::T, x2::T) where {T<:AbstractFloat}
+"""
+
+    get_normalized_lin_transform(x1, x2)
+
+Return parameters of linear function mapping `x1, x2` onto `-1, 1`.
+"""
+@inline function get_normalized_lin_transform(x1::T, x2::T) where {T<:AbstractFloat}
     x1_norm, x2_norm = T(-1), T(1)
     m = (x2_norm - x1_norm) / (x2 - x1)
     p = x1_norm - m * x1
     return m, p
 end
 
-function lin_transform_2_norm(y::T, m::T, p::T) where {T<:AbstractFloat}
+"""
+
+    get_normalized_lin_transform(x1, x2)
+
+Apply normalized linear transformation on interval limits `x1, x2`.
+"""
+@inline function normalized_lin_transform(y::T, m::T, p::T) where {T<:AbstractFloat}
     return (y-p)/m
 end
 
-function get_minreal_maximag_ratio(M::Matrix{Complex{T}}) where {T<:AbstractFloat}
+"""
+
+    get_minreal_maximag_ratio(M)
+
+Return the ratio of minimum real component to maximum imaginary component
+of complex matrix `M`.
+"""
+@inline function get_minreal_maximag_ratio(M::Matrix{Complex{T}}) where {T<:AbstractFloat}
     return minimum(abs.(real.(M))) / maximum(abs.(imag.(M)))
 end
