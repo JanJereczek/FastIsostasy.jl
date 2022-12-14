@@ -7,7 +7,13 @@ using JLD2
 using Interpolations
 include("helpers.jl")
 
-function main(n::Int)           # 2^n cells on domain (1)
+@inline function main(
+    n::Int,             # 2^n cells on domain (1)
+    case::String;       # Application case
+    make_plot = true,
+    make_anim = false,
+)
+
     T = Float64
 
     L = T(2000e3)               # half-length of the square domain (m)
@@ -15,11 +21,14 @@ function main(n::Int)           # 2^n cells on domain (1)
     R = T(1000e3)               # ice disc radius (m)
     H = T(1000)                 # ice disc thickness (m)
 
-    case = "homegeneous_viscosity_2layer"
     if case == "homegeneous_viscosity_2layer"
-        p = init_solidearth_params(T, Omega)
+        eta_channel = fill(1e21, size(Omega.X)...)
+        p = init_solidearth_params(T, Omega, channel_viscosity = eta_channel)
     elseif case == "homogeneous_viscosity_3layer"
         p = init_solidearth_params(T, Omega)
+    elseif case == "euler_2layer"
+        eta_channel = fill(1e21, size(Omega.X)...)
+        p = init_solidearth_params(T, Omega, channel_viscosity = eta_channel)
     elseif case == "affine_viscosity_2layer"
         m = (1e22 - 1e21)/(2 * L)
         p = 1e21 - m * minimum(Omega.X)
@@ -33,7 +42,7 @@ function main(n::Int)           # 2^n cells on domain (1)
     end
     c = init_physical_constants(T)
 
-    timespan = T.([0, 1e4]) * T(c.seconds_per_year)     # (yr) -> (s)
+    timespan = T.([0, 5e4]) * T(c.seconds_per_year)     # (yr) -> (s)
     dt = T(100) * T(c.seconds_per_year)                 # (yr) -> (s)
     t_vec = timespan[1]:dt:timespan[2]                  # (s)
 
@@ -41,6 +50,7 @@ function main(n::Int)           # 2^n cells on domain (1)
     u3D_elastic = copy(u3D)
     u3D_viscous = copy(u3D)
     domains = vcat(1.0e-14, 10 .^ (-10:0.05:-3), 1.0)
+    # domains = collect(10.0 .^ (-14:5))
 
     @testset "analytic solution" begin
         sol = analytic_solution(T(0), T(50000 * c.seconds_per_year), c, p, H, R, domains)
@@ -65,7 +75,7 @@ function main(n::Int)           # 2^n cells on domain (1)
 
     @time forward_isostasy!(Omega, t_vec, u3D_elastic, u3D_viscous, sigma_zz_disc, tools, p, c)
     jldsave(
-        "data/numerical_solution_N$(Omega.N).jld2",
+        "data/$(case)_N$(Omega.N).jld2",
         u3D_elastic = u3D_elastic,
         u3D_viscous = u3D_viscous,
     )
@@ -97,18 +107,6 @@ function main(n::Int)           # 2^n cells on domain (1)
     )
     u_analytic = u_analytic_interp.(Omega.X, Omega.Y)
 
-
-    fig = Figure(resolution=(1600, 900))
-    ax1 = Axis(fig[1, 1][1, :], aspect=DataAspect())
-    hm = heatmap!(ax1, Omega.X, Omega.Y, sigma_zz_disc)
-    Colorbar(
-        fig[1, 1][2, :],
-        hm,
-        label = L"Vertical load $ \mathrm{N \, m^{-2}}$",
-        vertical = false,
-        width = Relative(0.8),
-    )
-
     u_plot = [
         u_analytic,
         u3D_viscous[:,:,end],
@@ -130,38 +128,31 @@ function main(n::Int)           # 2^n cells on domain (1)
         L"Numerical minus analytical solution $u^V - u^A$ (m)",
         L"Total vertical displacement $u^E + u^V$ (m)",
     ]
-    for k in eachindex(u_plot)
-        i, j = panels[k]
-        ax3D = Axis3(fig[i, j][1, :])
-        sf = surface!(
-            ax3D,
-            Omega.X,
-            Omega.Y,
-            u_plot[k],
-            # colorrange = (-300, 50),
-            colormap = :jet,
-        )
-        wireframe!(
-            ax3D,
-            Omega.X,
-            Omega.Y,
-            u_plot[k],
-            linewidth = 0.1,
-            color = :black,
-        )
-        Colorbar(
-            fig[i, j][2, :],
-            sf,
-            label = labels[k],
-            vertical = false,
-            width = Relative(0.8),
+    if make_plot
+        response_fig = plot_response(
+            Omega,
+            sigma_zz_disc,
+            u_plot,
+            panels,
+            labels,
+            case,
         )
     end
-    plotname = "plots/discload_$(case)_N=$(Omega.N)"
-    save("$plotname.png", fig)
-    save("$plotname.pdf", fig)
+
+    if make_anim
+        anim_name = "plots/discload_$(case)_N=$(Omega.N)"
+        animate_viscous_response(t_vec, Omega, u3D_viscous, anim_name, (-300.0, 50.0))
+    end
 end
 
-for n in 5:8
-    main(n)
+"""
+Application cases:
+    - "homegeneous_viscosity_2layer"
+    - "homogeneous_viscosity_3layer"
+    - "affine_viscosity_2layer"
+    - "euler_2layer"
+"""
+case = "euler_2layer"
+for n in 7:7
+    main(n, case)
 end
