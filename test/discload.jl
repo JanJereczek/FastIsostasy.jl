@@ -49,7 +49,9 @@ include("helpers.jl")
     u3D = zeros( T, (size(Omega.X)..., length(t_vec)) )
     u3D_elastic = copy(u3D)
     u3D_viscous = copy(u3D)
+    
     domains = vcat(1.0e-14, 10 .^ (-10:0.05:-3), 1.0)
+
     # domains = collect(10.0 .^ (-14:5))
 
     @testset "analytic solution" begin

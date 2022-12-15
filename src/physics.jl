@@ -31,7 +31,7 @@ physical constants `c` as input.
 
     quad_support, quad_coeffs = get_quad_coeffs(T, quad_precision)
     loadresponse = get_integrated_loadresponse(Omega, quad_support, quad_coeffs)
-    fourier_left_term, fourier_right_term = get_cranknicholson_factors(
+    fourier_left_term, fourier_right_term = get_cranknicolson_factors(
         Omega,
         dt,
         p,
@@ -47,6 +47,46 @@ physical constants `c` as input.
         p1,
         p2,
     )
+end
+
+
+"""
+
+    function forward_isostasy!(
+        Omega::ComputationDomain,
+        t_vec::AbstractVector{T},
+        u3D_elastic::Array{T, 3},
+        u3D_viscous::Array{T, 3},
+        sigma_zz::AbstractMatrix{T},
+        tools::PrecomputedTerms,
+        p::SolidEarthParams,
+        c::PhysicalConstants,
+    ) where {T<:AbstractFloat}
+
+Integrates isostasy model over provided time vector.
+"""
+@inline function forward_isostasy!(
+    Omega::ComputationDomain,
+    t_vec::AbstractVector{T},
+    u3D_elastic::Array{T, 3},
+    u3D_viscous::Array{T, 3},
+    sigma_zz::AbstractMatrix{T},
+    tools::PrecomputedTerms,
+    p::SolidEarthParams,
+    c::PhysicalConstants,
+) where {T}
+
+    for i in eachindex(t_vec)[2:end]
+        u3D_elastic[:, :, i], u3D_viscous[:, :, i] = forwardstep_isostasy(
+            Omega,
+            t_vec[i]-t_vec[i-1],
+            u3D_viscous[:, :, i-1],
+            sigma_zz,
+            tools,
+            p,
+            c,
+        )
+    end
 end
 
 """
@@ -100,8 +140,8 @@ Forward-stepping of GIA model.
         end
         u_viscous_next = u_internal[:, :, end]
     
-    elseif viscous_solver == "CrankNicholson"
-        u_viscous_next = apply_bc( cranknicholson_viscous_response(
+    elseif viscous_solver == "CrankNicolson"
+        u_viscous_next = apply_bc( cranknicolson_viscous_response(
             dt,
             u_viscous,
             sigma_zz,
@@ -114,16 +154,17 @@ end
 
 """
 
-    cranknicholson_viscous_response(
+    cranknicolson_viscous_response(
         dt::T,
         u_viscous::AbstractMatrix{T},
         sigma_zz::AbstractMatrix{T},
         tools::PrecomputedTerms,
     )
 
-Return viscous response in the case of homogeneous solid-Earth parameters.
+Return viscous response based on Crank-Nicolson time discretization.
+Only valid for solid-Earth parameters that are constant over x, y.
 """
-@inline function cranknicholson_viscous_response(
+@inline function cranknicolson_viscous_response(
     dt::T,
     u_viscous::AbstractMatrix{T},
     sigma_zz::AbstractMatrix{T},
@@ -136,14 +177,18 @@ end
 
 """
 
-    cranknicholson_viscous_response(
+    euler_viscous_response(
+        Omega::ComputationDomain,
         dt::T,
-        u_viscous::AbstractMatrix{T},
+        u_current::AbstractMatrix{T},
         sigma_zz::AbstractMatrix{T},
         tools::PrecomputedTerms,
+        c::PhysicalConstants,
+        p::SolidEarthParams,
     )
 
-Return viscous response in the case of homogeneous solid-Earth parameters.
+Return viscous response based on explicit Euler time discretization.
+Valid for solid-Earth parameters that can vary over x, y.
 """
 @inline function euler_viscous_response(
     Omega::ComputationDomain,
@@ -169,121 +214,30 @@ end
 
 """
 
-    get_kernel_means(
-        L::Vector{Matrix{T}},
-        Omega::ComputationDomain,
-        i::Int,
-        j::Int,
-        kernel::Function,
-    )
+    apply_bc(u)
 
-Return viscous response in the case of heterogeneous solid-Earth parameters.
+Apply boundary condition on Fourier collocation solution.
+Assume that mean deformation at boundary is 0.
 """
-@inline function get_kernel_means(
-    L::Vector{Matrix{T}},
-    Omega::ComputationDomain,
-    i::Int,
-    j::Int,
-    kernel::Function,
-) where {T<:Real}
-    return [kernel_mean(M, Omega.X, Omega.Y, i, j, kernel) for M in L]
-end
-
-struct LocalFields{T<:AbstractFloat}
-    lithosphere_rigidity::T
-    mantle_density::T
-    halfspace_viscosity::T
-    viscosity_scaling::T
-end
-
 @inline function apply_bc(u::AbstractMatrix{T}) where {T<:AbstractFloat}
     return u .- T( ( sum(u[1,:]) + sum(u[:,1]) ) / sum(size(u)) )
 end
 
 """
 
-    function forward_isostasy!(
-        Omega::ComputationDomain,
-        t_vec::AbstractVector{T},
-        u3D_elastic::Array{T, 3},
-        u3D_viscous::Array{T, 3},
-        sigma_zz::AbstractMatrix{T},
-        tools::PrecomputedTerms,
-        p::SolidEarthParams,
-        c::PhysicalConstants,
-    ) where {T<:AbstractFloat}
-
-Integrates isostasy model over provided time vector.
-"""
-@inline function forward_isostasy!(
-    Omega::ComputationDomain,
-    t_vec::AbstractVector{T},
-    u3D_elastic::Array{T, 3},
-    u3D_viscous::Array{T, 3},
-    sigma_zz::AbstractMatrix{T},
-    tools::PrecomputedTerms,
-    p::SolidEarthParams,
-    c::PhysicalConstants,
-) where {T}
-
-    for i in eachindex(t_vec)[2:end]
-        u3D_elastic[:, :, i], u3D_viscous[:, :, i] = forwardstep_isostasy(
-            Omega,
-            t_vec[i]-t_vec[i-1],
-            u3D_viscous[:, :, i-1],
-            sigma_zz,
-            tools,
-            p,
-            c,
-        )
-    end
-end
-
-"""
-
-    get_differential_fourier(
-        T::Type,
-        Omega::ComputationDomain,
-    )
-
-Return coefficients resulting from transforming PDE into Fourier space.
-"""
-@inline function get_differential_fourier(
-    T::Type,
-    Omega::ComputationDomain,
-)
-    mu = T(π / Omega.L)
-    raw_coeffs = mu .* T.( vcat(0:Omega.N2, Omega.N2-1:-1:1) )
-    x_coeffs, y_coeffs = raw_coeffs, raw_coeffs
-    X_coeffs, Y_coeffs = meshgrid(x_coeffs, y_coeffs)
-    laplacian_coeffs = X_coeffs .^ 2 + Y_coeffs .^ 2
-    pseudodiff_coeffs = sqrt.(laplacian_coeffs)
-    biharmonic_coeffs = laplacian_coeffs .^ 2
-    return pseudodiff_coeffs, biharmonic_coeffs
-end
-
-@inline function get_freq_coeffs(
-    N::Int,
-    L::T,
-) where {T<:AbstractFloat}
-    return fftfreq( N, L/(N*T(π)) )
-end
-
-"""
-
-    get_cranknicholson_factors(
+    get_cranknicolson_factors(
         Omega::ComputationDomain,
         dt::T,
         p::Union{LocalFields, SolidEarthParams},
         c::PhysicalConstants,
     )
 
-Return two terms arising in the Crank-Nicholson scheme when applied to thepresent case.
+Return two terms arising in the Crank-Nicolson scheme when applied to thepresent case.
 """
-@inline function get_cranknicholson_factors(
+@inline function get_cranknicolson_factors(
     Omega::ComputationDomain,
     dt::T,
-    p::Union{LocalFields, SolidEarthParams},
+    p::SolidEarthParams,
     c::PhysicalConstants,
 ) where {T<:AbstractFloat}
     # mu already included in differential coeffs

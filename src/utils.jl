@@ -247,32 +247,6 @@ Get euclidean distance of point (x, y) to origin.
 """
 get_r(x::T, y::T) where {T<:Real} = LinearAlgebra.norm([x, y])
 
-radialgauss(sigma::T, r::T) where {T<:Real} = exp(-0.5*(r/sigma)^2) /(sigma * sqrt(2*π))
-
-@inline function normalize_matrix!(M::Matrix{T}) where {T<:Real}
-    M ./= sum(M)
-end
-
-"""
-
-    kernel_mean(M, X, Y, i, j, radial_distribution)
-
-Return mean of matrix M at indices `i ,j` and based on `kernel`. 
-M is defined over 2D spatial coordinates `X, Y`.
-"""
-@inline function kernel_mean(
-    M::AbstractMatrix{T},
-    X::AbstractMatrix{T},
-    Y::AbstractMatrix{T},
-    i::Int,
-    j::Int,
-    radial_distribution::Function,
-) where {T<:Real}
-    mask = radial_distribution.(get_r.(X .- X[i, j], Y .- Y[i, j]))
-    normalize_matrix!(mask)
-    return sum(mask .* M)
-end
-
 #####################################################
 ############## Load response matrix #################
 #####################################################
@@ -418,6 +392,39 @@ for Gauss-Legendre quadrature.
     return T.(x), T.(w)
 end
 
+
+"""
+
+    quadrature1D(f, n, x1, x2)
+
+Compute 1D Gauss-Legendre quadrature of `f` between `x1` and `x2`
+based on `n` support points.
+"""
+@inline function quadrature1D(f::Function, n::Int, x1::T, x2::T) where {T<:AbstractFloat}
+    x, w = get_quad_coeffs(T, n)
+    m, p = get_normalized_lin_transform(x1, x2)
+    sum = 0
+    for i=1:n
+        sum = sum + f(normalized_lin_transform(x[i], m, p)) * w[i] / m
+    end
+    return sum
+end
+
+"""
+
+    quadrature2D(
+        f::Function,
+        x::Vector{T},
+        w::Vector{T},
+        x1::T,
+        x2::T,
+        y1::T,
+        y2::T,
+    )
+
+Return the integration of `f` over [`x1, x2`] x [`y1, y2`] with `x, w` some pre-computed
+support points and coefficients of the Gauss-Legendre quadrature.
+"""
 function quadrature2D(
     f::Function,
     x::Vector{T},
@@ -443,23 +450,6 @@ end
 
 """
 
-    quadrature1D(f, n, x1, x2)
-
-Compute 1D Gauss-Legendre quadrature of `f` between `x1` and `x2`
-based on `n` support points.
-"""
-@inline function quadrature1D(f::Function, n::Int, x1::T, x2::T) where {T<:AbstractFloat}
-    x, w = get_quad_coeffs(T, n)
-    m, p = get_normalized_lin_transform(x1, x2)
-    sum = 0
-    for i=1:n
-        sum = sum + f(normalized_lin_transform(x[i], m, p)) * w[i] / m
-    end
-    return sum
-end
-
-"""
-
     get_normalized_lin_transform(x1, x2)
 
 Return parameters of linear function mapping `x1, x2` onto `-1, 1`.
@@ -473,21 +463,10 @@ end
 
 """
 
-    get_normalized_lin_transform(x1, x2)
+    normalized_lin_transform(y, m, p)
 
-Apply normalized linear transformation on interval limits `x1, x2`.
+Apply normalized linear transformation with slope `m` and bias `p` on `y`.
 """
 @inline function normalized_lin_transform(y::T, m::T, p::T) where {T<:AbstractFloat}
     return (y-p)/m
-end
-
-"""
-
-    get_minreal_maximag_ratio(M)
-
-Return the ratio of minimum real component to maximum imaginary component
-of complex matrix `M`.
-"""
-@inline function get_minreal_maximag_ratio(M::Matrix{Complex{T}}) where {T<:AbstractFloat}
-    return minimum(abs.(real.(M))) / maximum(abs.(imag.(M)))
 end
