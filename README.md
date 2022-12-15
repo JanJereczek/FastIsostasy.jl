@@ -4,12 +4,7 @@ Glacial Isostatic Adjustment (GIA) denotes the evolution over time of the solid-
 
 Compared to [1, 2], FastIsostasy.jl does not assume constant fields for parameters of the solid Earth. It thus offers an open-source and performant generalization of the original articles.
 
-
-!!! tip "Star us on GitHub!"
-    If you have found this library useful, please consider starring it on [GitHub](https://github.com/JanJereczek/FastIsostasy.jl).
-    This gives us an accurate lower bound of the (satisfied) user count.
-
-## [Getting started](@id getting_started)
+## Getting started
 
 `FastIsostasy.jl` is work under development and must be downloaded from GitHub to be used. It will hopefully become a registered julia package in future.
 
