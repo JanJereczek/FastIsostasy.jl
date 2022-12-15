@@ -21,4 +21,4 @@ Let x, y be the coordinates spanning the projection of the Earth surface and z t
 - A half-space representing the rest of the mantle, usually with small variance of viscosity over x and y.
 The two-layer model is a special case of this and can be obtained by setting the channel parameters to be the same as the ones of the half space.
 
-![Image](/home/jan/.julia/dev/FastIsostasy/docs/src/assets/sketch_3layer_model.png)
+![Schematic representation of the three-layer model](assets/sketch_3layer_model.png)
