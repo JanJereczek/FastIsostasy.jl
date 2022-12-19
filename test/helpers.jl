@@ -13,6 +13,9 @@ end
     return -D .* (c.rho_ice * c.g * H)
 end
 
+################################################
+# Analytic solution for constant viscosity
+################################################
 @inline function analytic_solution(
     r::T,
     t::T,
@@ -53,6 +56,7 @@ end
     p::SolidEarthParams,
     R0::T,
 ) where {T<:AbstractFloat}
+
     beta = mean(p.mantle_density) * c.g + mean(p.lithosphere_rigidity) * kappa ^ 4
     j0 = besselj0(kappa * r)
     j1 = besselj1(kappa * R0)
@@ -72,6 +76,59 @@ end
     # integrand of inverse Hankel transform when t-->infty
     return - j0 * j1 / beta
 end
+
+################################################
+# Analytic solution for radially dependent viscosity
+################################################
+
+@inline function analytic_radial_solution(
+    Omega::ComputationDomain,
+    i::Int,
+    j::Int,
+    t::T,
+    c::PhysicalConstants,
+    p::SolidEarthParams,
+    H0::T,
+    R0::T,
+    domains::Vector{T};
+    n_quad_support=5::Int,
+) where {T<:AbstractFloat}
+    scaling = c.rho_ice * c.g * H0 * R0
+    radial_integrand(kappa) = analytic_radial_integrand(Omega, i, j, kappa, t, c, p, R0)
+    return scaling .* looped_quadrature1D( radial_integrand, domains, n_quad_support )
+end
+
+@inline function analytic_radial_integrand(
+    Omega::ComputationDomain,
+    i::Int,
+    j::Int,
+    kappa::T,
+    t::T,
+    c::PhysicalConstants,
+    p::SolidEarthParams,
+    R0::T,
+) where {T<:AbstractFloat}
+
+    x, y = Omega.X[i, j], Omega.Y[i, j]
+    r = get_r(x, y)
+    # mantle_density = p.mantle_density[i, j]
+    # lithosphere_rigidity = p.lithosphere_rigidity[i, j]
+    # halfspace_viscosity = p.halfspace_viscosity[i, j]
+
+    # beta = mantle_density * c.g + lithosphere_rigidity * kappa ^ 4
+    # j0 = besselj0(kappa * r)
+    # j1 = besselj1(kappa * R0)
+    # return (exp(-beta*t/(2*halfspace_viscosity*kappa))-1) * j0 * j1 / beta
+
+    beta = mean(p.mantle_density) * c.g + mean(p.lithosphere_rigidity) * kappa ^ 4
+    j0 = besselj0(kappa * r)
+    j1 = besselj1(kappa * R0)
+    return (exp(-beta*t/(2*mean(p.halfspace_viscosity)*kappa))-1) * j0 * j1 / beta
+end
+
+################################################
+# Visualization
+################################################
 
 @inline function plot_response(
     Omega::ComputationDomain,

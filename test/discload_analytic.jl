@@ -21,24 +21,11 @@ include("helpers.jl")
     R = T(1000e3)               # ice disc radius (m)
     H = T(1000)                 # ice disc thickness (m)
 
-    if case == "homegeneous_viscosity_2layer"
+    if occursin("2layers", case)
         eta_channel = fill(1e21, size(Omega.X)...)
         p = init_solidearth_params(T, Omega, channel_viscosity = eta_channel)
-    elseif case == "homogeneous_viscosity_3layer"
+    elseif occursin("3layers", case)
         p = init_solidearth_params(T, Omega)
-    elseif case == "euler_2layer"
-        eta_channel = fill(1e21, size(Omega.X)...)
-        p = init_solidearth_params(T, Omega, channel_viscosity = eta_channel)
-    elseif case == "affine_viscosity_2layer"
-        m = (1e22 - 1e21)/(2 * L)
-        p = 1e21 - m * minimum(Omega.X)
-        halfspace_viscosity = m * Omega.X .+ p
-        p = init_solidearth_params(
-            T,
-            Omega,
-            channel_viscosity = halfspace_viscosity,
-            halfspace_viscosity = halfspace_viscosity,
-        )
     end
     c = init_physical_constants(T)
 
@@ -59,21 +46,8 @@ include("helpers.jl")
         @test isapprox( sol, -1000*c.rho_ice/mean(p.mantle_density), rtol=T(1e-2) )
     end
 
-    sigma_zz_zero = copy(u3D[:, :, 1])   # first, test a zero-load field (N/m^2)
     sigma_zz_disc = generate_uniform_disc_load(Omega, c, R, H)
     tools = precompute_terms(dt, Omega, p, c)
-
-    @testset "symmetry of load response" begin
-        @test isapprox( tools.loadresponse, tools.loadresponse', rtol = T(1e-6) )
-        @test isapprox( tools.loadresponse, reverse(tools.loadresponse, dims=1), rtol = T(1e-6) )
-        @test isapprox( tools.loadresponse, reverse(tools.loadresponse, dims=2), rtol = T(1e-6) )
-    end
-
-    @testset "homogeneous response to zero load" begin
-        forward_isostasy!(Omega, t_vec, u3D_elastic, u3D_viscous, sigma_zz_zero, tools, p, c)
-        @test sum( isapprox.(u3D_elastic, T(0)) ) == prod(size(u3D))
-        @test sum( isapprox.(u3D_viscous, T(0)) ) == prod(size(u3D))
-    end
 
     @time forward_isostasy!(Omega, t_vec, u3D_elastic, u3D_viscous, sigma_zz_disc, tools, p, c)
     jldsave(
@@ -149,12 +123,12 @@ end
 
 """
 Application cases:
-    - "homegeneous_viscosity_2layer"
-    - "homogeneous_viscosity_3layer"
-    - "affine_viscosity_2layer"
-    - "euler_2layer"
+    - "homegeneous_viscosity_2layers"
+    - "homogeneous_viscosity_3layers"
+    - "euler_2layers"
+    - "euler_3layers"
 """
-case = "euler_2layer"
+case = "euler_2layers"
 for n in 7:7
     main(n, case)
 end
