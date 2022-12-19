@@ -67,19 +67,22 @@ Integrates isostasy model over provided time vector.
 """
 @inline function forward_isostasy!(
     Omega::ComputationDomain,
-    t_vec::AbstractVector{T},
+    t_vec::AbstractVector{T},       # the output time vector
     u3D_elastic::Array{T, 3},
     u3D_viscous::Array{T, 3},
     sigma_zz::AbstractMatrix{T},
     tools::PrecomputedTerms,
     p::SolidEarthParams,
-    c::PhysicalConstants,
+    c::PhysicalConstants;
+    dt_refine=fill(100.0, length(t_vec)-1)::AbstractVector{T},   # refine time step for internal computation
 ) where {T}
 
     for i in eachindex(t_vec)[2:end]
+        dt = t_vec[i] - t_vec[i-1]
         u3D_elastic[:, :, i], u3D_viscous[:, :, i] = forwardstep_isostasy(
             Omega,
-            t_vec[i]-t_vec[i-1],
+            dt / dt_refine[i-1],
+            dt,
             u3D_viscous[:, :, i-1],
             sigma_zz,
             tools,
@@ -108,13 +111,13 @@ Forward-stepping of GIA model.
 @inline function forwardstep_isostasy(
     Omega::ComputationDomain,
     dt::T,
+    dt_out::T,
     u_viscous::AbstractMatrix{T},
     sigma_zz::AbstractMatrix{T},
     tools::PrecomputedTerms,
     p::SolidEarthParams,
     c::PhysicalConstants;
     viscous_solver="Euler"::String,
-    dt_refine=100::Int,
 ) where {T<:AbstractFloat}
 
     # load Ψ is defined as mass per surface area --> Ψ = - σ_zz / g
@@ -123,14 +126,13 @@ Forward-stepping of GIA model.
 
     if viscous_solver == "Euler"
 
-        t_internal = range(0, stop = dt, length = dt_refine)
-        dt_internal = t_internal[2] - t_internal[1]
-        u_internal = zeros(T, size(Omega.X)..., dt_refine)
+        t_internal = range(0, stop = dt_out, step = dt)
+        u_internal = zeros(T, size(Omega.X)..., length(t_internal))
         u_internal[:, :, 1] = u_viscous
         for i in eachindex(t_internal)[2:end]
             u_internal[:, :, i] = apply_bc(euler_viscous_response(
                 Omega,
-                dt_internal,
+                dt,
                 u_internal[:, :, i-1],
                 sigma_zz,
                 tools,
@@ -210,6 +212,28 @@ Valid for solid-Earth parameters that can vary over x, y.
     viscous_lgr = tools.forward_fft * ( lgr_term ./ eta_scaled )
     u_fourier_next = u_fourier_current + (dt ./ ( Omega.pseudodiff_coeffs .+ 1e-20 ) ) .* viscous_lgr
     return real.(tools.inverse_fft * u_fourier_next)
+end
+
+@inline function euler_viscous_response2(
+    Omega::ComputationDomain,
+    dt::T,
+    u_current::AbstractMatrix{T},
+    sigma_zz::AbstractMatrix{T},
+    tools::PrecomputedTerms,
+    c::PhysicalConstants,
+    p::SolidEarthParams,
+) where {T<:AbstractFloat}
+
+    biharmonic_u = Omega.harmonic_coeffs .* ( tools.forward_fft * 
+      ( p.lithosphere_rigidity .* (tools.inverse_fft *
+      ( Omega.harmonic_coeffs .* (tools.forward_fft * u_current) ) ) ) )
+
+    lgr_term = ( tools.forward_fft * sigma_zz -
+      tools.forward_fft * (p.mantle_density .* c.g .* u_current) -
+      biharmonic_u ) ./ ( Omega.pseudodiff_coeffs .* p.viscosity_scaling .+ 1e-20 )
+
+    return u_current +
+      dt ./ (2 .* p.halfspace_viscosity) .* real.(tools.inverse_fft * lgr_term)
 end
 
 """

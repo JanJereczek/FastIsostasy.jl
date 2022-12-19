@@ -15,6 +15,8 @@ export init_domain
 export init_physical_constants
 export init_solidearth_params
 
+export get_r
+
 export precompute_terms
 export quadrature1D
 export meshgrid

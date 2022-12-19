@@ -25,7 +25,7 @@ Initialize a square computational domain with length `2*L` and `2^n+1` grid cell
     X, Y = meshgrid(x, x)
     distance, loadresponse_coeffs = get_loadresponse_coeffs(T)
     loadresponse_matrix, loadresponse_function = build_loadresponse_matrix(X, Y, distance, loadresponse_coeffs)
-    pseudodiff_coeffs, biharmonic_coeffs = get_differential_fourier(L, N2)
+    pseudodiff, harmonic, biharmonic = get_differential_fourier(L, N2)
 
     return ComputationDomain(
         L,
@@ -37,8 +37,9 @@ Initialize a square computational domain with length `2*L` and `2^n+1` grid cell
         Y,
         loadresponse_matrix,
         loadresponse_function,
-        pseudodiff_coeffs,
-        biharmonic_coeffs,
+        pseudodiff,
+        harmonic,
+        biharmonic,
     )
 end
 
@@ -53,6 +54,7 @@ struct ComputationDomain{T<:AbstractFloat}
     loadresponse_matrix::AbstractMatrix{T}
     loadresponse_function::Function
     pseudodiff_coeffs::AbstractMatrix{T}
+    harmonic_coeffs::AbstractMatrix{T}
     biharmonic_coeffs::AbstractMatrix{T}
 end
 
@@ -72,10 +74,10 @@ Compute the matrices capturing the differential operators in the fourier space.
     raw_coeffs = mu .* T.( vcat(0:N2, N2-1:-1:1) )
     x_coeffs, y_coeffs = raw_coeffs, raw_coeffs
     X_coeffs, Y_coeffs = meshgrid(x_coeffs, y_coeffs)
-    laplacian_coeffs = X_coeffs .^ 2 + Y_coeffs .^ 2
-    pseudodiff_coeffs = sqrt.(laplacian_coeffs)
-    biharmonic_coeffs = laplacian_coeffs .^ 2
-    return pseudodiff_coeffs, biharmonic_coeffs
+    harmonic_coeffs = X_coeffs .^ 2 + Y_coeffs .^ 2
+    pseudodiff_coeffs = sqrt.(harmonic_coeffs)
+    biharmonic_coeffs = harmonic_coeffs .^ 2
+    return pseudodiff_coeffs, harmonic_coeffs, biharmonic_coeffs
 end
 #####################################################
 ############### Physical constants ##################
