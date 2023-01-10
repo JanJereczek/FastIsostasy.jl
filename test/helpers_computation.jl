@@ -9,8 +9,22 @@ end
     R::T,
     H::T,
 ) where {T<:AbstractFloat}
-    D = mask_disc(Omega.X, Omega.Y, R)
-    return -D .* (c.rho_ice * c.g * H)
+    M = mask_disc(Omega.X, Omega.Y, R)
+    return - M .* (c.ice_density * c.g * H)
+end
+
+@inline function generate_cap_load(
+    Omega::ComputationDomain,
+    c::PhysicalConstants,
+    alpha_deg::T,
+    H::T,
+) where {T<:AbstractFloat}
+    R = sqrt.( Omega.X .^ 2 + Omega.Y .^ 2 )
+    Theta = R ./ c.r_equator
+    alpha = deg2rad(alpha_deg)
+    M = Theta .< alpha
+    return - (c.ice_density * H * c.g) .* 
+           sqrt.( M .* (cos.(Theta) .- cos(alpha)) ./ (1 - cos(alpha)) )
 end
 
 ################################################
@@ -26,7 +40,7 @@ end
     domains::Vector{T};
     n_quad_support=5::Int,
 ) where {T<:AbstractFloat}
-    scaling = c.rho_ice * c.g * H0 * R0
+    scaling = c.ice_density * c.g * H0 * R0
     if t == T(Inf)
         equilibrium_integrand_r(kappa) = equilibrium_integrand(kappa, r, c, p, R0)
         return scaling .* looped_quadrature1D( equilibrium_integrand_r, domains, n_quad_support )
@@ -93,7 +107,7 @@ end
     domains::Vector{T};
     n_quad_support=5::Int,
 ) where {T<:AbstractFloat}
-    scaling = c.rho_ice * c.g * H0 * R0
+    scaling = c.ice_density * c.g * H0 * R0
     radial_integrand(kappa) = analytic_radial_integrand(Omega, i, j, kappa, t, c, p, R0)
     return scaling .* looped_quadrature1D( radial_integrand, domains, n_quad_support )
 end
@@ -124,134 +138,4 @@ end
     j0 = besselj0(kappa * r)
     j1 = besselj1(kappa * R0)
     return (exp(-beta*t/(2*mean(p.halfspace_viscosity)*kappa))-1) * j0 * j1 / beta
-end
-
-################################################
-# Visualization
-################################################
-
-@inline function plot_response(
-    Omega::ComputationDomain,
-    sigma::Matrix{T},
-    u_plot::Vector{Matrix{T}},
-    panels::Vector{Tuple{Int, Int}},
-    labels,
-    case::String,
-) where {T<:AbstractFloat}
-
-    fig = Figure(resolution=(1600, 900))
-    ax1 = Axis(fig[1, 1][1, :], aspect=DataAspect())
-    hm = heatmap!(ax1, Omega.X, Omega.Y, sigma)
-    Colorbar(
-        fig[1, 1][2, :],
-        hm,
-        label = L"Vertical load $ \mathrm{N \, m^{-2}}$",
-        vertical = false,
-        width = Relative(0.8),
-    )
-
-    for k in eachindex(u_plot)
-        i, j = panels[k]
-        ax3D = Axis3(fig[i, j][1, :])
-        sf = surface!(
-            ax3D,
-            Omega.X,
-            Omega.Y,
-            u_plot[k],
-            # colorrange = (-300, 50),
-            colormap = :jet,
-        )
-        wireframe!(
-            ax3D,
-            Omega.X,
-            Omega.Y,
-            u_plot[k],
-            linewidth = 0.1,
-            color = :black,
-        )
-        Colorbar(
-            fig[i, j][2, :],
-            sf,
-            label = labels[k],
-            vertical = false,
-            width = Relative(0.8),
-        )
-    end
-    plotname = "plots/discload_$(case)_N=$(Omega.N)"
-    save("$plotname.png", fig)
-    save("$plotname.pdf", fig)
-    return fig
-end
-
-@inline function animate_viscous_response(
-    t_vec::AbstractVector{T},
-    Omega::ComputationDomain,
-    u::Array{T, 3},
-    anim_name::String,
-    u_range::Tuple{T, T},
-    points,
-) where {T<:AbstractFloat}
-
-    t_vec = collect(t_vec) ./ (365. * 24. * 60. * 60.)
-
-    # umax = [minimum(u[:, :, j]) for j in axes(u, 3)]
-    u_lowest_eta = u[points[1][1], points[1][2], :]
-    u_highest_eta = u[points[2][1], points[2][2], :]
-
-    i = Observable(1)
-    
-    u2D = @lift(u[:, :, $i])
-    timepoint = @lift(t_vec[$i])
-    upoint_lowest = @lift(u_lowest_eta[$i])
-    upoint_highest = @lift(u_highest_eta[$i])
-
-    fig = Figure(resolution = (1600, 900))
-    ax1 = Axis(
-        fig[1, 1:3],
-        xlabel = L"Time $t$ (yr)",
-        ylabel = L"Viscous displacement $u^V$ (m)",
-        xminorticks = IntervalsBetween(10),
-        xminorgridvisible = true,
-    )
-    ax2 = Axis3(
-        fig[1, 5:8],
-        xlabel = L"$x$ (m)",
-        ylabel = L"$y$ (m)",
-        zlabel = L"$z$ (m)",
-    )
-    cmap = :jet
-    clims = u_range
-
-    zlims!(ax2, clims)
-    lines!(ax1, t_vec, u_lowest_eta)
-    lines!(ax1, t_vec, u_highest_eta)
-    scatter!(ax1, timepoint, upoint_lowest, color = :red)
-    scatter!(ax1, timepoint, upoint_highest, color = :red)
-
-    sf = surface!(
-        ax2,
-        Omega.X,
-        Omega.Y,
-        u2D,
-        colorrange = clims,
-        colormap = cmap,
-    )
-    wireframe!(
-        ax2,
-        Omega.X,
-        Omega.Y,
-        u2D,
-        linewidth = 0.1,
-        color = :black,
-    )
-    Colorbar(
-        fig[1, 9],
-        sf,
-        label = L"Viscous displacement field $u^V$ (m)",
-        height = Relative(0.5),
-    )
-
-    record(fig, "$anim_name.mp4", axes(u, 3)) do k
-        i[] = k
-    end
 end

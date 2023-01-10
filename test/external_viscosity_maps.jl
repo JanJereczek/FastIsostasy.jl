@@ -49,7 +49,7 @@ function viscositytxt2matrix()
     eta = loop_f_over_vecmat(filter_nan_viscosity, eta_withnan)
     km2m!(eta)
 
-    dx = 40e3   # Doug worked on 40km resolution
+    dx = 40e3   # wiens worked on 40km resolution
     L = 3000e3  # Remap this on 2L x 2L domain
     x = range( -L, stop = L, step = dx )
     y = copy( x )
@@ -110,24 +110,24 @@ function viscositytxt2matrix()
         highclip = cmap[end],
         label = "Log10 viscosity (Pa s)",
     )
-    save("plots/Doug_visc_map.png", fig)
-    save("plots/Doug_visc_map.pdf", fig)
+    save("plots/wiens_visc_map.png", fig)
+    save("plots/wiens_visc_map.pdf", fig)
 
     eta_interpolator = linear_interpolation(
         (collect(x), collect(y)),
         Eta_mean[:, :, 1],
     )
     jldsave(
-        "data/doug_viscosity_map.jld2",
+        "data/wiens_viscosity_map.jld2",
         eta = Eta,
         eta_mean = Eta_mean[:, :, 1],
         eta_mean_interpolator = eta_interpolator,
     )
 end
 
-function interpolate_visc_doug_on_grid(X, Y)
+function interpolate_visc_wiens_on_grid(X, Y)
     eta_mean_interpolator = load(
-        "data/doug_viscosity_map.jld2",
+        "data/wiens_viscosity_map.jld2",
         "eta_mean_interpolator",
     )
     return eta_mean_interpolator.(X, Y)'

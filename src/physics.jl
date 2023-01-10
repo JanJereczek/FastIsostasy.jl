@@ -121,7 +121,7 @@ Forward-stepping of GIA model.
 ) where {T<:AbstractFloat}
 
     # load Ψ is defined as mass per surface area --> Ψ = - σ_zz / g
-    # because σ_zz = rho_ice * g * H
+    # because σ_zz = ice_density * g * H
     u_elastic_next = compute_elastic_response(Omega, tools, -sigma_zz ./ c.g )
 
     if viscous_solver == "Euler"
@@ -192,7 +192,7 @@ end
 Return viscous response based on explicit Euler time discretization.
 Valid for solid-Earth parameters that can vary over x, y.
 """
-@inline function euler_viscous_response(
+@inline function euler_viscous_response2(
     Omega::ComputationDomain,
     dt::T,
     u_current::AbstractMatrix{T},
@@ -214,7 +214,7 @@ Valid for solid-Earth parameters that can vary over x, y.
     return real.(tools.inverse_fft * u_fourier_next)
 end
 
-@inline function euler_viscous_response2(
+@inline function euler_viscous_response(
     Omega::ComputationDomain,
     dt::T,
     u_current::AbstractMatrix{T},
@@ -232,8 +232,7 @@ end
       tools.forward_fft * (p.mantle_density .* c.g .* u_current) -
       biharmonic_u ) ./ ( Omega.pseudodiff_coeffs .* p.viscosity_scaling .+ 1e-20 )
 
-    return u_current +
-      dt ./ (2 .* p.halfspace_viscosity) .* real.(tools.inverse_fft * lgr_term)
+    return u_current + dt ./ (2 .* p.halfspace_viscosity) .* real.(tools.inverse_fft * lgr_term)
 end
 
 """
@@ -256,7 +255,7 @@ end
         c::PhysicalConstants,
     )
 
-Return two terms arising in the Crank-Nicolson scheme when applied to thepresent case.
+Return two terms arising in the Crank-Nicolson scheme when applied to the present case.
 """
 @inline function get_cranknicolson_factors(
     Omega::ComputationDomain,

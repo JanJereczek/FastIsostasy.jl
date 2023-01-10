@@ -1,0 +1,173 @@
+
+################################################
+# Visualization
+################################################
+
+@inline function plot_response(
+    Omega::ComputationDomain,
+    sigma::Matrix{T},
+    u_plot::Vector{Matrix{T}},
+    panels::Vector{Tuple{Int, Int}},
+    labels,
+    case::String,
+) where {T<:AbstractFloat}
+
+    fig = Figure(resolution=(1600, 900))
+    ax1 = Axis(fig[1, 1][1, :], aspect=DataAspect())
+    hm = heatmap!(ax1, Omega.X, Omega.Y, sigma)
+    Colorbar(
+        fig[1, 1][2, :],
+        hm,
+        label = L"Vertical load $ \mathrm{N \, m^{-2}}$",
+        vertical = false,
+        width = Relative(0.8),
+    )
+
+    for k in eachindex(u_plot)
+        i, j = panels[k]
+        ax3D = Axis3(fig[i, j][1, :])
+        sf = surface!(
+            ax3D,
+            Omega.X,
+            Omega.Y,
+            u_plot[k],
+            # colorrange = (-300, 50),
+            colormap = :jet,
+        )
+        wireframe!(
+            ax3D,
+            Omega.X,
+            Omega.Y,
+            u_plot[k],
+            linewidth = 0.01,
+            color = :black,
+        )
+        Colorbar(
+            fig[i, j][2, :],
+            sf,
+            label = labels[k],
+            vertical = false,
+            width = Relative(0.8),
+        )
+    end
+    plotname = "plots/discload_$(case)_N=$(Omega.N)"
+    save("$plotname.png", fig)
+    save("$plotname.pdf", fig)
+    return fig
+end
+
+@inline function slice_response(
+    Omega::ComputationDomain,
+    c::PhysicalConstants,
+    t_vec::AbstractVector{T},
+    t_plot::AbstractVector{T},
+    Uvec::Vector{Array{T, 3}},
+    labels,
+    plotname::String,
+) where {T<:AbstractFloat}
+
+    ncases = length(Uvec)
+    fig = Figure(resolution=(1600, 700))
+    axs = [Axis(
+        fig[1, j],
+        title = labels[j],
+        xlabel = L"Colatitude $\theta$ (deg)",
+        ylabel = j == 1 ? L"Total displacement $u$ (m)" : " ",
+        xminorticks = IntervalsBetween(5),
+        yminorticks = IntervalsBetween(2),
+        xminorgridvisible = true,
+        yminorgridvisible = true,
+        yticklabelsvisible = j == 1 ? true : false,
+    ) for j in 1:ncases]
+
+    for i in 1:ncases
+        U = Uvec[i]
+        n1, n2, nt = size(U)
+        slicey, slicex = Int(round(n1/2)), Int(round(n2/2))
+        theta = rad2deg.( Omega.X[slicey, slicex:end] ./ c.r_equator)
+
+        for t in t_plot
+            k = argmin((t_vec .- t).^2)
+            tyr = Int(round( seconds2years(t) ))
+            lines!(axs[i], theta, U[slicey, slicex:end, k], label = L"$t = %$tyr $ yr")
+        end
+        ylims!(axs[i], (-450, 50))
+    end
+    axislegend(axs[ncases], position = :rb)
+    save("plots/$plotname.png", fig)
+    save("plots/$plotname.pdf", fig)
+    return fig
+end
+
+@inline function animate_viscous_response(
+    t_vec::AbstractVector{T},
+    Omega::ComputationDomain,
+    u::Array{T, 3},
+    anim_name::String,
+    u_range::Tuple{T, T},
+    points,
+) where {T<:AbstractFloat}
+
+    t_vec = collect(t_vec) ./ (365. * 24. * 60. * 60.)
+
+    # umax = [minimum(u[:, :, j]) for j in axes(u, 3)]
+    u_lowest_eta = u[points[1][1], points[1][2], :]
+    u_highest_eta = u[points[2][1], points[2][2], :]
+
+    i = Observable(1)
+    
+    u2D = @lift(u[:, :, $i])
+    timepoint = @lift(t_vec[$i])
+    upoint_lowest = @lift(u_lowest_eta[$i])
+    upoint_highest = @lift(u_highest_eta[$i])
+
+    fig = Figure(resolution = (1600, 900))
+    ax1 = Axis(
+        fig[1, 1:3],
+        xlabel = L"Time $t$ (yr)",
+        ylabel = L"Viscous displacement $u^V$ (m)",
+        xminorticks = IntervalsBetween(10),
+        xminorgridvisible = true,
+    )
+    ax2 = Axis3(
+        fig[1, 5:8],
+        xlabel = L"$x$ (m)",
+        ylabel = L"$y$ (m)",
+        zlabel = L"$z$ (m)",
+    )
+    cmap = :jet
+    clims = u_range
+
+    zlims!(ax2, clims)
+    lines!(ax1, t_vec, u_lowest_eta)
+    lines!(ax1, t_vec, u_highest_eta)
+    scatter!(ax1, timepoint, upoint_lowest, color = :red)
+    scatter!(ax1, timepoint, upoint_highest, color = :red)
+
+    sf = surface!(
+        ax2,
+        Omega.X,
+        Omega.Y,
+        u2D,
+        colorrange = clims,
+        colormap = cmap,
+    )
+    wireframe!(
+        ax2,
+        Omega.X,
+        Omega.Y,
+        u2D,
+        linewidth = 0.1,
+        color = :black,
+    )
+    Colorbar(
+        fig[1, 9],
+        sf,
+        label = L"Viscous displacement field $u^V$ (m)",
+        height = Relative(0.5),
+    )
+
+    record(fig, "$anim_name.mp4", axes(u, 3)) do k
+        i[] = k
+    end
+end

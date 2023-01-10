@@ -14,6 +14,8 @@ include("physics.jl")
 export init_domain
 export init_physical_constants
 export init_solidearth_params
+export years2seconds
+export seconds2years
 
 export get_r
 

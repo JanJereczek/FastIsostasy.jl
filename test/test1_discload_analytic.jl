@@ -5,7 +5,8 @@ using Test
 using SpecialFunctions
 using JLD2
 using Interpolations
-include("helpers.jl")
+include("helpers_computation.jl")
+include("helpers_plots.jl")
 
 @inline function main(
     n::Int,             # 2^n cells on domain (1)
@@ -30,28 +31,28 @@ include("helpers.jl")
     c = init_physical_constants(T)
 
     timespan = T.([0, 5e4]) * T(c.seconds_per_year)     # (yr) -> (s)
-    dt = T(100) * T(c.seconds_per_year)                 # (yr) -> (s)
-    t_vec = timespan[1]:dt:timespan[2]                  # (s)
+    dt_out = T(100) * T(c.seconds_per_year)             # (yr) -> (s), time step for saving output
+    t_vec = timespan[1]:dt_out:timespan[2]              # (s)
 
     u3D = zeros( T, (size(Omega.X)..., length(t_vec)) )
     u3D_elastic = copy(u3D)
     u3D_viscous = copy(u3D)
     
-    domains = vcat(1.0e-14, 10 .^ (-10:0.05:-3), 1.0)
+    analytic_support = vcat(1.0e-14, 10 .^ (-10:0.05:-3), 1.0)
 
-    # domains = collect(10.0 .^ (-14:5))
+    # analytic_support = collect(10.0 .^ (-14:5))
 
     @testset "analytic solution" begin
-        sol = analytic_solution(T(0), T(50000 * c.seconds_per_year), c, p, H, R, domains)
-        @test isapprox( sol, -1000*c.rho_ice/mean(p.mantle_density), rtol=T(1e-2) )
+        sol = analytic_solution(T(0), T(50000 * c.seconds_per_year), c, p, H, R, analytic_support)
+        @test isapprox( sol, -1000*c.ice_density/mean(p.mantle_density), rtol=T(1e-2) )
     end
 
     sigma_zz_disc = generate_uniform_disc_load(Omega, c, R, H)
-    tools = precompute_terms(dt, Omega, p, c)
+    tools = precompute_terms(dt_out, Omega, p, c)
 
     @time forward_isostasy!(Omega, t_vec, u3D_elastic, u3D_viscous, sigma_zz_disc, tools, p, c)
     jldsave(
-        "data/$(case)_N$(Omega.N).jld2",
+        "data/$(case)_N=$(Omega.N).jld2",
         u3D_elastic = u3D_elastic,
         u3D_viscous = u3D_viscous,
     )
@@ -60,11 +61,11 @@ include("helpers.jl")
 
     # Computing analytical solution is quite expensive as it involves
     # integration over κ ∈ [0, ∞) --> load precomputed interpolator.
-    compute_analytical_sol = false
+    compute_analytical_sol = true
     tend = T(Inf * c.seconds_per_year)
 
     if compute_analytical_sol
-        analytic_solution_r(r) = analytic_solution(r, tend, c, p, H, R, domains)
+        analytic_solution_r(r) = analytic_solution(r, tend, c, p, H, R, analytic_support)
         u_analytic = analytic_solution_r.( sqrt.(Omega.X .^ 2 + Omega.Y .^ 2) )
         U = [u_analytic[i,j] for i in axes(Omega.X, 1), j in axes(Omega.X, 2)]
         u_analytic_interp = linear_interpolation(
@@ -73,14 +74,15 @@ include("helpers.jl")
             extrapolation_bc = NaN,
         )
         jldsave(
-            "data/analytical_solution_interpolator_N$(Omega.N).jld2",
+            "data/analytical_solution_interpolator_N=$(Omega.N).jld2",
             u_analytic_interp = u_analytic_interp,
         )
+    else
+        u_analytic_interp = load(
+            "data/analytical_solution_interpolator_N=$(Omega.N).jld2",
+            "u_analytic_interp",
+        )
     end
-    u_analytic_interp = load(
-        "data/analytical_solution_interpolator_N65.jld2",
-        "u_analytic_interp",
-    )
     u_analytic = u_analytic_interp.(Omega.X, Omega.Y)
 
     u_plot = [
@@ -129,6 +131,6 @@ Application cases:
     - "euler_3layers"
 """
 case = "euler_2layers"
-for n in 7:7
+for n in 8:8
     main(n, case)
 end

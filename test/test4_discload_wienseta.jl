@@ -23,7 +23,7 @@ include("external_viscosity_maps.jl")
     c = init_physical_constants(T)
     sigma_zz_disc = generate_uniform_disc_load(Omega, c, R, H)
 
-    log10_eta_channel = interpolate_visc_doug_on_grid(Omega.X, Omega.Y)
+    log10_eta_channel = interpolate_visc_wiens_on_grid(Omega.X, Omega.Y)
     eta_channel = 10 .^ (log10_eta_channel)
     eta_halfspace = fill(10.0 ^ 21, size(Omega.X)...)
     p = init_solidearth_params(
@@ -70,5 +70,5 @@ include("external_viscosity_maps.jl")
     end
 end
 
-case = "doug_viscosity_3layer"
+case = "wiens_viscosity_3layer"
 main(7, case, make_anim = true)

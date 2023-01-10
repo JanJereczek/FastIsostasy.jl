@@ -84,22 +84,40 @@ end
 #####################################################
 
 g = 9.81                                    # m/s^2
-seconds_per_year = 60 * 60 * 24 * 365       # s
-rho_ice = 0.910e3                           # kg/m^3
+seconds_per_year = 60 * 60 * 24 * 365.25    # s
+ice_density = 0.910e3                       # kg/m^3
+r_equator = 6.371e6                         # Earth radius at equator (m)
+r_pole = 6.357e6                            # Earth radius at pole (m)
 
 """
     init_physical_constants(T::Type)
 
 Return struct containing physical constants.
 """
-@inline function init_physical_constants(T::Type)
-    return PhysicalConstants(T(g), T(seconds_per_year), T(rho_ice))
+@inline function init_physical_constants(T::Type; ice_density = ice_density)
+    return PhysicalConstants(
+        T(g),
+        T(seconds_per_year),
+        T(ice_density),
+        T(r_equator),
+        T(r_pole),
+    )
 end
 
 struct PhysicalConstants{T<:AbstractFloat}
     g::T
     seconds_per_year::T
-    rho_ice::T
+    ice_density::T
+    r_equator::T
+    r_pole::T
+end
+
+function years2seconds(t::T) where {T<:AbstractFloat}
+    return t * seconds_per_year
+end
+
+function seconds2years(t::T) where {T<:AbstractFloat}
+    return t / seconds_per_year
 end
 
 #####################################################
@@ -261,9 +279,6 @@ Return the load response coefficients with type `T` and listed in table A3 of
 Farrell (1972).
 """
 function get_loadresponse_coeffs(T::Type)
-    # Earth's radius
-    a = 6.371e6 # equator
-    a = 6.357e6 # pole
 
     # Angles of table A3 of
     # Deformation of the Earth by surface Loads, Farrell 1972
