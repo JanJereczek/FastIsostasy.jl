@@ -6,6 +6,7 @@ using FFTW
 using FastGaussQuadrature
 using Interpolations
 using DSP
+using LazyArrays
 
 include("utils.jl")
 include("physics.jl")
@@ -22,6 +23,7 @@ export get_r
 export precompute_terms
 export quadrature1D
 export meshgrid
+export forwardstep_isostasy!
 export forwardstep_isostasy
 export forward_isostasy!
 

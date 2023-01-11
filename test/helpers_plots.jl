@@ -56,7 +56,7 @@
     return fig
 end
 
-@inline function slice_response(
+@inline function slice_spada(
     Omega::ComputationDomain,
     c::PhysicalConstants,
     t_vec::AbstractVector{T},
@@ -86,6 +86,21 @@ end
         slicey, slicex = Int(round(n1/2)), Int(round(n2/2))
         theta = rad2deg.( Omega.X[slicey, slicex:end] ./ c.r_equator)
 
+        if i == 1
+            theta_benchmark = [0, 5, 10, 20]
+            scatter_symbols = [:circle, :rect, :diamond]
+            for k in eachindex([0, 1, 5, 10, 1000])
+                for j in eachindex(["vk", "gs", "zm"])
+                    scatter!(
+                        axs[i],
+                        theta_benchmark,
+                        u_benchmark[j, :, k],
+                        marker = scatter_symbols[j],
+                    )
+                end
+            end
+        end
+
         for t in t_plot
             k = argmin((t_vec .- t).^2)
             tyr = Int(round( seconds2years(t) ))
@@ -93,7 +108,7 @@ end
         end
         ylims!(axs[i], (-450, 50))
     end
-    axislegend(axs[ncases], position = :rb)
+    axislegend(axs[1], position = :rb)
     save("plots/$plotname.png", fig)
     save("plots/$plotname.pdf", fig)
     return fig
@@ -171,3 +186,30 @@ end
         i[] = k
     end
 end
+
+u_t0_vk = [-27.81, -23.65, -7.49, -1.20]'
+u_t0_gs = [-27.77, -23.64, -7.33, -1.20]'
+u_t0_zm = [-27.77, -23.65, -7.38, -1.20]'
+u_t0 = vcat(u_t0_vk, u_t0_gs, u_t0_zm)
+
+u_t1_vk = [-94.49, -79.59, -25.25, -1.72]'
+u_t1_gs = [-94.40, -79.53, -24.80, -1.72]'
+u_t1_zm = [-94.42, -79.55, -24.92, -1.72]'
+u_t1 = vcat(u_t1_vk, u_t1_gs, u_t1_zm)
+
+u_t5_vk = [-237.58, -199.62, -48.88, 3.87]'
+u_t5_gs = [-237.49, -199.59, -47.73, 3.85]'
+u_t5_zm = [-237.50, -199.60, -48.04, 3.85]'
+u_t5 = vcat(u_t5_vk, u_t5_gs, u_t5_zm)
+
+u_t10_vk = [-303.03, -256.98, -50.94, 7.07]'
+u_t10_gs = [-303.01, -257.05, -49.35, 7.03]'
+u_t10_zm = [-302.99, -257.03, -49.77, 7.04]'
+u_t10 = vcat(u_t10_vk, u_t10_gs, u_t10_zm)
+
+u_tinf_vk = [NaN, NaN, NaN, NaN]'
+u_tinf_gs = [-388.11, -338.30, -59.24, 8.55]'
+u_tinf_zm = [NaN, NaN, NaN, NaN]'
+u_tinf = vcat(u_tinf_vk, u_tinf_gs, u_tinf_zm)
+
+u_benchmark = cat(u_t0, u_t1, u_t5, u_t10, u_tinf, dims = 3)

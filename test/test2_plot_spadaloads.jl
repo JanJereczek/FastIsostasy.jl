@@ -1,3 +1,5 @@
+push!(LOAD_PATH, "../")
+using FastIsostasy
 using CairoMakie
 using JLD2
 include("helpers_plots.jl")
@@ -22,11 +24,11 @@ include("helpers_plots.jl")
     ]
 
     if make_plot
-        response_fig = slice_response(
+        response_fig = slice_spada(
             sol_disc["Omega"],
             sol_disc["c"],
             sol_disc["t_vec"],
-            years2seconds.([0.0, 1e3, 2e3, 5e3, 1e4, 1e5]),
+            years2seconds.([1.0, 1e3, 2e3, 5e3, 1e4, 1e5]),
             u_plot,
             labels,
             "test2_N$N"
@@ -39,6 +41,6 @@ include("helpers_plots.jl")
     # end
 end
 
-for n in 7:7
+for n in 6:6
     main(n)
 end

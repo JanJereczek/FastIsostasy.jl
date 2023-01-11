@@ -75,11 +75,13 @@ Integrates isostasy model over provided time vector.
     p::SolidEarthParams,
     c::PhysicalConstants;
     dt_refine=fill(100.0, length(t_vec)-1)::AbstractVector{T},   # refine time step for internal computation
+    viscous_solver="Euler"::String,
 ) where {T}
 
     for i in eachindex(t_vec)[2:end]
         dt = t_vec[i] - t_vec[i-1]
-        u3D_elastic[:, :, i], u3D_viscous[:, :, i] = forwardstep_isostasy(
+        u3D_elastic[:, :, i] .= compute_elastic_response(Omega, tools, -sigma_zz ./ c.g )
+        u3D_viscous[:, :, i] .= forwardstep_isostasy(
             Omega,
             dt / dt_refine[i-1],
             dt,
@@ -88,6 +90,7 @@ Integrates isostasy model over provided time vector.
             tools,
             p,
             c,
+            viscous_solver = viscous_solver,
         )
     end
 end
@@ -120,38 +123,63 @@ Forward-stepping of GIA model.
     viscous_solver="Euler"::String,
 ) where {T<:AbstractFloat}
 
-    # load Ψ is defined as mass per surface area --> Ψ = - σ_zz / g
-    # because σ_zz = ice_density * g * H
-    u_elastic_next = compute_elastic_response(Omega, tools, -sigma_zz ./ c.g )
-
     if viscous_solver == "Euler"
 
         t_internal = range(0, stop = dt_out, step = dt)
-        u_internal = zeros(T, size(Omega.X)..., length(t_internal))
-        u_internal[:, :, 1] = u_viscous
+        # u_internal = zeros(T, size(Omega.X)..., length(t_internal))
+        # u_internal[:, :, 1] .= u_viscous
+
+        # for i in eachindex(t_internal)[2:end]
+        #     u_internal[:, :, i] .= apply_bc(euler_viscous_response(
+        #         Omega,
+        #         dt,
+        #         u_internal[:, :, i-1],
+        #         sigma_zz,
+        #         tools,
+        #         c,
+        #         p,
+        #     ))
+        # end
+        # u_viscous_next = u_internal[:, :, end]
+
+
+        # map_euler(u) = apply_bc(euler_viscous_response(
+        #     Omega,
+        #     dt,
+        #     u,
+        #     sigma_zz,
+        #     tools,
+        #     c,
+        #     p,
+        # ))
+        # for i in eachindex(t_internal)[2:end]
+        #     map!(fft, [u_internal[:, :, i]], [u_internal[:, :, i-1]])
+        # end
+
+        u_viscous_next = copy(u_viscous)
         for i in eachindex(t_internal)[2:end]
-            u_internal[:, :, i] = apply_bc(euler_viscous_response(
+            euler_viscous_response!(
                 Omega,
                 dt,
-                u_internal[:, :, i-1],
+                u_viscous_next,
                 sigma_zz,
                 tools,
                 c,
                 p,
-            ))
+            )
+            apply_bc!(u_viscous_next)
         end
-        u_viscous_next = u_internal[:, :, end]
     
     elseif viscous_solver == "CrankNicolson"
         u_viscous_next = apply_bc( cranknicolson_viscous_response(
-            dt,
+            dt_out,
             u_viscous,
             sigma_zz,
             tools,
         ) )
     end
 
-    return u_elastic_next, u_viscous_next
+    return u_viscous_next
 end
 
 """
@@ -192,28 +220,6 @@ end
 Return viscous response based on explicit Euler time discretization.
 Valid for solid-Earth parameters that can vary over x, y.
 """
-@inline function euler_viscous_response2(
-    Omega::ComputationDomain,
-    dt::T,
-    u_current::AbstractMatrix{T},
-    sigma_zz::AbstractMatrix{T},
-    tools::PrecomputedTerms,
-    c::PhysicalConstants,
-    p::SolidEarthParams,
-) where {T<:AbstractFloat}
-
-    u_fourier_current = tools.forward_fft * u_current
-    biharmonic_u = Omega.biharmonic_coeffs .* u_fourier_current
-    loadgravity_term = sigma_zz - p.mantle_density .* c.g .* u_current
-    rigidity_term = p.lithosphere_rigidity .* (tools.inverse_fft * biharmonic_u)
-    lgr_term = loadgravity_term - rigidity_term
-
-    eta_scaled = 2 .* p.halfspace_viscosity .* p.viscosity_scaling
-    viscous_lgr = tools.forward_fft * ( lgr_term ./ eta_scaled )
-    u_fourier_next = u_fourier_current + (dt ./ ( Omega.pseudodiff_coeffs .+ 1e-20 ) ) .* viscous_lgr
-    return real.(tools.inverse_fft * u_fourier_next)
-end
-
 @inline function euler_viscous_response(
     Omega::ComputationDomain,
     dt::T,
@@ -235,6 +241,27 @@ end
     return u_current + dt ./ (2 .* p.halfspace_viscosity) .* real.(tools.inverse_fft * lgr_term)
 end
 
+@inline function euler_viscous_response!(
+    Omega::ComputationDomain,
+    dt::T,
+    u::Matrix{T},
+    sigma_zz::Matrix{T},
+    tools::PrecomputedTerms,
+    c::PhysicalConstants,
+    p::SolidEarthParams,
+) where {T<:AbstractFloat}
+
+    biharmonic_u = Omega.harmonic_coeffs .* ( tools.forward_fft * 
+    ( p.lithosphere_rigidity .* (tools.inverse_fft *
+    ( Omega.harmonic_coeffs .* (tools.forward_fft * u) ) ) ) )
+
+    lgr_term = ( tools.forward_fft * sigma_zz -
+    tools.forward_fft * (p.mantle_density .* c.g .* u) -
+    biharmonic_u ) ./ ( Omega.pseudodiff_coeffs .* p.viscosity_scaling .+ 1e-20 )
+
+    u .+= dt ./ (2 .* p.halfspace_viscosity) .* real.(tools.inverse_fft * lgr_term)
+end
+
 """
 
     apply_bc(u)
@@ -244,6 +271,10 @@ Assume that mean deformation at boundary is 0.
 """
 @inline function apply_bc(u::AbstractMatrix{T}) where {T<:AbstractFloat}
     return u .- T( ( sum(u[1,:]) + sum(u[:,1]) ) / sum(size(u)) )
+end
+
+@inline function apply_bc!(u::Matrix{T}) where {T<:AbstractFloat}
+    u .-= T( ( sum(u[1,:]) + sum(u[:,1]) ) / sum(size(u)) )
 end
 
 """
@@ -264,7 +295,7 @@ Return two terms arising in the Crank-Nicolson scheme when applied to the presen
     c::PhysicalConstants,
 ) where {T<:AbstractFloat}
     # mu already included in differential coeffs
-    beta = ( p.mantle_density * c.g .+ p.lithosphere_rigidity .* Omega.biharmonic_coeffs )
+    beta = ( p.mantle_density .* c.g .+ p.lithosphere_rigidity .* Omega.biharmonic_coeffs )
     term1 = (2 .* p.halfspace_viscosity .* p.viscosity_scaling) .* Omega.pseudodiff_coeffs
     term2 = (dt/2) .* beta
     fourier_left_term = term1 + term2
