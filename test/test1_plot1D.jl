@@ -14,12 +14,15 @@ include("helpers_plot.jl")
     make_anim = false,
 )
 
-    T = Float64
-    L = T(2000e3)               # half-length of the square domain (m)
-    Omega = init_domain(L, n)   # domain parameters
-    R = T(1000e3)               # ice disc radius (m)
-    H = T(1000)                 # ice disc thickness (m)
+    N = 2^n
+    timespan = years2seconds.([0.0, 5e4])       # (yr) -> (s)
+    dt_out = years2seconds(100.0)               # (yr) -> (s), time step for saving output
+    t_vec = timespan[1]:dt_out:timespan[2]      # (s)
+    sol = load("data/test1_$(case)_N=$(N).jld2")
+    sol["R"], sol["H"]
 
+    L = T(3000e3)                               # half-length of the square domain (m)
+    Omega = init_domain(L, n, use_cuda = false) # domain parameters
     if occursin("2layers", case)
         eta_channel = fill(1e21, size(Omega.X)...)
         p = init_solidearth_params(T, Omega, channel_viscosity = eta_channel)
@@ -28,17 +31,13 @@ include("helpers_plot.jl")
     end
     c = init_physical_constants(T)
 
-    timespan = years2seconds.([0.0, 5e4])       # (yr) -> (s)
-    dt_out = years2seconds(100.0)               # (yr) -> (s), time step for saving output
-    t_vec = timespan[1]:dt_out:timespan[2]      # (s)
-    sol = load("data/$(case)_N=$(Omega.N).jld2")
 
     analytic_support = vcat(1.0e-14, 10 .^ (-10:0.05:-3), 1.0)
     # analytic_support = collect(10.0 .^ (-14:.5:0))
 
     t_plot = years2seconds.([100.0, 500.0, 1500.0, 5000.0, 10_000.0, 50_000.0])
     colors = [:black, :orange, :blue, :red, :gray, :purple]
-    islice, jslice = Int(round(Omega.N/2)), Int(round(Omega.N/2))
+    islice, jslice = Int(round(N/2)), Int(round(N/2))
     x = Omega.X[islice, jslice:end]
 
     fig = Figure(resolution = (1000, 800))
@@ -58,8 +57,8 @@ include("helpers_plot.jl")
         lines!(x, u_analytic, label = i == 1 ? L"analytic $\,$" : " ", linestyle = :dash, color = colors[i])
     end
 
-    save("plots/test1_transients_N$(Omega.N).png", fig)
-    save("plots/test1_transients_N$(Omega.N).pdf", fig)
+    save("plots/test1_transients_N$N.png", fig)
+    save("plots/test1_transients_N$N.pdf", fig)
 end
 
 """
@@ -70,6 +69,21 @@ Application cases:
     - "euler_3layers"
 """
 case = "euler_2layers"
-for n in 6:6
+for n in 8:8
     main(n, case)
 end
+
+
+# T = Float64
+# L = T(2000e3)               # half-length of the square domain (m)
+# Omega = init_domain(L, n)   # domain parameters
+# R = T(1000e3)               # ice disc radius (m)
+# H = T(1000)                 # ice disc thickness (m)
+
+# if occursin("2layers", case)
+#     eta_channel = fill(1e21, size(Omega.X)...)
+#     p = init_solidearth_params(T, Omega, channel_viscosity = eta_channel)
+# elseif occursin("3layers", case)
+#     p = init_solidearth_params(T, Omega)
+# end
+# c = init_physical_constants(T)

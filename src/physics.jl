@@ -3,7 +3,7 @@ struct PrecomputedTerms{T<:AbstractFloat}
     fourier_loadresponse::AbstractMatrix{Complex{T}}
     fourier_left_term::AbstractMatrix{T}
     fourier_right_term::AbstractMatrix{T}
-    forward_fft::FFTW.FFTWPlan
+    forward_fft::AbstractFFTs.Plan
     inverse_fft::AbstractFFTs.ScaledPlan
 end
 
@@ -31,17 +31,31 @@ physical constants `c` as input.
 
     quad_support, quad_coeffs = get_quad_coeffs(T, quad_precision)
     loadresponse = get_integrated_loadresponse(Omega, quad_support, quad_coeffs)
-    fourier_left_term, fourier_right_term = get_cranknicolson_factors(
-        Omega,
-        dt,
-        p,
-        c,
-    )
-    p1, p2 = plan_twoway_fft(Omega.X)
+
+    use_cn = false
+    if use_cn
+        fourier_left_term, fourier_right_term = get_cranknicolson_factors(
+            Omega,
+            dt,
+            p,
+            c,
+        )
+    else
+        fourier_left_term = zeros(T, Omega.N, Omega.N)
+        fourier_right_term = zeros(T, Omega.N, Omega.N)
+    end
+
+    if Omega.use_cuda
+        Xgpu = CuArray(Omega.X)
+        p1 = CUDA.CUFFT.plan_fft(Xgpu)
+        p2 = CUDA.CUFFT.plan_ifft(Xgpu)
+    else
+        p1, p2 = plan_fft(Omega.X), plan_ifft(Omega.X)
+    end
 
     return PrecomputedTerms(
         loadresponse,
-        p1 * loadresponse,
+        fft(loadresponse),
         fourier_left_term,
         fourier_right_term,
         p1,
@@ -68,14 +82,14 @@ Integrates isostasy model over provided time vector.
 @inline function forward_isostasy!(
     Omega::ComputationDomain,
     t_vec::AbstractVector{T},       # the output time vector
-    u3D_elastic::Array{T, 3},
-    u3D_viscous::Array{T, 3},
+    u3D_elastic::AbstractArray{T, 3},
+    u3D_viscous::AbstractArray{T, 3},
     sigma_zz::AbstractMatrix{T},
     tools::PrecomputedTerms,
     p::SolidEarthParams,
     c::PhysicalConstants;
-    dt_refine=fill(100.0, length(t_vec)-1)::AbstractVector{T},   # refine time step for internal computation
-    viscous_solver="Euler"::String,
+    dt_refine = fill(100.0, length(t_vec)-1)::AbstractVector{T},   # refine time step for internal computation
+    viscous_solver = "Euler"::String,
 ) where {T}
 
     for i in eachindex(t_vec)[2:end]
@@ -122,6 +136,10 @@ Forward-stepping of GIA model.
     c::PhysicalConstants;
     viscous_solver="Euler"::String,
 ) where {T<:AbstractFloat}
+
+    if Omega.use_cuda
+        u_viscous, sigma_zz = convert2CuArray([u_viscous, sigma_zz])
+    end
 
     if viscous_solver == "Euler"
 
@@ -179,6 +197,11 @@ Forward-stepping of GIA model.
         ) )
     end
 
+    if Omega.use_cuda
+        u_viscous_next = Array(u_viscous_next)
+    end
+    
+
     return u_viscous_next
 end
 
@@ -231,7 +254,7 @@ Valid for solid-Earth parameters that can vary over x, y.
 ) where {T<:AbstractFloat}
 
     biharmonic_u = Omega.harmonic_coeffs .* ( tools.forward_fft * 
-      ( p.lithosphere_rigidity .* (tools.inverse_fft *
+      ( p.lithosphere_rigidity .* real.(tools.inverse_fft *
       ( Omega.harmonic_coeffs .* (tools.forward_fft * u_current) ) ) ) )
 
     lgr_term = ( tools.forward_fft * sigma_zz -
@@ -244,8 +267,8 @@ end
 @inline function euler_viscous_response!(
     Omega::ComputationDomain,
     dt::T,
-    u::Matrix{T},
-    sigma_zz::Matrix{T},
+    u::AbstractMatrix{T},
+    sigma_zz::AbstractMatrix{T},
     tools::PrecomputedTerms,
     c::PhysicalConstants,
     p::SolidEarthParams,
@@ -257,7 +280,7 @@ end
 
     lgr_term = ( tools.forward_fft * sigma_zz -
     tools.forward_fft * (p.mantle_density .* c.g .* u) -
-    biharmonic_u ) ./ ( Omega.pseudodiff_coeffs .* p.viscosity_scaling .+ 1e-20 )
+    biharmonic_u ) ./ ( Omega.pseudodiff_coeffs .* p.viscosity_scaling .+ T(1e-20) )
 
     u .+= dt ./ (2 .* p.halfspace_viscosity) .* real.(tools.inverse_fft * lgr_term)
 end
@@ -267,14 +290,17 @@ end
     apply_bc(u)
 
 Apply boundary condition on Fourier collocation solution.
-Assume that mean deformation at boundary is 0.
+Assume that mean deformation at corners of domain is 0.
+Here we take the corners because they represent the far-field better.
 """
 @inline function apply_bc(u::AbstractMatrix{T}) where {T<:AbstractFloat}
-    return u .- T( ( sum(u[1,:]) + sum(u[:,1]) ) / sum(size(u)) )
+    u_bc = copy(u)
+    return apply_bc!(u_bc)
 end
 
-@inline function apply_bc!(u::Matrix{T}) where {T<:AbstractFloat}
+@inline function apply_bc!(u::AbstractMatrix{T}) where {T<:AbstractFloat}
     u .-= (u[1,1] + u[1,end] + u[end,1] + u[end,end]) / T(4)
+    # former (as in Bueler 2007): T( ( sum(u[1,:]) + sum(u[:,1]) ) / sum(size(u)) )
 end
 
 """

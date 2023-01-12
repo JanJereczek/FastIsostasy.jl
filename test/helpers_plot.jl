@@ -50,7 +50,7 @@
             width = Relative(0.8),
         )
     end
-    plotname = "plots/discload_$(case)_N=$(Omega.N)"
+    plotname = "plots/test1_2D_$(case)_N$(Omega.N)"
     save("$plotname.png", fig)
     save("$plotname.pdf", fig)
     return fig

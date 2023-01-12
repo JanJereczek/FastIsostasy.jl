@@ -10,7 +10,7 @@ include("helpers_compute.jl")
 )
 
     T = Float64
-    L = T(2200e3)               # half-length of the square domain (m)
+    L = T(3000e3)               # half-length of the square domain (m)
     Omega = init_domain(L, n)   # domain parameters
     
     litho_thickness = 70e3      # lithosphere thickness (m)

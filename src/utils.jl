@@ -9,24 +9,39 @@ Return a 2D meshgrid spanned by `x, y`.
     return one_y * x', (one_x * y')'
 end
 
+@inline function convert2CuArray(X::Vector)
+    return [CuArray(x) for x in X]
+end
+
+@inline function convert2Array(X::Vector)
+    return [Array(x) for x in X]
+end
+
 """
 
     init_domain(L::AbstractFloat, n::Int)
 
 Initialize a square computational domain with length `2*L` and `2^n+1` grid cells.
 """
-@inline function init_domain(L::T, n::Int) where {T<:AbstractFloat}
+@inline function init_domain(
+    L::T,
+    n::Int;
+    use_cuda=false::Bool
+) where {T<:AbstractFloat}
+
     N = 2^n
-#     N = 2^n+1
     N2 = Int(floor(N/2))
     h = T(2*L) / N
     x = collect(-L+h:h:L)
-#     x = collect(-L+h/2:h:L-h/2)
     X, Y = meshgrid(x, x)
     distance, loadresponse_coeffs = get_loadresponse_coeffs(T)
     loadresponse_matrix, loadresponse_function = build_loadresponse_matrix(X, Y, distance, loadresponse_coeffs)
     pseudodiff, harmonic, biharmonic = get_differential_fourier(L, N2)
 
+    if use_cuda
+        pseudodiff, harmonic, biharmonic = convert2CuArray([pseudodiff, harmonic, biharmonic])
+    end
+    
     return ComputationDomain(
         L,
         N,
@@ -40,6 +55,7 @@ Initialize a square computational domain with length `2*L` and `2^n+1` grid cell
         pseudodiff,
         harmonic,
         biharmonic,
+        use_cuda,
     )
 end
 
@@ -56,6 +72,7 @@ struct ComputationDomain{T<:AbstractFloat}
     pseudodiff_coeffs::AbstractMatrix{T}
     harmonic_coeffs::AbstractMatrix{T}
     biharmonic_coeffs::AbstractMatrix{T}
+    use_cuda::Bool
 end
 
 """
@@ -159,11 +176,28 @@ Return struct containing solid-Earth parameters.
 
     channel_thickness = halfspace_begin - channel_begin
     viscosity_ratio = get_viscosity_ratio(channel_viscosity, halfspace_viscosity)
+
+    if Omega.use_cuda
+        pseudodiff_coeffs = Array(Omega.pseudodiff_coeffs)
+    else
+        pseudodiff_coeffs = Omega.pseudodiff_coeffs
+    end
+
     viscosity_scaling = three_layer_scaling(
-        Omega.pseudodiff_coeffs,       # κ
+        pseudodiff_coeffs,       # κ
         viscosity_ratio,
         channel_thickness,
     )
+
+    if Omega.use_cuda
+        lithosphere_rigidity, mantle_density, channel_viscosity,
+        halfspace_viscosity, viscosity_ratio, viscosity_scaling,
+        channel_begin, halfspace_begin, channel_thickness = convert2CuArray(
+            [lithosphere_rigidity, mantle_density, channel_viscosity,
+            halfspace_viscosity, viscosity_ratio, viscosity_scaling,
+            channel_begin, halfspace_begin, channel_thickness]
+        )
+    end
 
     return SolidEarthParams(
         lithosphere_rigidity,
