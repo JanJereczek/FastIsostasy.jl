@@ -71,10 +71,11 @@ end
     R0::T,
 ) where {T<:AbstractFloat}
 
-    beta = mean(p.mantle_density) * c.g + mean(p.lithosphere_rigidity) * kappa ^ 4
+    # Here we assume that p-fields are constant over Omega
+    beta = p.mantle_density[1,1] * c.g + p.lithosphere_rigidity[1,1] * kappa ^ 4
     j0 = besselj0(kappa * r)
     j1 = besselj1(kappa * R0)
-    return (exp(-beta*t/(2*mean(p.halfspace_viscosity)*kappa))-1) * j0 * j1 / beta
+    return (exp(-beta*t/(2*p.halfspace_viscosity[1,1]*kappa))-1) * j0 * j1 / beta
 end
 
 @inline function equilibrium_integrand(

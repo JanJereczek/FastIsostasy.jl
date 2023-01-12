@@ -2,7 +2,7 @@ push!(LOAD_PATH, "../")
 using FastIsostasy
 using CairoMakie
 using JLD2
-include("helpers_plots.jl")
+include("helpers_plot.jl")
 
 @inline function main(
     n::Int;             # 2^n cells on domain (1)

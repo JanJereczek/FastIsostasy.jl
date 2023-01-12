@@ -5,7 +5,8 @@ using Test
 using SpecialFunctions
 using JLD2
 using Interpolations
-include("helpers.jl")
+include("helpers_compute.jl")
+include("helpers_plot.jl")
 
 @inline function main(
     n::Int,             # 2^n cells on domain (1)

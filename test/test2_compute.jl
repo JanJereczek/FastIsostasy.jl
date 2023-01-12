@@ -2,7 +2,7 @@ push!(LOAD_PATH, "../")
 using FastIsostasy
 using Test
 using JLD2
-include("helpers_computation.jl")
+include("helpers_compute.jl")
 
 @inline function main(
     n::Int,             # 2^n cells on domain (1)
