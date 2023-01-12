@@ -274,7 +274,7 @@ Assume that mean deformation at boundary is 0.
 end
 
 @inline function apply_bc!(u::Matrix{T}) where {T<:AbstractFloat}
-    u .-= T( ( sum(u[1,:]) + sum(u[:,1]) ) / sum(size(u)) )
+    u .-= (u[1,1] + u[1,end] + u[end,1] + u[end,end]) / T(4)
 end
 
 """
