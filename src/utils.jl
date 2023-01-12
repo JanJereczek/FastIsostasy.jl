@@ -184,6 +184,7 @@ Return struct containing solid-Earth parameters.
     end
 
     viscosity_scaling = three_layer_scaling(
+        Omega,
         pseudodiff_coeffs,       # κ
         viscosity_ratio,
         channel_thickness,
@@ -245,6 +246,7 @@ end
 """
 
     three_layer_scaling(
+        Omega,
         kappa::T,
         visc_ratio::T,
         Tc::T,
@@ -255,6 +257,7 @@ Bueler (2007) below equation 15.
 
 """
 @inline function three_layer_scaling(
+    Omega::ComputationDomain,
     kappa::Matrix{T},
     visc_ratio::Matrix{T},
     channel_thickness::Matrix{T},
@@ -263,7 +266,7 @@ Bueler (2007) below equation 15.
     visc_scaling = zeros(T, size(kappa)...)
     for i in axes(kappa, 1), j in axes(kappa, 2)
 
-        k = π / 2e6 # kappa[i, j]
+        k = π / Omega.L # 2e6 # kappa[i, j]
         vr = visc_ratio[i, j]
         Tc = channel_thickness[i, j]     # Lingle-Clark: in km
 
