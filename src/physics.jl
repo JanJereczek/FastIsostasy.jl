@@ -254,7 +254,7 @@ Valid for solid-Earth parameters that can vary over x, y.
 ) where {T<:AbstractFloat}
 
     biharmonic_u = Omega.harmonic_coeffs .* ( tools.forward_fft * 
-      ( p.lithosphere_rigidity .* real.(tools.inverse_fft *
+      ( p.lithosphere_rigidity .* (tools.inverse_fft *
       ( Omega.harmonic_coeffs .* (tools.forward_fft * u_current) ) ) ) )
 
     lgr_term = ( tools.forward_fft * sigma_zz -
@@ -263,6 +263,17 @@ Valid for solid-Earth parameters that can vary over x, y.
 
     return u_current + dt ./ (2 .* p.halfspace_viscosity) .* real.(tools.inverse_fft * lgr_term)
 end
+
+# biharmonic_u = Omega.harmonic_coeffs .* ( tools.forward_fft * 
+# ( p.lithosphere_rigidity .* (tools.inverse_fft *
+# ( Omega.harmonic_coeffs .* (tools.forward_fft * u_current) ) ) ) )
+
+# lgr_term = ( tools.forward_fft * sigma_zz -
+# tools.forward_fft * (p.mantle_density .* c.g .* u_current) -
+# biharmonic_u ) ./ ( Omega.pseudodiff_coeffs .+ 1e-20 )
+
+# return u_current + dt ./ (2 .* p.halfspace_viscosity .* p.viscosity_scaling) .* real.(tools.inverse_fft * lgr_term)
+
 
 @inline function euler_viscous_response!(
     Omega::ComputationDomain,
@@ -299,7 +310,9 @@ Here we take the corners because they represent the far-field better.
 end
 
 @inline function apply_bc!(u::AbstractMatrix{T}) where {T<:AbstractFloat}
-    u .-= (u[1,1] + u[1,end] + u[end,1] + u[end,end]) / T(4)
+    CUDA.allowscalar() do
+        u .-= (u[1,1] + u[1,end] + u[end,1] + u[end,end]) / T(4)
+    end
     # former (as in Bueler 2007): T( ( sum(u[1,:]) + sum(u[:,1]) ) / sum(size(u)) )
 end
 

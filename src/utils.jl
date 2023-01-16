@@ -266,9 +266,9 @@ Bueler (2007) below equation 15.
     visc_scaling = zeros(T, size(kappa)...)
     for i in axes(kappa, 1), j in axes(kappa, 2)
 
-        k = π / Omega.L # 2e6 # kappa[i, j]
+        k = kappa[i, j]                 # (1/m)
         vr = visc_ratio[i, j]
-        Tc = channel_thickness[i, j]     # Lingle-Clark: in km
+        Tc = channel_thickness[i, j]
 
         C, S = hyperbolic_channel_coeffs(Tc, k)
         
@@ -391,6 +391,31 @@ end
     else
         return interp_loadresponse_(r) / ( r * T(1e12) )
     end
+end
+
+#####################################################
+############## Copy main structs CPU ################
+#####################################################
+
+function copystructs2cpu(
+    Omega::ComputationDomain,
+    p::SolidEarthParams,
+)
+
+    T = typeof( Omega.L )
+    n = Int( round( log2(Omega.N) ) )
+    Omega_cpu = init_domain(Omega.L, n, use_cuda = false)
+    p_cpu = init_solidearth_params(
+        T,
+        Omega_cpu;
+        lithosphere_rigidity = Array(p.lithosphere_rigidity),
+        mantle_density = Array(p.mantle_density),
+        channel_viscosity = Array(p.channel_viscosity),
+        halfspace_viscosity = Array(p.halfspace_viscosity),
+        channel_begin = Array(p.channel_begin),
+        halfspace_begin = Array(p.halfspace_begin),
+    )
+    return Omega_cpu, p_cpu
 end
 
 #####################################################

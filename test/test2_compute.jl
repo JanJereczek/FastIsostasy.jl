@@ -7,12 +7,20 @@ include("helpers_compute.jl")
 @inline function main(
     n::Int,             # 2^n cells on domain (1)
     case::String;       # Application case
+    use_cuda = true::Bool,
 )
+
+    if use_cuda
+        kernel = "gpu"
+    else
+        kernel = "cpu"
+    end
 
     T = Float64
     L = T(3000e3)               # half-length of the square domain (m)
-    Omega = init_domain(L, n)   # domain parameters
-    
+    Omega = init_domain(L, n, use_cuda = use_cuda)
+    filename = "$(case)_$(kernel)_N$(Omega.N)"
+
     litho_thickness = 70e3      # lithosphere thickness (m)
     G = 0.50605e11              # shear modulus (Pa)
     nu = 0.5
@@ -52,11 +60,10 @@ include("helpers_compute.jl")
 
     tools = precompute_terms(1.0, Omega, p, c)
     @time forward_isostasy!(Omega, t_out, u3D_elastic, u3D_viscous, sigma_zz, tools, p, c, dt_refine = refine)
-
-    # @time forward_isostasy!(Omega, t_out, u3D_elastic, u3D_viscous, sigma_zz, tools, p, c, viscous_solver = "CrankNicolson")
+    Omega, p = copystructs2cpu(Omega, p)
 
     jldsave(
-        "data/test2_$(case)_N$(Omega.N).jld2",
+        "data/test2/$filename.jld2",
         u3D_elastic = u3D_elastic,
         u3D_viscous = u3D_viscous,
         sigma_zz = sigma_zz,
@@ -68,7 +75,7 @@ include("helpers_compute.jl")
 end
 
 cases = ["disc", "cap"]
-for n in 6:6
+for n in 6:7
     for case in cases
         N = 2^n
         println("Computing $case on $N x $N grid...")

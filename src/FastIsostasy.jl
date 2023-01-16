@@ -18,6 +18,7 @@ export init_solidearth_params
 export years2seconds
 export seconds2years
 export convert2Array
+export copystructs2cpu
 
 export get_r
 

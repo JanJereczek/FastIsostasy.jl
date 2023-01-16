@@ -20,7 +20,7 @@ include("helpers_plot.jl")
     timespan = years2seconds.([0.0, 5e4])       # (yr) -> (s)
     dt_out = years2seconds(100.0)               # (yr) -> (s), time step for saving output
     t_vec = timespan[1]:dt_out:timespan[2]      # (s)
-    sol = load("data/test1_$(case)_N=$N.jld2")
+    sol = load("data/test1/$(case)_gpu_N$N.jld2")
     Omega, c, p, R, H = sol["Omega"], sol["c"], sol["p"], sol["R"], sol["H"]
     u3D_elastic, u3D_viscous = sol["u3D_elastic"], sol["u3D_viscous"]
     sigma_zz_disc = generate_uniform_disc_load(Omega, c, R, H)
@@ -84,19 +84,19 @@ include("helpers_plot.jl")
     end
 
     if make_anim
-        anim_name = "plots/test1_$(case)_N$N"
+        anim_name = "plots/test1/2D/$(case)_N$N"
         animate_viscous_response(t_vec, Omega, u3D_viscous, anim_name, (-300.0, 50.0))
     end
 end
 
 """
 Application cases:
-    - "cn_2layers"
-    - "cn_3layers"
-    - "euler_2layers"
-    - "euler_3layers"
+    - "cn2layers"
+    - "cn3layers"
+    - "euler2layers"
+    - "euler3layers"
 """
-case = "euler_2layers"
-for n in 7:7
+case = "euler2layers"
+for n in 6:8
     main(n, case, make_anim = false)
 end

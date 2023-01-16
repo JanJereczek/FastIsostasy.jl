@@ -50,7 +50,7 @@
             width = Relative(0.8),
         )
     end
-    plotname = "plots/test1_2D_$(case)_N$(Omega.N)"
+    plotname = "plots/test1/2D/$(case)_N$(Omega.N)"
     save("$plotname.png", fig)
     save("$plotname.pdf", fig)
     return fig
@@ -79,6 +79,7 @@ end
         yminorgridvisible = true,
         yticklabelsvisible = j == 1 ? true : false,
     ) for j in 1:ncases]
+    colors = [:black, :orange, :blue, :red, :gray, :purple]
 
     for i in 1:ncases
         U = Uvec[i]
@@ -89,22 +90,30 @@ end
         if i == 1
             theta_benchmark = [0, 5, 10, 20]
             scatter_symbols = [:circle, :rect, :diamond]
-            for k in eachindex([0, 1, 5, 10, 1000])
+            for k in eachindex([0, 1, 5, 10, 1000])     # output time vector in spada 2011 (kyr)
                 for j in eachindex(["vk", "gs", "zm"])
                     scatter!(
                         axs[i],
                         theta_benchmark,
                         u_benchmark[j, :, k],
                         marker = scatter_symbols[j],
+                        color = colors[k],
                     )
                 end
             end
         end
 
-        for t in t_plot
-            k = argmin((t_vec .- t).^2)
+        for l in eachindex(t_plot)
+            t = t_plot[l]
+            k = argmin( (t_vec .- t) .^ 2 )
             tyr = Int(round( seconds2years(t) ))
-            lines!(axs[i], theta, U[slicey, slicex:end, k], label = L"$t = %$tyr $ yr")
+            lines!(
+                axs[i],
+                theta,
+                U[slicey, slicex:end, k],
+                label = L"$t = %$tyr $ yr",
+                color = colors[l],
+            )
         end
         ylims!(axs[i], (-450, 50))
     end
