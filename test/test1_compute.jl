@@ -25,18 +25,18 @@ include("helpers_compute.jl")
     H = T(1000)                 # ice disc thickness (m)
     filename = "$(case)_$(kernel)_N$(Omega.N)"
 
+    c = init_physical_constants()
     if occursin("2layers", case)
-        eta_channel = fill(1e21, size(Omega.X)...)
-        p = init_solidearth_params(T, Omega, channel_viscosity = eta_channel)
+        layers_viscosity = [1e21, 1e21]
+        p = init_multilayer_earth(Omega, c, layers_viscosity = layers_viscosity)
     elseif occursin("3layers", case)
-        p = init_solidearth_params(T, Omega)
+        println("3layers")
+        p = init_multilayer_earth(Omega, c)
     end
-    c = init_physical_constants(T)
 
     timespan = years2seconds.([0.0, 5e4])           # (yr) -> (s)
     dt_out = years2seconds(100.0)                   # (yr) -> (s), time step for saving output
     t_out = timespan[1]:dt_out:timespan[2]          # (s)
-    refine = fill(100.0, length(t_out)-1)
 
     u3D = zeros( T, (size(Omega.X)..., length(t_out)) )
     u3D_elastic = copy(u3D)
@@ -47,16 +47,28 @@ include("helpers_compute.jl")
 
     @testset "analytic solution" begin
         sol = analytic_solution(T(0), T(50000 * c.seconds_per_year), c, p, H, R, analytic_support)
-        @test isapprox( sol, -1000*c.ice_density/mean(p.mantle_density), rtol=T(1e-2) )
+        @test isapprox( sol, -1000*c.ice_density/p.mean_density, rtol=T(1e-2) )
     end
 
     sigma_zz_disc = generate_uniform_disc_load(Omega, c, R, H)
     tools = precompute_terms(dt_out, Omega, p, c)
 
     t1 = time()
-    @time forward_isostasy!(Omega, t_out, u3D_elastic, u3D_viscous, sigma_zz_disc, tools, p, c, dt_refine = refine)
+    @time forward_isostasy!(
+        Omega,
+        t_out,
+        u3D_elastic,
+        u3D_viscous,
+        sigma_zz_disc,
+        tools,
+        p,
+        c,
+    )
     t_fastiso = time() - t1
-    Omega, p = copystructs2cpu(Omega, p)
+
+    if use_cuda
+        Omega, p = copystructs2cpu(Omega, p, c)
+    end
 
     jldsave(
         "data/test1/$filename.jld2",
@@ -69,7 +81,6 @@ include("helpers_compute.jl")
         H = H,
         t_fastiso = t_fastiso,
         t_out = t_out,
-        refine = refine,
     )
 
 end
@@ -82,6 +93,6 @@ Application cases:
     - "euler3layers"
 """
 case = "euler2layers"
-for n in 5:5
-    main(n, case, use_cuda = true)
+for n in 4:8
+    main(n, case, use_cuda = false)
 end

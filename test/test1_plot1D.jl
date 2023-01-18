@@ -18,19 +18,8 @@ include("helpers_plot.jl")
     timespan = years2seconds.([0.0, 5e4])       # (yr) -> (s)
     dt_out = years2seconds(100.0)               # (yr) -> (s), time step for saving output
     t_vec = timespan[1]:dt_out:timespan[2]      # (s)
-    sol = load("data/test1/$(case)_$(kernel)_N$(N).jld2")
-    sol["R"], sol["H"]
-
-    L = T(3000e3)                               # half-length of the square domain (m)
-    Omega = init_domain(L, n, use_cuda = false) # domain parameters
-    if occursin("2layers", case)
-        eta_channel = fill(1e21, size(Omega.X)...)
-        p = init_solidearth_params(T, Omega, channel_viscosity = eta_channel)
-    elseif occursin("3layers", case)
-        p = init_solidearth_params(T, Omega)
-    end
-    c = init_physical_constants(T)
-
+    sol = load("data/test1/$(case)_N$(N).jld2")
+    R, H, Omega, c, p = sol["R"], sol["H"], sol["Omega"], sol["c"], sol["p"]
 
     analytic_support = vcat(1.0e-14, 10 .^ (-10:0.05:-3), 1.0)
     # analytic_support = collect(10.0 .^ (-14:.5:0))
@@ -53,23 +42,38 @@ include("helpers_plot.jl")
         t_idx = Int(round(t / dt_out)) + 1
         u_numeric = sol["u3D_viscous"][islice:end, jslice, t_idx]
 
-        lines!(x, u_numeric, label = i == 1 ? L"numeric $\,$" : " ", color = colors[i])
-        lines!(x, u_analytic, label = i == 1 ? L"analytic $\,$" : " ", linestyle = :dash, color = colors[i])
+        lines!(
+            ax,
+            x,
+            u_numeric,
+            label = i == 1 ? L"numeric $\,$" : " ",
+            color = colors[i],
+        )
+        lines!(
+            ax,
+            x,
+            u_analytic,
+            label = i == 1 ? L"analytic $\,$" : " ",
+            linestyle = :dash,
+            color = colors[i],
+        )
     end
 
-    save("plots/test1_transients_N$N.png", fig)
-    save("plots/test1_transients_N$N.pdf", fig)
+    save("plots/test1/$(case)_transients_N$N.png", fig)
+    save("plots/test1/$(case)_transients_N$N.pdf", fig)
 end
 
 """
 Application cases:
-    - "homegeneous_viscosity_2layers"
-    - "homogeneous_viscosity_3layers"
-    - "euler_2layers"
-    - "euler_3layers"
+    - "cn2layers"
+    - "cn3layers"
+    - "euler2layers_cpu"
+    - "euler3layers_cpu"
+    - "euler2layers_gpu"
+    - "euler3layers_gpu"
 """
-case = "euler_2layers"
-for n in 8:8
+case = "euler2layers_cpu"
+for n in 4:5
     main(n, case)
 end
 

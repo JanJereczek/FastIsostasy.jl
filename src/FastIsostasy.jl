@@ -14,7 +14,7 @@ include("physics.jl")
 # Write your package code here.
 export init_domain
 export init_physical_constants
-export init_solidearth_params
+export init_multilayer_earth
 export years2seconds
 export seconds2years
 export convert2Array
@@ -33,7 +33,7 @@ export forward_isostasy!
 
 export ComputationDomain
 export PhysicalConstants
-export SolidEarthParams
+export MultilayerEarth
 export LocalFields
 
 end
