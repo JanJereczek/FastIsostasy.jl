@@ -6,23 +6,19 @@ using SpecialFunctions
 using JLD2
 using Interpolations
 include("helpers_plot.jl")
+include("helpers_compute.jl")
 
 @inline function main(
     n::Int,             # 2^n cells on domain (1)
     case::String;       # Application case
-    make_plot = true,
     make_anim = false,
 )
 
     N = 2^n
-    timespan = years2seconds.([0.0, 5e4])       # (yr) -> (s)
-    dt_out = years2seconds(100.0)               # (yr) -> (s), time step for saving output
-    t_vec = timespan[1]:dt_out:timespan[2]      # (s)
     sol = load("data/test1/$(case)_N$(N).jld2")
     R, H, Omega, c, p = sol["R"], sol["H"], sol["Omega"], sol["c"], sol["p"]
-
-    analytic_support = vcat(1.0e-14, 10 .^ (-10:0.05:-3), 1.0)
-    # analytic_support = collect(10.0 .^ (-14:.5:0))
+    t_out = sol["t_out"]
+    analytic_support = vcat(1.0e-14, 10 .^ (-10:0.05:0))
 
     t_plot = years2seconds.([100.0, 500.0, 1500.0, 5000.0, 10_000.0, 50_000.0])
     colors = [:black, :orange, :blue, :red, :gray, :purple]
@@ -39,8 +35,8 @@ include("helpers_plot.jl")
             Omega.Y[islice, jslice:end] .^ 2 
         ) )
 
-        t_idx = Int(round(t / dt_out)) + 1
-        u_numeric = sol["u3D_viscous"][islice:end, jslice, t_idx]
+        k = argmin( (t_out .- t).^2 )
+        u_numeric = sol["u3D_viscous"][islice:end, jslice, k]
 
         lines!(
             ax,
@@ -72,22 +68,7 @@ Application cases:
     - "euler2layers_gpu"
     - "euler3layers_gpu"
 """
-case = "euler2layers_cpu"
-for n in 4:5
+case = "euler3layers_gpu"
+for n in 4:8
     main(n, case)
 end
-
-
-# T = Float64
-# L = T(2000e3)               # half-length of the square domain (m)
-# Omega = init_domain(L, n)   # domain parameters
-# R = T(1000e3)               # ice disc radius (m)
-# H = T(1000)                 # ice disc thickness (m)
-
-# if occursin("2layers", case)
-#     eta_channel = fill(1e21, size(Omega.X)...)
-#     p = init_solidearth_params(T, Omega, channel_viscosity = eta_channel)
-# elseif occursin("3layers", case)
-#     p = init_solidearth_params(T, Omega)
-# end
-# c = init_physical_constants(T)

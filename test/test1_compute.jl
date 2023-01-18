@@ -30,7 +30,6 @@ include("helpers_compute.jl")
         layers_viscosity = [1e21, 1e21]
         p = init_multilayer_earth(Omega, c, layers_viscosity = layers_viscosity)
     elseif occursin("3layers", case)
-        println("3layers")
         p = init_multilayer_earth(Omega, c)
     end
 
@@ -46,7 +45,15 @@ include("helpers_compute.jl")
     # analytic_support = collect(10.0 .^ (-14:5))
 
     @testset "analytic solution" begin
-        sol = analytic_solution(T(0), T(50000 * c.seconds_per_year), c, p, H, R, analytic_support)
+        sol = analytic_solution(
+            T(0),
+            T(50000 * c.seconds_per_year),
+            c,
+            p,
+            H,
+            R,
+            analytic_support,
+        )
         @test isapprox( sol, -1000*c.ice_density/p.mean_density, rtol=T(1e-2) )
     end
 
@@ -92,7 +99,7 @@ Application cases:
     - "euler2layers"
     - "euler3layers"
 """
-case = "euler2layers"
+case = "euler3layers"
 for n in 4:8
-    main(n, case, use_cuda = false)
+    main(n, case, use_cuda = true)
 end

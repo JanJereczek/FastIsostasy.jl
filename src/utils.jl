@@ -196,9 +196,16 @@ Return struct with solid-Earth parameters for mutliple channel layers and a half
     gz(z) = gr(c.r_pole - z)
 
     layers_thickness = diff( layers_begin )
-    layers_mean_gravity = 0.5 .*(gz.(layers_begin[1:end-1]) + gz.(layers_begin[2:end]))
-    mean_gravity = (layers_thickness ./ (sum(layers_thickness)))' * layers_mean_gravity
-    mean_density = (layers_thickness ./ (sum(layers_thickness)))' * layers_density
+    mean_density = (layers_thickness ./ (sum(layers_thickness)))' * layers_density    
+    
+    fixed_mean_gravity = true
+    if fixed_mean_gravity
+        mean_gravity = c.g
+    else
+        layers_mean_gravity = 0.5 .*(gz.(layers_begin[1:end-1]) + gz.(layers_begin[2:end]))
+        mean_gravity = (layers_thickness ./ (sum(layers_thickness)))' * layers_mean_gravity
+    end
+
 
     if Omega.use_cuda
         pseudodiff_coeffs = Array(Omega.pseudodiff_coeffs)
