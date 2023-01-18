@@ -26,22 +26,22 @@ include("helpers_compute.jl")
     nu = 0.5
     E = G * 2 * (1 + nu)
     D = (E * litho_thickness ^ 3)/(12*(1-nu^2))
-
-    p = init_solidearth_params(
-        T,
+    c = init_physical_constants(ice_density = 0.931e3)
+    p = init_multilayer_earth(
         Omega,
-        lithosphere_rigidity = fill(T(D), Omega.N, Omega.N),
-        mantle_density = fill(T(3.6e3), Omega.N, Omega.N),
-        channel_viscosity = fill(T(1e21), Omega.N, Omega.N),
-        halfspace_viscosity = fill(T(2e21), Omega.N, Omega.N),
-        channel_begin = fill(T(litho_thickness), Omega.N, Omega.N),
-        halfspace_begin = fill(T(670e3), Omega.N, Omega.N),
+        c,
+        lithosphere_rigidity = D,
+        layers_density = [3.438e3, 3.871e3],
+        layers_viscosity = [1e21, 1e21, 2e21],
+        layers_begin = c.r_equator .- [6301e3, 5951e3, 5701e3],
     )
-    c = init_physical_constants(T, ice_density = 0.931e3)
+
+    # layers_density = [3.438e3, 3.871e3, 4.978e3],
+    # layers_viscosity = [1e21, 1e21, 2e21],
+    # layers_begin = c.r_equator .- [6301e3, 5951e3, 5701e3, 5371e3],
 
     t_out_yr = [0.0, 1.0, 1e3, 2e3, 5e3, 1e4, 1e5]
     t_out = years2seconds.(t_out_yr)
-    refine = diff(t_out_yr)
 
     u3D = zeros( T, (size(Omega.X)..., length(t_out)) )
     u3D_elastic = copy(u3D)
@@ -58,10 +58,22 @@ include("helpers_compute.jl")
         sigma_zz = generate_cap_load(Omega, c, alpha, H)
     end
 
-    tools = precompute_terms(1.0, Omega, p, c)
-    @time forward_isostasy!(Omega, t_out, u3D_elastic, u3D_viscous, sigma_zz, tools, p, c, dt_refine = refine)
-    Omega, p = copystructs2cpu(Omega, p)
+    placeholder = 1.0   # we do not need to specify dt if Crank-Nicolson is not used.
+    tools = precompute_terms(placeholder, Omega, p, c)
+    @time forward_isostasy!(
+        Omega,
+        t_out,
+        u3D_elastic,
+        u3D_viscous,
+        sigma_zz,
+        tools,
+        p,
+        c,
+    )
 
+    if use_cuda
+        Omega, p = copystructs2cpu(Omega, p, c)
+    end
     jldsave(
         "data/test2/$filename.jld2",
         u3D_elastic = u3D_elastic,
@@ -70,7 +82,7 @@ include("helpers_compute.jl")
         Omega = Omega,
         c = c,
         p = p,
-        t_vec = t_out,
+        t_out = t_out,
     )
 end
 
