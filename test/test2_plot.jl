@@ -7,7 +7,6 @@ include("helpers_plot.jl")
 @inline function main(
     case::String,       # Choose between viscoelastic and purely viscous response.
     n::Int;             # 2^n cells on domain (1)
-    make_plot = true,
     make_anim = false,
 )
 
@@ -34,18 +33,15 @@ include("helpers_plot.jl")
 
     t_plot_yr = [1.0, 1e3, 5e3, 1e4, 1e5]
     t_plot = years2seconds.(t_plot_yr)
-
-    if make_plot
-        response_fig = slice_spada(
-            sol_disc["Omega"],
-            sol_disc["c"],
-            sol_disc["t_vec"],
-            t_plot,
-            u_plot,
-            labels,
-            "test2/$(case)_N$N"
-        )
-    end
+    response_fig = slice_spada(
+        sol_disc["Omega"],
+        sol_disc["c"],
+        sol_disc["t_out"],
+        t_plot,
+        u_plot,
+        labels,
+        "test2/$(case)_N$N"
+    )
 
     # if make_anim
     #     anim_name = "plots/discload_$(case)_N=$(Omega.N)"
