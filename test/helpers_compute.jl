@@ -34,7 +34,7 @@ end
     r::T,
     t::T,
     c::PhysicalConstants,
-    p::SolidEarthParams,
+    p::MultilayerEarth,
     H0::T,
     R0::T,
     domains::Vector{T};
@@ -67,25 +67,25 @@ end
     r::T,
     t::T,
     c::PhysicalConstants,
-    p::SolidEarthParams,
+    p::MultilayerEarth,
     R0::T,
 ) where {T<:AbstractFloat}
 
     # Here we assume that p-fields are constant over Omega
-    beta = p.mantle_density[1,1] * c.g + p.lithosphere_rigidity[1,1] * kappa ^ 4
+    beta = p.mean_density * c.g + p.lithosphere_rigidity[1,1] * kappa ^ 4
     j0 = besselj0(kappa * r)
     j1 = besselj1(kappa * R0)
-    return (exp(-beta*t/(2*p.halfspace_viscosity[1,1]*kappa))-1) * j0 * j1 / beta
+    return (exp(-beta*t/(2*p.layers_viscosity[1,1,end]*kappa))-1) * j0 * j1 / beta
 end
 
 @inline function equilibrium_integrand(
     kappa::T,
     r::T,
     c::PhysicalConstants,
-    p::SolidEarthParams,
+    p::MultilayerEarth,
     R0::T,
 ) where {T<:AbstractFloat}
-    beta = mean(p.mantle_density) * c.g + mean(p.lithosphere_rigidity) * kappa ^ 4
+    beta = mean(p.mean_density) * c.g + mean(p.lithosphere_rigidity) * kappa ^ 4
     j0 = besselj0(kappa * r)
     j1 = besselj1(kappa * R0)
     # integrand of inverse Hankel transform when t-->infty
@@ -102,7 +102,7 @@ end
     j::Int,
     t::T,
     c::PhysicalConstants,
-    p::SolidEarthParams,
+    p::MultilayerEarth,
     H0::T,
     R0::T,
     domains::Vector{T};
@@ -120,23 +120,15 @@ end
     kappa::T,
     t::T,
     c::PhysicalConstants,
-    p::SolidEarthParams,
+    p::MultilayerEarth,
     R0::T,
 ) where {T<:AbstractFloat}
 
     x, y = Omega.X[i, j], Omega.Y[i, j]
     r = get_r(x, y)
-    # mantle_density = p.mantle_density[i, j]
-    # lithosphere_rigidity = p.lithosphere_rigidity[i, j]
-    # halfspace_viscosity = p.halfspace_viscosity[i, j]
 
-    # beta = mantle_density * c.g + lithosphere_rigidity * kappa ^ 4
-    # j0 = besselj0(kappa * r)
-    # j1 = besselj1(kappa * R0)
-    # return (exp(-beta*t/(2*halfspace_viscosity*kappa))-1) * j0 * j1 / beta
-
-    beta = mean(p.mantle_density) * c.g + mean(p.lithosphere_rigidity) * kappa ^ 4
+    beta = mean(p.mean_density) * c.g + mean(p.lithosphere_rigidity) * kappa ^ 4
     j0 = besselj0(kappa * r)
     j1 = besselj1(kappa * R0)
-    return (exp(-beta*t/(2*mean(p.halfspace_viscosity)*kappa))-1) * j0 * j1 / beta
+    return (exp(-beta*t/(2*mean(p.layers_viscosity[1,1,end])*kappa))-1) * j0 * j1 / beta
 end

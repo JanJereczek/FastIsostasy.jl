@@ -1,4 +1,5 @@
 struct PrecomputedTerms{T<:AbstractFloat}
+    viscous_solver::String
     loadresponse::AbstractMatrix{T}
     fourier_loadresponse::AbstractMatrix{Complex{T}}
     fourier_left_term::AbstractMatrix{T}
@@ -18,16 +19,16 @@ physical constants `c` as input.
 @inline function precompute_terms(
     dt::T,
     Omega::ComputationDomain{T},
-    p::SolidEarthParams{T},
+    p::MultilayerEarth{T},
     c::PhysicalConstants{T};
     quad_precision::Int = 4,
+    viscous_solver::String = "Euler",
 ) where {T<:AbstractFloat}
 
     quad_support, quad_coeffs = get_quad_coeffs(T, quad_precision)
     loadresponse = get_integrated_loadresponse(Omega, quad_support, quad_coeffs)
 
-    use_cn = false
-    if use_cn
+    if viscous_solver == "CrankNicolson"
         fourier_left_term, fourier_right_term = get_cranknicolson_factors(
             Omega,
             dt,
@@ -36,7 +37,7 @@ physical constants `c` as input.
         )
     else
         fourier_left_term = zeros(T, Omega.N, Omega.N)
-        fourier_right_term = zeros(T, Omega.N, Omega.N)
+        fourier_right_term = copy(fourier_left_term)
     end
 
     if Omega.use_cuda
@@ -48,6 +49,7 @@ physical constants `c` as input.
     end
 
     return PrecomputedTerms(
+        viscous_solver,
         loadresponse,
         fft(loadresponse),
         fourier_left_term,
@@ -60,9 +62,9 @@ end
 
 """
 
-    forward_isostasy!(Omega, t_vec, u3D_elastic, u3D_viscous, sigma_zz, tools, p, c)
+    forward_isostasy!(Omega, t_out, u3D_elastic, u3D_viscous, sigma_zz, tools, p, c)
 
-Integrates isostasy model over provided time vector `t_vec` for a given
+Integrates isostasy model over provided time vector `t_out` for a given
 `ComputationDomain` `Omega`, pre-allocated arrays `u3D_elastic` and `u3D_viscous`
 containing the solution, `sigma_zz` the vertical load applied upon the bedrock,
 `tools` a set of pre-computed terms to speed up the computation, `p` some
@@ -70,37 +72,34 @@ containing the solution, `sigma_zz` the vertical load applied upon the bedrock,
 """
 @inline function forward_isostasy!(
     Omega::ComputationDomain,
-    t_vec::AbstractVector{T},       # the output time vector
+    t_out::AbstractVector{T},       # the output time vector
     u3D_elastic::AbstractArray{T, 3},
     u3D_viscous::AbstractArray{T, 3},
     sigma_zz::AbstractMatrix{T},
     tools::PrecomputedTerms,
-    p::SolidEarthParams,
+    p::MultilayerEarth,
     c::PhysicalConstants;
-    dt_refine = fill(100.0, length(t_vec)-1)::AbstractVector{T},   # refine time step for internal computation
-    viscous_solver = "Euler"::String,
+    dt = fill(T(years2seconds(1.0)), length(t_out)-1)::AbstractVector{T},
 ) where {T}
 
-    for i in eachindex(t_vec)[2:end]
-        dt = t_vec[i] - t_vec[i-1]
+    for i in eachindex(t_out)[2:end]
+        dt_out = t_out[i] - t_out[i-1]
         u3D_elastic[:, :, i] .= compute_elastic_response(Omega, tools, -sigma_zz ./ c.g )
-        u3D_viscous[:, :, i] .= forwardstep_isostasy(
+        u3D_viscous[:, :, i] = forwardstep_isostasy(
             Omega,
-            dt / dt_refine[i-1],
-            dt,
+            dt[i-1],
+            dt_out,
             u3D_viscous[:, :, i-1],
             sigma_zz,
             tools,
             p,
-            c,
-            viscous_solver = viscous_solver,
         )
     end
 end
 
 """
 
-    forwardstep_isostasy(Omega, dt, dt_out, u_viscous, sigma_zz, tools, p, c)
+    forwardstep_isostasy(Omega, dt, dt_out, u_viscous, sigma_zz, tools, p)
 
 Perform GIA computation one step forward w.r.t. the time vector used for storing the
 output. This implies performing a number of in-between steps (for numerical stability
@@ -113,16 +112,14 @@ and accuracy) that are given by the ratio between `dt_out` and `dt`.
     u_viscous::AbstractMatrix{T},
     sigma_zz::AbstractMatrix{T},
     tools::PrecomputedTerms,
-    p::SolidEarthParams,
-    c::PhysicalConstants;
-    viscous_solver="Euler"::String,
+    p::MultilayerEarth,
 ) where {T<:AbstractFloat}
 
     if Omega.use_cuda
         u_viscous, sigma_zz = convert2CuArray([u_viscous, sigma_zz])
     end
 
-    if viscous_solver == "Euler"
+    if tools.viscous_solver == "Euler"
 
         t_internal = range(0, stop = dt_out, step = dt)
         u_viscous_next = copy(u_viscous)
@@ -133,13 +130,12 @@ and accuracy) that are given by the ratio between `dt_out` and `dt`.
                 u_viscous_next,
                 sigma_zz,
                 tools,
-                c,
                 p,
             )
             apply_bc!(u_viscous_next)
         end
     
-    elseif viscous_solver == "CrankNicolson"
+    elseif tools.viscous_solver == "CrankNicolson"
         u_viscous_next = apply_bc( cranknicolson_viscous_response(
             dt_out,
             u_viscous,
@@ -184,25 +180,10 @@ collocation. Valid for multilayer parameters that can vary over x, y.
 @inline function euler_viscous_response(
     Omega::ComputationDomain,
     dt::T,
-    u_current::AbstractMatrix{T},
-    sigma_zz::AbstractMatrix{T},
-    tools::PrecomputedTerms,
-    c::PhysicalConstants,
-    p::SolidEarthParams,
-) where {T<:AbstractFloat}
-
-    u = copy(u_current)
-    return euler_viscous_response!(Omega, dt, u, sigma_zz, tools, c, p)
-end
-
-@inline function euler_viscous_response!(
-    Omega::ComputationDomain,
-    dt::T,
     u::AbstractMatrix{T},
     sigma_zz::AbstractMatrix{T},
     tools::PrecomputedTerms,
-    c::PhysicalConstants,
-    p::SolidEarthParams,
+    p::MultilayerEarth,
 ) where {T<:AbstractFloat}
 
     biharmonic_u = Omega.harmonic_coeffs .* ( tools.forward_fft * 
@@ -210,10 +191,38 @@ end
     ( Omega.harmonic_coeffs .* (tools.forward_fft * u) ) ) ) )
 
     lgr_term = ( tools.forward_fft * sigma_zz -
-    tools.forward_fft * (p.mantle_density .* c.g .* u) -
-    biharmonic_u ) ./ ( Omega.pseudodiff_coeffs .* p.viscosity_scaling .+ T(1e-20) )
+    tools.forward_fft * (p.mean_density .* p.mean_gravity .* u) -
+    biharmonic_u ) ./ ( 2 .* p.effective_viscosity .* Omega.pseudodiff_coeffs .+
+    T(1e-20) )
 
-    u .+= dt ./ (2 .* p.halfspace_viscosity) .* real.(tools.inverse_fft * lgr_term)
+    return u + dt .* real.(tools.inverse_fft * lgr_term)
+end
+
+
+#     u = copy(u_current)
+#     return euler_viscous_response!(Omega, dt, u, sigma_zz, tools, p)
+# end
+
+@inline function euler_viscous_response!(
+    Omega::ComputationDomain,
+    dt::T,
+    u::AbstractMatrix{T},
+    sigma_zz::AbstractMatrix{T},
+    tools::PrecomputedTerms,
+    p::MultilayerEarth,
+) where {T<:AbstractFloat}
+
+    eps = 1e-20
+
+    biharmonic_u = Omega.harmonic_coeffs .* ( tools.forward_fft * 
+    ( p.lithosphere_rigidity .* (tools.inverse_fft *
+    ( Omega.harmonic_coeffs .* (tools.forward_fft * u) ) ) ) )
+
+    lgr_term = ( tools.forward_fft * sigma_zz -
+    tools.forward_fft * (p.mean_density .* p.mean_gravity .* u) -
+    biharmonic_u ) ./ ( Omega.pseudodiff_coeffs .+ T(eps) )
+
+    u .+= dt ./ (2 .* p.effective_viscosity) .* real.(tools.inverse_fft * lgr_term)
 end
 
 """
@@ -245,7 +254,7 @@ Return two terms arising in the Crank-Nicolson scheme when applied to the presen
 @inline function get_cranknicolson_factors(
     Omega::ComputationDomain,
     dt::T,
-    p::SolidEarthParams,
+    p::MultilayerEarth,
     c::PhysicalConstants,
 ) where {T<:AbstractFloat}
     # Note: μ = π/L already included in differential coeffs
@@ -288,7 +297,7 @@ Green's function stored in the pre-computed `tools`(elements obtained from Farel
 end
 
 @inline function collocate_elastic_response(
-    p::SolidEarthParams,
+    p::MultilayerEarth,
     tools::PrecomputedTerms,
     load::AbstractMatrix{T},
 ) where {T<:AbstractFloat}

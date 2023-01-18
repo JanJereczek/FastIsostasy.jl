@@ -104,6 +104,9 @@ r_equator = 6.371e6                     # Earth radius at equator (m)
 r_pole = 6.357e6                        # Earth radius at pole (m)
 G = 6.674e-11                           # Gravity constant (m^3 kg^-1 s^-2)
 mE = 5.972e24                           # Earth's mass (kg)
+rho_0 = 13.1e3                          # Density of Earth's core (kg m^-3)
+rho_1 = 3.0e3                           # Mean density of solid-Earth surface (kg m^-3)
+# Note: rho_0 and rho_1 are chosen such that g(pole) ≈ 9.81
 
 """
     init_physical_constants()
@@ -119,6 +122,8 @@ Return struct containing physical constants.
         T(r_pole),
         T(G),
         T(mE),
+        T(rho_0),
+        T(rho_1),
     )
 end
 
@@ -130,6 +135,8 @@ struct PhysicalConstants{T<:AbstractFloat}
     r_pole::T
     G::T
     mE::T
+    rho_0::T
+    rho_1::T
 end
 
 function years2seconds(t::T) where {T<:AbstractFloat}
@@ -144,89 +151,12 @@ end
 ############# Solid Earth parameters ################
 #####################################################
 
-mantle_density = 3.3e3              # kg/m^3
-lithosphere_rigidity = 5e24         # N*m
-halfspace_viscosity = 1e21          # Pa*s (Ivins 2022, Fig 12 WAIS)
-channel_viscosity = 1e19            # Pa*s (Ivins 2022, Fig 10 WAIS)
-channel_begin = 88e3                # 88 km: beginning of asthenosphere (Bueler 2007).
-halfspace_begin = 400e3             # 400 km: beginning of homogenous half-space (Ivins 2022, Fig 12).
-
-"""
-
-    init_solidearth_params(
-        T::Type,
-        Omega::ComputationDomain;
-        lithosphere_rigidity,
-        mantle_density,
-        channel_viscosity,
-        halfspace_viscosity,
-        channel_begin,
-        halfspace_begin,
-    )
-
-Return struct containing solid-Earth parameters.
-"""
-@inline function init_solidearth_params(
-    T::Type,
-    Omega::ComputationDomain;
-    lithosphere_rigidity = fill(T(lithosphere_rigidity), Omega.N, Omega.N),
-    mantle_density = fill(T(mantle_density), Omega.N, Omega.N),
-    channel_viscosity = fill(T(channel_viscosity), Omega.N, Omega.N),
-    halfspace_viscosity = fill(T(halfspace_viscosity), Omega.N, Omega.N),
-    channel_begin = fill(T(channel_begin), Omega.N, Omega.N),
-    halfspace_begin = fill(T(halfspace_begin), Omega.N, Omega.N),
-)
-
-    channel_thickness = halfspace_begin - channel_begin
-    viscosity_ratio = get_viscosity_ratio(channel_viscosity, halfspace_viscosity)
-
-    if Omega.use_cuda
-        pseudodiff_coeffs = Array(Omega.pseudodiff_coeffs)
-    else
-        pseudodiff_coeffs = Omega.pseudodiff_coeffs
-    end
-
-    viscosity_scaling = three_layer_scaling(
-        Omega,
-        pseudodiff_coeffs,       # κ
-        viscosity_ratio,
-        channel_thickness,
-    )
-
-    if Omega.use_cuda
-        lithosphere_rigidity, mantle_density, channel_viscosity,
-        halfspace_viscosity, viscosity_ratio, viscosity_scaling,
-        channel_begin, halfspace_begin, channel_thickness = convert2CuArray(
-            [lithosphere_rigidity, mantle_density, channel_viscosity,
-            halfspace_viscosity, viscosity_ratio, viscosity_scaling,
-            channel_begin, halfspace_begin, channel_thickness]
-        )
-    end
-
-    return SolidEarthParams(
-        lithosphere_rigidity,
-        mantle_density,
-        channel_viscosity,
-        halfspace_viscosity,
-        viscosity_ratio,
-        viscosity_scaling,
-        channel_begin,
-        halfspace_begin,
-        channel_thickness,
-    )
-end
-
-struct SolidEarthParams{T<:AbstractFloat}
-    lithosphere_rigidity::AbstractMatrix{T}
-    mantle_density::AbstractMatrix{T}
-    channel_viscosity::AbstractMatrix{T}
-    halfspace_viscosity::AbstractMatrix{T}
-    viscosity_ratio::AbstractMatrix{T}
-    viscosity_scaling::AbstractMatrix{T}
-    channel_begin::AbstractMatrix{T}
-    halfspace_begin::AbstractMatrix{T}
-    channel_thickness::AbstractMatrix{T}
-end
+lithosphere_rigidity = 5e24     # N*m
+layers_density = [3.3e3]        # kg/m^3
+layers_viscosity = [1e19, 1e21] # Pa*s (Ivins 2022, Fig 12 WAIS)
+layers_begin = [88e3, 400e3]
+# 88 km: beginning of asthenosphere (Bueler 2007).
+# 400 km: beginning of homogenous half-space (Ivins 2022, Fig 12).
 
 """
 
@@ -241,35 +171,46 @@ end
 Return struct with solid-Earth parameters for mutliple channel layers and a halfspace.
 """
 @inline function init_multilayer_earth(
-    Omega::ComputationDomain{T};
-    lithosphere_rigidity<:Union{Vector{T}, Vector{AbstractMatrix{T}}},
-    layers_density::Vector{T},
-    layers_viscosity<:Union{Vector{T}, Vector{AbstractMatrix{T}}},
-    layers_begin::Vector{T},
-) where {T<:AbstractFloat}
+    Omega::ComputationDomain{T},
+    c::PhysicalConstants{T};
+    lithosphere_rigidity::ScalarOrMatrix = lithosphere_rigidity,
+    layers_density::Vector{T} = layers_density,
+    layers_viscosity::VectorOr3DArray = layers_viscosity,
+    layers_begin::Vector{T} = layers_begin,
+) where {
+    T<:AbstractFloat,
+    ScalarOrMatrix<:Union{T, AbstractMatrix{T}},
+    VectorOr3DArray<:Union{Vector{T}, AbstractArray{T, 3}},
+}
 
-    if lithosphere_rigidity isa Vector
+    if lithosphere_rigidity isa Real
         lithosphere_rigidity = matrify_constant(lithosphere_rigidity, Omega.N)
     end
     if layers_viscosity isa Vector
-        layers_viscosity = matrify_constant(layers_viscosity, Omega.N)
+        layers_viscosity = matrify_vectorconstant(layers_viscosity, Omega.N)
     end
 
-    g(z) = G * mE / (a - z)^2
+    # Earth acceleration over depth z.
+    # Use the pole radius because GIA most important at poles.
+    gr(r) = 4*π/3*c.G*c.rho_0* r - π*c.G*(c.rho_0 - c.rho_1) * r^2/c.r_pole
+    gz(z) = gr(c.r_pole - z)
 
-    layers_thickness = diff( vcat( T(0), layers_begin ) )
-    layers_mean_gravity = 0.5 .* (g.(layers_begin[1:end-1]) + g.(layers_begin[2:end]))
+    layers_thickness = diff( layers_begin )
+    layers_mean_gravity = 0.5 .*(gz.(layers_begin[1:end-1]) + gz.(layers_begin[2:end]))
     mean_gravity = (layers_thickness ./ (sum(layers_thickness)))' * layers_mean_gravity
     mean_density = (layers_thickness ./ (sum(layers_thickness)))' * layers_density
-
-    effective_viscosity = get_effective_viscosity(layers_viscosity, layers_thickness, Omega)
 
     if Omega.use_cuda
         pseudodiff_coeffs = Array(Omega.pseudodiff_coeffs)
     else
         pseudodiff_coeffs = Omega.pseudodiff_coeffs
     end
-
+    effective_viscosity = get_effective_viscosity(
+        Omega,
+        layers_viscosity,
+        layers_thickness,
+        pseudodiff_coeffs,
+    )
     if Omega.use_cuda
         lithosphere_rigidity, effective_viscosity = convert2CuArray(
             [lithosphere_rigidity, effective_viscosity]
@@ -279,33 +220,47 @@ Return struct with solid-Earth parameters for mutliple channel layers and a half
     return MultilayerEarth(
         mean_gravity,
         mean_density,
-        lithosphere_rigidity,
         effective_viscosity,
+        lithosphere_rigidity,
+        layers_density,
+        layers_viscosity,
+        layers_begin,
     )
+
 end
 
 struct MultilayerEarth{T<:AbstractFloat}
-    mean_gravity::AbstractMatrix{T}
-    mean_density::AbstractMatrix{T}
-    lithosphere_rigidity::AbstractMatrix{T}
+    mean_gravity::T
+    mean_density::T
     effective_viscosity::AbstractMatrix{T}
+    lithosphere_rigidity::AbstractMatrix{T}
+    layers_density::Vector{T}
+    layers_viscosity::AbstractArray{T, 3}
+    layers_begin::Vector{T}
+end
+
+"""
+
+    matrify_vectorconstant(x, N)
+
+Generate a vector of constant matrices from a vector of constants.
+"""
+@inline function matrify_vectorconstant(x::Vector{T}, N::Int) where {T<:AbstractFloat}
+    X = zeros(T, N, N, length(x))
+    for i in eachindex(x)
+        X[:, :, i] = matrify_constant(x[i], N)
+    end
+    return X
 end
 
 """
 
     matrify_constant(x, N)
 
-Generate a vector of constant matrices from a vector of constants.
+Generate a constant matrix from a constant.
 """
-@inline function matrify_constant(x::Vector{T}, N::Int) where {T<:AbstractFloat}
-    X = zeros(T, N, N, length(x))
-    for i in eachindex(x)
-        X[:, :, i] = fill(
-            x[i],
-            N, N,
-        )
-    end
-    return X
+@inline function matrify_constant(x::T, N::Int) where {T<:AbstractFloat}
+    return fill(x, N, N)
 end
 
 """
@@ -320,15 +275,17 @@ Compute equivalent viscosity for multilayer model by recursively applying
 the formula for a halfspace and a channel from Lingle and Clark (1975).
 """
 @inline function get_effective_viscosity(
-    layers_viscosity::Vector{AbstractMatrix{T}},
-    layers_thickness::Vector{T},
     Omega::ComputationDomain{T},
+    layers_viscosity::AbstractArray{T, 3},
+    layers_thickness::Vector{T},
+    pseudodiff_coeffs::AbstractMatrix{T},
 ) where {T<:AbstractFloat}
 
-    effective_viscosity = layers_viscosity[end]     # begin with half space
-    for i in eachindex(layers_viscosity)[1:end-1]
-        channel_viscosity = layers_viscosity[end - i]
-        channel_thickness = layers_thickness[end - i]
+    effective_viscosity = layers_viscosity[:, :, end]    # begin with half space
+    p1, p2 = plan_fft(effective_viscosity), plan_ifft(effective_viscosity)
+    for i in axes(layers_viscosity, 3)[1:end-1]
+        channel_viscosity = layers_viscosity[:, :, end - i]
+        channel_thickness = layers_thickness[end - i + 1]
         viscosity_ratio = get_viscosity_ratio(channel_viscosity, effective_viscosity)
         viscosity_scaling = three_layer_scaling(
             Omega,
@@ -336,7 +293,10 @@ the formula for a halfspace and a channel from Lingle and Clark (1975).
             viscosity_ratio,
             channel_thickness,
         )
-        effective_viscosity .*= viscosity_scaling
+        copy!( 
+            effective_viscosity,
+            real.( p2 * (( p1 * effective_viscosity ) .* viscosity_scaling)),
+        )
     end
     return effective_viscosity
 end
@@ -374,7 +334,7 @@ Bueler (2007) below equation 15.
 
 """
 @inline function three_layer_scaling(
-    Omega::ComputationDomain,
+    Omega::ComputationDomain{T},
     kappa::Matrix{T},
     visc_ratio::Matrix{T},
     channel_thickness::T,
@@ -383,7 +343,7 @@ Bueler (2007) below equation 15.
     visc_scaling = zeros(T, size(kappa)...)
     for i in axes(kappa, 1), j in axes(kappa, 2)
 
-        k = kappa[i, j]                 # (1/m)
+        k = π / Omega.L  # kappa[i, j]                 # (1/m)
         vr = visc_ratio[i, j]
         C, S = hyperbolic_channel_coeffs(channel_thickness, k)
         
@@ -399,6 +359,27 @@ Bueler (2007) below equation 15.
     end
     return visc_scaling
 end
+
+# @inline function three_layer_scaling(
+#     kappa::AbstractMatrix{T},
+#     visc_ratio::AbstractMatrix{T},
+#     channel_thickness::T,
+# ) where {T<:AbstractFloat}
+
+#     C(k) = cosh(channel_thickness * k)
+#     S(k) = sinh(channel_thickness * k)
+#     C, S = C.(kappa), S.(kappa)
+
+#     num1 = 2 .* visc_ratio .* C .* S
+#     num2 = (1 .- visc_ratio .^ 2) .* channel_thickness .^ 2 .* kappa .^ 2
+#     num3 = visc_ratio .^ 2 .* S .^ 2 + C .^ 2
+
+#     denum1 = (visc_ratio + 1 ./ visc_ratio) .* C .* S
+#     denum2 = (visc_ratio - 1 ./ visc_ratio) .* channel_thickness .* kappa
+#     denum3 = S .^ 2 + C .^ 2
+
+#     return (num1 + num2 + num3) ./ (denum1 + denum2 + denum3)
+# end
 
 """
 
@@ -520,21 +501,21 @@ end
 
 function copystructs2cpu(
     Omega::ComputationDomain,
-    p::SolidEarthParams,
+    p::MultilayerEarth,
+    c::PhysicalConstants,
 )
 
     T = typeof( Omega.L )
     n = Int( round( log2(Omega.N) ) )
     Omega_cpu = init_domain(Omega.L, n, use_cuda = false)
-    p_cpu = init_solidearth_params(
-        T,
-        Omega_cpu;
+
+    p_cpu = init_multilayer_earth(
+        Omega_cpu,
+        c;
         lithosphere_rigidity = Array(p.lithosphere_rigidity),
-        mantle_density = Array(p.mantle_density),
-        channel_viscosity = Array(p.channel_viscosity),
-        halfspace_viscosity = Array(p.halfspace_viscosity),
-        channel_begin = Array(p.channel_begin),
-        halfspace_begin = Array(p.halfspace_begin),
+        layers_density = p.layers_density,
+        layers_viscosity = p.layers_viscosity,
+        layers_begin = p.layers_begin,
     )
     return Omega_cpu, p_cpu
 end
