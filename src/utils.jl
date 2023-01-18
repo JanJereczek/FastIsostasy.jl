@@ -1,6 +1,6 @@
 """
 
-    meshgrid(x::Vector{T}, y::Vector{T}) where {T<:AbstractFloat}
+    meshgrid(x, y)
 
 Return a 2D meshgrid spanned by `x, y`.
 """
@@ -19,7 +19,7 @@ end
 
 """
 
-    init_domain(L::AbstractFloat, n::Int)
+    init_domain(L, n)
 
 Initialize a square computational domain with length `2*L` and `2^n+1` grid cells.
 """
@@ -76,12 +76,9 @@ struct ComputationDomain{T<:AbstractFloat}
 end
 
 """
-    get_differential_fourier(
-        L::T,
-        N2::Int,
-    )
+    get_differential_fourier(L, N2)
 
-Compute the matrices capturing the differential operators in the fourier space.
+Compute the matrices representing the differential operators in the fourier space.
 """
 @inline function get_differential_fourier(
     L::T,
@@ -100,24 +97,28 @@ end
 ############### Physical constants ##################
 #####################################################
 
-g = 9.81                                    # m/s^2
-seconds_per_year = 60 * 60 * 24 * 365.25    # s
-ice_density = 0.910e3                       # kg/m^3
-r_equator = 6.371e6                         # Earth radius at equator (m)
-r_pole = 6.357e6                            # Earth radius at pole (m)
+g = 9.81                                # Mean Earth acceleration at surface (m/s^2)
+seconds_per_year = 60^2 * 24 * 365.25   # (s)
+ice_density = 0.910e3                   # (kg/m^3)
+r_equator = 6.371e6                     # Earth radius at equator (m)
+r_pole = 6.357e6                        # Earth radius at pole (m)
+G = 6.674e-11                           # Gravity constant (m^3 kg^-1 s^-2)
+mE = 5.972e24                           # Earth's mass (kg)
 
 """
-    init_physical_constants(T::Type)
+    init_physical_constants()
 
 Return struct containing physical constants.
 """
-@inline function init_physical_constants(T::Type; ice_density = ice_density)
+@inline function init_physical_constants(;T::Type=Float64, ice_density = ice_density)
     return PhysicalConstants(
         T(g),
         T(seconds_per_year),
         T(ice_density),
         T(r_equator),
         T(r_pole),
+        T(G),
+        T(mE),
     )
 end
 
@@ -127,6 +128,8 @@ struct PhysicalConstants{T<:AbstractFloat}
     ice_density::T
     r_equator::T
     r_pole::T
+    G::T
+    mE::T
 end
 
 function years2seconds(t::T) where {T<:AbstractFloat}
@@ -227,6 +230,120 @@ end
 
 """
 
+    init_multilayer_earth(
+        Omega::ComputationDomain{T};
+        lithosphere_rigidity<:Union{Vector{T}, Vector{AbstractMatrix{T}}},
+        layers_density::Vector{T},
+        layers_viscosity<:Union{Vector{T}, Vector{AbstractMatrix{T}}},
+        layers_begin::Vector{T},
+    ) where {T<:AbstractFloat}
+
+Return struct with solid-Earth parameters for mutliple channel layers and a halfspace.
+"""
+@inline function init_multilayer_earth(
+    Omega::ComputationDomain{T};
+    lithosphere_rigidity<:Union{Vector{T}, Vector{AbstractMatrix{T}}},
+    layers_density::Vector{T},
+    layers_viscosity<:Union{Vector{T}, Vector{AbstractMatrix{T}}},
+    layers_begin::Vector{T},
+) where {T<:AbstractFloat}
+
+    if lithosphere_rigidity isa Vector
+        lithosphere_rigidity = matrify_constant(lithosphere_rigidity, Omega.N)
+    end
+    if layers_viscosity isa Vector
+        layers_viscosity = matrify_constant(layers_viscosity, Omega.N)
+    end
+
+    g(z) = G * mE / (a - z)^2
+
+    layers_thickness = diff( vcat( T(0), layers_begin ) )
+    layers_mean_gravity = 0.5 .* (g.(layers_begin[1:end-1]) + g.(layers_begin[2:end]))
+    mean_gravity = (layers_thickness ./ (sum(layers_thickness)))' * layers_mean_gravity
+    mean_density = (layers_thickness ./ (sum(layers_thickness)))' * layers_density
+
+    effective_viscosity = get_effective_viscosity(layers_viscosity, layers_thickness, Omega)
+
+    if Omega.use_cuda
+        pseudodiff_coeffs = Array(Omega.pseudodiff_coeffs)
+    else
+        pseudodiff_coeffs = Omega.pseudodiff_coeffs
+    end
+
+    if Omega.use_cuda
+        lithosphere_rigidity, effective_viscosity = convert2CuArray(
+            [lithosphere_rigidity, effective_viscosity]
+        )
+    end
+
+    return MultilayerEarth(
+        mean_gravity,
+        mean_density,
+        lithosphere_rigidity,
+        effective_viscosity,
+    )
+end
+
+struct MultilayerEarth{T<:AbstractFloat}
+    mean_gravity::AbstractMatrix{T}
+    mean_density::AbstractMatrix{T}
+    lithosphere_rigidity::AbstractMatrix{T}
+    effective_viscosity::AbstractMatrix{T}
+end
+
+"""
+
+    matrify_constant(x, N)
+
+Generate a vector of constant matrices from a vector of constants.
+"""
+@inline function matrify_constant(x::Vector{T}, N::Int) where {T<:AbstractFloat}
+    X = zeros(T, N, N, length(x))
+    for i in eachindex(x)
+        X[:, :, i] = fill(
+            x[i],
+            N, N,
+        )
+    end
+    return X
+end
+
+"""
+
+    get_effective_viscosity(
+        layers_viscosity::Vector{AbstractMatrix{T}},
+        layers_thickness::Vector{T},
+        Omega::ComputationDomain{T},
+    ) where {T<:AbstractFloat}
+
+Compute equivalent viscosity for multilayer model by recursively applying
+the formula for a halfspace and a channel from Lingle and Clark (1975).
+"""
+@inline function get_effective_viscosity(
+    layers_viscosity::Vector{AbstractMatrix{T}},
+    layers_thickness::Vector{T},
+    Omega::ComputationDomain{T},
+) where {T<:AbstractFloat}
+
+    effective_viscosity = layers_viscosity[end]     # begin with half space
+    for i in eachindex(layers_viscosity)[1:end-1]
+        channel_viscosity = layers_viscosity[end - i]
+        channel_thickness = layers_thickness[end - i]
+        viscosity_ratio = get_viscosity_ratio(channel_viscosity, effective_viscosity)
+        viscosity_scaling = three_layer_scaling(
+            Omega,
+            pseudodiff_coeffs,
+            viscosity_ratio,
+            channel_thickness,
+        )
+        effective_viscosity .*= viscosity_scaling
+    end
+    return effective_viscosity
+end
+
+
+"""
+
     get_viscosity_ratio(
         channel_viscosity::Matrix{T},
         halfspace_viscosity::Matrix{T},
@@ -249,7 +366,7 @@ end
         Omega,
         kappa::T,
         visc_ratio::T,
-        Tc::T,
+        channel_thickness::T,
     )
 
 Return the viscosity scaling for three-layer model as given in
@@ -260,7 +377,7 @@ Bueler (2007) below equation 15.
     Omega::ComputationDomain,
     kappa::Matrix{T},
     visc_ratio::Matrix{T},
-    channel_thickness::Matrix{T},
+    channel_thickness::T,
 ) where {T<:AbstractFloat}
 
     visc_scaling = zeros(T, size(kappa)...)
@@ -268,16 +385,14 @@ Bueler (2007) below equation 15.
 
         k = kappa[i, j]                 # (1/m)
         vr = visc_ratio[i, j]
-        Tc = channel_thickness[i, j]
-
-        C, S = hyperbolic_channel_coeffs(Tc, k)
+        C, S = hyperbolic_channel_coeffs(channel_thickness, k)
         
         num1 = 2 * vr * C * S
-        num2 = (1 - vr ^ 2) * Tc^2 * k ^ 2
+        num2 = (1 - vr ^ 2) * channel_thickness^2 * k ^ 2
         num3 = vr ^ 2 * S ^ 2 + C ^ 2
 
         denum1 = (vr + 1/vr) * C * S
-        denum2 = (vr - 1/vr) * Tc * k
+        denum2 = (vr - 1/vr) * channel_thickness * k
         denum3 = S^2 + C^2
         
         visc_scaling[i, j] = (num1 + num2 + num3) / (denum1 + denum2 + denum3)
@@ -285,11 +400,17 @@ Bueler (2007) below equation 15.
     return visc_scaling
 end
 
+"""
+
+    hyperbolic_channel_coeffs(channel_thickness, kappa)
+
+Return hyperbolic coefficients for equivalent viscosity computation.
+"""
 @inline function hyperbolic_channel_coeffs(
-    Tc::T,
+    channel_thickness::T,
     kappa::T,
 ) where {T<:AbstractFloat}
-    return cosh(Tc * kappa), sinh(Tc * kappa)
+    return cosh(channel_thickness * kappa), sinh(channel_thickness * kappa)
 end
 
 #####################################################
@@ -491,15 +612,7 @@ end
 
 """
 
-    quadrature2D(
-        f::Function,
-        x::Vector{T},
-        w::Vector{T},
-        x1::T,
-        x2::T,
-        y1::T,
-        y2::T,
-    )
+    quadrature2D(f, x, w, x1, x2, y1, y2)
 
 Return the integration of `f` over [`x1, x2`] x [`y1, y2`] with `x, w` some pre-computed
 support points and coefficients of the Gauss-Legendre quadrature.

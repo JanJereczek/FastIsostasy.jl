@@ -56,8 +56,8 @@ include("helpers_compute.jl")
     t1 = time()
     @time forward_isostasy!(Omega, t_out, u3D_elastic, u3D_viscous, sigma_zz_disc, tools, p, c, dt_refine = refine)
     t_fastiso = time() - t1
-
     Omega, p = copystructs2cpu(Omega, p)
+
     jldsave(
         "data/test1/$filename.jld2",
         u3D_elastic = u3D_elastic,
@@ -81,7 +81,7 @@ Application cases:
     - "euler2layers"
     - "euler3layers"
 """
-case = "euler3layers"
-for n in 6:8
+case = "euler2layers"
+for n in 5:5
     main(n, case, use_cuda = true)
 end
