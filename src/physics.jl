@@ -75,6 +75,7 @@ containing the solution, `sigma_zz` the vertical load applied upon the bedrock,
     t_out::AbstractVector{T},       # the output time vector
     u3D_elastic::AbstractArray{T, 3},
     u3D_viscous::AbstractArray{T, 3},
+    dudt3D_viscous::AbstractArray{T, 3},
     sigma_zz::AbstractMatrix{T},
     tools::PrecomputedTerms,
     p::MultilayerEarth,
@@ -85,15 +86,18 @@ containing the solution, `sigma_zz` the vertical load applied upon the bedrock,
     for i in eachindex(t_out)[2:end]
         dt_out = t_out[i] - t_out[i-1]
         u3D_elastic[:, :, i] .= compute_elastic_response(Omega, tools, -sigma_zz ./ c.g )
-        u3D_viscous[:, :, i] = forwardstep_isostasy(
+
+        u3D_viscous[:, :, i], dudt3D_viscous[:, :, i] = forwardstep_isostasy(
             Omega,
             dt[i-1],
             dt_out,
             u3D_viscous[:, :, i-1],
+            dudt3D_viscous[:, :, i-1],
             sigma_zz,
             tools,
             p,
         )
+
     end
 end
 
@@ -110,29 +114,33 @@ and accuracy) that are given by the ratio between `dt_out` and `dt`.
     dt::T,
     dt_out::T,
     u_viscous::AbstractMatrix{T},
+    dudt_viscous::AbstractMatrix{T},
     sigma_zz::AbstractMatrix{T},
     tools::PrecomputedTerms,
     p::MultilayerEarth,
 ) where {T<:AbstractFloat}
 
     if Omega.use_cuda
-        u_viscous, sigma_zz = convert2CuArray([u_viscous, sigma_zz])
+        u_viscous, dudt_viscous, sigma_zz = convert2CuArray([u_viscous, dudt_viscous, sigma_zz])
     end
 
     if tools.viscous_solver == "Euler"
 
         t_internal = range(0, stop = dt_out, step = dt)
         u_viscous_next = copy(u_viscous)
+        dudt_viscous_next = copy(dudt_viscous)
         for i in eachindex(t_internal)[2:end]
             euler_viscous_response!(
                 Omega,
                 dt,
                 u_viscous_next,
+                dudt_viscous_next,
                 sigma_zz,
                 tools,
                 p,
             )
             apply_bc!(u_viscous_next)
+            apply_bc!(dudt_viscous_next)
         end
     
     elseif tools.viscous_solver == "CrankNicolson"
@@ -145,10 +153,12 @@ and accuracy) that are given by the ratio between `dt_out` and `dt`.
     end
 
     if Omega.use_cuda
-        u_viscous_next = Array(u_viscous_next)
+        u_viscous_next, dudt_viscous_next = convert2Array(
+            [u_viscous_next, dudt_viscous_next])
     end
 
-    return u_viscous_next
+
+    return u_viscous_next, dudt_viscous_next
 end
 
 """
@@ -177,36 +187,11 @@ end
 Return viscous response based on explicit Euler time discretization and Fourier 
 collocation. Valid for multilayer parameters that can vary over x, y.
 """
-@inline function euler_viscous_response(
-    Omega::ComputationDomain,
-    dt::T,
-    u::AbstractMatrix{T},
-    sigma_zz::AbstractMatrix{T},
-    tools::PrecomputedTerms,
-    p::MultilayerEarth,
-) where {T<:AbstractFloat}
-
-    biharmonic_u = Omega.harmonic_coeffs .* ( tools.forward_fft * 
-    ( p.lithosphere_rigidity .* (tools.inverse_fft *
-    ( Omega.harmonic_coeffs .* (tools.forward_fft * u) ) ) ) )
-
-    lgr_term = ( tools.forward_fft * sigma_zz -
-    tools.forward_fft * (p.mean_density .* p.mean_gravity .* u) -
-    biharmonic_u ) ./ ( 2 .* p.effective_viscosity .* Omega.pseudodiff_coeffs .+
-    T(1e-20) )
-
-    return u + dt .* real.(tools.inverse_fft * lgr_term)
-end
-
-
-#     u = copy(u_current)
-#     return euler_viscous_response!(Omega, dt, u, sigma_zz, tools, p)
-# end
-
 @inline function euler_viscous_response!(
     Omega::ComputationDomain,
     dt::T,
     u::AbstractMatrix{T},
+    dudt::AbstractMatrix{T},
     sigma_zz::AbstractMatrix{T},
     tools::PrecomputedTerms,
     p::MultilayerEarth,
@@ -222,7 +207,8 @@ end
     tools.forward_fft * (p.mean_density .* p.mean_gravity .* u) -
     biharmonic_u ) ./ ( Omega.pseudodiff_coeffs .+ T(eps) )
 
-    u .+= dt ./ (2 .* p.effective_viscosity) .* real.(tools.inverse_fft * lgr_term)
+    dudt .= real.(tools.inverse_fft * lgr_term) ./ (2 .* p.effective_viscosity)
+    u .+= dt .* dudt
 end
 
 """

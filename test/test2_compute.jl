@@ -46,6 +46,7 @@ include("helpers_compute.jl")
     u3D = zeros( T, (size(Omega.X)..., length(t_out)) )
     u3D_elastic = copy(u3D)
     u3D_viscous = copy(u3D)
+    dudt3D_viscous = copy(u3D)
 
     if occursin("disc", case)
         alpha = T(10)                       # max latitude (°) of uniform ice disc
@@ -60,16 +61,20 @@ include("helpers_compute.jl")
 
     placeholder = 1.0   # we do not need to specify dt if Crank-Nicolson is not used.
     tools = precompute_terms(placeholder, Omega, p, c)
+
+    t1 = time()
     @time forward_isostasy!(
         Omega,
         t_out,
         u3D_elastic,
         u3D_viscous,
+        dudt3D_viscous,
         sigma_zz,
         tools,
         p,
         c,
     )
+    t_fastiso = time() - t1
 
     if use_cuda
         Omega, p = copystructs2cpu(Omega, p, c)
@@ -78,19 +83,22 @@ include("helpers_compute.jl")
         "data/test2/$filename.jld2",
         u3D_elastic = u3D_elastic,
         u3D_viscous = u3D_viscous,
+        dudt3D_viscous = dudt3D_viscous,
         sigma_zz = sigma_zz,
         Omega = Omega,
         c = c,
         p = p,
+        t_fastiso = t_fastiso,
         t_out = t_out,
     )
+
 end
 
 cases = ["disc", "cap"]
-for n in 6:7
+for n in 4:8
     for case in cases
         N = 2^n
         println("Computing $case on $N x $N grid...")
-        main(n, case)
+        main(n, case, use_cuda = false)
     end
 end

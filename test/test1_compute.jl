@@ -40,7 +40,8 @@ include("helpers_compute.jl")
     u3D = zeros( T, (size(Omega.X)..., length(t_out)) )
     u3D_elastic = copy(u3D)
     u3D_viscous = copy(u3D)
-    
+    dudt3D_viscous = copy(u3D)
+
     analytic_support = vcat(1.0e-14, 10 .^ (-10:0.05:-3), 1.0)
     # analytic_support = collect(10.0 .^ (-14:5))
 
@@ -66,6 +67,7 @@ include("helpers_compute.jl")
         t_out,
         u3D_elastic,
         u3D_viscous,
+        dudt3D_viscous,
         sigma_zz_disc,
         tools,
         p,

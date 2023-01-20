@@ -21,6 +21,7 @@ t_vec = timespan[1]:dt:timespan[2]                  # (s)
 u3D = zeros( T, (size(Omega.X)..., length(t_vec)) )
 u3D_elastic = copy(u3D)
 u3D_viscous = copy(u3D)
+dudt3D_viscous = copy(u3D)
 
 domains = vcat(1.0e-14, 10 .^ (-10:0.05:-3), 1.0)
 
@@ -34,7 +35,17 @@ tools = precompute_terms(dt, Omega, p, c)
 end
 
 @testset "homogeneous response to zero load" begin
-    forward_isostasy!(Omega, t_vec, u3D_elastic, u3D_viscous, sigma_zz_zero, tools, p, c)
+    @time forward_isostasy!(
+        Omega,
+        t_out,
+        u3D_elastic,
+        u3D_viscous,
+        dudt3D_viscous,
+        sigma_zz,
+        tools,
+        p,
+        c,
+    )
     @test sum( isapprox.(u3D_elastic, T(0)) ) == prod(size(u3D))
     @test sum( isapprox.(u3D_viscous, T(0)) ) == prod(size(u3D))
 end

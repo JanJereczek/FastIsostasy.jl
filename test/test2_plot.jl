@@ -8,27 +8,49 @@ include("helpers_plot.jl")
     case::String,       # Choose between viscoelastic and purely viscous response.
     n::Int;             # 2^n cells on domain (1)
     make_anim = false,
+    kernel = "gpu",
 )
 
     N = 2^n
-    sol_disc = load("data/test2/disc_gpu_N$N.jld2")
-    sol_cap = load("data/test2/cap_gpu_N$N.jld2")
+    suffix = "$(kernel)_N$N"
+    sol_disc = load("data/test2/disc_$suffix.jld2")
+    sol_cap = load("data/test2/cap_$suffix.jld2")
 
     if case == "viscoelastic"
         u_plot = [
             sol_cap["u3D_elastic"] + sol_cap["u3D_viscous"],
             sol_disc["u3D_elastic"] + sol_disc["u3D_viscous"],
+            m_per_sec2mm_per_yr.(sol_cap["dudt3D_viscous"]),
+            m_per_sec2mm_per_yr.(sol_disc["dudt3D_viscous"]),
         ]
     elseif case == "viscous"
         u_plot = [
             sol_cap["u3D_viscous"],
             sol_disc["u3D_viscous"],
+            m_per_sec2mm_per_yr.(sol_cap["dudt3D_viscous"]),
+            m_per_sec2mm_per_yr.(sol_disc["dudt3D_viscous"]),
         ]
     end
     
     labels = [
         L"Cap model $\,$",
         L"Disc model $\,$",
+        "",
+        "",
+    ]
+
+    xlabels = [
+        "",
+        "",
+        L"Colatitude $\theta$ (deg)",
+        L"Colatitude $\theta$ (deg)",
+    ]
+
+    ylabels = [
+        L"Total displacement $u$ (m)",
+        "",
+        L"Displacement rate $\dot{u} \: \mathrm{(mm \, yr^{-1}})$",
+        "",
     ]
 
     t_plot_yr = [1.0, 1e3, 5e3, 1e4, 1e5]
@@ -40,7 +62,9 @@ include("helpers_plot.jl")
         t_plot,
         u_plot,
         labels,
-        "test2/$(case)_N$N"
+        xlabels,
+        ylabels,
+        "test2/$(case)_$suffix"
     )
 
     # if make_anim
@@ -50,7 +74,7 @@ include("helpers_plot.jl")
 end
 
 for case in ["viscoelastic", "viscous"]
-    for n in 6:7
-        main(case, n)
+    for n in 4:8
+        main(case, n, kernel = "gpu")
     end
 end

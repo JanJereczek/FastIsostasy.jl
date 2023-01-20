@@ -63,22 +63,26 @@ end
     t_plot::AbstractVector{T},
     Uvec::Vector{Array{T, 3}},
     labels,
+    xlabels,
+    ylabels,
     plotname::String,
 ) where {T<:AbstractFloat}
 
     ncases = length(Uvec)
-    fig = Figure(resolution=(1600, 700))
+    fig = Figure(resolution=(1600, 900), fontsize = 24)
+    nrows, ncols = 2,2
     axs = [Axis(
-        fig[1, j],
-        title = labels[j],
-        xlabel = L"Colatitude $\theta$ (deg)",
-        ylabel = j == 1 ? L"Total displacement $u$ (m)" : " ",
+        fig[i, j],
+        title = labels[(i-1)*2 + j],
+        xlabel = xlabels[(i-1)*2 + j],
+        ylabel = ylabels[(i-1)*2 + j],
         xminorticks = IntervalsBetween(5),
         yminorticks = IntervalsBetween(2),
         xminorgridvisible = true,
         yminorgridvisible = true,
+        xticklabelsvisible = i == 2 ? true : false,
         yticklabelsvisible = j == 1 ? true : false,
-    ) for j in 1:ncases]
+    ) for j in 1:2, i in 1:2]
     colors = [:black, :orange, :blue, :red, :gray, :purple]
 
     for i in 1:ncases
@@ -115,7 +119,11 @@ end
                 color = colors[l],
             )
         end
-        ylims!(axs[i], (-450, 50))
+        if i <= 2
+            ylims!(axs[i], (-450, 50))
+        else
+            ylims!(axs[i], (-85, 10))
+        end
     end
     axislegend(axs[1], position = :rb)
     save("plots/$plotname.png", fig)
