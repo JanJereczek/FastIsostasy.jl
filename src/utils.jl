@@ -147,6 +147,10 @@ function seconds2years(t::T) where {T<:AbstractFloat}
     return t / seconds_per_year
 end
 
+function m_per_sec2mm_per_yr(dudt::T) where {T<:AbstractFloat}
+    return dudt * 1e3 * seconds_per_year
+end
+
 #####################################################
 ############# Solid Earth parameters ################
 #####################################################
@@ -196,7 +200,7 @@ Return struct with solid-Earth parameters for mutliple channel layers and a half
     gz(z) = gr(c.r_pole - z)
 
     layers_thickness = diff( layers_begin )
-    mean_density = (layers_thickness ./ (sum(layers_thickness)))' * layers_density    
+    mean_density = (layers_thickness ./ (sum(layers_thickness)))' * layers_density
     
     fixed_mean_gravity = true
     if fixed_mean_gravity
@@ -268,6 +272,14 @@ Generate a constant matrix from a constant.
 """
 @inline function matrify_constant(x::T, N::Int) where {T<:AbstractFloat}
     return fill(x, N, N)
+end
+
+@inline function get_rigidity(
+    t::T;
+    E::T = T(6.6e10),
+    nu::T = T(0.5),
+) where {T<:AbstractFloat}
+    return (E * t^3) / (12 * (1 - nu^2))
 end
 
 """

@@ -15,11 +15,14 @@ include("physics.jl")
 export init_domain
 export init_physical_constants
 export init_multilayer_earth
+
 export years2seconds
 export seconds2years
+export m_per_sec2mm_per_yr
 export convert2Array
 export copystructs2cpu
 
+export get_rigidity
 export get_r
 
 export precompute_terms
@@ -34,6 +37,5 @@ export forward_isostasy!
 export ComputationDomain
 export PhysicalConstants
 export MultilayerEarth
-export LocalFields
 
 end

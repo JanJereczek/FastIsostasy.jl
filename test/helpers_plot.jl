@@ -131,6 +131,66 @@ end
     return fig
 end
 
+
+@inline function slice_test3(
+    Omega::ComputationDomain,
+    c::PhysicalConstants,
+    t_vec::AbstractVector{T},
+    t_plot::AbstractVector{T},
+    Uvec::Vector{Array{T, 3}},
+    labels,
+    xlabels,
+    ylabels,
+    plotname::String,
+) where {T<:AbstractFloat}
+
+    ncases = length(Uvec)
+    fig = Figure(resolution=(1600, 900), fontsize = 24)
+    nrows, ncols = 2, 3
+    axs = [Axis(
+        fig[i, j],
+        title = labels[(i-1)*ncols + j],
+        xlabel = xlabels[(i-1)*ncols + j],
+        ylabel = ylabels[(i-1)*ncols + j],
+        xminorticks = IntervalsBetween(5),
+        yminorticks = IntervalsBetween(2),
+        xminorgridvisible = true,
+        yminorgridvisible = true,
+        xticklabelsvisible = i == nrows ? true : false,
+        yticklabelsvisible = j == 1 ? true : false,
+    ) for j in 1:ncols, i in 1:nrows]
+    colors = [:black, :orange, :blue, :red, :gray, :purple]
+
+    for i in 1:ncases
+        U = Uvec[i]
+        n1, n2, nt = size(U)
+        slicey, slicex = Int(n1/2), 1:n2
+        theta = rad2deg.( Omega.X[slicey, slicex] ./ c.r_equator)
+
+        for l in eachindex(t_plot)
+            t = t_plot[l]
+            k = argmin( (t_vec .- t) .^ 2 )
+            tyr = Int(round( seconds2years(t) ))
+            lines!(
+                axs[i],
+                theta,
+                U[slicey, slicex, k],
+                label = L"$t = %$tyr $ yr",
+                color = colors[l],
+            )
+        end
+        if i <= 3
+            ylims!(axs[i], (-450, 50))
+        else
+            ylims!(axs[i], (-85, 10))
+        end
+    end
+    axislegend(axs[1], position = :rb)
+    save("plots/$plotname.png", fig)
+    save("plots/$plotname.pdf", fig)
+    return fig
+end
+
 @inline function animate_viscous_response(
     t_vec::AbstractVector{T},
     Omega::ComputationDomain,

@@ -133,3 +133,17 @@ end
     j1 = besselj1(kappa * R0)
     return (exp(-beta*t/(2*mean(p.effective_viscosity)*kappa))-1) * j0 * j1 / beta
 end
+
+################################################
+# Generate binary parameter fields for test 3
+################################################
+
+function generate_binary_field(
+    Omega::ComputationDomain{T},
+    x_lo::T,
+    x_hi::T,
+) where {T<:AbstractFloat}
+    lo_half = fill(x_lo, Omega.N, Int(Omega.N/2))
+    hi_half = fill(x_hi, Omega.N, Int(Omega.N/2))
+    return cat(lo_half, hi_half, dims=2)
+end
