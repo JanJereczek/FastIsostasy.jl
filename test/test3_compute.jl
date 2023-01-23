@@ -27,12 +27,18 @@ include("helpers_compute.jl")
     if case == "binaryD"
         binary_thickness = generate_binary_field(Omega, 50e3, 250e3)
         binary_rigidity = get_rigidity.(binary_thickness)
-        p = init_multilayer_earth(Omega, c, lithosphere_rigidity = binary_rigidity)
+        p = init_multilayer_earth(Omega, c, litho_rigidity = binary_rigidity)
     elseif case == "binaryη"
-        binary_viscosity = generate_binary_field(Omega, 1e18, 1e23)
-        halfspace_viscosity = fill(1e21, Omega.N, Omega.N)
+        binary_viscosity = generate_binary_field(Omega, 1e18, 1e23) # + rand(Omega.N, Omega.N)
+        halfspace_viscosity = fill(1e21, Omega.N, Omega.N) # + 1e15 .* rand(Omega.N, Omega.N)
         layers_viscosity = cat(binary_viscosity, halfspace_viscosity, dims=3)
-        p = init_multilayer_earth(Omega, c, layers_viscosity = layers_viscosity)
+        layers_begin = matrify_vectorconstant([88e3, 400e3], Omega.N)
+        p = init_multilayer_earth(
+            Omega,
+            c,
+            layers_begin = layers_begin,
+            layers_viscosity = layers_viscosity,
+        )
     elseif case == "binaryDη"
         binary_thickness = generate_binary_field(Omega, 50e3, 250e3)
         binary_rigidity = get_rigidity.(binary_thickness)
@@ -42,7 +48,7 @@ include("helpers_compute.jl")
         p = init_multilayer_earth(
             Omega,
             c,
-            lithosphere_rigidity = binary_rigidity,
+            litho_rigidity = binary_rigidity,
             layers_viscosity = layers_viscosity,
         )
     end

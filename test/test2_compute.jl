@@ -21,7 +21,7 @@ include("helpers_compute.jl")
     Omega = init_domain(L, n, use_cuda = use_cuda)
     filename = "$(case)_$(kernel)_N$(Omega.N)"
 
-    litho_thickness = 70e3      # lithosphere thickness (m)
+    litho_thickness = 70e3      # litho thickness (m)
     G = 0.50605e11              # shear modulus (Pa)
     nu = 0.5
     E = G * 2 * (1 + nu)
@@ -30,7 +30,7 @@ include("helpers_compute.jl")
     p = init_multilayer_earth(
         Omega,
         c,
-        lithosphere_rigidity = D,
+        litho_rigidity = D,
         layers_density = [3.438e3, 3.871e3],
         layers_viscosity = [1e21, 1e21, 2e21],
         layers_begin = c.r_equator .- [6301e3, 5951e3, 5701e3],

@@ -152,12 +152,14 @@ function m_per_sec2mm_per_yr(dudt::T) where {T<:AbstractFloat}
 end
 
 #####################################################
-############# Solid Earth parameters ################
+# Solid Earth parameters
 #####################################################
 
-lithosphere_rigidity = 5e24     # N*m
-layers_density = [3.3e3]        # kg/m^3
-layers_viscosity = [1e19, 1e21] # Pa*s (Ivins 2022, Fig 12 WAIS)
+litho_rigidity = 5e24               # (N*m)
+litho_youngmodulus = 6.6e10         # (N/m^2)
+litho_poissonratio = 0.5            # (1)
+layers_density = [3.3e3]            # (kg/m^3)
+layers_viscosity = [1e19, 1e21]     # (Pa*s) (Bueler 2007, Ivins 2022, Fig 12 WAIS)
 layers_begin = [88e3, 400e3]
 # 88 km: beginning of asthenosphere (Bueler 2007).
 # 400 km: beginning of homogenous half-space (Ivins 2022, Fig 12).
@@ -166,7 +168,7 @@ layers_begin = [88e3, 400e3]
 
     init_multilayer_earth(
         Omega::ComputationDomain{T};
-        lithosphere_rigidity<:Union{Vector{T}, Vector{AbstractMatrix{T}}},
+        litho_rigidity<:Union{Vector{T}, Vector{AbstractMatrix{T}}},
         layers_density::Vector{T},
         layers_viscosity<:Union{Vector{T}, Vector{AbstractMatrix{T}}},
         layers_begin::Vector{T},
@@ -177,62 +179,56 @@ Return struct with solid-Earth parameters for mutliple channel layers and a half
 @inline function init_multilayer_earth(
     Omega::ComputationDomain{T},
     c::PhysicalConstants{T};
-    lithosphere_rigidity::ScalarOrMatrix = lithosphere_rigidity,
+    layers_begin::VectorOr3DArray = layers_begin,
     layers_density::Vector{T} = layers_density,
     layers_viscosity::VectorOr3DArray = layers_viscosity,
-    layers_begin::Vector{T} = layers_begin,
+    litho_youngmodulus::ScalarOrMatrix = litho_youngmodulus,
+    litho_poissonratio::ScalarOrMatrix = litho_poissonratio,
 ) where {
     T<:AbstractFloat,
-    ScalarOrMatrix<:Union{T, AbstractMatrix{T}},
     VectorOr3DArray<:Union{Vector{T}, AbstractArray{T, 3}},
+    ScalarOrMatrix<:Union{T, AbstractMatrix{T}},
 }
 
-    if lithosphere_rigidity isa Real
-        lithosphere_rigidity = matrify_constant(lithosphere_rigidity, Omega.N)
+    if layers_begin isa Vector
+        layers_begin = matrify_vectorconstant(layers_begin, Omega.N)
     end
+    litho_thickness = layers_begin[:, :, 1]
+    litho_rigidity = get_rigidity.(
+        litho_thickness,
+        litho_youngmodulus,
+        litho_poissonratio,
+    )
+
     if layers_viscosity isa Vector
         layers_viscosity = matrify_vectorconstant(layers_viscosity, Omega.N)
     end
 
-    # Earth acceleration over depth z.
-    # Use the pole radius because GIA most important at poles.
-    gr(r) = 4*π/3*c.G*c.rho_0* r - π*c.G*(c.rho_0 - c.rho_1) * r^2/c.r_pole
-    gz(z) = gr(c.r_pole - z)
-
-    layers_thickness = diff( layers_begin )
-    mean_density = (layers_thickness ./ (sum(layers_thickness)))' * layers_density
-    
-    fixed_mean_gravity = true
-    if fixed_mean_gravity
-        mean_gravity = c.g
-    else
-        layers_mean_gravity = 0.5 .*(gz.(layers_begin[1:end-1]) + gz.(layers_begin[2:end]))
-        mean_gravity = (layers_thickness ./ (sum(layers_thickness)))' * layers_mean_gravity
-    end
-
-
+    layers_thickness = diff( layers_begin, dims=3 )
     if Omega.use_cuda
         pseudodiff_coeffs = Array(Omega.pseudodiff_coeffs)
     else
         pseudodiff_coeffs = Omega.pseudodiff_coeffs
     end
     effective_viscosity = get_effective_viscosity(
-        Omega,
         layers_viscosity,
         layers_thickness,
         pseudodiff_coeffs,
     )
+
+    mean_density = get_matrix_mean_density(layers_thickness, layers_density)
+
     if Omega.use_cuda
-        lithosphere_rigidity, effective_viscosity = convert2CuArray(
-            [lithosphere_rigidity, effective_viscosity]
+        litho_rigidity, effective_viscosity = convert2CuArray(
+            [litho_rigidity, effective_viscosity]
         )
     end
 
     return MultilayerEarth(
-        mean_gravity,
+        c.g,
         mean_density,
         effective_viscosity,
-        lithosphere_rigidity,
+        litho_rigidity,
         layers_density,
         layers_viscosity,
         layers_begin,
@@ -242,12 +238,12 @@ end
 
 struct MultilayerEarth{T<:AbstractFloat}
     mean_gravity::T
-    mean_density::T
+    mean_density::AbstractMatrix{T}
     effective_viscosity::AbstractMatrix{T}
-    lithosphere_rigidity::AbstractMatrix{T}
+    litho_rigidity::AbstractMatrix{T}
     layers_density::Vector{T}
     layers_viscosity::AbstractArray{T, 3}
-    layers_begin::Vector{T}
+    layers_begin::AbstractArray{T, 3}
 end
 
 """
@@ -275,11 +271,51 @@ Generate a constant matrix from a constant.
 end
 
 @inline function get_rigidity(
-    t::T;
-    E::T = T(6.6e10),
-    nu::T = T(0.5),
+    t::T,
+    E::T,
+    nu::T,
 ) where {T<:AbstractFloat}
     return (E * t^3) / (12 * (1 - nu^2))
+end
+
+@inline function get_matrix_mean_density(
+    layers_thickness::AbstractArray{T, 3},
+    layers_density::Vector{T},
+) where {T<:AbstractFloat}
+    mean_density = zeros(T, size(layers_thickness)[1:2])
+    for i in axes(layers_thickness, 1), j in axes(layers_thickness, 2)
+        mean_density[i, j] = get_mean_density(layers_thickness[i, j, :], layers_density)
+    end
+    return mean_density
+end
+
+@inline function get_mean_density(
+    layers_thickness::Vector{T},
+    layers_density::Vector{T},
+) where {T<:AbstractFloat}
+    return sum( (layers_thickness ./ (sum(layers_thickness)))' * layers_density )
+end
+
+@inline function matrified_mean_gravity()
+    fixed_mean_gravity = true
+    if fixed_mean_gravity
+        mean_gravity = c.g
+    else
+        # Earth acceleration over depth z.
+        # Use the pole radius because GIA most important at poles.
+        gr(r) = 4*π/3*c.G*c.rho_0* r - π*c.G*(c.rho_0 - c.rho_1) * r^2/c.r_pole
+        gz(z) = gr(c.r_pole - z)
+        mean_gravity = get_mean_gravity(layers_begin, layers_thickness, gz)
+    end
+end
+
+@inline function get_mean_gravity(
+    layers_begin::Vector{T},
+    layers_thickness::Vector{T},
+    gz::Function,
+) where {T<:AbstractFloat}
+    layers_mean_gravity = 0.5 .*(gz.(layers_begin[1:end-1]) + gz.(layers_begin[2:end]))
+    return (layers_thickness ./ (sum(layers_thickness)))' * layers_mean_gravity
 end
 
 """
@@ -294,27 +330,26 @@ Compute equivalent viscosity for multilayer model by recursively applying
 the formula for a halfspace and a channel from Lingle and Clark (1975).
 """
 @inline function get_effective_viscosity(
-    Omega::ComputationDomain{T},
     layers_viscosity::AbstractArray{T, 3},
-    layers_thickness::Vector{T},
+    layers_thickness::AbstractArray{T, 3},
     pseudodiff_coeffs::AbstractMatrix{T},
 ) where {T<:AbstractFloat}
 
-    effective_viscosity = layers_viscosity[:, :, end]    # begin with half space
+    # Recursion has to start with half space = n-th layer:
+    effective_viscosity = layers_viscosity[:, :, end]
     p1, p2 = plan_fft(effective_viscosity), plan_ifft(effective_viscosity)
     for i in axes(layers_viscosity, 3)[1:end-1]
         channel_viscosity = layers_viscosity[:, :, end - i]
-        channel_thickness = layers_thickness[end - i + 1]
+        channel_thickness = layers_thickness[:, :, end - i + 1]
         viscosity_ratio = get_viscosity_ratio(channel_viscosity, effective_viscosity)
         viscosity_scaling = three_layer_scaling(
-            Omega,
             pseudodiff_coeffs,
             viscosity_ratio,
             channel_thickness,
         )
         copy!( 
             effective_viscosity,
-            real.( p2 * (( p1 * effective_viscosity ) .* viscosity_scaling)),
+            effective_viscosity .* viscosity_scaling,
         )
     end
     return effective_viscosity
@@ -353,6 +388,28 @@ Bueler (2007) below equation 15.
 
 """
 @inline function three_layer_scaling(
+    kappa::Matrix{T},
+    visc_ratio::Matrix{T},
+    channel_thickness::Matrix{T},
+) where {T<:AbstractFloat}
+
+    # FIXME: What is kappa in that context???
+    kappa = π / 3e6
+    C = cosh.(channel_thickness .* kappa)
+    S = sinh.(channel_thickness .* kappa)
+
+    num1 = 2 .* visc_ratio .* C .* S
+    num2 = (1 .- visc_ratio .^ 2) .* channel_thickness .^ 2 .* kappa .^ 2
+    num3 = visc_ratio .^ 2 .* S .^ 2 + C .^ 2
+
+    denum1 = (visc_ratio .+ 1 ./ visc_ratio) .* C .* S
+    denum2 = (visc_ratio .- 1 ./ visc_ratio) .* channel_thickness .* kappa
+    denum3 = S .^ 2 + C .^ 2
+    
+    return (num1 + num2 + num3) ./ (denum1 + denum2 + denum3)
+end
+
+@inline function three_layer_scaling_scalar(
     Omega::ComputationDomain{T},
     kappa::Matrix{T},
     visc_ratio::Matrix{T},
@@ -378,6 +435,7 @@ Bueler (2007) below equation 15.
     end
     return visc_scaling
 end
+
 
 # @inline function three_layer_scaling(
 #     kappa::AbstractMatrix{T},
@@ -531,7 +589,7 @@ function copystructs2cpu(
     p_cpu = init_multilayer_earth(
         Omega_cpu,
         c;
-        lithosphere_rigidity = Array(p.lithosphere_rigidity),
+        litho_rigidity = Array(p.litho_rigidity),
         layers_density = p.layers_density,
         layers_viscosity = p.layers_viscosity,
         layers_begin = p.layers_begin,

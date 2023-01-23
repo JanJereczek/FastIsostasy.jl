@@ -21,6 +21,7 @@ export seconds2years
 export m_per_sec2mm_per_yr
 export convert2Array
 export copystructs2cpu
+export matrify_vectorconstant
 
 export get_rigidity
 export get_r
