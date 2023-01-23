@@ -200,7 +200,7 @@ collocation. Valid for multilayer parameters that can vary over x, y.
     eps = 1e-20
 
     biharmonic_u = Omega.harmonic_coeffs .* ( tools.forward_fft * 
-    ( p.lithosphere_rigidity .* (tools.inverse_fft *
+    ( p.litho_rigidity .* (tools.inverse_fft *
     ( Omega.harmonic_coeffs .* (tools.forward_fft * u) ) ) ) )
 
     lgr_term = ( tools.forward_fft * sigma_zz -
@@ -244,7 +244,7 @@ Return two terms arising in the Crank-Nicolson scheme when applied to the presen
     c::PhysicalConstants,
 ) where {T<:AbstractFloat}
     # Note: μ = π/L already included in differential coeffs
-    beta = ( p.mantle_density .* c.g .+ p.lithosphere_rigidity .* Omega.biharmonic_coeffs )
+    beta = ( p.mantle_density .* c.g .+ p.litho_rigidity .* Omega.biharmonic_coeffs )
     term1 = (2 .* p.halfspace_viscosity .* p.viscosity_scaling) .* Omega.pseudodiff_coeffs
     term2 = (dt/2) .* beta
     fourier_left_term = term1 + term2
@@ -287,7 +287,7 @@ end
     tools::PrecomputedTerms,
     load::AbstractMatrix{T},
 ) where {T<:AbstractFloat}
-    harmonic_u = 1 ./ p.lithosphere_rigidity .* ( tools.inverse_fft * 
+    harmonic_u = 1 ./ p.litho_rigidity .* ( tools.inverse_fft * 
                  ( tools.forward_fft * load ./ tools.harmonic_coeffs ) )
     
     return real.( tools.inverse_fft * ( tools.forward_fft * harmonic_u ./ tools.harmonic_coeffs ) )
