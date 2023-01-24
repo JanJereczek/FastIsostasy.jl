@@ -158,5 +158,19 @@ function generate_sigmoid_field(
     scaled_sigmoid(x) = sigmoid(x, 1e-2)
     return x_lo .+ delta_x .* scaled_sigmoid.(Omega.X)
 end
-
 sigmoid(x::Real, c::Real) = 1 / (1 + exp(-c*x))
+
+function generate_window_field(
+    Omega::ComputationDomain{T},
+    x_background::T,
+    x_lo::T,
+    x_hi::T,
+) where {T<:AbstractFloat}
+    N = Omega.N
+    N2 = Int(N/2)
+    N4 = Int(N/4)
+    X = fill(x_background, N, N)
+    X[N4+1:end-N4, N4+1:N2] .= x_lo
+    X[N4+1:end-N4, N2+1:end-N4] .= x_hi
+    return X
+end

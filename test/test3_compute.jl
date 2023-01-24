@@ -25,33 +25,29 @@ include("helpers_compute.jl")
 
     c = init_physical_constants()
     if case == "binaryD"
-        binary_thickness = generate_binary_field(Omega, 50e3, 250e3)
-        sigmoid_thickness = generate_sigmoid_field(Omega, 50e3, 250e3)
+        layer1_begin = generate_window_field(Omega, 100e3, 50e3, 250e3)
         layer2_begin = fill(250e3, Omega.N, Omega.N)
-        lb = cat(sigmoid_thickness, layer2_begin, dims=3)
+        lb = cat(layer1_begin, layer2_begin, dims=3)
         p = init_multilayer_earth(Omega, c, layers_begin = lb, layers_viscosity = [1e21, 1e21])
     elseif case == "binaryη"
-        binary_viscosity = generate_binary_field(Omega, 1e18, 1e23)
-        logsigmoid_viscosity = 10 .^ generate_sigmoid_field(Omega, 18., 23.)
+        window_viscosity = 10 .^ generate_window_field(Omega, 21., 18., 23.)
         halfspace_viscosity = fill(1e21, Omega.N, Omega.N)
-        lv = cat(logsigmoid_viscosity, halfspace_viscosity, dims=3)
+        lv = cat(window_viscosity, halfspace_viscosity, dims=3)
         p = init_multilayer_earth(
             Omega,
             c,
             layers_viscosity = lv,
         )
     elseif case == "binaryDη"
-        binary_thickness = generate_binary_field(Omega, 50e3, 250e3)
-        sigmoid_thickness = generate_sigmoid_field(Omega, 50e3, 250e3)
+        layer1_begin = generate_window_field(Omega, 100e3, 50e3, 250e3)
         layer2_begin = fill(250e3, Omega.N, Omega.N)
         layer3_begin = fill(400e3, Omega.N, Omega.N)
-        lb = cat(sigmoid_thickness, layer2_begin, layer3_begin, dims=3)
+        lb = cat(layer1_begin, layer2_begin, layer3_begin, dims=3)
 
-        eqlayer_visc = fill(1e18, Omega.N, Omega.N)
-        binary_viscosity = generate_binary_field(Omega, 1e18, 1e23)
-        logsigmoid_viscosity = 10 .^ generate_sigmoid_field(Omega, 18., 23.)
+        eqlayer_visc = fill(1e21, Omega.N, Omega.N)
+        window_viscosity = 10 .^ generate_window_field(Omega, 21., 18., 23.)
         halfspace_viscosity = fill(1e21, Omega.N, Omega.N)
-        lv = cat(eqlayer_visc, logsigmoid_viscosity, halfspace_viscosity, dims=3)
+        lv = cat(eqlayer_visc, window_viscosity, halfspace_viscosity, dims=3)
 
         ld = [3.3e3, 3.3e3]
 
@@ -69,7 +65,7 @@ include("helpers_compute.jl")
     if n >= 8
         dt = fill( years2seconds(0.1), length(t_out)-1 )
     else
-        dt = fill( years2seconds(1), length(t_out)-1 )
+        dt = fill( years2seconds(1.0), length(t_out)-1 )
     end
 
     u3D = zeros( T, (size(Omega.X)..., length(t_out)) )
@@ -121,7 +117,7 @@ end
     - "binaryη"
     - "binaryDη"
 =#
-for n in 8:8
+for n in 6:7
     for case in ["binaryD", "binaryη", "binaryDη"]
         main(n, case, use_cuda = true)
     end
