@@ -64,6 +64,6 @@ include("helpers_plot.jl")
 
 end
 
-for n in 4:6
-    main(n, kernel = "cpu")
+for n in 6:8
+    main(n, kernel = "gpu")
 end

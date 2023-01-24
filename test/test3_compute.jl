@@ -26,35 +26,47 @@ include("helpers_compute.jl")
     c = init_physical_constants()
     if case == "binaryD"
         binary_thickness = generate_binary_field(Omega, 50e3, 250e3)
-        binary_rigidity = get_rigidity.(binary_thickness)
-        p = init_multilayer_earth(Omega, c, litho_rigidity = binary_rigidity)
+        layer2_begin = fill(250e3, Omega.N, Omega.N)
+        lb = cat(binary_thickness, layer2_begin, dims=3)
+        p = init_multilayer_earth(Omega, c, layers_begin = lb, layers_viscosity = [1e21, 1e21])
     elseif case == "binaryη"
-        binary_viscosity = generate_binary_field(Omega, 1e18, 1e23) # + rand(Omega.N, Omega.N)
-        halfspace_viscosity = fill(1e21, Omega.N, Omega.N) # + 1e15 .* rand(Omega.N, Omega.N)
-        layers_viscosity = cat(binary_viscosity, halfspace_viscosity, dims=3)
-        layers_begin = matrify_vectorconstant([88e3, 400e3], Omega.N)
+        binary_viscosity = generate_binary_field(Omega, 1e18, 1e23)
+        halfspace_viscosity = fill(1e21, Omega.N, Omega.N)
+        lv = cat(binary_viscosity, halfspace_viscosity, dims=3)
         p = init_multilayer_earth(
             Omega,
             c,
-            layers_begin = layers_begin,
-            layers_viscosity = layers_viscosity,
+            layers_viscosity = lv,
         )
     elseif case == "binaryDη"
         binary_thickness = generate_binary_field(Omega, 50e3, 250e3)
-        binary_rigidity = get_rigidity.(binary_thickness)
+        layer2_begin = fill(250e3, Omega.N, Omega.N)
+        layer3_begin = fill(400e3, Omega.N, Omega.N)
+        lb = cat(binary_thickness, layer2_begin, layer3_begin, dims=3)
+
+        eqlayer_visc = fill(1e18, Omega.N, Omega.N)
         binary_viscosity = generate_binary_field(Omega, 1e18, 1e23)
         halfspace_viscosity = fill(1e21, Omega.N, Omega.N)
-        layers_viscosity = cat(binary_viscosity, halfspace_viscosity, dims=3)
+        lv = cat(eqlayer_visc, binary_viscosity, halfspace_viscosity, dims=3)
+
+        ld = [3.3e3, 3.3e3]
+
         p = init_multilayer_earth(
             Omega,
             c,
-            litho_rigidity = binary_rigidity,
-            layers_viscosity = layers_viscosity,
+            layers_begin = lb,
+            layers_viscosity = lv,
+            layers_density = ld,
         )
     end
 
     t_out_yr = [0.0, 1.0, 1e1, 1e2, 1e3, 2e3, 5e3, 1e4, 1e5]
     t_out = years2seconds.(t_out_yr)
+    if n >= 8
+        dt = fill( years2seconds(0.5), length(t_out)-1 )
+    else
+        dt = fill( years2seconds(1), length(t_out)-1 )
+    end
 
     u3D = zeros( T, (size(Omega.X)..., length(t_out)) )
     u3D_elastic = copy(u3D)
@@ -76,6 +88,7 @@ include("helpers_compute.jl")
         tools,
         p,
         c,
+        dt = dt,
     )
     t_fastiso = time() - t1
 
@@ -104,8 +117,8 @@ end
     - "binaryη"
     - "binaryDη"
 =#
-for n in 4:6
+for n in 8:8
     for case in ["binaryD", "binaryη", "binaryDη"]
-        main(n, case, use_cuda = false)
+        main(n, case, use_cuda = true)
     end
 end

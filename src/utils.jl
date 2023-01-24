@@ -179,15 +179,17 @@ Return struct with solid-Earth parameters for mutliple channel layers and a half
 @inline function init_multilayer_earth(
     Omega::ComputationDomain{T},
     c::PhysicalConstants{T};
-    layers_begin::VectorOr3DArray = layers_begin,
+    layers_begin::A = layers_begin,
     layers_density::Vector{T} = layers_density,
-    layers_viscosity::VectorOr3DArray = layers_viscosity,
-    litho_youngmodulus::ScalarOrMatrix = litho_youngmodulus,
-    litho_poissonratio::ScalarOrMatrix = litho_poissonratio,
+    layers_viscosity::B = layers_viscosity,
+    litho_youngmodulus::C = litho_youngmodulus,
+    litho_poissonratio::D = litho_poissonratio,
 ) where {
     T<:AbstractFloat,
-    VectorOr3DArray<:Union{Vector{T}, AbstractArray{T, 3}},
-    ScalarOrMatrix<:Union{T, AbstractMatrix{T}},
+    A<:Union{Vector{T}, AbstractArray{T, 3}},
+    B<:Union{Vector{T}, AbstractArray{T, 3}},
+    C<:Union{T, AbstractMatrix{T}},
+    D<:Union{T, AbstractMatrix{T}},
 }
 
     if layers_begin isa Vector
@@ -216,11 +218,12 @@ Return struct with solid-Earth parameters for mutliple channel layers and a half
         pseudodiff_coeffs,
     )
 
-    mean_density = get_matrix_mean_density(layers_thickness, layers_density)
+    # mean_density = get_matrix_mean_density(layers_thickness, layers_density)
+    mean_density = fill(3.3e3, Omega.N, Omega.N)
 
     if Omega.use_cuda
-        litho_rigidity, effective_viscosity = convert2CuArray(
-            [litho_rigidity, effective_viscosity]
+        litho_rigidity, effective_viscosity, mean_density = convert2CuArray(
+            [litho_rigidity, effective_viscosity, mean_density]
         )
     end
 
@@ -589,11 +592,11 @@ function copystructs2cpu(
     p_cpu = init_multilayer_earth(
         Omega_cpu,
         c;
-        litho_rigidity = Array(p.litho_rigidity),
+        layers_begin = p.layers_begin,
         layers_density = p.layers_density,
         layers_viscosity = p.layers_viscosity,
-        layers_begin = p.layers_begin,
     )
+
     return Omega_cpu, p_cpu
 end
 
