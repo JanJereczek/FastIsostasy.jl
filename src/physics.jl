@@ -157,7 +157,8 @@ and accuracy) that are given by the ratio between `dt_out` and `dt`.
             [u_viscous_next, dudt_viscous_next])
     end
 
-
+    # display(p.effective_viscosity)
+    # display(u_viscous_next)
     return u_viscous_next, dudt_viscous_next
 end
 
@@ -197,15 +198,22 @@ collocation. Valid for multilayer parameters that can vary over x, y.
     p::MultilayerEarth,
 ) where {T<:AbstractFloat}
 
-    eps = 1e-20
+    # println(typeof(Omega.harmonic_coeffs))
+    # println(typeof(p.litho_rigidity))
+    # println(typeof(p.effective_viscosity))
+    # println(typeof(u))
+    # println(typeof(sigma_zz))
+    # println(typeof(p.mean_density))
+
+    eps = 5e-9
 
     biharmonic_u = Omega.harmonic_coeffs .* ( tools.forward_fft * 
     ( p.litho_rigidity .* (tools.inverse_fft *
     ( Omega.harmonic_coeffs .* (tools.forward_fft * u) ) ) ) )
 
-    lgr_term = ( tools.forward_fft * sigma_zz -
-    tools.forward_fft * (p.mean_density .* p.mean_gravity .* u) -
-    biharmonic_u ) ./ ( Omega.pseudodiff_coeffs .+ T(eps) )
+    lgr_term = ( tools.forward_fft * ( sigma_zz - p.mean_density .*
+    p.mean_gravity .* u) - biharmonic_u ) ./
+    ( Omega.pseudodiff_coeffs .+ T(eps) )
 
     dudt .= real.(tools.inverse_fft * lgr_term) ./ (2 .* p.effective_viscosity)
     u .+= dt .* dudt
@@ -227,7 +235,8 @@ end
 
 @inline function apply_bc!(u::AbstractMatrix{T}) where {T<:AbstractFloat}
     CUDA.allowscalar() do
-        u .-= (u[1,1] + u[1,end] + u[end,1] + u[end,end]) / T(4)
+        u .-= u[end,end]
+        # u .-= (u[1,1] + u[1,end] + u[end,1] + u[end,end]) / T(4)
     end
 end
 

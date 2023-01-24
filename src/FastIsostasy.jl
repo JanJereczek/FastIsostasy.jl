@@ -34,6 +34,7 @@ export get_integrated_loadresponse
 export forwardstep_isostasy!
 export forwardstep_isostasy
 export forward_isostasy!
+export apply_bc!
 
 export ComputationDomain
 export PhysicalConstants
