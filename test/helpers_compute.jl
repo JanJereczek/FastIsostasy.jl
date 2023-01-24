@@ -147,3 +147,16 @@ function generate_binary_field(
     hi_half = fill(x_hi, Omega.N, Int(Omega.N/2))
     return cat(lo_half, hi_half, dims=2)
 end
+
+function generate_sigmoid_field(
+    Omega::ComputationDomain{T},
+    x_lo::T,
+    x_hi::T,
+) where {T<:AbstractFloat}
+
+    delta_x = x_hi - x_lo
+    scaled_sigmoid(x) = sigmoid(x, 1e-2)
+    return x_lo .+ delta_x .* scaled_sigmoid.(Omega.X)
+end
+
+sigmoid(x::Real, c::Real) = 1 / (1 + exp(-c*x))

@@ -26,13 +26,15 @@ include("helpers_compute.jl")
     c = init_physical_constants()
     if case == "binaryD"
         binary_thickness = generate_binary_field(Omega, 50e3, 250e3)
+        sigmoid_thickness = generate_sigmoid_field(Omega, 50e3, 250e3)
         layer2_begin = fill(250e3, Omega.N, Omega.N)
-        lb = cat(binary_thickness, layer2_begin, dims=3)
+        lb = cat(sigmoid_thickness, layer2_begin, dims=3)
         p = init_multilayer_earth(Omega, c, layers_begin = lb, layers_viscosity = [1e21, 1e21])
     elseif case == "binaryη"
         binary_viscosity = generate_binary_field(Omega, 1e18, 1e23)
+        logsigmoid_viscosity = 10 .^ generate_sigmoid_field(Omega, 18., 23.)
         halfspace_viscosity = fill(1e21, Omega.N, Omega.N)
-        lv = cat(binary_viscosity, halfspace_viscosity, dims=3)
+        lv = cat(logsigmoid_viscosity, halfspace_viscosity, dims=3)
         p = init_multilayer_earth(
             Omega,
             c,
@@ -40,14 +42,16 @@ include("helpers_compute.jl")
         )
     elseif case == "binaryDη"
         binary_thickness = generate_binary_field(Omega, 50e3, 250e3)
+        sigmoid_thickness = generate_sigmoid_field(Omega, 50e3, 250e3)
         layer2_begin = fill(250e3, Omega.N, Omega.N)
         layer3_begin = fill(400e3, Omega.N, Omega.N)
-        lb = cat(binary_thickness, layer2_begin, layer3_begin, dims=3)
+        lb = cat(sigmoid_thickness, layer2_begin, layer3_begin, dims=3)
 
         eqlayer_visc = fill(1e18, Omega.N, Omega.N)
         binary_viscosity = generate_binary_field(Omega, 1e18, 1e23)
+        logsigmoid_viscosity = 10 .^ generate_sigmoid_field(Omega, 18., 23.)
         halfspace_viscosity = fill(1e21, Omega.N, Omega.N)
-        lv = cat(eqlayer_visc, binary_viscosity, halfspace_viscosity, dims=3)
+        lv = cat(eqlayer_visc, logsigmoid_viscosity, halfspace_viscosity, dims=3)
 
         ld = [3.3e3, 3.3e3]
 
@@ -63,7 +67,7 @@ include("helpers_compute.jl")
     t_out_yr = [0.0, 1.0, 1e1, 1e2, 1e3, 2e3, 5e3, 1e4, 1e5]
     t_out = years2seconds.(t_out_yr)
     if n >= 8
-        dt = fill( years2seconds(0.5), length(t_out)-1 )
+        dt = fill( years2seconds(0.1), length(t_out)-1 )
     else
         dt = fill( years2seconds(1), length(t_out)-1 )
     end
