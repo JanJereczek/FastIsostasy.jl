@@ -31,9 +31,12 @@ include("helpers_plot.jl")
     ]
 
     xlabels = [
-        "",
-        "",
-        "",
+        L"Colatitude $\theta$ (°)",
+        L"Colatitude $\theta$ (°)",
+        L"Colatitude $\theta$ (°)",
+        # "",
+        # "",
+        # "",
         L"Colatitude $\theta$ (deg)",
         L"Colatitude $\theta$ (deg)",
         L"Colatitude $\theta$ (deg)",
@@ -55,7 +58,7 @@ include("helpers_plot.jl")
         sol_D["c"],
         sol_D["t_out"],
         t_plot,
-        u_plot,
+        u_plot, # var_plot,
         labels,
         xlabels,
         ylabels,

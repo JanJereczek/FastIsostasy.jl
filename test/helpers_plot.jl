@@ -145,8 +145,8 @@ end
 ) where {T<:AbstractFloat}
 
     ncases = length(Uvec)
-    fig = Figure(resolution=(1600, 900), fontsize = 24)
-    nrows, ncols = 2, 3
+    fig = Figure(resolution=(1600, 600), fontsize = 24)
+    nrows, ncols = 1, 3
     axs = [Axis(
         fig[i, j],
         title = labels[(i-1)*ncols + j],
@@ -159,7 +159,7 @@ end
         xticklabelsvisible = i == nrows ? true : false,
         yticklabelsvisible = j == 1 ? true : false,
     ) for j in 1:ncols, i in 1:nrows]
-    colors = [:black, :orange, :blue, :red, :gray, :purple]
+    colors = [:gray80, :gray65, :gray50, :gray35, :gray20, :gray5]
 
     for i in 1:ncases
         U = Uvec[i]
@@ -180,9 +180,11 @@ end
             )
         end
         if i <= 3
-            ylims!(axs[i], (-450, 50))
+            ylims!(axs[i], (-550, 50))
+        elseif i == 4
+            ylims!(axs[i], (-150, 10))
         else
-            ylims!(axs[i], (-85, 10))
+            ylims!(axs[i], (-5000, 1000))
         end
     end
     axislegend(axs[1], position = :rb)
