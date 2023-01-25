@@ -1,27 +1,27 @@
 push!(LOAD_PATH, "../")
 using FastIsostasy
 using CairoMakie
-using Test
-using SpecialFunctions
 using JLD2
 using Interpolations
-include("helpers.jl")
+include("helpers_compute.jl")
 include("external_viscosity_maps.jl")
 
 @inline function main(
     n::Int,             # 2^n cells on domain (1)
     case::String;       # Application case
-    make_anim = false,
+    use_cuda = true::Bool,
 )
+    if use_cuda
+        kernel = "gpu"
+    else
+        kernel = "cpu"
+    end
 
     T = Float64
-
     L = T(3000e3)               # half-length of the square domain (m)
     Omega = init_domain(L, n)   # domain parameters
-    R = T(1500e3)               # ice disc radius (m)
-    H = T(1000)                 # ice disc thickness (m)
-    c = init_physical_constants(T)
-    sigma_zz_disc = generate_uniform_disc_load(Omega, c, R, H)
+
+    c = init_physical_constants()
 
     log10_eta_channel = interpolate_visc_wiens_on_grid(Omega.X, Omega.Y)
     eta_channel = 10 .^ (log10_eta_channel)
