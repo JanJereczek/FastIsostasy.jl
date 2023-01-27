@@ -723,3 +723,31 @@ Apply normalized linear transformation with slope `m` and bias `p` on `y`.
 @inline function normalized_lin_transform(y::T, m::T, p::T) where {T<:AbstractFloat}
     return (y-p)/m
 end
+
+
+"""
+
+    interp_eqvisc_over_time(tvec, layers_viscosity, layers_thickness, pseudodiff_coeffs)
+
+Compute a log-interpolator of the equivalent viscosity from provided viscosity
+fields `layers_viscosity` at time stamps `tvec`.
+"""
+@inline function interp_eqvisc_over_time(
+    tvec::AbstractVector{T},
+    layers_viscosity::AbstractArray{T, 4},
+    layers_thickness::AbstractArray{T, 3},
+    pseudodiff_coeffs::AbstractMatrix,
+) where {T<:AbstractFloat}
+    n1, n2, n3, nt = size(layers_viscosity)
+    log_eqviscosity = [fill(T(0.0), n1, n2) for k in 1:nt]
+
+    [log_eqviscosity[k] .= log10.(get_effective_viscosity(
+        layers_viscosity[:, :, :, k],
+        layers_thickness,
+        pseudodiff_coeffs,
+    )) for k in 1:nt]
+
+    log_interp = linear_interpolation(tvec, log_eqviscosity)
+    visc_interp(t) = 10 .^ log_interp(t)
+    return visc_interp
+end
