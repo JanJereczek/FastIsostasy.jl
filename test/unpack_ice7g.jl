@@ -1,6 +1,8 @@
+push!(LOAD_PATH, "../")
 using NCDatasets
 using JLD2
 using FastIsostasy
+using CairoMakie
 
 @inline function stereographic_projection(
     lat::T,
@@ -10,7 +12,7 @@ using FastIsostasy
     lon0=T(0.0),
 ) where {T<:Real}
     lat, lon, lat0, lon0 = deg2rad.([lat, lon, lat0, lon0])
-    k = 2 * R / (1 + sin(lat0)*sin(lat) + cos(lat0)*cos(lat)*cos(lon-lon0))
+    k = 2*R / (1 + sin(lat0)*sin(lat) + cos(lat0)*cos(lat)*cos(lon-lon0))
     x = k * cos(lat) * sin(lon - lon0)
     y = k * (cos(lat0) * sin(lat) - sin(lat0) * cos(lat) * cos(lon-lon0))
     return x, y
@@ -73,3 +75,20 @@ jldsave(
     topo = topo,
     topo_diff = topo_diff,
 )
+
+cmap = :ice
+clim = (1e-8, 4500)
+fig = Figure(resolution = (800, 800))
+ax = Axis(fig[1, 1], aspect = DataAspect())
+hm = heatmap!(
+    ax,
+    Xcartesian[1,:],
+    Ycartesian[:,1],
+    Hcartesian[:, :, 1]',
+    colormap = cmap,
+    colorrange = clim,
+    lowclip = :white,
+    highclip = :white,
+)
+# hidedecorations!(ax)
+Colorbar(fig[1,2], hm, height = Relative(0.7))
