@@ -117,7 +117,7 @@ end
     - "binaryη"
     - "binaryDη"
 =#
-for n in 6:7
+for n in 6:6
     for case in ["binaryD", "binaryη", "binaryDη"]
         main(n, case, use_cuda = true)
     end

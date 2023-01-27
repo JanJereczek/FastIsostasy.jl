@@ -9,8 +9,8 @@ include("helpers_plot.jl")
 
 @inline function main()
 
-    case = "euler2layers"
-    Nvec = 2 .^ (6:8)
+    case = "euler3layers"
+    Nvec = 2 .^ (4:8)
     fig = Figure(resolution = (1600, 900))
 
     maxerror = Float64[]

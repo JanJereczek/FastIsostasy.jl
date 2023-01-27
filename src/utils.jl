@@ -21,7 +21,7 @@ end
 
     init_domain(L, n)
 
-Initialize a square computational domain with length `2*L` and `2^n+1` grid cells.
+Initialize a square computational domain with length `2*L` and `2^n` grid cells.
 """
 @inline function init_domain(
     L::T,
@@ -218,8 +218,8 @@ Return struct with solid-Earth parameters for mutliple channel layers and a half
         pseudodiff_coeffs,
     )
 
-    # mean_density = get_matrix_mean_density(layers_thickness, layers_density)
-    mean_density = fill(3.3e3, Omega.N, Omega.N)
+    mean_density = get_matrix_mean_density(layers_thickness, layers_density)
+    # mean_density = fill(layers_density[1], Omega.N, Omega.N)
 
     if Omega.use_cuda
         litho_rigidity, effective_viscosity, mean_density = convert2CuArray(
@@ -597,9 +597,9 @@ function copystructs2cpu(
     p_cpu = init_multilayer_earth(
         Omega_cpu,
         c;
-        layers_begin = p.layers_begin,
-        layers_density = p.layers_density,
-        layers_viscosity = p.layers_viscosity,
+        layers_begin = Array(p.layers_begin),
+        layers_density = Array(p.layers_density),
+        layers_viscosity = Array(p.layers_viscosity),
     )
 
     return Omega_cpu, p_cpu
