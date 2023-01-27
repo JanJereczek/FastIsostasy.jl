@@ -439,27 +439,32 @@ end
     return visc_scaling
 end
 
+"""
 
-# @inline function three_layer_scaling(
-#     kappa::AbstractMatrix{T},
-#     visc_ratio::AbstractMatrix{T},
-#     channel_thickness::T,
-# ) where {T<:AbstractFloat}
+    loginterp_viscosity(tvec, layers_viscosity, layers_thickness, pseudodiff_coeffs)
 
-#     C(k) = cosh(channel_thickness * k)
-#     S(k) = sinh(channel_thickness * k)
-#     C, S = C.(kappa), S.(kappa)
+Compute a log-interpolator of the equivalent viscosity from provided viscosity
+fields `layers_viscosity` at time stamps `tvec`.
+"""
+@inline function loginterp_viscosity(
+    tvec::AbstractVector{T},
+    layers_viscosity::AbstractArray{T, 4},
+    layers_thickness::AbstractArray{T, 3},
+    pseudodiff_coeffs::AbstractMatrix,
+) where {T<:AbstractFloat}
+    n1, n2, n3, nt = size(layers_viscosity)
+    log_eqviscosity = [fill(T(0.0), n1, n2) for k in 1:nt]
 
-#     num1 = 2 .* visc_ratio .* C .* S
-#     num2 = (1 .- visc_ratio .^ 2) .* channel_thickness .^ 2 .* kappa .^ 2
-#     num3 = visc_ratio .^ 2 .* S .^ 2 + C .^ 2
+    [log_eqviscosity[k] .= log10.(get_effective_viscosity(
+        layers_viscosity[:, :, :, k],
+        layers_thickness,
+        pseudodiff_coeffs,
+    )) for k in 1:nt]
 
-#     denum1 = (visc_ratio + 1 ./ visc_ratio) .* C .* S
-#     denum2 = (visc_ratio - 1 ./ visc_ratio) .* channel_thickness .* kappa
-#     denum3 = S .^ 2 + C .^ 2
-
-#     return (num1 + num2 + num3) ./ (denum1 + denum2 + denum3)
-# end
+    log_interp = linear_interpolation(tvec, log_eqviscosity)
+    visc_interp(t) = 10 .^ log_interp(t)
+    return visc_interp
+end
 
 """
 
@@ -722,32 +727,4 @@ Apply normalized linear transformation with slope `m` and bias `p` on `y`.
 """
 @inline function normalized_lin_transform(y::T, m::T, p::T) where {T<:AbstractFloat}
     return (y-p)/m
-end
-
-
-"""
-
-    interp_eqvisc_over_time(tvec, layers_viscosity, layers_thickness, pseudodiff_coeffs)
-
-Compute a log-interpolator of the equivalent viscosity from provided viscosity
-fields `layers_viscosity` at time stamps `tvec`.
-"""
-@inline function interp_eqvisc_over_time(
-    tvec::AbstractVector{T},
-    layers_viscosity::AbstractArray{T, 4},
-    layers_thickness::AbstractArray{T, 3},
-    pseudodiff_coeffs::AbstractMatrix,
-) where {T<:AbstractFloat}
-    n1, n2, n3, nt = size(layers_viscosity)
-    log_eqviscosity = [fill(T(0.0), n1, n2) for k in 1:nt]
-
-    [log_eqviscosity[k] .= log10.(get_effective_viscosity(
-        layers_viscosity[:, :, :, k],
-        layers_thickness,
-        pseudodiff_coeffs,
-    )) for k in 1:nt]
-
-    log_interp = linear_interpolation(tvec, log_eqviscosity)
-    visc_interp(t) = 10 .^ log_interp(t)
-    return visc_interp
 end
