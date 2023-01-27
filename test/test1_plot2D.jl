@@ -96,7 +96,7 @@ Application cases:
     - "euler2layers"
     - "euler3layers"
 """
-case = "euler2layers"
+case = "euler3layers"
 for n in 6:8
     main(n, case, make_anim = false)
 end

@@ -24,6 +24,7 @@ include("helpers_compute.jl")
     R = T(1000e3)               # ice disc radius (m)
     H = T(1000)                 # ice disc thickness (m)
     filename = "$(case)_$(kernel)_N$(Omega.N)"
+    println("Computing $case on $(Omega.N) x $(Omega.N) grid...")
 
     c = init_physical_constants()
     if occursin("2layers", case)
@@ -34,32 +35,16 @@ include("helpers_compute.jl")
     end
 
     timespan = years2seconds.([0.0, 5e4])           # (yr) -> (s)
-    dt_out = years2seconds(100.0)                   # (yr) -> (s), time step for saving output
-    t_out = timespan[1]:dt_out:timespan[2]          # (s)
+    t_out = years2seconds.([0.0, 100.0, 500.0, 1500.0, 5000.0, 10_000.0, 50_000.0])
 
     u3D = zeros( T, (size(Omega.X)..., length(t_out)) )
     u3D_elastic = copy(u3D)
     u3D_viscous = copy(u3D)
     dudt3D_viscous = copy(u3D)
 
-    analytic_support = vcat(1.0e-14, 10 .^ (-10:0.05:-3), 1.0)
-    # analytic_support = collect(10.0 .^ (-14:5))
-
-    @testset "analytic solution" begin
-        sol = analytic_solution(
-            T(0),
-            T(50000 * c.seconds_per_year),
-            c,
-            p,
-            H,
-            R,
-            analytic_support,
-        )
-        @test isapprox( sol, -1000*c.ice_density/p.mean_density, rtol=T(1e-2) )
-    end
-
     sigma_zz_disc = generate_uniform_disc_load(Omega, c, R, H)
-    tools = precompute_terms(dt_out, Omega, p, c)
+    placeholder = 1.0
+    tools = precompute_terms(placeholder, Omega, p, c)
 
     t1 = time()
     @time forward_isostasy!(

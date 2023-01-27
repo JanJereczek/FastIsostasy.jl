@@ -21,24 +21,21 @@ include("helpers_compute.jl")
     Omega = init_domain(L, n, use_cuda = use_cuda)
     filename = "$(case)_$(kernel)_N$(Omega.N)"
 
-    litho_thickness = 70e3      # litho thickness (m)
     G = 0.50605e11              # shear modulus (Pa)
     nu = 0.5
     E = G * 2 * (1 + nu)
-    D = (E * litho_thickness ^ 3)/(12*(1-nu^2))
     c = init_physical_constants(ice_density = 0.931e3)
+    lb = c.r_equator .- [6301e3, 5951e3, 5701e3]
+
     p = init_multilayer_earth(
         Omega,
         c,
-        litho_rigidity = D,
+        layers_begin = lb,
         layers_density = [3.438e3, 3.871e3],
         layers_viscosity = [1e21, 1e21, 2e21],
-        layers_begin = c.r_equator .- [6301e3, 5951e3, 5701e3],
+        litho_youngmodulus = E,
+        litho_poissonratio = nu,
     )
-
-    # layers_density = [3.438e3, 3.871e3, 4.978e3],
-    # layers_viscosity = [1e21, 1e21, 2e21],
-    # layers_begin = c.r_equator .- [6301e3, 5951e3, 5701e3, 5371e3],
 
     t_out_yr = [0.0, 1.0, 1e3, 2e3, 5e3, 1e4, 1e5]
     t_out = years2seconds.(t_out_yr)
@@ -95,10 +92,10 @@ include("helpers_compute.jl")
 end
 
 cases = ["disc", "cap"]
-for n in 4:8
+for n in 6:6
     for case in cases
         N = 2^n
         println("Computing $case on $N x $N grid...")
-        main(n, case, use_cuda = false)
+        main(n, case, use_cuda = true)
     end
 end
