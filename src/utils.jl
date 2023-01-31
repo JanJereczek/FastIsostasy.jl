@@ -1,3 +1,43 @@
+#####################################################
+# Array utils
+#####################################################
+
+"""
+
+    matrify_vectorconstant(x, N)
+
+Generate a vector of constant matrices from a vector of constants.
+"""
+@inline function matrify_vectorconstant(x::Vector{T}, N::Int) where {T<:AbstractFloat}
+    X = zeros(T, N, N, length(x))
+    for i in eachindex(x)
+        X[:, :, i] = matrify_constant(x[i], N)
+    end
+    return X
+end
+
+"""
+
+    matrify_constant(x, N)
+
+Generate a constant matrix from a constant.
+"""
+@inline function matrify_constant(x::T, N::Int) where {T<:AbstractFloat}
+    return fill(x, N, N)
+end
+
+#####################################################
+# Domain utils
+#####################################################
+
+"""
+
+    get_r(x, y)
+
+Get euclidean distance of point (x, y) to origin.
+"""
+get_r(x::T, y::T) where {T<:Real} = LinearAlgebra.norm([x, y])
+
 """
 
     meshgrid(x, y)
@@ -7,14 +47,6 @@ Return a 2D meshgrid spanned by `x, y`.
 @inline function meshgrid(x::AbstractVector{T}, y::AbstractVector{T}) where {T<:AbstractFloat}
     one_x, one_y = ones(T, length(x)), ones(T, length(y))
     return one_y * x', (one_x * y')'
-end
-
-@inline function convert2CuArray(X::Vector)
-    return [CuArray(x) for x in X]
-end
-
-@inline function convert2Array(X::Vector)
-    return [Array(x) for x in X]
 end
 
 """
@@ -84,6 +116,11 @@ struct ComputationDomain{T<:AbstractFloat}
     use_cuda::Bool
 end
 
+#####################################################
+# Differential utils
+#####################################################
+
+# Fourier
 """
     get_differential_fourier(L, N2)
 
@@ -101,116 +138,6 @@ Compute the matrices representing the differential operators in the fourier spac
     pseudodiff_coeffs = sqrt.(harmonic_coeffs)
     biharmonic_coeffs = harmonic_coeffs .^ 2
     return pseudodiff_coeffs, harmonic_coeffs, biharmonic_coeffs
-end
-
-
-# a = 1
-# b = 1 + π/2
-# # b = 100
-# N = 100
-# dx = (b-a)/N
-# x = a .+ dx .* (0:N-1)
-# w = 2
-# f = sin.(w*x).^2
-# dfdx = 2 .* w .* sin.(w .* x) .* cos.(w .* x)
-# d2fdx2 = 4 .* w .^ 2 .* cos.(w .* x) .^ 2 .- 2 .* w .^2
-# Nx = size(x, 1)
-# k = 2*pi/(b-a) .* vcat(0:Nx/2-1, 0, -Nx/2+1:-1)
-# dFdx = ifft( im * k .* fft(f) )
-# d2Fdx2 = ifft( -k .^ 2 .*fft(f) )
-
-# a = 1
-# b = 100
-# N = 100
-# dx = (b-a)/N
-# x = a .+ dx .* (0:N-1)
-# f = vcat(0:3:147, 147:-3:0)
-# Nx = size(x, 1)
-# k = 2*pi/(b-a) .* vcat(0:Nx/2-1, 0, -Nx/2+1:-1)
-# ifft( (im .* k) .* fft(f) )
-# itp_cdf = extrapolate(interpolate(y, percentile_values, SteffenMonotonicInterpolation()), Flat());
-
-@inline function central_fdx(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
-    n2 = size(M, 2)
-    return (view(M, :, 3:n2) - view(M, :, 1:n2-2)) ./ (2*h)
-end
-
-@inline function forward_fdx(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
-    return (view(M, :, 2) - view(M, :, 1)) ./ h
-end
-
-@inline function backward_fdx(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
-    n2 = size(M, 2)
-    return (view(M, :, n2) - view(M, :, n2-1)) ./ h
-end
-
-####
-
-@inline function mixed_fdx(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
-    return cat( forward_fdx(M,h), central_fdx(M,h), backward_fdx(M,h), dims=2 )
-end
-
-@inline function central_fdy(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
-    n1 = size(M, 1)
-    return (view(M, 3:n1, :) - view(M, 1:n1-2, :)) ./ (2*h)
-end
-
-@inline function forward_fdy(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
-    return (view(M, 2, :) - view(M, 1, :)) ./ h
-end
-
-@inline function backward_fdy(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
-    n1 = size(M, 1)
-    return (view(M, n1, :) - view(M, n1-1, :)) ./ h
-end
-
-@inline function mixed_fdy(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
-    return cat( forward_fdy(M,h)', central_fdy(M,h), backward_fdy(M,h)', dims=1 )
-end
-
-####
-
-@inline function central_fdxx(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
-    n2 = size(M, 2)
-    return (view(M, :, 3:n2) - 2 .* view(M, :, 2:n2-1) + view(M, :, 1:n2-2)) ./ h^2
-end
-
-@inline function forward_fdxx(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
-    return (view(M, :, 3) - 2 .* view(M, :, 2) + view(M, :, 1)) ./ h^2
-end
-
-@inline function backward_fdxx(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
-    n2 = size(M, 2)
-    return (view(M, :, n2) - 2 .* view(M, :, n2-1) + view(M, :, n2-2)) ./ h^2
-end
-
-@inline function mixed_fdxx(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
-    return cat( forward_fdxx(M,h), central_fdxx(M,h), backward_fdxx(M,h), dims=2 )
-end
-
-####
-
-@inline function central_fdyy(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
-    n1 = size(M, 1)
-    return (view(M, 3:n1, :) - 2 .* view(M, 2:n1-1, :) + view(M, 1:n1-2, :)) ./ h^2
-end
-
-@inline function forward_fdyy(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
-    return (view(M, 3, :) - 2 .* view(M, 2, :) + view(M, 1, :)) ./ h^2
-end
-
-@inline function backward_fdyy(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
-    n1 = size(M, 1)
-    return (view(M, n1, :) - 2 .* view(M, n1-1, :) + view(M, n1-2, :)) ./ h^2
-end
-
-@inline function mixed_fdyy(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
-    return cat( forward_fdyy(M,h)', central_fdyy(M,h), backward_fdyy(M,h)', dims=1 )
-end
-
-@inline function gauss_distr(x::T, mu::Vector{T}, sigma::Matrix{T}) where {T<:AbstractFloat}
-    k = length(mu)
-    return (2 * π)^(k/2) * det(sigma) * exp( -0.5 * (x .- mu)' * inv(sigma) * (x .- mu) )
 end
 
 @inline function precomp_fourier_dxdy(
@@ -235,8 +162,89 @@ end
     return vcat( [real.(ip1 * ( ( im .* k1 ) .^ n .* (p1 * M[i, :]) ))' for i in axes(M,1)]... )
 end
 
+# FDM in x, 1st order
+@inline function central_fdx(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
+    n2 = size(M, 2)
+    return (view(M, :, 3:n2) - view(M, :, 1:n2-2)) ./ (2*h)
+end
+
+@inline function forward_fdx(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
+    return (view(M, :, 2) - view(M, :, 1)) ./ h
+end
+
+@inline function backward_fdx(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
+    n2 = size(M, 2)
+    return (view(M, :, n2) - view(M, :, n2-1)) ./ h
+end
+
+# FDM in y, 1st order
+@inline function mixed_fdx(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
+    return cat( forward_fdx(M,h), central_fdx(M,h), backward_fdx(M,h), dims=2 )
+end
+
+@inline function central_fdy(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
+    n1 = size(M, 1)
+    return (view(M, 3:n1, :) - view(M, 1:n1-2, :)) ./ (2*h)
+end
+
+@inline function forward_fdy(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
+    return (view(M, 2, :) - view(M, 1, :)) ./ h
+end
+
+@inline function backward_fdy(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
+    n1 = size(M, 1)
+    return (view(M, n1, :) - view(M, n1-1, :)) ./ h
+end
+
+@inline function mixed_fdy(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
+    return cat( forward_fdy(M,h)', central_fdy(M,h), backward_fdy(M,h)', dims=1 )
+end
+
+# FDM in x, 2nd order
+@inline function central_fdxx(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
+    n2 = size(M, 2)
+    return (view(M, :, 3:n2) - 2 .* view(M, :, 2:n2-1) + view(M, :, 1:n2-2)) ./ h^2
+end
+
+@inline function forward_fdxx(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
+    return (view(M, :, 3) - 2 .* view(M, :, 2) + view(M, :, 1)) ./ h^2
+end
+
+@inline function backward_fdxx(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
+    n2 = size(M, 2)
+    return (view(M, :, n2) - 2 .* view(M, :, n2-1) + view(M, :, n2-2)) ./ h^2
+end
+
+@inline function mixed_fdxx(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
+    return cat( forward_fdxx(M,h), central_fdxx(M,h), backward_fdxx(M,h), dims=2 )
+end
+
+# FDM in y, 2nd order
+@inline function central_fdyy(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
+    n1 = size(M, 1)
+    return (view(M, 3:n1, :) - 2 .* view(M, 2:n1-1, :) + view(M, 1:n1-2, :)) ./ h^2
+end
+
+@inline function forward_fdyy(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
+    return (view(M, 3, :) - 2 .* view(M, 2, :) + view(M, 1, :)) ./ h^2
+end
+
+@inline function backward_fdyy(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
+    n1 = size(M, 1)
+    return (view(M, n1, :) - 2 .* view(M, n1-1, :) + view(M, n1-2, :)) ./ h^2
+end
+
+@inline function mixed_fdyy(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
+    return cat( forward_fdyy(M,h)', central_fdyy(M,h), backward_fdyy(M,h)', dims=1 )
+end
+
+@inline function gauss_distr(x::T, mu::Vector{T}, sigma::Matrix{T}) where {T<:AbstractFloat}
+    k = length(mu)
+    return (2 * π)^(k/2) * det(sigma) * exp( -0.5 * (x .- mu)' * inv(sigma) * (x .- mu) )
+end
+
 #####################################################
-############### Physical constants ##################
+# Physical constants
 #####################################################
 
 g = 9.81                                # Mean Earth acceleration at surface (m/s^2)
@@ -391,30 +399,6 @@ struct MultilayerEarth{T<:AbstractFloat}
     layers_density::Vector{T}
     layers_viscosity::AbstractArray{T, 3}
     layers_begin::AbstractArray{T, 3}
-end
-
-"""
-
-    matrify_vectorconstant(x, N)
-
-Generate a vector of constant matrices from a vector of constants.
-"""
-@inline function matrify_vectorconstant(x::Vector{T}, N::Int) where {T<:AbstractFloat}
-    X = zeros(T, N, N, length(x))
-    for i in eachindex(x)
-        X[:, :, i] = matrify_constant(x[i], N)
-    end
-    return X
-end
-
-"""
-
-    matrify_constant(x, N)
-
-Generate a constant matrix from a constant.
-"""
-@inline function matrify_constant(x::T, N::Int) where {T<:AbstractFloat}
-    return fill(x, N, N)
 end
 
 @inline function get_rigidity(
@@ -624,19 +608,7 @@ Return hyperbolic coefficients for equivalent viscosity computation.
 end
 
 #####################################################
-############## Geometric utilities ##################
-#####################################################
-
-"""
-
-    get_r(x, y)
-
-Get euclidean distance of point (x, y) to origin.
-"""
-get_r(x::T, y::T) where {T<:Real} = LinearAlgebra.norm([x, y])
-
-#####################################################
-############## Load response matrix #################
+# Load response utils
 #####################################################
 
 """
@@ -724,34 +696,6 @@ end
     end
 end
 
-#####################################################
-############## Copy main structs CPU ################
-#####################################################
-
-function copystructs2cpu(
-    Omega::ComputationDomain{T},
-    p::MultilayerEarth{T},
-    c::PhysicalConstants{T},
-) where {T<:AbstractFloat}
-
-    n = Int( round( log2(Omega.N) ) )
-    Omega_cpu = init_domain(Omega.Lx, n, use_cuda = false)
-
-    p_cpu = init_multilayer_earth(
-        Omega_cpu,
-        c;
-        layers_begin = Array(p.layers_begin),
-        layers_density = Array(p.layers_density),
-        layers_viscosity = Array(p.layers_viscosity),
-    )
-
-    return Omega_cpu, p_cpu
-end
-
-#####################################################
-############# Quadrature computation ################
-#####################################################
-
 """
 
     get_integrated_loadresponse(Omega, quad_support, quad_coeffs)
@@ -780,14 +724,14 @@ support points and associated coefficients.
             p*h+h,
             q*h,
             q*h+h,
-            # p*h-h/2,
-            # p*h+h/2,
-            # q*h-h/2,
-            # q*h+h/2,
         )
     end
     return integrated_loadresponse
 end
+
+#####################################################
+# Quadrature utils
+#####################################################
 
 """
 
@@ -870,4 +814,37 @@ Apply normalized linear transformation with slope `m` and bias `p` on `y`.
 """
 @inline function normalized_lin_transform(y::T, m::T, p::T) where {T<:AbstractFloat}
     return (y-p)/m
+end
+
+
+#####################################################
+# Kernel utils
+#####################################################
+
+@inline function convert2CuArray(X::Vector)
+    return [CuArray(x) for x in X]
+end
+
+@inline function convert2Array(X::Vector)
+    return [Array(x) for x in X]
+end
+
+function copystructs2cpu(
+    Omega::ComputationDomain{T},
+    p::MultilayerEarth{T},
+    c::PhysicalConstants{T},
+) where {T<:AbstractFloat}
+
+    n = Int( round( log2(Omega.N) ) )
+    Omega_cpu = init_domain(Omega.Lx, n, use_cuda = false)
+
+    p_cpu = init_multilayer_earth(
+        Omega_cpu,
+        c;
+        layers_begin = Array(p.layers_begin),
+        layers_density = Array(p.layers_density),
+        layers_viscosity = Array(p.layers_viscosity),
+    )
+
+    return Omega_cpu, p_cpu
 end
