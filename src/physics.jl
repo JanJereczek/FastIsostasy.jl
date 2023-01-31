@@ -1,63 +1,7 @@
-struct PrecomputedTerms{T<:AbstractFloat}
-    viscous_solver::String
-    loadresponse::AbstractMatrix{T}
-    fourier_loadresponse::AbstractMatrix{Complex{T}}
-    fourier_left_term::AbstractMatrix{T}
-    fourier_right_term::AbstractMatrix{T}
-    forward_fft::AbstractFFTs.Plan
-    inverse_fft::AbstractFFTs.ScaledPlan
-end
 
-"""
-
-    precompute_terms(dt, Omega, p, c)
-
-Return a `struct` containing pre-computed tools to perform forward-stepping. Takes the
-time step `dt`, the ComputationDomain `Omega`, the solid-Earth parameters `p` and 
-physical constants `c` as input.
-"""
-@inline function precompute_terms(
-    dt::T,
-    Omega::ComputationDomain{T},
-    p::MultilayerEarth{T},
-    c::PhysicalConstants{T};
-    quad_precision::Int = 4,
-    viscous_solver::String = "Euler",
-) where {T<:AbstractFloat}
-
-    quad_support, quad_coeffs = get_quad_coeffs(T, quad_precision)
-    loadresponse = get_integrated_loadresponse(Omega, quad_support, quad_coeffs)
-
-    if viscous_solver == "CrankNicolson"
-        fourier_left_term, fourier_right_term = get_cranknicolson_factors(
-            Omega,
-            dt,
-            p,
-            c,
-        )
-    else
-        fourier_left_term = zeros(T, Omega.N, Omega.N)
-        fourier_right_term = copy(fourier_left_term)
-    end
-
-    if Omega.use_cuda
-        Xgpu = CuArray(Omega.X)
-        p1 = CUDA.CUFFT.plan_fft(Xgpu)
-        p2 = CUDA.CUFFT.plan_ifft(Xgpu)
-    else
-        p1, p2 = plan_fft(Omega.X), plan_ifft(Omega.X)
-    end
-
-    return PrecomputedTerms(
-        viscous_solver,
-        loadresponse,
-        fft(loadresponse),
-        fourier_left_term,
-        fourier_right_term,
-        p1,
-        p2,
-    )
-end
+#####################################################
+# Precomputation
+#####################################################
 
 """
 
@@ -111,6 +55,10 @@ struct PrecomputedFastiso{T<:AbstractFloat}
     Dxy::AbstractMatrix{T}
     rhog::AbstractMatrix{T}
 end
+
+#####################################################
+# Forward integration
+#####################################################
 
 """
 
@@ -203,62 +151,9 @@ and accuracy) that are given by the ratio between `dt_out` and `dt`.
     return u_viscous_next, dudt_viscous_next
 end
 
-"""
-
-    cranknicolson_viscous_response(dt, u_viscous, sigma_zz, tools)
-
-Return viscous response based on Crank-Nicolson time discretization.
-Only valid for solid-Earth parameters that are constant over x, y.
-"""
-@inline function cranknicolson_viscous_response(
-    dt::T,
-    u_viscous::AbstractMatrix{T},
-    sigma_zz::AbstractMatrix{T},
-    tools::PrecomputedTerms,
-) where {T<:AbstractFloat}
-    # Should: FFT the load at t = tn + Δt / 2 giving ( hat_σ_zz )_pq
-    # But: If performed with small enough time step, negligible
-    num = tools.fourier_right_term .* (tools.forward_fft * u_viscous) + ( tools.forward_fft * (dt .* sigma_zz) )
-    return real.(tools.inverse_fft * ( num ./ tools.fourier_left_term ))
-end
-
-"""
-
-    euler_viscous_response(Omega, dt, u_current, sigma_zz, tools, c, p)
-
-Return viscous response based on explicit Euler time discretization and Fourier 
-collocation. Valid for multilayer parameters that can vary over x, y.
-"""
-@inline function euler_viscous_response!(
-    Omega::ComputationDomain,
-    dt::T,
-    u::AbstractMatrix{T},
-    dudt::AbstractMatrix{T},
-    sigma_zz::AbstractMatrix{T},
-    tools::PrecomputedTerms,
-    p::MultilayerEarth,
-) where {T<:AbstractFloat}
-
-    # println(typeof(Omega.harmonic_coeffs))
-    # println(typeof(p.litho_rigidity))
-    # println(typeof(p.effective_viscosity))
-    # println(typeof(u))
-    # println(typeof(sigma_zz))
-    # println(typeof(p.mean_density))
-
-    eps = 5e-9
-
-    biharmonic_u = Omega.harmonic_coeffs .* ( tools.forward_fft * 
-    ( p.litho_rigidity .* (tools.inverse_fft *
-    ( Omega.harmonic_coeffs .* (tools.forward_fft * u) ) ) ) )
-
-    lgr_term = ( tools.forward_fft * ( sigma_zz - p.mean_density .*
-    p.mean_gravity .* u) - biharmonic_u ) ./
-    ( Omega.pseudodiff_coeffs .+ T(eps) )
-
-    dudt .= real.(tools.inverse_fft * lgr_term) ./ (2 .* p.effective_viscosity)
-    u .+= dt .* dudt
-end
+#####################################################
+# RHS
+#####################################################
 
 """
 
@@ -303,6 +198,10 @@ collocation. Valid for multilayer parameters that can vary over x, y.
     u .+= dt .* dudt
 end
 
+#####################################################
+# BCs
+#####################################################
+
 """
 
     apply_bc(u)
@@ -323,37 +222,9 @@ end
     end
 end
 
-"""
-
-    get_cranknicolson_factors(Omega, dt, p, c)
-
-Return two terms arising in the Crank-Nicolson scheme when applied to the present case.
-"""
-@inline function get_cranknicolson_factors(
-    Omega::ComputationDomain,
-    dt::T,
-    p::MultilayerEarth,
-    c::PhysicalConstants,
-) where {T<:AbstractFloat}
-    # Note: μ = π/L already included in differential coeffs
-    beta = ( p.mantle_density .* c.g .+ p.litho_rigidity .* Omega.biharmonic_coeffs )
-    term1 = (2 .* p.halfspace_viscosity .* p.viscosity_scaling) .* Omega.pseudodiff_coeffs
-    term2 = (dt/2) .* beta
-    fourier_left_term = term1 + term2
-    fourier_right_term = term1 - term2
-    return fourier_left_term, fourier_right_term
-end
-
-"""
-
-    plan_twoway_fft(X)
-
-Return forward-FFT and inverse-FFT plan to apply on array with same dimensions as `X`.
-"""
-@inline function plan_twoway_fft(X::AbstractMatrix{T}) where {T<:AbstractFloat}
-    return plan_fft(X), plan_ifft(X)
-end
-
+#####################################################
+# Elastic response
+#####################################################
 """
 
     compute_elastic_response(tools, load)
@@ -385,3 +256,7 @@ end
     
     return real.( tools.pifft * ( tools.pfft * harmonic_u ./ Omega.harmonic_coeffs ) )
 end
+
+#####################################################
+# Geoid response
+#####################################################
