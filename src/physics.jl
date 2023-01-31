@@ -229,34 +229,56 @@ end
 
     compute_elastic_response(tools, load)
 
-Compute the elastic response of the solid Earth by convoluting the `load` with the
-Green's function stored in the pre-computed `tools`(elements obtained from Farell
- 1972).
+For a computation domain `Omega`, compute the elastic response of the solid Earth
+by convoluting the `load` with the Green's function stored in the pre-computed `tools`
+(elements obtained from Farell 1972).
 """
 @inline function compute_elastic_response(
     Omega::ComputationDomain,
     tools::PrecomputedFastiso,
     load::AbstractMatrix{T},
 ) where {T<:AbstractFloat}
-    if rem(Omega.N, 2) == 0
-        return conv(load, tools.loadresponse)[Omega.N2:end-Omega.N2, Omega.N2:end-Omega.N2]
-    else
-        return conv(load, tools.loadresponse)[Omega.N2+1:end-Omega.N2, Omega.N2+1:end-Omega.N2]
-    end
-end
-
-@inline function collocate_elastic_response(
-    Omega::ComputationDomain,
-    p::MultilayerEarth,
-    tools::PrecomputedFastiso,
-    load::AbstractMatrix{T},
-) where {T<:AbstractFloat}
-    harmonic_u = 1 ./ p.litho_rigidity .* ( tools.pifft * 
-                 ( tools.pfft * load ./ Omega.harmonic_coeffs ) )
-    
-    return real.( tools.pifft * ( tools.pfft * harmonic_u ./ Omega.harmonic_coeffs ) )
+    return conv(load, tools.loadresponse)[Omega.N2:end-Omega.N2, Omega.N2:end-Omega.N2]
 end
 
 #####################################################
 # Geoid response
 #####################################################
+"""
+
+    compute_geoid_response(Omega, tools, load)
+
+Compute the geoid response of by convoluting the `geoid_green` with the
+`regional_mass_change` for a computation domain `Omega`.
+"""
+@inline function compute_geoid_response(
+    Omega::ComputationDomain{T},
+    geoid_green::AbstractMatrix{T},
+    regional_mass_change::AbstractMatrix{T},
+) where {T<:AbstractFloat}
+    return conv(
+        geoid_green,
+        regional_mass_change,
+    )[Omega.N2:end-Omega.N2, Omega.N2:end-Omega.N2]
+end
+
+@inline function get_regional_mass_change(
+    c::PhysicalConstants{T},
+    p::MultilayerEarth{T},
+    hi::AbstractMatrix{T},
+    hw::AbstractMatrix{T},
+    b::AbstractMatrix{T},
+    hi0::AbstractMatrix{T},
+    hw0::AbstractMatrix{T},
+    b0::AbstractMatrix{T},
+) where {T<:AbstractFloat}
+    return c.ice_density .* (hi - hi0) + c.water_density .* (hw - hw0) +
+    p.mean_density .* (b - b0)
+end
+
+@inline function get_geoid_green(
+    c::PhysicalConstants{T},
+    theta::AbstractMatrix{T},
+) where {T<:AbstractFloat}
+    return c.r_equator ./ c.mE ./ ( 2 .* sin.(theta ./ 2) )
+end
