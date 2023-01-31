@@ -221,6 +221,46 @@ end
 
 """
 
+    viscous_response!(Omega, dt, u_current, sigma_zz, tools, c, p)
+
+Return viscous response based on explicit Euler time discretization and Fourier 
+collocation. Valid for multilayer parameters that can vary over x, y.
+"""
+@inline function viscous_response!(
+    Omega::ComputationDomain,
+    dt::T,
+    u::AbstractMatrix{T},
+    dudt::AbstractMatrix{T},
+    sigma_zz::AbstractMatrix{T},
+    tools::PrecomputedTerms,
+    p::MultilayerEarth,
+) where {T<:AbstractFloat}
+
+    eps = 5e-9
+
+    uf = tools.pfft * u
+    harmonic_uf = tools.piftt * ( Omega.harmonic_coeffs .* uf )
+
+    term1 = sigma_zz
+    term2 = - p.mean_density .* p.mean_gravity .* u
+    term3 = - p.litho_rigidity .* tools.pifft * ( Omega.biharmonic_coeffs .* uf )
+    term4 = - 2 .* tools.Dx .* mixed_fdx(harmonic_uf, dx)
+    term5 = - 2 .* tools.Dy .* mixed_fdy(harmonic_uf, dy)
+    term6 = - tools.pifft * (Omega.harmonic_coeffs .* (tools.pfft * (p.litho_rigidity .* harmonic_uf)))
+    term7 = tools.Dxx .* mixed_fdyy(u, dy)
+    term8 = -2 .* tools.Dxy .* mixed_fdy( mixed_fdx(u, dx), dy )
+    term9 = tools.Dyy .* mixed_fdxx(u, dx)
+
+    rhs = term1 + term2 + term3 + term4 + term5 + term6 + (1 - p.litho_poissonratio) .*
+            (term7 + term8 + term9)
+
+    dudtf = (tools.pfft * rhs) ./ (Omega.pseudodiff_coeffs .+ eps) 
+    dudt .= real.(tools.inverse_fft * dudtf) ./ (2 .* p.eq_viscosity)
+    u .+= dt .* dudt
+end
+
+"""
+
     apply_bc(u)
 
 Apply boundary condition on Fourier collocation solution.

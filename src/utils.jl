@@ -93,6 +93,139 @@ Compute the matrices representing the differential operators in the fourier spac
     biharmonic_coeffs = harmonic_coeffs .^ 2
     return pseudodiff_coeffs, harmonic_coeffs, biharmonic_coeffs
 end
+
+
+# a = 1
+# b = 1 + π/2
+# # b = 100
+# N = 100
+# dx = (b-a)/N
+# x = a .+ dx .* (0:N-1)
+# w = 2
+# f = sin.(w*x).^2
+# dfdx = 2 .* w .* sin.(w .* x) .* cos.(w .* x)
+# d2fdx2 = 4 .* w .^ 2 .* cos.(w .* x) .^ 2 .- 2 .* w .^2
+# Nx = size(x, 1)
+# k = 2*pi/(b-a) .* vcat(0:Nx/2-1, 0, -Nx/2+1:-1)
+# dFdx = ifft( im * k .* fft(f) )
+# d2Fdx2 = ifft( -k .^ 2 .*fft(f) )
+
+# a = 1
+# b = 100
+# N = 100
+# dx = (b-a)/N
+# x = a .+ dx .* (0:N-1)
+# f = vcat(0:3:147, 147:-3:0)
+# Nx = size(x, 1)
+# k = 2*pi/(b-a) .* vcat(0:Nx/2-1, 0, -Nx/2+1:-1)
+# ifft( (im .* k) .* fft(f) )
+# itp_cdf = extrapolate(interpolate(y, percentile_values, SteffenMonotonicInterpolation()), Flat());
+
+@inline function central_fdx(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
+    n2 = size(M, 2)
+    return (view(M, :, 3:n2) - view(M, :, 1:n2-2)) ./ (2*h)
+end
+
+@inline function forward_fdx(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
+    return (view(M, :, 2) - view(M, :, 1)) ./ h
+end
+
+@inline function backward_fdx(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
+    n2 = size(M, 2)
+    return (view(M, :, n2) - view(M, :, n2-1)) ./ h
+end
+
+####
+
+@inline function mixed_fdx(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
+    return cat( forward_fdx(M,h), central_fdx(M,h), backward_fdx(M,h), dims=2 )
+end
+
+@inline function central_fdy(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
+    n1 = size(M, 1)
+    return (view(M, 3:n1, :) - view(M, 1:n1-2, :)) ./ (2*h)
+end
+
+@inline function forward_fdy(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
+    return (view(M, 2, :) - view(M, 1, :)) ./ h
+end
+
+@inline function backward_fdy(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
+    n1 = size(M, 1)
+    return (view(M, n1, :) - view(M, n1-1, :)) ./ h
+end
+
+@inline function mixed_fdy(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
+    return cat( forward_fdy(M,h)', central_fdy(M,h), backward_fdy(M,h)', dims=1 )
+end
+
+####
+
+@inline function central_fdxx(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
+    n2 = size(M, 2)
+    return (view(M, :, 3:n2) - 2 .* view(M, :, 2:n2-1) + view(M, :, 1:n2-2)) ./ h^2
+end
+
+@inline function forward_fdxx(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
+    return (view(M, :, 3) - 2 .* view(M, :, 2) + view(M, :, 1)) ./ h^2
+end
+
+@inline function backward_fdxx(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
+    n2 = size(M, 2)
+    return (view(M, :, n2) - 2 .* view(M, :, n2-1) + view(M, :, n2-2)) ./ h^2
+end
+
+@inline function mixed_fdxx(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
+    return cat( forward_fdxx(M,h), central_fdxx(M,h), backward_fdxx(M,h), dims=2 )
+end
+
+####
+
+@inline function central_fdyy(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
+    n1 = size(M, 1)
+    return (view(M, 3:n1, :) - 2 .* view(M, 2:n1-1, :) + view(M, 1:n1-2, :)) ./ h^2
+end
+
+@inline function forward_fdyy(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
+    return (view(M, 3, :) - 2 .* view(M, 2, :) + view(M, 1, :)) ./ h^2
+end
+
+@inline function backward_fdyy(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
+    n1 = size(M, 1)
+    return (view(M, n1, :) - 2 .* view(M, n1-1, :) + view(M, n1-2, :)) ./ h^2
+end
+
+@inline function mixed_fdyy(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
+    return cat( forward_fdyy(M,h)', central_fdyy(M,h), backward_fdyy(M,h)', dims=1 )
+end
+
+@inline function gauss_distr(x::T, mu::Vector{T}, sigma::Matrix{T}) where {T<:AbstractFloat}
+    k = length(mu)
+    return (2 * π)^(k/2) * det(sigma) * exp( -0.5 * (x .- mu)' * inv(sigma) * (x .- mu) )
+end
+
+@inline function precomp_fourier_dxdy(
+    M::AbstractMatrix{T},
+    L1::T,
+    L2::T,
+) where {T<:AbstractFloat}
+    n1, n2 = size(M)
+    k1 = 2 * π / L1 .* vcat(0:n1/2-1, 0, -n1/2+1:-1)
+    k2 = 2 * π / L2 .* vcat(0:n2/2-1, 0, -n2/2+1:-1)
+    p1, p2 = plan_fft(k1), plan_fft(k2)
+    ip1, ip2 = plan_ifft(k1), plan_ifft(k2)
+    return k1, k2, p1, p2, ip1, ip2
+end
+
+@inline function fourier_dnx(
+    M::AbstractMatrix{T},
+    k1::Vector{T},
+    p1::AbstractFFTs.Plan,
+    ip1::AbstractFFTs.ScaledPlan,
+) where {T<:AbstractFloat}
+    return vcat( [real.(ip1 * ( ( im .* k1 ) .^ n .* (p1 * M[i, :]) ))' for i in axes(M,1)]... )
+end
+
 #####################################################
 ############### Physical constants ##################
 #####################################################
