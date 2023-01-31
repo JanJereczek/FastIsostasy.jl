@@ -29,11 +29,14 @@ Initialize a square computational domain with length `2*L` and `2^n` grid cells.
     use_cuda=false::Bool
 ) where {T<:AbstractFloat}
 
+    Lx, Ly = L, L
     N = 2^n
     N2 = Int(floor(N/2))
-    h = T(2*L) / N
-    x = collect(-L+h:h:L)
-    X, Y = meshgrid(x, x)
+    dx = T(2*Lx) / N
+    dy = T(2*Ly) / N
+    x = collect(-Lx+dx:dx:Lx)
+    y = collect(-Ly+dy:dy:Ly)
+    X, Y = meshgrid(x, y)
     distance, loadresponse_coeffs = get_loadresponse_coeffs(T)
     loadresponse_matrix, loadresponse_function = build_loadresponse_matrix(X, Y, distance, loadresponse_coeffs)
     pseudodiff, harmonic, biharmonic = get_differential_fourier(L, N2)
@@ -43,11 +46,14 @@ Initialize a square computational domain with length `2*L` and `2^n` grid cells.
     end
     
     return ComputationDomain(
-        L,
+        Lx,
+        Ly,
         N,
         N2,
-        h,
+        dx,
+        dy,
         x,
+        y,
         X,
         Y,
         loadresponse_matrix,
@@ -60,11 +66,14 @@ Initialize a square computational domain with length `2*L` and `2^n` grid cells.
 end
 
 struct ComputationDomain{T<:AbstractFloat}
-    L::T
+    Lx::T
+    Ly::T
     N::Int
     N2::Int
-    h::T
+    dx::T
+    dy::T
     x::Vector{T}
+    y::Vector{T}
     X::AbstractMatrix{T}
     Y::AbstractMatrix{T}
     loadresponse_matrix::AbstractMatrix{T}
@@ -365,6 +374,7 @@ Return struct with solid-Earth parameters for mutliple channel layers and a half
         mean_density,
         effective_viscosity,
         litho_rigidity,
+        litho_poissonratio,
         layers_density,
         layers_viscosity,
         layers_begin,
@@ -377,6 +387,7 @@ struct MultilayerEarth{T<:AbstractFloat}
     mean_density::AbstractMatrix{T}
     effective_viscosity::AbstractMatrix{T}
     litho_rigidity::AbstractMatrix{T}
+    litho_poissonratio::T
     layers_density::Vector{T}
     layers_viscosity::AbstractArray{T, 3}
     layers_begin::AbstractArray{T, 3}
@@ -555,7 +566,7 @@ end
     visc_scaling = zeros(T, size(kappa)...)
     for i in axes(kappa, 1), j in axes(kappa, 2)
 
-        k = π / Omega.L  # kappa[i, j]                 # (1/m)
+        k = π / Omega.Lx  # kappa[i, j]                 # (1/m)
         vr = visc_ratio[i, j]
         C, S = hyperbolic_channel_coeffs(channel_thickness, k)
         
@@ -718,14 +729,13 @@ end
 #####################################################
 
 function copystructs2cpu(
-    Omega::ComputationDomain,
-    p::MultilayerEarth,
-    c::PhysicalConstants,
-)
+    Omega::ComputationDomain{T},
+    p::MultilayerEarth{T},
+    c::PhysicalConstants{T},
+) where {T<:AbstractFloat}
 
-    T = typeof( Omega.L )
     n = Int( round( log2(Omega.N) ) )
-    Omega_cpu = init_domain(Omega.L, n, use_cuda = false)
+    Omega_cpu = init_domain(Omega.Lx, n, use_cuda = false)
 
     p_cpu = init_multilayer_earth(
         Omega_cpu,
@@ -755,7 +765,7 @@ support points and associated coefficients.
     quad_coeffs::Vector{T},
 ) where {T<:AbstractFloat}
 
-    h = Omega.h
+    h = Omega.dx
     N = Omega.N
     integrated_loadresponse = similar(Omega.X)
 

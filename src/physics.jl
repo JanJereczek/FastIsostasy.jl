@@ -59,6 +59,58 @@ physical constants `c` as input.
     )
 end
 
+"""
+
+    precompute_fastiso(dt, Omega, p, c)
+
+Return a `struct` containing pre-computed tools to perform forward-stepping. Takes the
+time step `dt`, the ComputationDomain `Omega`, the solid-Earth parameters `p` and 
+physical constants `c` as input.
+"""
+@inline function precompute_fastiso(
+    Omega::ComputationDomain{T},
+    p::MultilayerEarth{T},
+    c::PhysicalConstants{T};
+    quad_precision::Int = 4,
+) where {T<:AbstractFloat}
+
+    quad_support, quad_coeffs = get_quad_coeffs(T, quad_precision)
+    loadresponse = get_integrated_loadresponse(Omega, quad_support, quad_coeffs)
+
+    if Omega.use_cuda
+        Xgpu = CuArray(Omega.X)
+        p1 = CUDA.CUFFT.plan_fft(Xgpu)
+        p2 = CUDA.CUFFT.plan_ifft(Xgpu)
+    else
+        p1, p2 = plan_fft(Omega.X), plan_ifft(Omega.X)
+    end
+
+    return PrecomputedFastiso(
+        loadresponse,
+        fft(loadresponse),
+        p1,
+        p2,
+        mixed_fdx(p.litho_rigidity, Omega.dx),
+        mixed_fdy(p.litho_rigidity, Omega.dy),
+        mixed_fdxx(p.litho_rigidity, Omega.dx),
+        mixed_fdyy(p.litho_rigidity, Omega.dy),
+        mixed_fdy( mixed_fdx(p.litho_rigidity, Omega.dx), Omega.dy ),
+        p.mean_density .* c.g,
+    )
+end
+
+struct PrecomputedFastiso{T<:AbstractFloat}
+    loadresponse::AbstractMatrix{T}
+    fourier_loadresponse::AbstractMatrix{Complex{T}}
+    pfft::AbstractFFTs.Plan
+    pifft::AbstractFFTs.ScaledPlan
+    Dx::AbstractMatrix{T}
+    Dy::AbstractMatrix{T}
+    Dxx::AbstractMatrix{T}
+    Dyy::AbstractMatrix{T}
+    Dxy::AbstractMatrix{T}
+    rhog::AbstractMatrix{T}
+end
 
 """
 
@@ -71,15 +123,15 @@ containing the solution, `sigma_zz` the vertical load applied upon the bedrock,
 `MultilayerEarth` parameters and `c` the `PhysicalConstants` of the problem.
 """
 @inline function forward_isostasy!(
-    Omega::ComputationDomain,
+    Omega::ComputationDomain{T},
     t_out::AbstractVector{T},       # the output time vector
     u3D_elastic::AbstractArray{T, 3},
     u3D_viscous::AbstractArray{T, 3},
     dudt3D_viscous::AbstractArray{T, 3},
     sigma_zz::AbstractMatrix{T},
-    tools::PrecomputedTerms,
-    p::MultilayerEarth,
-    c::PhysicalConstants;
+    tools::PrecomputedFastiso{T},
+    p::MultilayerEarth{T},
+    c::PhysicalConstants{T};
     dt = fill(T(years2seconds(1.0)), length(t_out)-1)::AbstractVector{T},
 ) where {T}
 
@@ -116,7 +168,7 @@ and accuracy) that are given by the ratio between `dt_out` and `dt`.
     u_viscous::AbstractMatrix{T},
     dudt_viscous::AbstractMatrix{T},
     sigma_zz::AbstractMatrix{T},
-    tools::PrecomputedTerms,
+    tools::PrecomputedFastiso,
     p::MultilayerEarth,
 ) where {T<:AbstractFloat}
 
@@ -124,32 +176,21 @@ and accuracy) that are given by the ratio between `dt_out` and `dt`.
         u_viscous, dudt_viscous, sigma_zz = convert2CuArray([u_viscous, dudt_viscous, sigma_zz])
     end
 
-    if tools.viscous_solver == "Euler"
-
-        t_internal = range(0, stop = dt_out, step = dt)
-        u_viscous_next = copy(u_viscous)
-        dudt_viscous_next = copy(dudt_viscous)
-        for i in eachindex(t_internal)[2:end]
-            euler_viscous_response!(
-                Omega,
-                dt,
-                u_viscous_next,
-                dudt_viscous_next,
-                sigma_zz,
-                tools,
-                p,
-            )
-            apply_bc!(u_viscous_next)
-            apply_bc!(dudt_viscous_next)
-        end
-    
-    elseif tools.viscous_solver == "CrankNicolson"
-        u_viscous_next = apply_bc( cranknicolson_viscous_response(
-            dt_out,
-            u_viscous,
+    t_internal = range(0, stop = dt_out, step = dt)
+    u_viscous_next = copy(u_viscous)
+    dudt_viscous_next = copy(dudt_viscous)
+    for i in eachindex(t_internal)[2:end]
+        viscous_response!(
+            Omega,
+            dt,
+            u_viscous_next,
+            dudt_viscous_next,
             sigma_zz,
             tools,
-        ) )
+            p,
+        )
+        apply_bc!(u_viscous_next)
+        apply_bc!(dudt_viscous_next)
     end
 
     if Omega.use_cuda
@@ -232,30 +273,33 @@ collocation. Valid for multilayer parameters that can vary over x, y.
     u::AbstractMatrix{T},
     dudt::AbstractMatrix{T},
     sigma_zz::AbstractMatrix{T},
-    tools::PrecomputedTerms,
+    tools::PrecomputedFastiso,
     p::MultilayerEarth,
 ) where {T<:AbstractFloat}
 
     eps = 5e-9
 
     uf = tools.pfft * u
-    harmonic_uf = tools.piftt * ( Omega.harmonic_coeffs .* uf )
+    harmonic_uf = real.(tools.pifft * ( Omega.harmonic_coeffs .* uf ))
+    biharmonic_uf = real.( tools.pifft * ( Omega.biharmonic_coeffs .* uf ) )
 
     term1 = sigma_zz
-    term2 = - p.mean_density .* p.mean_gravity .* u
-    term3 = - p.litho_rigidity .* tools.pifft * ( Omega.biharmonic_coeffs .* uf )
-    term4 = - 2 .* tools.Dx .* mixed_fdx(harmonic_uf, dx)
-    term5 = - 2 .* tools.Dy .* mixed_fdy(harmonic_uf, dy)
-    term6 = - tools.pifft * (Omega.harmonic_coeffs .* (tools.pfft * (p.litho_rigidity .* harmonic_uf)))
-    term7 = tools.Dxx .* mixed_fdyy(u, dy)
-    term8 = -2 .* tools.Dxy .* mixed_fdy( mixed_fdx(u, dx), dy )
-    term9 = tools.Dyy .* mixed_fdxx(u, dx)
+    term2 = - tools.rhog .* u
+    term3 = - p.litho_rigidity .* biharmonic_uf
+    term4 = - T(2) .* tools.Dx .* mixed_fdx(harmonic_uf, Omega.dx)
+    term5 = - T(2) .* tools.Dy .* mixed_fdy(harmonic_uf, Omega.dy)
+    term6 = - real.(tools.pifft * (Omega.harmonic_coeffs .* (tools.pfft * (p.litho_rigidity .* harmonic_uf))))
+    term7 = tools.Dxx .* mixed_fdyy(u, Omega.dy)
+    term8 = - T(2) .* tools.Dxy .* mixed_fdy( mixed_fdx(u, Omega.dx), Omega.dy )
+    term9 = tools.Dyy .* mixed_fdxx(u, Omega.dx)
 
-    rhs = term1 + term2 + term3 + term4 + term5 + term6 + (1 - p.litho_poissonratio) .*
+    # rhs = term1 + term2 + term3 + term4 + term5 + term6 + (T(1) - p.litho_poissonratio) .*
+    #         (term7 + term8 + term9)
+    rhs = term1 + term2 + term4 + term5 + term6 + (T(1) - p.litho_poissonratio) .*
             (term7 + term8 + term9)
-
+    
     dudtf = (tools.pfft * rhs) ./ (Omega.pseudodiff_coeffs .+ eps) 
-    dudt .= real.(tools.inverse_fft * dudtf) ./ (2 .* p.eq_viscosity)
+    dudt .= real.(tools.pifft * dudtf) ./ (T(2) .* p.effective_viscosity)
     u .+= dt .* dudt
 end
 
@@ -320,7 +364,7 @@ Green's function stored in the pre-computed `tools`(elements obtained from Farel
 """
 @inline function compute_elastic_response(
     Omega::ComputationDomain,
-    tools::PrecomputedTerms,
+    tools::PrecomputedFastiso,
     load::AbstractMatrix{T},
 ) where {T<:AbstractFloat}
     if rem(Omega.N, 2) == 0
@@ -331,12 +375,13 @@ Green's function stored in the pre-computed `tools`(elements obtained from Farel
 end
 
 @inline function collocate_elastic_response(
+    Omega::ComputationDomain,
     p::MultilayerEarth,
-    tools::PrecomputedTerms,
+    tools::PrecomputedFastiso,
     load::AbstractMatrix{T},
 ) where {T<:AbstractFloat}
-    harmonic_u = 1 ./ p.litho_rigidity .* ( tools.inverse_fft * 
-                 ( tools.forward_fft * load ./ tools.harmonic_coeffs ) )
+    harmonic_u = 1 ./ p.litho_rigidity .* ( tools.pifft * 
+                 ( tools.pfft * load ./ Omega.harmonic_coeffs ) )
     
-    return real.( tools.inverse_fft * ( tools.forward_fft * harmonic_u ./ tools.harmonic_coeffs ) )
+    return real.( tools.pifft * ( tools.pfft * harmonic_u ./ Omega.harmonic_coeffs ) )
 end
