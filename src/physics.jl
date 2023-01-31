@@ -21,10 +21,18 @@ physical constants `c` as input.
     quad_support, quad_coeffs = get_quad_coeffs(T, quad_precision)
     loadresponse = get_integrated_loadresponse(Omega, quad_support, quad_coeffs)
 
+    Dx = mixed_fdx(p.litho_rigidity, Omega.dx)
+    Dy = mixed_fdy(p.litho_rigidity, Omega.dy)
+    Dxx = mixed_fdxx(p.litho_rigidity, Omega.dx)
+    Dyy = mixed_fdyy(p.litho_rigidity, Omega.dy)
+    Dxy = mixed_fdy( mixed_fdx(p.litho_rigidity, Omega.dx), Omega.dy )
+    rhog = p.mean_density .* c.g
+
     if Omega.use_cuda
         Xgpu = CuArray(Omega.X)
         p1 = CUDA.CUFFT.plan_fft(Xgpu)
         p2 = CUDA.CUFFT.plan_ifft(Xgpu)
+        Dx, Dy, Dxx, Dyy, Dxy, rhog = convert2CuArray([Dx, Dy, Dxx, Dxy, Dyy, rhog])
     else
         p1, p2 = plan_fft(Omega.X), plan_ifft(Omega.X)
     end
@@ -34,12 +42,12 @@ physical constants `c` as input.
         fft(loadresponse),
         p1,
         p2,
-        mixed_fdx(p.litho_rigidity, Omega.dx),
-        mixed_fdy(p.litho_rigidity, Omega.dy),
-        mixed_fdxx(p.litho_rigidity, Omega.dx),
-        mixed_fdyy(p.litho_rigidity, Omega.dy),
-        mixed_fdy( mixed_fdx(p.litho_rigidity, Omega.dx), Omega.dy ),
-        p.mean_density .* c.g,
+        Dx,
+        Dy,
+        Dxx,
+        Dyy,
+        Dxy,
+        rhog,
     )
 end
 
