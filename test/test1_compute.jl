@@ -43,8 +43,7 @@ include("helpers_compute.jl")
     dudt3D_viscous = copy(u3D)
 
     sigma_zz_disc = generate_uniform_disc_load(Omega, c, R, H)
-    placeholder = 1.0
-    tools = precompute_terms(placeholder, Omega, p, c)
+    tools = precompute_fastiso(Omega, p, c)
 
     t1 = time()
     @time forward_isostasy!(
@@ -87,6 +86,6 @@ Application cases:
     - "euler3layers"
 """
 case = "euler3layers"
-for n in 4:8
-    main(n, case, use_cuda = true)
+for n in 4:6
+    main(n, case, use_cuda = false)
 end

@@ -153,7 +153,7 @@ include("helpers_plot.jl")
         u_numeric = sol["u3D_viscous"][:, :, end]
         abs_error = abs.(u_analytic - u_numeric[islice, jslice:end])
 
-        append!(delta_x, Omega.L * 1e-3 / N)
+        append!(delta_x, Omega.Lx * 1e-3 / N)
         append!(maxerror, maximum(abs_error))
         append!(meanerror, mean(abs_error))
     end

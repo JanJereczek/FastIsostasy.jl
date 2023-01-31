@@ -28,6 +28,7 @@ export get_rigidity
 export get_r
 
 export precompute_terms
+export precompute_fastiso
 export quadrature1D
 export meshgrid
 export get_quad_coeffs
