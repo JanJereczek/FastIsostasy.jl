@@ -196,10 +196,10 @@ collocation. Valid for multilayer parameters that can vary over x, y.
     term8 = - T(2) .* tools.Dxy .* mixed_fdy( mixed_fdx(u, Omega.dx), Omega.dy )
     term9 = tools.Dyy .* mixed_fdxx(u, Omega.dx)
 
-    # rhs = term1 + term2 + term3 + term4 + term5 + term6 + (T(1) - p.litho_poissonratio) .*
-    #         (term7 + term8 + term9)
-    rhs = term1 + term2 + term4 + term5 + term6 + (T(1) - p.litho_poissonratio) .*
+    rhs = term1 + term2 + term3 + term4 + term5 + term6 + (T(1) - p.litho_poissonratio) .*
             (term7 + term8 + term9)
+    # rhs = term1 + term2 + term4 + term5 + term6 + (T(1) - p.litho_poissonratio) .*
+    #         (term7 + term8 + term9)
     
     dudtf = (tools.pfft * rhs) ./ (Omega.pseudodiff_coeffs .+ eps) 
     dudt .= real.(tools.pifft * dudtf) ./ (T(2) .* p.effective_viscosity)

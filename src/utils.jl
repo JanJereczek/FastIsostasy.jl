@@ -243,6 +243,23 @@ end
     return (2 * π)^(k/2) * det(sigma) * exp( -0.5 * (x .- mu)' * inv(sigma) * (x .- mu) )
 end
 
+@inline function gauss_distr(
+    X::AbstractMatrix{T},
+    Y::AbstractMatrix{T},
+    mu::Vector{T},
+    sigma::Matrix{T}
+) where {T<:AbstractFloat}
+    k = length(mu)
+    G = similar(X)
+    invsigma = inv(sigma)
+    invsqrtdetsigma = 1/sqrt(det(sigma))
+    for i in axes(X,1), j in axes(X,2)
+        G[i, j] = (2*π)^(-k/2) * invsqrtdetsigma * exp( 
+            -0.5 * ([X[i,j], Y[i,j]] .- mu)' * invsigma * ([X[i,j], Y[i,j]] .- mu) )
+    end
+    return G
+end
+
 #####################################################
 # Physical constants
 #####################################################
@@ -363,9 +380,10 @@ Return struct with solid-Earth parameters for mutliple channel layers and a half
         pseudodiff_coeffs = Omega.pseudodiff_coeffs
     end
     effective_viscosity = get_effective_viscosity(
+        Omega,
         layers_viscosity,
         layers_thickness,
-        pseudodiff_coeffs,
+        # pseudodiff_coeffs,
     )
 
     mean_density = get_matrix_mean_density(layers_thickness, layers_density)
@@ -381,6 +399,7 @@ Return struct with solid-Earth parameters for mutliple channel layers and a half
         c.g,
         mean_density,
         effective_viscosity,
+        litho_thickness,
         litho_rigidity,
         litho_poissonratio,
         layers_density,
@@ -394,6 +413,7 @@ struct MultilayerEarth{T<:AbstractFloat}
     mean_gravity::T
     mean_density::AbstractMatrix{T}
     effective_viscosity::AbstractMatrix{T}
+    litho_thickness::AbstractMatrix{T}
     litho_rigidity::AbstractMatrix{T}
     litho_poissonratio::T
     layers_density::Vector{T}
@@ -461,9 +481,10 @@ Compute equivalent viscosity for multilayer model by recursively applying
 the formula for a halfspace and a channel from Lingle and Clark (1975).
 """
 @inline function get_effective_viscosity(
+    Omega::ComputationDomain{T},
     layers_viscosity::AbstractArray{T, 3},
     layers_thickness::AbstractArray{T, 3},
-    pseudodiff_coeffs::AbstractMatrix{T},
+    # pseudodiff_coeffs::AbstractMatrix{T},
 ) where {T<:AbstractFloat}
 
     # Recursion has to start with half space = n-th layer:
@@ -474,10 +495,13 @@ the formula for a halfspace and a channel from Lingle and Clark (1975).
         channel_thickness = layers_thickness[:, :, end - i + 1]
         viscosity_ratio = get_viscosity_ratio(channel_viscosity, effective_viscosity)
         viscosity_scaling = three_layer_scaling(
-            pseudodiff_coeffs,
+            Omega,
+            # pseudodiff_coeffs,
             viscosity_ratio,
             channel_thickness,
         )
+        # display(viscosity_scaling)
+        # display(p1 * effective_viscosity)
         copy!( 
             effective_viscosity,
             effective_viscosity .* viscosity_scaling,
@@ -519,13 +543,14 @@ Bueler (2007) below equation 15.
 
 """
 @inline function three_layer_scaling(
-    kappa::Matrix{T},
+    # kappa::Matrix{T},
+    Omega::ComputationDomain{T},
     visc_ratio::Matrix{T},
     channel_thickness::Matrix{T},
 ) where {T<:AbstractFloat}
 
     # FIXME: What is kappa in that context???
-    kappa = π / 3e6
+    kappa = π / Omega.Lx
     C = cosh.(channel_thickness .* kappa)
     S = sinh.(channel_thickness .* kappa)
 
@@ -538,33 +563,6 @@ Bueler (2007) below equation 15.
     denum3 = S .^ 2 + C .^ 2
     
     return (num1 + num2 + num3) ./ (denum1 + denum2 + denum3)
-end
-
-@inline function three_layer_scaling_scalar(
-    Omega::ComputationDomain{T},
-    kappa::Matrix{T},
-    visc_ratio::Matrix{T},
-    channel_thickness::T,
-) where {T<:AbstractFloat}
-
-    visc_scaling = zeros(T, size(kappa)...)
-    for i in axes(kappa, 1), j in axes(kappa, 2)
-
-        k = π / Omega.Lx  # kappa[i, j]                 # (1/m)
-        vr = visc_ratio[i, j]
-        C, S = hyperbolic_channel_coeffs(channel_thickness, k)
-        
-        num1 = 2 * vr * C * S
-        num2 = (1 - vr ^ 2) * channel_thickness^2 * k ^ 2
-        num3 = vr ^ 2 * S ^ 2 + C ^ 2
-
-        denum1 = (vr + 1/vr) * C * S
-        denum2 = (vr - 1/vr) * channel_thickness * k
-        denum3 = S^2 + C^2
-        
-        visc_scaling[i, j] = (num1 + num2 + num3) / (denum1 + denum2 + denum3)
-    end
-    return visc_scaling
 end
 
 """

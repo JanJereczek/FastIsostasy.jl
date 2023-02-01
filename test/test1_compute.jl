@@ -1,9 +1,6 @@
 push!(LOAD_PATH, "../")
 using FastIsostasy
-using Test
-using SpecialFunctions
 using JLD2
-using Interpolations
 include("helpers_compute.jl")
 
 @inline function main(
