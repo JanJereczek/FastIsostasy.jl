@@ -1,3 +1,4 @@
+using LinearAlgebra
 
 @inline function mask_disc(X::AbstractMatrix{T}, Y::AbstractMatrix{T}, R::T) where {T<:AbstractFloat}
     return T.(X .^ 2 + Y .^ 2 .< R^2)
@@ -173,4 +174,17 @@ function generate_window_field(
     X[N4+1:end-N4, N4+1:N2] .= x_lo
     X[N4+1:end-N4, N2+1:end-N4] .= x_hi
     return X
+end
+
+function generate_gaussian_field(
+    Omega::ComputationDomain{T},
+    z_background::T,
+    xy_peak::Vector{T},
+    z_peak::T,
+    sigma::AbstractMatrix{T},
+) where {T<:AbstractFloat}
+    N = Omega.N
+    G = gauss_distr( Omega.X, Omega.Y, xy_peak, sigma )
+    G = G ./ maximum(abs.(G)) .* z_peak
+    return fill(z_background, N, N) + G
 end

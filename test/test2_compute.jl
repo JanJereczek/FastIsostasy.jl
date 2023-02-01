@@ -56,8 +56,7 @@ include("helpers_compute.jl")
         sigma_zz = generate_cap_load(Omega, c, alpha, H)
     end
 
-    placeholder = 1.0   # we do not need to specify dt if Crank-Nicolson is not used.
-    tools = precompute_terms(placeholder, Omega, p, c)
+    tools = precompute_fastiso(Omega, p, c)
 
     t1 = time()
     @time forward_isostasy!(

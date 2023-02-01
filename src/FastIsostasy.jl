@@ -19,24 +19,26 @@ export init_multilayer_earth
 export years2seconds
 export seconds2years
 export m_per_sec2mm_per_yr
+
 export convert2Array
 export copystructs2cpu
+
 export matrify_vectorconstant
+
 export loginterp_viscosity
 
 export get_rigidity
 export get_r
 
-export precompute_terms
+export gauss_distr
+
 export precompute_fastiso
 export quadrature1D
 export meshgrid
 export get_quad_coeffs
 export get_integrated_loadresponse
-export forwardstep_isostasy!
 export forwardstep_isostasy
 export forward_isostasy!
-export apply_bc!
 
 export ComputationDomain
 export PhysicalConstants
