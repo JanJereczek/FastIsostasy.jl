@@ -191,7 +191,7 @@ collocation. Valid for multilayer parameters that can vary over x, y.
 
     term1 = sigma_zz
     term2 = - tools.rhog .* u
-    term3 = - p.litho_rigidity .* biharmonic_uf
+    # term3 = - p.litho_rigidity .* biharmonic_uf
     term4 = - T(2) .* tools.Dx .* mixed_fdx(harmonic_uf, Omega.dx)
     term5 = - T(2) .* tools.Dy .* mixed_fdy(harmonic_uf, Omega.dy)
     term6 = - real.(tools.pifft * (Omega.harmonic_coeffs .* (tools.pfft * (p.litho_rigidity .* harmonic_uf))))
@@ -199,13 +199,12 @@ collocation. Valid for multilayer parameters that can vary over x, y.
     term8 = - T(2) .* tools.Dxy .* mixed_fdy( mixed_fdx(u, Omega.dx), Omega.dy )
     term9 = tools.Dyy .* mixed_fdxx(u, Omega.dx)
 
-    rhs = term1 + term2 + term3 + term4 + term5 + term6 + (T(1) - p.litho_poissonratio) .*
+    rhs = term1 + term2 + # term3 + 
+            term4 + term5 + term6 + (T(1) - p.litho_poissonratio) .*
             (term7 + term8 + term9)
     dudtf = (tools.pfft * rhs) ./ (pseudodiff_coeffs)
     dudt .= real.(tools.pifft * dudtf) ./ (T(2) .* p.effective_viscosity)
     u .+= dt .* dudt
-    # display(rhs)
-    # display(dudtf)
 
 end
 
