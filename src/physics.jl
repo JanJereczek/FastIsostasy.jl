@@ -32,7 +32,8 @@ physical constants `c` as input.
         Xgpu = CuArray(Omega.X)
         p1 = CUDA.CUFFT.plan_fft(Xgpu)
         p2 = CUDA.CUFFT.plan_ifft(Xgpu)
-        Dx, Dy, Dxx, Dyy, Dxy, rhog = convert2CuArray([Dx, Dy, Dxx, Dxy, Dyy, rhog])
+        # Dx, Dy, Dxx, Dyy, Dxy, rhog = convert2CuArray([Dx, Dy, Dxx, Dxy, Dyy, rhog])
+        Dx, Dy, Dxx, Dyy, Dxy = convert2CuArray([Dx, Dy, Dxx, Dxy, Dyy])
     else
         p1, p2 = plan_fft(Omega.X), plan_ifft(Omega.X)
     end
