@@ -28,12 +28,6 @@ include("helpers_compute.jl")
     p = choose_case(case, Omega, c)
     t_out_yr = [0.0, 1.0, 1e1, 1e2, 1e3, 2e3, 5e3, 1e4, 1e5]
     t_out = years2seconds.(t_out_yr)
-    if n >= 8
-        dt = fill( years2seconds(0.1), length(t_out)-1 )
-    else
-        dt = fill( years2seconds(1.0), length(t_out)-1 )
-    end
-
     u3D = zeros( T, (size(Omega.X)..., length(t_out)) )
     u3D_elastic = copy(u3D)
     u3D_viscous = copy(u3D)
@@ -41,6 +35,7 @@ include("helpers_compute.jl")
 
     sigma_zz_disc = generate_uniform_disc_load(Omega, c, R, H)
     tools = precompute_fastiso(Omega, p, c)
+    dt = fill( years2seconds(1.0), length(t_out)-1 )
 
     t1 = time()
     @time forward_isostasy!(
@@ -81,8 +76,8 @@ end
 ["binaryD", "binaryη", "binaryDη"]
 ["gaussian_lo_D", "gaussian_hi_D", "gaussian_lo_η", "gaussian_hi_η"]
 =#
-for n in 6:6
-    for case in ["gaussian_lo_D", "gaussian_hi_D", "gaussian_lo_η", "gaussian_hi_η"]
+for n in 5:5
+    for case in ["gaussian_hi_η"]
         main(n, case, use_cuda = false)
     end
 end

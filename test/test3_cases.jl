@@ -37,14 +37,14 @@ function choose_case(case::String, Omega::ComputationDomain, c::PhysicalConstant
     elseif case == "gaussian_lo_D"
         L = (Omega.Lx + Omega.Ly) / 2
         sigma = diagm([(L/4)^2, (L/4)^2])
-        layer1_begin = generate_gaussian_field(Omega, 100e3, [0.0, 0.0], -70e3, sigma)
+        layer1_begin = generate_gaussian_field(Omega, 150e3, [0.0, 0.0], -100e3, sigma)
         layer2_begin = fill(250e3, Omega.N, Omega.N)
         lb = cat(layer1_begin, layer2_begin, dims=3)
         p = init_multilayer_earth(Omega, c, layers_begin = lb, layers_viscosity = [1e21, 1e21])
     elseif case == "gaussian_hi_D"
         L = (Omega.Lx + Omega.Ly) / 2
         sigma = diagm([(L/4)^2, (L/4)^2])
-        layer1_begin = generate_gaussian_field(Omega, 100e3, [0.0, 0.0], 150e3, sigma)
+        layer1_begin = generate_gaussian_field(Omega, 150e3, [0.0, 0.0], 100e3, sigma)
         layer2_begin = fill(250e3, Omega.N, Omega.N)
         lb = cat(layer1_begin, layer2_begin, dims=3)
         p = init_multilayer_earth(Omega, c, layers_begin = lb, layers_viscosity = [1e21, 1e21])
