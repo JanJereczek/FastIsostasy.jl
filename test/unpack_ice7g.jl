@@ -76,19 +76,25 @@ jldsave(
     topo_diff = topo_diff,
 )
 
-cmap = :ice
+idx = Observable(1)
+H = @lift(Hcartesian[:, :, $idx]')
+cmap = :rainbow # :ice
 clim = (1e-8, 4500)
 fig = Figure(resolution = (800, 800))
 ax = Axis(fig[1, 1], aspect = DataAspect())
 hm = heatmap!(
     ax,
-    Xcartesian[1,:],
-    Ycartesian[:,1],
-    Hcartesian[:, :, 1]',
+    Xcartesian,
+    Ycartesian,
+    H,
     colormap = cmap,
     colorrange = clim,
     lowclip = :white,
-    highclip = :white,
+    highclip = :black,
 )
-# hidedecorations!(ax)
 Colorbar(fig[1,2], hm, height = Relative(0.7))
+
+record(fig, "ice_load_history.mp4", axes(Hcartesian, 3); framerate = 10) do i
+    idx[] = i
+end
+
