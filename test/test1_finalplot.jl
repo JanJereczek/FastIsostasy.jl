@@ -135,7 +135,7 @@ include("helpers_plot.jl")
     axislegend(ax3, position = :rc)
 
 
-    Nvec = 2 .^ (4:8)
+    Nvec = 2 .^ (4:9)
     maxerror = Float64[]
     meanerror = Float64[]
     delta_x = Float64[]
@@ -160,26 +160,28 @@ include("helpers_plot.jl")
     ax1 = Axis(
         fig[3,2],
         title = L"(e) $\,$",
-        xlabel = L"$\Delta x $ (km)",
+        xlabel = L"$N = N_{x} = N_{y} $ (1)",
         ylabel = L"Error w.r.t. analytical solution (m)$\,$",
+        xscale = log2,
         yscale = log10,
         yticks = (10. .^ (-1:1), [L"$10^{%$l}$" for l in -1:1]),
         yminorticks = IntervalsBetween(9),
         yminorticksvisible = true,
         yminorgridvisible = true,
     )
-    scatterlines!(ax1, delta_x, maxerror, label = L"Maximum $\,$")
-    scatterlines!(ax1, delta_x, meanerror, label = L"Average $\,$")
-    axislegend(ax1, position = :rb)
+    scatterlines!(ax1, Nvec, maxerror, label = L"Maximum $\,$")
+    scatterlines!(ax1, Nvec, meanerror, label = L"Average $\,$")
+    axislegend(ax1, position = :lb)
 
 
     ax2 = Axis(
         fig[3,3],
         title = L"(f) $\,$",
-        xlabel = L"$\Delta x $ (km)",
+        xlabel = L"$N = N_{x} = N_{y} $ (1)",
         ylabel = L"Run time (s) $\,$",
+        xscale = log2,
         yscale = log10,
-        yticks = (10. .^ (0:2), [L"$10^{%$l} $" for l in 0:2]),
+        yticks = (10. .^ (0:3), [L"$10^{%$l} $" for l in 0:3]),
         yminorticks = IntervalsBetween(9),
         yminorticksvisible = true,
         yminorgridvisible = true,
@@ -191,13 +193,11 @@ include("helpers_plot.jl")
             hash = "$(case)_$(kernel)_N$(N)"
             sol = load("data/test1/$hash.jld2")
             append!(runtime, sol["t_fastiso"])
-            append!(delta_x, 2*sol["Omega"].L * 1e-3 / N)
+            append!(delta_x, 2*sol["Omega"].Lx * 1e-3 / N)
         end
-        scatterlines!(ax2, delta_x, runtime, label = L"%$kernel $\,$")
+        scatterlines!(ax2, Nvec, runtime, label = L"%$kernel $\,$")
     end
-    axislegend(ax2, position = :rt)
-
-
+    axislegend(ax2, position = :lt)
 
     save("plots/test1/finalplot.png", fig)
     save("plots/test1/finalplot.pdf", fig)

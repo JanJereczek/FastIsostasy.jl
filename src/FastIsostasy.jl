@@ -24,13 +24,15 @@ export convert2Array
 export copystructs2cpu
 
 export matrify_vectorconstant
-
 export loginterp_viscosity
-
 export get_rigidity
 export get_r
-
 export gauss_distr
+
+export mixed_fdx
+export mixed_fdy
+export mixed_fdxx
+export mixed_fdyy
 
 export precompute_fastiso
 export quadrature1D

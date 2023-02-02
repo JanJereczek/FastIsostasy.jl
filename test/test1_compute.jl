@@ -83,6 +83,6 @@ Application cases:
     - "euler3layers"
 """
 case = "euler3layers"
-for n in 4:6
-    main(n, case, use_cuda = false)
+for n in 4:9
+    main(n, case, use_cuda = true)
 end
