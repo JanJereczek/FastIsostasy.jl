@@ -70,11 +70,20 @@ Initialize a square computational domain with length `2*L` and `2^n` grid cells.
     y = collect(-Ly+dy:dy:Ly)
     X, Y = meshgrid(x, y)
     distance, loadresponse_coeffs = get_loadresponse_coeffs(T)
-    loadresponse_matrix, loadresponse_function = build_loadresponse_matrix(X, Y, distance, loadresponse_coeffs)
+    loadresponse_matrix, loadresponse_function = build_loadresponse_matrix(
+        X, Y,
+        distance,
+        loadresponse_coeffs,
+    )
     pseudodiff, harmonic, biharmonic = get_differential_fourier(L, N2)
 
+    # Avoid division by zero. Tolerance ϵ of the order of the neighboring terms.
+    # Tests show that it does not lead to errors wrt analytical or benchmark solutions.
+    pseudodiff[1, 1] = mean([pseudodiff[1,2], pseudodiff[2,1]])
+
     if use_cuda
-        pseudodiff, harmonic, biharmonic = convert2CuArray([pseudodiff, harmonic, biharmonic])
+        pseudodiff, harmonic, biharmonic = convert2CuArray(
+            [pseudodiff, harmonic, biharmonic])
     end
     
     return ComputationDomain(
