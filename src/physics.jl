@@ -61,7 +61,7 @@ struct PrecomputedFastiso{T<:AbstractFloat}
     Dxx::AbstractMatrix{T}
     Dyy::AbstractMatrix{T}
     Dxy::AbstractMatrix{T}
-    rhog::AbstractMatrix{T}
+    rhog::T
 end
 
 #####################################################
@@ -180,7 +180,10 @@ collocation. Valid for multilayer parameters that can vary over x, y.
     p::MultilayerEarth,
 ) where {T<:AbstractFloat}
 
-    eps = 5e-9
+    # eps = 5e-9
+    eps = 1e-6
+    pseudodiff_coeffs = Omega.pseudodiff_coeffs
+    pseudodiff_coeffs[1, 1] = eps
 
     uf = tools.pfft * u
     harmonic_uf = real.(tools.pifft * ( Omega.harmonic_coeffs .* uf ))
@@ -198,12 +201,12 @@ collocation. Valid for multilayer parameters that can vary over x, y.
 
     rhs = term1 + term2 + term3 + term4 + term5 + term6 + (T(1) - p.litho_poissonratio) .*
             (term7 + term8 + term9)
-    # rhs = term1 + term2 + term4 + term5 + term6 + (T(1) - p.litho_poissonratio) .*
-    #         (term7 + term8 + term9)
-    
-    dudtf = (tools.pfft * rhs) ./ (Omega.pseudodiff_coeffs .+ eps) 
+    dudtf = (tools.pfft * rhs) ./ (pseudodiff_coeffs)
     dudt .= real.(tools.pifft * dudtf) ./ (T(2) .* p.effective_viscosity)
     u .+= dt .* dudt
+    # display(rhs)
+    # display(dudtf)
+
 end
 
 #####################################################

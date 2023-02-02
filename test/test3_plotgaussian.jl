@@ -20,7 +20,7 @@ include("helpers_plot.jl")
     sols = [sol_lo_D, sol_hi_D, sol_lo_η, sol_hi_η]
     u_plot = [sol["u3D_viscous"] for sol in sols]
     D_plot = [sol["p"].litho_thickness for sol in sols[1:2]]
-    η_plot = [log10.(sol["p"].effective_viscosity) for sol in sols[3:4]]
+    η_plot = [log10.(sol["p"].layers_viscosity[:,:,1]) for sol in sols[3:4]]
     var_plots = u_plot
     p_plots = vcat(D_plot, η_plot)
 
@@ -78,15 +78,17 @@ include("helpers_plot.jl")
         yticklabelsvisible = j == 1 ? true : false,
     ) for j in 1:ncols, i in 1:nrows]
     colors = [:gray80, :gray65, :gray50, :gray35, :gray20, :gray5]
-    cmaps = [:RdBu, :RdBu, :PuOr, :PuOr]
-    clims = [(50, 250), (50, 250), (19, 23), (19, 23)]
+    cmaps = [cgrad(:RdBu, rev=true), cgrad(:RdBu, rev=true),
+        cgrad(:PuOr, rev=true), cgrad(:PuOr, rev=true)]
+    clims = [(50e3, 250e3), (50e3, 250e3), (20, 22), (20, 22)]
+
     for j in 1:ncases
 
         hm = heatmap!(
             axs[j],
             p_plots[j],
             colormap = cmaps[j],
-            colorrange = clims[j]
+            colorrange = clims[j],
         )
         hidedecorations!(axs[j])
         if rem(j, 2) == 0
@@ -114,17 +116,18 @@ include("helpers_plot.jl")
                 axs[i],
                 theta,
                 varplot[slicey, slicex, k],
-                label = L"$t = %$tyr $ yr",
+                label = L"$%$tyr $ yr",
                 color = colors[l],
             )
         end
+        ylims!(axs[i], (-600, 50))
     end
-    axislegend(axs[5], position = :rb)
+    axislegend(axs[5], position = :rb, nbanks=2)
     save("plots/$(plotname)_gaussian.png", fig)
     save("plots/$(plotname)_gaussian.pdf", fig)
 
 end
 
-for n in 6:6
+for n in 5:5
     main(n, kernel = "cpu")
 end

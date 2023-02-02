@@ -185,6 +185,6 @@ function generate_gaussian_field(
 ) where {T<:AbstractFloat}
     N = Omega.N
     G = gauss_distr( Omega.X, Omega.Y, xy_peak, sigma )
-    G = G ./ maximum(abs.(G)) .* z_peak
+    G = G ./ maximum(G) .* z_peak
     return fill(z_background, N, N) + G
 end

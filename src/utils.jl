@@ -386,8 +386,8 @@ Return struct with solid-Earth parameters for mutliple channel layers and a half
         # pseudodiff_coeffs,
     )
 
-    mean_density = get_matrix_mean_density(layers_thickness, layers_density)
-    # mean_density = fill(layers_density[1], Omega.N, Omega.N)
+    # mean_density = get_matrix_mean_density(layers_thickness, layers_density)
+    mean_density = fill(layers_density[1], Omega.N, Omega.N)
 
     if Omega.use_cuda
         litho_rigidity, effective_viscosity, mean_density = convert2CuArray(
@@ -397,7 +397,7 @@ Return struct with solid-Earth parameters for mutliple channel layers and a half
 
     return MultilayerEarth(
         c.g,
-        mean_density,
+        mean(mean_density),
         effective_viscosity,
         litho_thickness,
         litho_rigidity,
@@ -411,7 +411,7 @@ end
 
 struct MultilayerEarth{T<:AbstractFloat}
     mean_gravity::T
-    mean_density::AbstractMatrix{T}
+    mean_density::T
     effective_viscosity::AbstractMatrix{T}
     litho_thickness::AbstractMatrix{T}
     litho_rigidity::AbstractMatrix{T}
