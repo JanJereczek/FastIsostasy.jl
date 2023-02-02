@@ -127,7 +127,7 @@ end
 
 function interpolate_visc_wiens_on_grid(X, Y)
     eta_mean_interpolator = load(
-        "data/wiens_viscosity_map.jld2",
+        "data/visc_field/doug_viscosity_map.jld2",
         "eta_mean_interpolator",
     )
     return eta_mean_interpolator.(X, Y)'

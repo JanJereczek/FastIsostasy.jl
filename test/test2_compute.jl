@@ -55,7 +55,7 @@ include("helpers_compute.jl")
         H = T(1500)
         sigma_zz = generate_cap_load(Omega, c, alpha, H)
     end
-
+    sigma_zz_snapshots = ([t_out[1], t_out[end]], [sigma_zz, sigma_zz])
     tools = precompute_fastiso(Omega, p, c)
 
     t1 = time()
@@ -65,7 +65,7 @@ include("helpers_compute.jl")
         u3D_elastic,
         u3D_viscous,
         dudt3D_viscous,
-        sigma_zz,
+        sigma_zz_snapshots,
         tools,
         p,
         c,

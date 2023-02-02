@@ -1,6 +1,5 @@
 push!(LOAD_PATH, "../")
 using FastIsostasy
-using CairoMakie
 using JLD2
 using Interpolations
 include("helpers_compute.jl")
@@ -13,63 +12,79 @@ include("external_viscosity_maps.jl")
 )
 
     T = Float64
-
     L = T(3000e3)               # half-length of the square domain (m)
     Omega = init_domain(L, n)   # domain parameters
     R = T(1500e3)               # ice disc radius (m)
     H = T(1000)                 # ice disc thickness (m)
-    c = init_physical_constants(T)
-    sigma_zz_disc = generate_uniform_disc_load(Omega, c, R, H)
+    c = init_physical_constants()
 
     log10_eta_channel = interpolate_visc_wiens_on_grid(Omega.X, Omega.Y)
-    eta_channel = 10 .^ (log10_eta_channel)
-    eta_halfspace = fill(10.0 ^ 21, size(Omega.X)...)
-    p = init_solidearth_params(
-        T,
+    channel_viscosity = 10 .^ (log10_eta_channel)
+    halfspace_viscosity = fill(1e21, Omega.N, Omega.N)
+    lv = cat(channel_viscosity, halfspace_viscosity, dims=3)
+    p = init_multilayer_earth(
         Omega,
-        channel_viscosity = eta_channel,
-        halfspace_viscosity = eta_halfspace,
+        c,
+        layers_viscosity = lv,
     )
 
-    lowest_eta = minimum(p.channel_viscosity[abs.(sigma_zz_disc) .> 1e-8])
-    point_lowest_eta = argmin( (p.channel_viscosity .- lowest_eta).^2 )
-    point_highest_eta = argmax(p.channel_viscosity .* abs.(sigma_zz_disc))
-    points = [point_lowest_eta, point_highest_eta]
-
-    timespan = T.([0, 1e4]) * T(c.seconds_per_year)     # (yr) -> (s)
-    dt = T(10) * T(c.seconds_per_year)                  # (yr) -> (s)
-    t_vec = timespan[1]:dt:timespan[2]                  # (s)
-
-    u3D = zeros( T, (size(Omega.X)..., length(t_vec)) )
+    t_out_yr = 0.0:10:1e4
+    t_out = years2seconds.(t_out_yr)
+    u3D = zeros( T, (size(Omega.X)..., length(t_out)) )
     u3D_elastic = copy(u3D)
     u3D_viscous = copy(u3D)
     dudt3D_viscous = copy(u3D)
+    tools = precompute_fastiso(Omega, p, c)
+    dt = fill( years2seconds(1.0), length(t_out)-1 )
 
-    tools = precompute_terms(dt, Omega, p, c)
+    sigma_zz_disc = generate_uniform_disc_load(Omega, c, R, H)
+    sigma_zz_snapshots = ([t_out[1], t_out[end]], [sigma_zz_disc, sigma_zz_disc])
 
+    t1 = time()
     @time forward_isostasy!(
         Omega,
         t_out,
         u3D_elastic,
         u3D_viscous,
         dudt3D_viscous,
-        sigma_zz,
+        sigma_zz_snapshots,
         tools,
         p,
         c,
+        dt = dt,
     )
+    t_fastiso = time() - t1
+
+    # if use_cuda
+    #     Omega, p = copystructs2cpu(Omega, p, c)
+    # end
+
     jldsave(
-        "data/discload_$(case)_N$(Omega.N).jld2",
+        "data/test4a/discload_$(case)_N$(Omega.N).jld2",
         u3D_elastic = u3D_elastic,
         u3D_viscous = u3D_viscous,
+        dudt3D_viscous = dudt3D_viscous,
+        sigma_zz = sigma_zz_disc,
+        Omega = Omega,
+        c = c,
+        p = p,
+        R = R,
+        H = H,
+        t_fastiso = t_fastiso,
+        t_out = t_out,
     )
 
     ##############
 
+    lowest_eta = minimum(channel_viscosity[abs.(sigma_zz_disc) .> 1e-8])
+    point_lowest_eta = argmin( (channel_viscosity .- lowest_eta).^2 )
+    point_highest_eta = argmax(channel_viscosity .* abs.(sigma_zz_disc))
+    points = [point_lowest_eta, point_highest_eta]
+
     if make_anim
         anim_name = "plots/discload_$(case)_N=$(Omega.N)"
         animate_viscous_response(
-            t_vec,
+            t_out,
             Omega,
             u3D_viscous,
             anim_name,
@@ -80,4 +95,4 @@ include("external_viscosity_maps.jl")
 end
 
 case = "wiens_viscosity_3layer"
-main(7, case, make_anim = true)
+main(6, case, make_anim = true)
