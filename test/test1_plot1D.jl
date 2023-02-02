@@ -68,7 +68,7 @@ Application cases:
     - "euler2layers_gpu"
     - "euler3layers_gpu"
 """
-case = "euler3layers_gpu"
+case = "euler3layers_cpu"
 for n in 4:6
     main(n, case)
 end

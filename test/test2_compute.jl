@@ -95,6 +95,6 @@ for n in 6:6
     for case in cases
         N = 2^n
         println("Computing $case on $N x $N grid...")
-        main(n, case, use_cuda = true)
+        main(n, case, use_cuda = false)
     end
 end
