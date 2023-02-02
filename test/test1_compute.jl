@@ -40,7 +40,7 @@ include("helpers_compute.jl")
     dudt3D_viscous = copy(u3D)
 
     sigma_zz_disc = generate_uniform_disc_load(Omega, c, R, H)
-    sigma_zz = linear_interpolation(timespan, [sigma_zz_disc, sigma_zz_disc])
+    sigma_zz_snapshots = (timespan, [sigma_zz_disc, sigma_zz_disc])
     tools = precompute_fastiso(Omega, p, c)
 
     t1 = time()
@@ -50,7 +50,7 @@ include("helpers_compute.jl")
         u3D_elastic,
         u3D_viscous,
         dudt3D_viscous,
-        sigma_zz,
+        sigma_zz_snapshots,
         tools,
         p,
         c,
@@ -85,5 +85,5 @@ Application cases:
 """
 case = "euler3layers"
 for n in 4:5
-    main(n, case, use_cuda = false)
+    main(n, case, use_cuda = true)
 end

@@ -85,12 +85,19 @@ upon the bedrock, `tools` some pre-computed terms to speed up the computation, `
     u3D_elastic::AbstractArray{T, 3},
     u3D_viscous::AbstractArray{T, 3},
     dudt3D_viscous::AbstractArray{T, 3},
-    sigma_zz::Interpolations.Extrapolation,
+    sigma_zz_snapshots::Tuple{Vector{T}, Vector{Matrix{T}}},
     tools::PrecomputedFastiso{T},
     p::MultilayerEarth{T},
     c::PhysicalConstants{T};
     dt = fill(T(years2seconds(1.0)), length(t_out)-1)::AbstractVector{T},
 ) where {T}
+
+    if Omega.use_cuda
+        sigma_zz_values = convert2CuArray(sigma_zz_snapshots[2])
+    else
+        sigma_zz_values = sigma_zz_snapshots[2]
+    end
+    sigma_zz = linear_interpolation(sigma_zz_snapshots[1], sigma_zz_values)
 
     for i in eachindex(t_out)[1:end-1]
         t = t_out[i]
@@ -200,6 +207,7 @@ collocation. Valid for multilayer parameters that can vary over x, y.
     rhs = term1 + term2 + # term3 + 
             term4 + term5 + term6 + (T(1) - p.litho_poissonratio) .*
             (term7 + term8 + term9)
+
     dudtf = (tools.pfft * rhs) ./ Omega.pseudodiff_coeffs
     dudt .= real.(tools.pifft * dudtf) ./ (T(2) .* p.effective_viscosity)
     u .+= dt .* dudt
