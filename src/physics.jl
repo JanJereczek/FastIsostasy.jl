@@ -75,8 +75,8 @@ end
 
 Integrates isostasy model over provided time vector `t_out` for a given
 `ComputationDomain` `Omega`, pre-allocated arrays `u3D_elastic` and `u3D_viscous`
-containing the solution, `sigma_zz` the vertical load applied upon the bedrock,
-`tools` a set of pre-computed terms to speed up the computation, `p` some
+containing the solution, `sigma_zz` a time-interpolator ofthe vertical load applied
+upon the bedrock, `tools` some pre-computed terms to speed up the computation, `p` some
 `MultilayerEarth` parameters and `c` the `PhysicalConstants` of the problem.
 """
 @inline function forward_isostasy!(
@@ -85,23 +85,25 @@ containing the solution, `sigma_zz` the vertical load applied upon the bedrock,
     u3D_elastic::AbstractArray{T, 3},
     u3D_viscous::AbstractArray{T, 3},
     dudt3D_viscous::AbstractArray{T, 3},
-    sigma_zz::AbstractMatrix{T},
+    sigma_zz::Interpolations.Extrapolation,
     tools::PrecomputedFastiso{T},
     p::MultilayerEarth{T},
     c::PhysicalConstants{T};
     dt = fill(T(years2seconds(1.0)), length(t_out)-1)::AbstractVector{T},
 ) where {T}
 
-    for i in eachindex(t_out)[2:end]
-        dt_out = t_out[i] - t_out[i-1]
-        u3D_elastic[:, :, i] .= compute_elastic_response(Omega, tools, -sigma_zz ./ c.g )
+    for i in eachindex(t_out)[1:end-1]
+        t = t_out[i]
+        dt_out = t_out[i+1] - t_out[i]
+        u3D_elastic[:, :, i+1] .= compute_elastic_response(Omega, tools, -Array(sigma_zz(t)) ./ c.g )
 
-        u3D_viscous[:, :, i], dudt3D_viscous[:, :, i] = forwardstep_isostasy(
+        u3D_viscous[:, :, i+1], dudt3D_viscous[:, :, i+1] = forwardstep_viscous_response(
             Omega,
-            dt[i-1],
+            t,
+            dt[i],
             dt_out,
-            u3D_viscous[:, :, i-1],
-            dudt3D_viscous[:, :, i-1],
+            u3D_viscous[:, :, i],
+            dudt3D_viscous[:, :, i],
             sigma_zz,
             tools,
             p,
@@ -112,33 +114,35 @@ end
 
 """
 
-    forwardstep_isostasy(Omega, dt, dt_out, u_viscous, sigma_zz, tools, p)
+    forwardstep_viscous_response(Omega, dt, dt_out, u_viscous, sigma_zz, tools, p)
 
 Perform GIA computation one step forward w.r.t. the time vector used for storing the
 output. This implies performing a number of in-between steps (for numerical stability
 and accuracy) that are given by the ratio between `dt_out` and `dt`.
 """
-@inline function forwardstep_isostasy(
+@inline function forwardstep_viscous_response(
     Omega::ComputationDomain,
+    t::T,
     dt::T,
     dt_out::T,
     u_viscous::AbstractMatrix{T},
     dudt_viscous::AbstractMatrix{T},
-    sigma_zz::AbstractMatrix{T},
+    sigma_zz::Interpolations.Extrapolation,
     tools::PrecomputedFastiso,
     p::MultilayerEarth,
 ) where {T<:AbstractFloat}
 
     if Omega.use_cuda
-        u_viscous, dudt_viscous, sigma_zz = convert2CuArray([u_viscous, dudt_viscous, sigma_zz])
+        u_viscous, dudt_viscous = convert2CuArray([u_viscous, dudt_viscous])
     end
 
-    t_internal = range(0, stop = dt_out, step = dt)
+    t_internal = range(t, stop = t + dt_out, step = dt)
     u_viscous_next = copy(u_viscous)
     dudt_viscous_next = copy(dudt_viscous)
-    for i in eachindex(t_internal)[2:end]
+    for i in eachindex(t_internal)[1:end-1]
         viscous_response!(
             Omega,
+            t_internal[i],
             dt,
             u_viscous_next,
             dudt_viscous_next,
@@ -154,9 +158,6 @@ and accuracy) that are given by the ratio between `dt_out` and `dt`.
         u_viscous_next, dudt_viscous_next = convert2Array(
             [u_viscous_next, dudt_viscous_next])
     end
-
-    # display(p.effective_viscosity)
-    # display(u_viscous_next)
     return u_viscous_next, dudt_viscous_next
 end
 
@@ -173,24 +174,20 @@ collocation. Valid for multilayer parameters that can vary over x, y.
 """
 @inline function viscous_response!(
     Omega::ComputationDomain,
+    t::T,
     dt::T,
     u::AbstractMatrix{T},
     dudt::AbstractMatrix{T},
-    sigma_zz::AbstractMatrix{T},
+    sigma_zz::Interpolations.Extrapolation,
     tools::PrecomputedFastiso,
     p::MultilayerEarth,
 ) where {T<:AbstractFloat}
-
-    # eps = 5e-9
-    eps = 1e-6
-    pseudodiff_coeffs = Omega.pseudodiff_coeffs
-    pseudodiff_coeffs[1, 1] = eps
 
     uf = tools.pfft * u
     harmonic_uf = real.(tools.pifft * ( Omega.harmonic_coeffs .* uf ))
     biharmonic_uf = real.( tools.pifft * ( Omega.biharmonic_coeffs .* uf ) )
 
-    term1 = sigma_zz
+    term1 = sigma_zz(t)
     term2 = - tools.rhog .* u
     # term3 = - p.litho_rigidity .* biharmonic_uf
     term4 = - T(2) .* tools.Dx .* mixed_fdx(harmonic_uf, Omega.dx)
@@ -203,7 +200,7 @@ collocation. Valid for multilayer parameters that can vary over x, y.
     rhs = term1 + term2 + # term3 + 
             term4 + term5 + term6 + (T(1) - p.litho_poissonratio) .*
             (term7 + term8 + term9)
-    dudtf = (tools.pfft * rhs) ./ (pseudodiff_coeffs)
+    dudtf = (tools.pfft * rhs) ./ Omega.pseudodiff_coeffs
     dudt .= real.(tools.pifft * dudtf) ./ (T(2) .* p.effective_viscosity)
     u .+= dt .* dudt
 

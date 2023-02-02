@@ -1,10 +1,11 @@
 module FastIsostasy
 
+using Reexport
 using LinearAlgebra
 using StatsBase
 using FFTW
 using FastGaussQuadrature
-using Interpolations
+@reexport using Interpolations
 using DSP
 using CUDA
 
