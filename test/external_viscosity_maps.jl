@@ -4,7 +4,7 @@ using CairoMakie
 using Interpolations
 
 function filter_nan_viscosity(M::Matrix{T}) where {T<:AbstractFloat}
-    return M[.!isnan.(eta_100km[:, 3]), :]
+    return M[.!isnan.(M[:, 3]), :]
 end
 
 function get2Dinterpolator(M::Matrix{T}) where {T<:AbstractFloat}
@@ -28,7 +28,7 @@ function get_closest_eta(x::T, y::T, M::Matrix{T}) where {T<:AbstractFloat}
     return M[l, 3]
 end
 
-function viscositytxt2matrix()
+function load_wiens_2021(X, Y)
     """
     Columns:
         1. x coordinate (km)
@@ -39,22 +39,53 @@ function viscositytxt2matrix()
         6. longitude (deg)
         7. latitude (deg)
     """
-    eta_100km = readdlm("data/ANT_20_vis_100.txt")
-    eta_200km = readdlm("data/ANT_20_vis_200.txt")
-    eta_300km = readdlm("data/ANT_20_vis_300.txt")
+    eta_100km = readdlm("data/visc_field/ANT_20_vis_100.txt")
+    eta_200km = readdlm("data/visc_field/ANT_20_vis_200.txt")
+    eta_300km = readdlm("data/visc_field/ANT_20_vis_300.txt")
     z = range( 100e3, stop = 300e3, step = 100e3 )
     nz = length(z)
 
     eta_withnan = [eta_100km, eta_200km, eta_300km]
     eta = loop_f_over_vecmat(filter_nan_viscosity, eta_withnan)
     km2m!(eta)
+    Eta = zeros(Float64, (size(X,1), size(X,2), nz))
+    for k in axes(Eta, 3)
+        for i in axes(Eta, 1), j in axes(Eta, 2)
+            Eta[i, j, k] = get_closest_eta(X[i,j], Y[i,j], eta[k])
+        end
+    end
+    Eta_mean = mean(Eta, dims=3)
+    return Eta, Eta_mean, z
+end
 
+function interpolate_viscosity_xy(X, Y, Eta, Eta_mean)
+    x, y = X[1,:], Y[:,1]
+    eta_interpolators = [linear_interpolation(
+        (x, y),
+        Eta[:, :, k],
+    ) for k in axes(Eta, 3)]
+    eta_mean_interpolator = linear_interpolation(
+        (x, y),
+        Eta_mean[:, :, 1],
+    )
+    jldsave(
+        "data/wiens_viscosity_map.jld2",
+        eta = Eta,
+        eta_mean = Eta_mean[:, :, 1],
+        eta_interpolators = eta_interpolators,
+        eta_mean_interpolator = eta_mean_interpolator,
+    )
+    return eta_interpolators, eta_mean_interpolator
+end
+
+function viscositytxt2matrix()
     dx = 40e3   # wiens worked on 40km resolution
     L = 3000e3  # Remap this on 2L x 2L domain
-    x = range( -L, stop = L, step = dx )
+    x = collect(range( -L, stop = L, step = dx ))
     y = copy( x )
     X, Y = meshgrid(x, y)
-    Eta = zeros(Float64, (size(X,1), size(X,2), nz))
+    Eta, Eta_mean, z = load_wiens_2021(X, Y)
+    interpolate_viscosity_xy(x, y, Eta, Eta_mean)
 
     fig = Figure(resolution = (1600, 600))
     axs = [Axis(
@@ -72,14 +103,9 @@ function viscositytxt2matrix()
         yticklabelsvisible = false,
         aspect = DataAspect(),
     )
-
     cmap = cgrad(:jet, rev = true)
     crange = (18, 23)
-
     for k in axes(Eta, 3)
-        for i in axes(Eta, 1), j in axes(Eta, 2)
-            Eta[i, j, k] = get_closest_eta(X[i,j], Y[i,j], eta[k])
-        end
         heatmap!(
             axs[k],
             X./1e6,
@@ -89,8 +115,6 @@ function viscositytxt2matrix()
             colormap = :jet,
         )
     end
-    
-    Eta_mean = mean(Eta, dims=3)
     heatmap!(
         ax_mean,
         X./1e6,
@@ -113,16 +137,6 @@ function viscositytxt2matrix()
     save("plots/wiens_visc_map.png", fig)
     save("plots/wiens_visc_map.pdf", fig)
 
-    eta_interpolator = linear_interpolation(
-        (collect(x), collect(y)),
-        Eta_mean[:, :, 1],
-    )
-    jldsave(
-        "data/wiens_viscosity_map.jld2",
-        eta = Eta,
-        eta_mean = Eta_mean[:, :, 1],
-        eta_mean_interpolator = eta_interpolator,
-    )
 end
 
 function interpolate_visc_wiens_on_grid(X, Y)
@@ -130,5 +144,5 @@ function interpolate_visc_wiens_on_grid(X, Y)
         "data/visc_field/doug_viscosity_map.jld2",
         "eta_mean_interpolator",
     )
-    return eta_mean_interpolator.(X, Y)'
+    return eta_mean_interpolator.(X, Y)
 end

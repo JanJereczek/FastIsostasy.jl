@@ -498,7 +498,7 @@ the formula for a halfspace and a channel from Lingle and Clark (1975).
 
     # Recursion has to start with half space = n-th layer:
     effective_viscosity = layers_viscosity[:, :, end]
-    p1, p2 = plan_fft(effective_viscosity), plan_ifft(effective_viscosity)
+    # p1, p2 = plan_fft(effective_viscosity), plan_ifft(effective_viscosity)
     for i in axes(layers_viscosity, 3)[1:end-1]
         channel_viscosity = layers_viscosity[:, :, end - i]
         channel_thickness = layers_thickness[:, :, end - i + 1]

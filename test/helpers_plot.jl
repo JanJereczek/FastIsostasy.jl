@@ -1,3 +1,4 @@
+using DelimitedFiles
 
 ################################################
 # Visualization
@@ -69,6 +70,9 @@ end
 ) where {T<:AbstractFloat}
 
     ncases = length(Uvec)
+    data = get_spada_displacements()
+    keys = ["u_cap", "u_disc", "dudt_cap", "dudt_disc"]
+
     fig = Figure(resolution=(1600, 900), fontsize = 24)
     nrows, ncols = 2,2
     axs = [Axis(
@@ -83,7 +87,8 @@ end
         xticklabelsvisible = i == 2 ? true : false,
         yticklabelsvisible = j == 1 ? true : false,
     ) for j in 1:2, i in 1:2]
-    colors = [:black, :orange, :blue, :red, :gray, :purple]
+    # colors = [:black, :orange, :blue, :red, :gray, :purple]
+    colors = [:gray80, :gray65, :gray50, :gray35, :gray20, :gray5]
 
     for i in 1:ncases
         U = Uvec[i]
@@ -91,20 +96,15 @@ end
         slicey, slicex = Int(round(n1/2)), Int(round(n2/2))
         theta = rad2deg.( Omega.X[slicey, slicex:end] ./ c.r_equator)
 
-        if i == 1
-            theta_benchmark = [0, 5, 10, 20]
-            scatter_symbols = [:circle, :rect, :diamond]
-            for k in eachindex([0, 1, 5, 10, 1000])     # output time vector in spada 2011 (kyr)
-                for j in eachindex(["vk", "gs", "zm"])
-                    scatter!(
-                        axs[i],
-                        theta_benchmark,
-                        u_benchmark[j, :, k],
-                        marker = scatter_symbols[j],
-                        color = colors[k],
-                    )
-                end
-            end
+        bm_data = data[keys[i]]
+        for k in eachindex(bm_data)
+            lines!(
+                axs[i],
+                bm_data[k][:, 1],
+                bm_data[k][:, 2],
+                color = colors[k],
+                linestyle = :dash,
+            )
         end
 
         for l in eachindex(t_plot)
@@ -124,6 +124,7 @@ end
         else
             ylims!(axs[i], (-85, 10))
         end
+        xlims!(axs[i], (0, 20))
     end
     axislegend(axs[1], position = :rb)
     save("plots/$plotname.png", fig)
@@ -200,9 +201,10 @@ end
     anim_name::String,
     u_range::Tuple{T, T},
     points,
+    framerate::Int,
 ) where {T<:AbstractFloat}
 
-    t_vec = collect(t_vec) ./ (365. * 24. * 60. * 60.)
+    t_vec = seconds2years.(t_vec)
 
     # umax = [minimum(u[:, :, j]) for j in axes(u, 3)]
     u_lowest_eta = u[points[1][1], points[1][2], :]
@@ -227,9 +229,9 @@ end
         fig[1, 5:8],
         xlabel = L"$x$ (m)",
         ylabel = L"$y$ (m)",
-        zlabel = L"$z$ (m)",
+        zlabel = L"$u^V$ (m)",
     )
-    cmap = :jet
+    cmap = cgrad(:cool, rev = true)
     clims = u_range
 
     zlims!(ax2, clims)
@@ -251,7 +253,7 @@ end
         Omega.X,
         Omega.Y,
         u2D,
-        linewidth = 0.1,
+        linewidth = 0.08,
         color = :black,
     )
     Colorbar(
@@ -261,7 +263,7 @@ end
         height = Relative(0.5),
     )
 
-    record(fig, "$anim_name.mp4", axes(u, 3)) do k
+    record(fig, "$anim_name.mp4", axes(u, 3), framerate = framerate) do k
         i[] = k
     end
 end
@@ -292,3 +294,19 @@ u_tinf_zm = [NaN, NaN, NaN, NaN]'
 u_tinf = vcat(u_tinf_vk, u_tinf_gs, u_tinf_zm)
 
 u_benchmark = cat(u_t0, u_t1, u_t5, u_t10, u_tinf, dims = 3)
+
+@inline function get_spada_displacements()
+    prefix ="data/test2/Spada/"
+    cases = ["u_cap", "u_disc", "dudt_cap", "dudt_disc"]
+    snapshots = ["0", "1", "2", "5", "10", "inf"]
+    data = Dict{String, Vector{Matrix{Float64}}}()
+    for case in cases
+        tmp = Matrix{Float64}[]
+        for snapshot in snapshots
+            fname = string(prefix, case, "_", snapshot, ".csv")
+            append!(tmp, [readdlm(fname, ',', Float64)])
+        end
+        data[case] = tmp
+    end
+    return data
+end

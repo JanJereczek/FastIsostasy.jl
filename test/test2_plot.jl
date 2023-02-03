@@ -53,7 +53,7 @@ include("helpers_plot.jl")
         "",
     ]
 
-    t_plot_yr = [1.0, 1e3, 5e3, 1e4, 1e5]
+    t_plot_yr = [1.0, 1e3, 2e3, 5e3, 1e4, 1e5]
     t_plot = years2seconds.(t_plot_yr)
     response_fig = slice_spada(
         sol_disc["Omega"],
