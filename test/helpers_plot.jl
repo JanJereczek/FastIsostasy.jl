@@ -124,7 +124,7 @@ end
         else
             ylims!(axs[i], (-85, 10))
         end
-        xlims!(axs[i], (0, 20))
+        xlims!(axs[i], (0, 15))
     end
     axislegend(axs[1], position = :rb)
     save("plots/$plotname.png", fig)

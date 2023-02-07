@@ -32,6 +32,7 @@ include("helpers_compute.jl")
         c,
         layers_begin = lb,
         layers_density = [3.438e3, 3.871e3],
+        # layers_density = [3.438e3, 3.871e3],
         layers_viscosity = [1e21, 1e21, 2e21],
         litho_youngmodulus = E,
         litho_poissonratio = nu,
@@ -91,10 +92,10 @@ include("helpers_compute.jl")
 end
 
 cases = ["disc", "cap"]
-for n in 6:6
+for n in 6:8
     for case in cases
         N = 2^n
         println("Computing $case on $N x $N grid...")
-        main(n, case, use_cuda = false)
+        main(n, case, use_cuda = true)
     end
 end

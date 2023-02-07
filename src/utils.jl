@@ -509,8 +509,6 @@ the formula for a halfspace and a channel from Lingle and Clark (1975).
             viscosity_ratio,
             channel_thickness,
         )
-        # display(viscosity_scaling)
-        # display(p1 * effective_viscosity)
         copy!( 
             effective_viscosity,
             effective_viscosity .* viscosity_scaling,

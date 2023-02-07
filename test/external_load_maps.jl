@@ -4,6 +4,73 @@ using JLD2
 using FastIsostasy
 using CairoMakie
 
+#####################################################
+# GLAC1D
+#####################################################
+
+@inline function interpolated_glac1d_snapshots(Omega::ComputationDomain{T}) where {T<:AbstractFloat}
+    xl, yl, Hl, tvecl = load_glac1d("data/GLAC1D/output/ANT-16KM_GLAC1D-nn4041ANT-30kto0k.nc") # load_full_glac1d()
+    tvecl = years2seconds.(tvecl .* 1e3)    # (kyr) --> (s)
+    xl .*= 1e3                              # (km) --> (m)
+    yl .*= 1e3                              # (km) --> (m)
+    xl = range(xl[1], stop = xl[end], length = length(xl))
+    yl = range(yl[1], stop = yl[end], length = length(yl))
+
+    H = fill(0.0, Omega.N, Omega.N, length(tvecl))
+    for k in axes(H, 3)
+        itp = extrapolate(scale(interpolate(
+            Hl[:, :, k],
+            BSpline(Linear())),
+            (xl,yl)),
+            T(0.0),
+        )
+        H[:, :, k] = itp.(Omega.X, Omega.Y)
+    end
+    deltaH = H .- H[:, :, 1]
+    return tvecl, deltaH, H
+end
+
+@inline function load_full_glac1d()
+    x1, y1, H1, tvec1 = load_glac1d("data/GLAC1D/output/ANT-16KM_GLAC1D-nn4041ANT-120kto30k.nc")
+    x2, y2, H2, tvec2 = load_glac1d("data/GLAC1D/output/ANT-16KM_GLAC1D-nn4041ANT-30kto0k.nc")
+    println(sum(x1 .!= x2))
+    println(sum(y1 .!= y2))
+    H = cat(H1, H2, dims=3)
+    tvec = vcat(tvec1, tvec2)
+    return x1, y1, H, tvec
+end
+
+@inline function load_glac1d(filename)
+    ds = NCDataset(filename, "r")
+    x = copy(ds["xc"][:,:])
+    y = copy(ds["yc"][:,:])
+    H = copy(ds["HICE"][:,:])
+    if occursin("120k", filename)
+        tvec = copy(ds["T120K"][:,:])
+    else
+        tvec = copy(ds["T122KP1"][:,:])
+    end
+    close(ds)
+    H[ ismissing.(H) ] .= 0.0
+    Hnonmissing = fill(0.0, size(H))
+    Hnonmissing[:, :, :] .= H[:, :, :]
+    return x, y, Hnonmissing, tvec
+end
+
+@inline function map2nearestneighbour(M1, x1, y1, X2, Y2)
+    X1, Y1 = meshgrid(x1, y1)
+    M2 = similar(X2)
+    for i in axes(M2, 1), j in axes(M2, 2)
+        dist = (X1 .- X2[i, j]) .^ 2 + (Y1 .- Y2[i, j]) .^ 2
+        M2[i, j] = M1[argmin( dist )]
+    end
+    return M2
+end
+
+#####################################################
+# ICE-7G
+#####################################################
+
 @inline function stereographic_projection(
     lat::T,
     lon::T,
@@ -18,7 +85,7 @@ using CairoMakie
     return x, y
 end
 
-function main(;make_anim = false)
+function load_ice7g(;make_anim = false)
     prefix = "data/test4/ICE-7G/I7G_NA.VM7_1deg."
     suffix = ".nc"
     tvec = collect(21:-0.5:0)
@@ -106,4 +173,4 @@ function main(;make_anim = false)
     end
 end
 
-main()
+# load_ice7g()

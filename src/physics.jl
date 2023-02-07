@@ -101,6 +101,7 @@ upon the bedrock, `tools` some pre-computed terms to speed up the computation, `
 
     for i in eachindex(t_out)[1:end-1]
         t = t_out[i]
+        println("t = $(Int(round(seconds2years(t)))) years...")
         dt_out = t_out[i+1] - t_out[i]
         u3D_elastic[:, :, i+1] .= compute_elastic_response(Omega, tools, -Array(sigma_zz(t)) ./ c.g )
 

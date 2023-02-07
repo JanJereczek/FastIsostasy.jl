@@ -74,7 +74,7 @@ include("helpers_plot.jl")
 end
 
 for case in ["viscoelastic", "viscous"]
-    for n in 6:6
-        main(case, n, kernel = "cpu")
+    for n in 6:8
+        main(case, n, kernel = "gpu")
     end
 end

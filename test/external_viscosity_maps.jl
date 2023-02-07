@@ -63,10 +63,12 @@ function interpolate_viscosity_xy(X, Y, Eta, Eta_mean)
     eta_interpolators = [linear_interpolation(
         (x, y),
         Eta[:, :, k],
+        extrapolation_bc = Flat(),
     ) for k in axes(Eta, 3)]
     eta_mean_interpolator = linear_interpolation(
         (x, y),
         Eta_mean[:, :, 1],
+        extrapolation_bc = Flat(),
     )
     jldsave(
         "data/wiens_viscosity_map.jld2",
@@ -85,7 +87,7 @@ function viscositytxt2matrix()
     y = copy( x )
     X, Y = meshgrid(x, y)
     Eta, Eta_mean, z = load_wiens_2021(X, Y)
-    interpolate_viscosity_xy(x, y, Eta, Eta_mean)
+    interpolate_viscosity_xy(X, Y, Eta, Eta_mean)
 
     fig = Figure(resolution = (1600, 600))
     axs = [Axis(
