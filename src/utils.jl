@@ -1,4 +1,20 @@
 #####################################################
+# Unit conversion utils
+#####################################################
+
+function years2seconds(t::T) where {T<:AbstractFloat}
+    return t * seconds_per_year
+end
+
+function seconds2years(t::T) where {T<:AbstractFloat}
+    return t / seconds_per_year
+end
+
+function m_per_sec2mm_per_yr(dudt::T) where {T<:AbstractFloat}
+    return dudt * 1e3 * seconds_per_year
+end
+
+#####################################################
 # Array utils
 #####################################################
 
@@ -27,7 +43,7 @@ Generate a constant matrix from a constant.
 end
 
 #####################################################
-# Domain utils
+# Domain and projection utils
 #####################################################
 
 """
@@ -51,6 +67,18 @@ end
 
 """
 
+    dist2angle_stereographic()
+
+"""
+@inline function dist2angle_stereographic(
+    dist::T,
+    c::PhysicalConstants{T},
+) where {T<:Real}
+    return 2 * atan( dist / (2 * c.r_equator) )
+end
+
+"""
+
     init_domain(L, n)
 
 Initialize a square computational domain with length `2*L` and `2^n` grid cells.
@@ -61,6 +89,7 @@ Initialize a square computational domain with length `2*L` and `2^n` grid cells.
     use_cuda=false::Bool
 ) where {T<:AbstractFloat}
 
+    # Geometry
     Lx, Ly = L, L
     N = 2^n
     N2 = Int(floor(N/2))
@@ -69,6 +98,8 @@ Initialize a square computational domain with length `2*L` and `2^n` grid cells.
     x = collect(-Lx+dx:dx:Lx)
     y = collect(-Ly+dy:dy:Ly)
     X, Y = meshgrid(x, y)
+    R = sqrt.( Omega.X .^ 2 + Omega.Y .^ 2 )
+
     distance, loadresponse_coeffs = get_loadresponse_coeffs(T)
     loadresponse_matrix, loadresponse_function = build_loadresponse_matrix(
         X, Y,
@@ -87,170 +118,19 @@ Initialize a square computational domain with length `2*L` and `2^n` grid cells.
     end
     
     return ComputationDomain(
-        Lx,
-        Ly,
-        N,
-        N2,
-        dx,
-        dy,
-        x,
-        y,
-        X,
-        Y,
-        loadresponse_matrix,
-        loadresponse_function,
-        pseudodiff,
-        harmonic,
-        biharmonic,
+        Lx, Ly, N, N2,
+        dx, dy, x, y,
+        X, Y, R, Θ,
+        loadresponse_matrix, loadresponse_function,
+        pseudodiff, harmonic, biharmonic,
         use_cuda,
     )
 end
 
-struct ComputationDomain{T<:AbstractFloat}
-    Lx::T
-    Ly::T
-    N::Int
-    N2::Int
-    dx::T
-    dy::T
-    x::Vector{T}
-    y::Vector{T}
-    X::AbstractMatrix{T}
-    Y::AbstractMatrix{T}
-    loadresponse_matrix::AbstractMatrix{T}
-    loadresponse_function::Function
-    pseudodiff_coeffs::AbstractMatrix{T}
-    harmonic_coeffs::AbstractMatrix{T}
-    biharmonic_coeffs::AbstractMatrix{T}
-    use_cuda::Bool
-end
 
 #####################################################
 # Differential utils
 #####################################################
-
-# Fourier
-"""
-    get_differential_fourier(L, N2)
-
-Compute the matrices representing the differential operators in the fourier space.
-"""
-@inline function get_differential_fourier(
-    L::T,
-    N2::Int,
-) where {T<:Real}
-    mu = T(π / L)
-    raw_coeffs = mu .* T.( vcat(0:N2, N2-1:-1:1) )
-    x_coeffs, y_coeffs = raw_coeffs, raw_coeffs
-    X_coeffs, Y_coeffs = meshgrid(x_coeffs, y_coeffs)
-    harmonic_coeffs = X_coeffs .^ 2 + Y_coeffs .^ 2
-    pseudodiff_coeffs = sqrt.(harmonic_coeffs)
-    biharmonic_coeffs = harmonic_coeffs .^ 2
-    return pseudodiff_coeffs, harmonic_coeffs, biharmonic_coeffs
-end
-
-@inline function precomp_fourier_dxdy(
-    M::AbstractMatrix{T},
-    L1::T,
-    L2::T,
-) where {T<:AbstractFloat}
-    n1, n2 = size(M)
-    k1 = 2 * π / L1 .* vcat(0:n1/2-1, 0, -n1/2+1:-1)
-    k2 = 2 * π / L2 .* vcat(0:n2/2-1, 0, -n2/2+1:-1)
-    p1, p2 = plan_fft(k1), plan_fft(k2)
-    ip1, ip2 = plan_ifft(k1), plan_ifft(k2)
-    return k1, k2, p1, p2, ip1, ip2
-end
-
-@inline function fourier_dnx(
-    M::AbstractMatrix{T},
-    k1::Vector{T},
-    p1::AbstractFFTs.Plan,
-    ip1::AbstractFFTs.ScaledPlan,
-) where {T<:AbstractFloat}
-    return vcat( [real.(ip1 * ( ( im .* k1 ) .^ n .* (p1 * M[i, :]) ))' for i in axes(M,1)]... )
-end
-
-# FDM in x, 1st order
-@inline function central_fdx(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
-    n2 = size(M, 2)
-    return (view(M, :, 3:n2) - view(M, :, 1:n2-2)) ./ (2*h)
-end
-
-@inline function forward_fdx(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
-    return (view(M, :, 2) - view(M, :, 1)) ./ h
-end
-
-@inline function backward_fdx(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
-    n2 = size(M, 2)
-    return (view(M, :, n2) - view(M, :, n2-1)) ./ h
-end
-
-# FDM in y, 1st order
-@inline function mixed_fdx(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
-    return cat( forward_fdx(M,h), central_fdx(M,h), backward_fdx(M,h), dims=2 )
-end
-
-@inline function central_fdy(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
-    n1 = size(M, 1)
-    return (view(M, 3:n1, :) - view(M, 1:n1-2, :)) ./ (2*h)
-end
-
-@inline function forward_fdy(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
-    return (view(M, 2, :) - view(M, 1, :)) ./ h
-end
-
-@inline function backward_fdy(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
-    n1 = size(M, 1)
-    return (view(M, n1, :) - view(M, n1-1, :)) ./ h
-end
-
-@inline function mixed_fdy(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
-    return cat( forward_fdy(M,h)', central_fdy(M,h), backward_fdy(M,h)', dims=1 )
-end
-
-# FDM in x, 2nd order
-@inline function central_fdxx(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
-    n2 = size(M, 2)
-    return (view(M, :, 3:n2) - 2 .* view(M, :, 2:n2-1) + view(M, :, 1:n2-2)) ./ h^2
-end
-
-@inline function forward_fdxx(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
-    return (view(M, :, 3) - 2 .* view(M, :, 2) + view(M, :, 1)) ./ h^2
-end
-
-@inline function backward_fdxx(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
-    n2 = size(M, 2)
-    return (view(M, :, n2) - 2 .* view(M, :, n2-1) + view(M, :, n2-2)) ./ h^2
-end
-
-@inline function mixed_fdxx(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
-    return cat( forward_fdxx(M,h), central_fdxx(M,h), backward_fdxx(M,h), dims=2 )
-end
-
-# FDM in y, 2nd order
-@inline function central_fdyy(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
-    n1 = size(M, 1)
-    return (view(M, 3:n1, :) - 2 .* view(M, 2:n1-1, :) + view(M, 1:n1-2, :)) ./ h^2
-end
-
-@inline function forward_fdyy(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
-    return (view(M, 3, :) - 2 .* view(M, 2, :) + view(M, 1, :)) ./ h^2
-end
-
-@inline function backward_fdyy(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
-    n1 = size(M, 1)
-    return (view(M, n1, :) - 2 .* view(M, n1-1, :) + view(M, n1-2, :)) ./ h^2
-end
-
-@inline function mixed_fdyy(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
-    return cat( forward_fdyy(M,h)', central_fdyy(M,h), backward_fdyy(M,h)', dims=1 )
-end
-
-@inline function gauss_distr(x::T, mu::Vector{T}, sigma::Matrix{T}) where {T<:AbstractFloat}
-    k = length(mu)
-    return (2 * π)^(k/2) * det(sigma) * exp( -0.5 * (x .- mu)' * inv(sigma) * (x .- mu) )
-end
 
 @inline function gauss_distr(
     X::AbstractMatrix{T},
@@ -267,64 +147,6 @@ end
             -0.5 * ([X[i,j], Y[i,j]] .- mu)' * invsigma * ([X[i,j], Y[i,j]] .- mu) )
     end
     return G
-end
-
-#####################################################
-# Physical constants
-#####################################################
-
-g = 9.81                                # Mean Earth acceleration at surface (m/s^2)
-seconds_per_year = 60^2 * 24 * 365.25   # (s)
-ice_density = 0.910e3                   # (kg/m^3)
-r_equator = 6.371e6                     # Earth radius at equator (m)
-r_pole = 6.357e6                        # Earth radius at pole (m)
-G = 6.674e-11                           # Gravity constant (m^3 kg^-1 s^-2)
-mE = 5.972e24                           # Earth's mass (kg)
-rho_0 = 13.1e3                          # Density of Earth's core (kg m^-3)
-rho_1 = 3.0e3                           # Mean density of solid-Earth surface (kg m^-3)
-# Note: rho_0 and rho_1 are chosen such that g(pole) ≈ 9.81
-
-"""
-    init_physical_constants()
-
-Return struct containing physical constants.
-"""
-@inline function init_physical_constants(;T::Type=Float64, ice_density = ice_density)
-    return PhysicalConstants(
-        T(g),
-        T(seconds_per_year),
-        T(ice_density),
-        T(r_equator),
-        T(r_pole),
-        T(G),
-        T(mE),
-        T(rho_0),
-        T(rho_1),
-    )
-end
-
-struct PhysicalConstants{T<:AbstractFloat}
-    g::T
-    seconds_per_year::T
-    ice_density::T
-    r_equator::T
-    r_pole::T
-    G::T
-    mE::T
-    rho_0::T
-    rho_1::T
-end
-
-function years2seconds(t::T) where {T<:AbstractFloat}
-    return t * seconds_per_year
-end
-
-function seconds2years(t::T) where {T<:AbstractFloat}
-    return t / seconds_per_year
-end
-
-function m_per_sec2mm_per_yr(dudt::T) where {T<:AbstractFloat}
-    return dudt * 1e3 * seconds_per_year
 end
 
 #####################################################
@@ -416,18 +238,6 @@ Return struct with solid-Earth parameters for mutliple channel layers and a half
         layers_begin,
     )
 
-end
-
-struct MultilayerEarth{T<:AbstractFloat}
-    mean_gravity::T
-    mean_density::T
-    effective_viscosity::AbstractMatrix{T}
-    litho_thickness::AbstractMatrix{T}
-    litho_rigidity::AbstractMatrix{T}
-    litho_poissonratio::T
-    layers_density::Vector{T}
-    layers_viscosity::AbstractArray{T, 3}
-    layers_begin::AbstractArray{T, 3}
 end
 
 @inline function get_rigidity(

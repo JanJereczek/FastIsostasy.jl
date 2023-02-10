@@ -1,0 +1,47 @@
+
+"""
+
+    compute_geoid_response(c, p, Omega, tools, lc)
+
+Compute the geoid response to the load changes `lc`, with `Omega` the computation
+domain, `c` the physical constants, `p` the solid-Earth parameters and `tools` the
+precomputed terms to accelerate FastIsostasy.
+
+=================
+Reference:
+=================
+
+Coulon et al. 2021.
+"""
+@inline function compute_geoid_response(
+    c::PhysicalConstants{T},
+    p::MultilayerEarth{T},
+    Omega::ComputationDomain{T},
+    tools::PrecomputedFastiso{T},
+    lc::LoadChanges{T},
+) where {T<:AbstractFloat}
+    load_change = get_load_change(c, p, lc)
+    return conv(
+        tools.geoid_green,
+        load_change,
+    )[Omega.N2:end-Omega.N2, Omega.N2:end-Omega.N2]
+end
+
+@inline function get_load_change(
+    c::PhysicalConstants{T},
+    p::MultilayerEarth{T},
+    lc::LoadChanges{T},
+) where {T<:AbstractFloat}
+    return c.ice_density .* (lc.hi - lc.hi0) + 
+           c.water_density .* (lc.hw - lc.hw0) +
+           p.mean_density .* (lc.b - lc.b0)
+end
+
+# TODO: add to precomputed terms
+# TODO: for test 2, I observe distortions compared to Spada in the far-field because I don't transform with stereographic!
+@inline function get_geoid_green(
+    c::PhysicalConstants{T},
+    theta::AbstractMatrix{T},
+) where {T<:AbstractFloat}
+    return c.r_equator ./ c.mE ./ ( 2 .* sin.(theta ./ 2) )
+end

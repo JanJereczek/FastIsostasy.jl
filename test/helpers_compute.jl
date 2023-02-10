@@ -20,7 +20,7 @@ end
     alpha_deg::T,
     H::T,
 ) where {T<:AbstractFloat}
-    R = sqrt.( Omega.X .^ 2 + Omega.Y .^ 2 )
+    R = XY2R(Omega.X, Omega.Y)
     Theta = R ./ c.r_equator
     alpha = deg2rad(alpha_deg)
     M = Theta .< alpha

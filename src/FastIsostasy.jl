@@ -9,8 +9,12 @@ using FastGaussQuadrature
 using DSP
 using CUDA
 
+include("structs.jl")
+include("parameters.jl")
 include("utils.jl")
-include("physics.jl")
+include("derivatives.jl")
+include("geoid.jl")
+include("mechanics.jl")
 
 # Write your package code here.
 export init_domain

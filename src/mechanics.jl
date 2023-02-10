@@ -52,18 +52,6 @@ physical constants `c` as input.
     )
 end
 
-struct PrecomputedFastiso{T<:AbstractFloat}
-    loadresponse::AbstractMatrix{T}
-    fourier_loadresponse::AbstractMatrix{Complex{T}}
-    pfft::AbstractFFTs.Plan
-    pifft::AbstractFFTs.ScaledPlan
-    Dx::AbstractMatrix{T}
-    Dy::AbstractMatrix{T}
-    Dxx::AbstractMatrix{T}
-    Dyy::AbstractMatrix{T}
-    Dxy::AbstractMatrix{T}
-    rhog::T
-end
 
 #####################################################
 # Forward integration
@@ -85,6 +73,7 @@ upon the bedrock, `tools` some pre-computed terms to speed up the computation, `
     u3D_elastic::AbstractArray{T, 3},
     u3D_viscous::AbstractArray{T, 3},
     dudt3D_viscous::AbstractArray{T, 3},
+    geoid3D::AbstractArray{T, 3},
     sigma_zz_snapshots::Tuple{Vector{T}, Vector{Matrix{T}}},
     tools::PrecomputedFastiso{T},
     p::MultilayerEarth{T},
@@ -115,6 +104,12 @@ upon the bedrock, `tools` some pre-computed terms to speed up the computation, `
             sigma_zz,
             tools,
             p,
+        )
+
+        geoid3D[:, :, i+1] = compute_geoid_response(
+            Omega,
+            tools,
+            u3D_viscous[:, :, i+1],
         )
 
     end
@@ -256,46 +251,4 @@ by convoluting the `load` with the Green's function stored in the pre-computed `
     load::AbstractMatrix{T},
 ) where {T<:AbstractFloat}
     return conv(load, tools.loadresponse)[Omega.N2:end-Omega.N2, Omega.N2:end-Omega.N2]
-end
-
-#####################################################
-# Geoid response
-#####################################################
-"""
-
-    compute_geoid_response(Omega, tools, load)
-
-Compute the geoid response of by convoluting the `geoid_green` with the
-`regional_mass_change` for a computation domain `Omega`.
-"""
-@inline function compute_geoid_response(
-    Omega::ComputationDomain{T},
-    geoid_green::AbstractMatrix{T},
-    regional_mass_change::AbstractMatrix{T},
-) where {T<:AbstractFloat}
-    return conv(
-        geoid_green,
-        regional_mass_change,
-    )[Omega.N2:end-Omega.N2, Omega.N2:end-Omega.N2]
-end
-
-@inline function get_regional_mass_change(
-    c::PhysicalConstants{T},
-    p::MultilayerEarth{T},
-    hi::AbstractMatrix{T},
-    hw::AbstractMatrix{T},
-    b::AbstractMatrix{T},
-    hi0::AbstractMatrix{T},
-    hw0::AbstractMatrix{T},
-    b0::AbstractMatrix{T},
-) where {T<:AbstractFloat}
-    return c.ice_density .* (hi - hi0) + c.water_density .* (hw - hw0) +
-    p.mean_density .* (b - b0)
-end
-
-@inline function get_geoid_green(
-    c::PhysicalConstants{T},
-    theta::AbstractMatrix{T},
-) where {T<:AbstractFloat}
-    return c.r_equator ./ c.mE ./ ( 2 .* sin.(theta ./ 2) )
 end
