@@ -8,6 +8,6 @@ FastIsostasy.jl is validated by severals tests:
 
 3. Test a domain with discontinuous lateral variability of lithopsheric thickness and upper-mantle viscosity.
 
-4a. Not a test as such, rather check whether output makes sense and gain insight out of it. Disc load over viscosity field as provided by Wiens et al. (2021).
+4a. Disc load over viscosity field as provided by Wiens et al. (2021). Get insight on what is the resulting time-scale difference for WAIS and AIS.
 
 4b. Simulate uplift resulting from deglaciation. One problem: signal might come from recent history, especially in WAIS.

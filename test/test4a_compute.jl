@@ -8,11 +8,12 @@ include("helpers_compute.jl")
 include("external_viscosity_maps.jl")
 
 @inline function main(
-    n::Int,             # 2^n cells on domain (1)
     case::String;       # Application case
     make_anim = false,
 )
 
+    # Fix resolution --> fast but not 100% accurate results for sanity check.
+    n = 6
     T = Float64
     L = T(3000e3)               # half-length of the square domain (m)
     Omega = init_domain(L, n)   # domain parameters
@@ -217,5 +218,5 @@ end
 
 cases = ["homogeneous_viscosity", "wiens_scaledviscosity", "wiens_meanviscosity"]
 for case in cases
-    main(6, case, make_anim = true)
+    main(case, make_anim = true)
 end
