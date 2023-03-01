@@ -7,7 +7,7 @@ using LinearAlgebra
 include("helpers_compute.jl")
 include("helpers_plot.jl")
 
-@inline function main()
+function main()
 
     case = "euler3layers"
     N = 256

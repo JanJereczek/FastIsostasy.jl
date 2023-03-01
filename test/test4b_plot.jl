@@ -6,11 +6,11 @@ include("helpers_plot.jl")
 include("external_load_maps.jl")
 include("external_viscosity_maps.jl")
 
-@inline function num2latexstring(x::Real)
+function num2latexstring(x::Real)
     return L"%$x"
 end
 
-@inline function animate_deglaciation(
+function animate_deglaciation(
     t_vec::AbstractVector{T},
     Omega::ComputationDomain,
     u::Array{T, 3},
@@ -168,7 +168,7 @@ end
 end
 
 
-@inline function main(
+function main(
     n::Int,             # 2^n cells on domain (1)
     case::String,       # Application case
 )

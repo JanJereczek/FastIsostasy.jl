@@ -8,7 +8,7 @@ using Interpolations
 include("helpers_compute.jl")
 include("helpers_plot.jl")
 
-@inline function main(
+function main(
     n::Int,             # 2^n cells on domain (1)
     case::String;       # Application case
     make_plot = true,

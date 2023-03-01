@@ -4,7 +4,7 @@ using CairoMakie
 using JLD2
 include("helpers_plot.jl")
 
-@inline function main(
+function main(
     n::Int;             # 2^n cells on domain (1)
     make_anim = false,
     kernel = "gpu",

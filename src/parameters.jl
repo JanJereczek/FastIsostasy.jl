@@ -18,7 +18,7 @@ rho_1 = 3.0e3                           # Mean density of solid-Earth surface (k
 
 Return struct containing physical constants.
 """
-@inline function init_physical_constants(;T::Type=Float64, ice_density = ice_density)
+function init_physical_constants(;T::Type=Float64, ice_density = ice_density)
     return PhysicalConstants(
         T(g),
         T(seconds_per_year),

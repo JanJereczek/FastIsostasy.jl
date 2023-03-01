@@ -40,11 +40,11 @@ struct MultilayerEarth{T<:AbstractFloat}
     litho_rigidity::AbstractMatrix{T}
     litho_poissonratio::T
     layers_density::Vector{T}
-    layers_viscosity::AbstractArray{T, 3}
-    layers_begin::AbstractArray{T, 3}
+    layers_viscosity::Array{T, 3}
+    layers_begin::Array{T, 3}
 end
 
-mutable struct LoadChanges{T<:AbstractFloat}
+mutable struct ColumnChanges{T<:AbstractFloat}
     hi::AbstractMatrix{T}
     hi0::AbstractMatrix{T}
     hw::AbstractMatrix{T}
@@ -63,5 +63,7 @@ struct PrecomputedFastiso{T<:AbstractFloat}
     Dxx::AbstractMatrix{T}
     Dyy::AbstractMatrix{T}
     Dxy::AbstractMatrix{T}
+    negligible_gradD::Bool
     rhog::T
+    geoid_green::AbstractMatrix{T}
 end

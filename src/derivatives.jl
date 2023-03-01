@@ -1,81 +1,81 @@
 
 # FDM in x, 1st order
-@inline function central_fdx(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
+function central_fdx(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
     n2 = size(M, 2)
     return (view(M, :, 3:n2) - view(M, :, 1:n2-2)) ./ (2*h)
 end
 
-@inline function forward_fdx(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
+function forward_fdx(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
     return (view(M, :, 2) - view(M, :, 1)) ./ h
 end
 
-@inline function backward_fdx(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
+function backward_fdx(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
     n2 = size(M, 2)
     return (view(M, :, n2) - view(M, :, n2-1)) ./ h
 end
 
 # FDM in y, 1st order
-@inline function mixed_fdx(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
+function mixed_fdx(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
     return cat( forward_fdx(M,h), central_fdx(M,h), backward_fdx(M,h), dims=2 )
 end
 
-@inline function central_fdy(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
+function central_fdy(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
     n1 = size(M, 1)
     return (view(M, 3:n1, :) - view(M, 1:n1-2, :)) ./ (2*h)
 end
 
-@inline function forward_fdy(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
+function forward_fdy(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
     return (view(M, 2, :) - view(M, 1, :)) ./ h
 end
 
-@inline function backward_fdy(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
+function backward_fdy(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
     n1 = size(M, 1)
     return (view(M, n1, :) - view(M, n1-1, :)) ./ h
 end
 
-@inline function mixed_fdy(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
+function mixed_fdy(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
     return cat( forward_fdy(M,h)', central_fdy(M,h), backward_fdy(M,h)', dims=1 )
 end
 
 # FDM in x, 2nd order
-@inline function central_fdxx(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
+function central_fdxx(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
     n2 = size(M, 2)
     return (view(M, :, 3:n2) - 2 .* view(M, :, 2:n2-1) + view(M, :, 1:n2-2)) ./ h^2
 end
 
-@inline function forward_fdxx(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
+function forward_fdxx(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
     return (view(M, :, 3) - 2 .* view(M, :, 2) + view(M, :, 1)) ./ h^2
 end
 
-@inline function backward_fdxx(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
+function backward_fdxx(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
     n2 = size(M, 2)
     return (view(M, :, n2) - 2 .* view(M, :, n2-1) + view(M, :, n2-2)) ./ h^2
 end
 
-@inline function mixed_fdxx(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
+function mixed_fdxx(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
     return cat( forward_fdxx(M,h), central_fdxx(M,h), backward_fdxx(M,h), dims=2 )
 end
 
 # FDM in y, 2nd order
-@inline function central_fdyy(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
+function central_fdyy(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
     n1 = size(M, 1)
     return (view(M, 3:n1, :) - 2 .* view(M, 2:n1-1, :) + view(M, 1:n1-2, :)) ./ h^2
 end
 
-@inline function forward_fdyy(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
+function forward_fdyy(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
     return (view(M, 3, :) - 2 .* view(M, 2, :) + view(M, 1, :)) ./ h^2
 end
 
-@inline function backward_fdyy(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
+function backward_fdyy(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
     n1 = size(M, 1)
     return (view(M, n1, :) - 2 .* view(M, n1-1, :) + view(M, n1-2, :)) ./ h^2
 end
 
-@inline function mixed_fdyy(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
+function mixed_fdyy(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
     return cat( forward_fdyy(M,h)', central_fdyy(M,h), backward_fdyy(M,h)', dims=1 )
 end
 
-@inline function gauss_distr(x::T, mu::Vector{T}, sigma::Matrix{T}) where {T<:AbstractFloat}
+function gauss_distr(x::T, mu::Vector{T}, sigma::Matrix{T}) where {T<:AbstractFloat}
     k = length(mu)
     return (2 * π)^(k/2) * det(sigma) * exp( -0.5 * (x .- mu)' * inv(sigma) * (x .- mu) )
 end
@@ -87,7 +87,7 @@ end
 
 Compute the matrices representing the differential operators in the fourier space.
 """
-@inline function get_differential_fourier(
+function get_differential_fourier(
     L::T,
     N2::Int,
 ) where {T<:Real}
@@ -101,7 +101,7 @@ Compute the matrices representing the differential operators in the fourier spac
     return pseudodiff_coeffs, harmonic_coeffs, biharmonic_coeffs
 end
 
-@inline function precomp_fourier_dxdy(
+function precomp_fourier_dxdy(
     M::AbstractMatrix{T},
     L1::T,
     L2::T,
@@ -114,7 +114,7 @@ end
     return k1, k2, p1, p2, ip1, ip2
 end
 
-@inline function fourier_dnx(
+function fourier_dnx(
     M::AbstractMatrix{T},
     k1::Vector{T},
     p1::AbstractFFTs.Plan,

@@ -1,3 +1,62 @@
+"""
+
+    FastIsoResults
+
+A mutable struct containing the results of FastIsostasy:
+    - `t_out` the time output vector
+    - `u3D_elastic` the elastic response over `t_out`
+    - `u3D_viscous` the viscous response over `t_out`
+    - `dudt3D_viscous` the displacement rate over `t_out`
+    - `geoid3D` the geoid response over `t_out`
+    - `Hice` an interpolator of the ice thickness over time
+    - `eta` an interpolator of the upper-mantle viscosity over time
+"""
+mutable struct FastIsoResults{T<:AbstractFloat}
+    t_out::Vector{T}
+    u3D_elastic::Array{T, 3}
+    u3D_viscous::Array{T, 3}
+    dudt3D_viscous::Array{T, 3}
+    geoid3D::Array{T, 3}
+    Hice::Interpolations.Extrapolation
+    eta::Interpolations.Extrapolation
+end
+
+"""
+
+    init_fastiso_results(
+        Omega::ComputationDomain{T},
+        t_out::Vector{T},
+        t_Hice_snapshots::Vector{T},
+        Hice_snapshots::Vector{Matrix{T}},
+        t_eta_snapshots::Vector{T},
+        eta_snapshots::Vector{Matrix{T}},
+    )
+
+Initialize a [FastIsoResults](@ref FastIsoResults) struct.
+"""
+function init_fastiso_results(
+    Omega::ComputationDomain{T},
+    t_out::Vector{T},
+    t_Hice_snapshots::Vector{T},
+    Hice_snapshots::Vector{Matrix{T}},
+    t_eta_snapshots::Vector{T},
+    eta_snapshots::Vector{Matrix{T}},
+) where {T<:AbstractFloat}
+
+    zerofield = fill(T(0.0), Omega.N, Omega.N, length(t_out))
+    if Omega.use_cuda
+        Hice_snapshots = convert2CuArray(Hice_snapshots)
+        eta_snapshots = convert2CuArray(eta_snapshots)
+    end
+    Hice = linear_interpolation(t_Hice_snapshots, Hice_snapshots)
+    eta = linear_interpolation(t_eta_snapshots, eta_snapshots)
+
+    return FastIsoResults( t_out, [zerofield for k in 1:4]..., Hice, eta )
+end
+
+function ice_load(c::PhysicalConstants{T}, H::T) where {T<:AbstractFloat}
+    return -c.ice_density * c.g * H
+end
 
 #####################################################
 # Precomputation
@@ -11,23 +70,33 @@ Return a `struct` containing pre-computed tools to perform forward-stepping. Tak
 time step `dt`, the ComputationDomain `Omega`, the solid-Earth parameters `p` and 
 physical constants `c` as input.
 """
-@inline function precompute_fastiso(
+function precompute_fastiso(
     Omega::ComputationDomain{T},
     p::MultilayerEarth{T},
     c::PhysicalConstants{T};
     quad_precision::Int = 4,
 ) where {T<:AbstractFloat}
 
+    # Elastic response
     quad_support, quad_coeffs = get_quad_coeffs(T, quad_precision)
     loadresponse = get_integrated_loadresponse(Omega, quad_support, quad_coeffs)
 
+    # Space-derivatives of rigidity 
     Dx = mixed_fdx(p.litho_rigidity, Omega.dx)
     Dy = mixed_fdy(p.litho_rigidity, Omega.dy)
     Dxx = mixed_fdxx(p.litho_rigidity, Omega.dx)
     Dyy = mixed_fdyy(p.litho_rigidity, Omega.dy)
     Dxy = mixed_fdy( mixed_fdx(p.litho_rigidity, Omega.dx), Omega.dy )
-    rhog = p.mean_density .* c.g
 
+    omega_zeros = fill(T(0.0), Omega.N, Omega.N)
+    zero_tol = 1e-2
+    negligible_gradD = isapprox(Dx, omega_zeros, atol = zero_tol) &
+                        isapprox(Dy, omega_zeros, atol = zero_tol) &
+                        isapprox(Dxx, omega_zeros, atol = zero_tol) &
+                        isapprox(Dyy, omega_zeros, atol = zero_tol) &
+                        isapprox(Dxy, omega_zeros, atol = zero_tol)
+    
+    # FFT plans depening on CPU vs. GPU usage
     if Omega.use_cuda
         Xgpu = CuArray(Omega.X)
         p1 = CUDA.CUFFT.plan_fft(Xgpu)
@@ -38,17 +107,15 @@ physical constants `c` as input.
         p1, p2 = plan_fft(Omega.X), plan_ifft(Omega.X)
     end
 
+    rhog = p.mean_density .* c.g
+    geoid_green = get_geoid_green.(Omega.Θ, c)
+
     return PrecomputedFastiso(
-        loadresponse,
-        fft(loadresponse),
-        p1,
-        p2,
-        Dx,
-        Dy,
-        Dxx,
-        Dyy,
-        Dxy,
+        loadresponse, fft(loadresponse),
+        p1, p2,
+        Dx, Dy, Dxx, Dyy, Dxy, negligible_gradD,
         rhog,
+        geoid_green,
     )
 end
 
@@ -67,13 +134,13 @@ containing the solution, `sigma_zz` a time-interpolator ofthe vertical load appl
 upon the bedrock, `tools` some pre-computed terms to speed up the computation, `p` some
 `MultilayerEarth` parameters and `c` the `PhysicalConstants` of the problem.
 """
-@inline function forward_isostasy!(
+function forward_isostasy!(
     Omega::ComputationDomain{T},
     t_out::AbstractVector{T},       # the output time vector
-    u3D_elastic::AbstractArray{T, 3},
-    u3D_viscous::AbstractArray{T, 3},
-    dudt3D_viscous::AbstractArray{T, 3},
-    geoid3D::AbstractArray{T, 3},
+    u3D_elastic::Array{T, 3},
+    u3D_viscous::Array{T, 3},
+    dudt3D_viscous::Array{T, 3},
+    geoid3D::Array{T, 3},
     sigma_zz_snapshots::Tuple{Vector{T}, Vector{Matrix{T}}},
     tools::PrecomputedFastiso{T},
     p::MultilayerEarth{T},
@@ -106,10 +173,11 @@ upon the bedrock, `tools` some pre-computed terms to speed up the computation, `
             p,
         )
 
+        update_columnchanges!(lc, u3D_viscous[:, :, i+1], H_ice)
         geoid3D[:, :, i+1] = compute_geoid_response(
-            Omega,
+            c, p, Omega,
             tools,
-            u3D_viscous[:, :, i+1],
+            lc,
         )
 
     end
@@ -123,7 +191,7 @@ Perform GIA computation one step forward w.r.t. the time vector used for storing
 output. This implies performing a number of in-between steps (for numerical stability
 and accuracy) that are given by the ratio between `dt_out` and `dt`.
 """
-@inline function forwardstep_viscous_response(
+function forwardstep_viscous_response(
     Omega::ComputationDomain,
     t::T,
     dt::T,
@@ -175,7 +243,7 @@ end
 Return viscous response based on explicit Euler time discretization and Fourier 
 collocation. Valid for multilayer parameters that can vary over x, y.
 """
-@inline function viscous_response!(
+function viscous_response!(
     Omega::ComputationDomain,
     t::T,
     dt::T,
@@ -223,12 +291,12 @@ Assume that mean deformation at corners of domain is 0.
 Whereas Bueler et al. (2007) take the edges for this computation, we take the corners
 because they represent the far-field better.
 """
-@inline function apply_bc(u::AbstractMatrix{T}) where {T<:AbstractFloat}
+function apply_bc(u::AbstractMatrix{T}) where {T<:AbstractFloat}
     u_bc = copy(u)
     return apply_bc!(u_bc)
 end
 
-@inline function apply_bc!(u::AbstractMatrix{T}) where {T<:AbstractFloat}
+function apply_bc!(u::AbstractMatrix{T}) where {T<:AbstractFloat}
     CUDA.allowscalar() do
         u .-= (u[1,1] + u[1,end] + u[end,1] + u[end,end]) / T(4)
     end
@@ -245,7 +313,7 @@ For a computation domain `Omega`, compute the elastic response of the solid Eart
 by convoluting the `load` with the Green's function stored in the pre-computed `tools`
 (elements obtained from Farell 1972).
 """
-@inline function compute_elastic_response(
+function compute_elastic_response(
     Omega::ComputationDomain,
     tools::PrecomputedFastiso,
     load::AbstractMatrix{T},
