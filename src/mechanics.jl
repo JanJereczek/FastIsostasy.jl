@@ -11,51 +11,24 @@ A mutable struct containing the results of FastIsostasy:
     - `Hice` an interpolator of the ice thickness over time
     - `eta` an interpolator of the upper-mantle viscosity over time
 """
-mutable struct FastIsoResults{T<:AbstractFloat}
+struct FastIsoResults{T<:AbstractFloat}
     t_out::Vector{T}
-    u3D_elastic::Array{T, 3}
-    u3D_viscous::Array{T, 3}
-    dudt3D_viscous::Array{T, 3}
-    geoid3D::Array{T, 3}
+    viscous::Vector{Matrix{T}}
+    displacement_rate::Vector{Matrix{T}}
+    elastic::Vector{Matrix{T}}
+    geoid::Vector{Matrix{T}}
     Hice::Interpolations.Extrapolation
     eta::Interpolations.Extrapolation
 end
 
 """
 
-    init_fastiso_results(
-        Omega::ComputationDomain{T},
-        t_out::Vector{T},
-        t_Hice_snapshots::Vector{T},
-        Hice_snapshots::Vector{Matrix{T}},
-        t_eta_snapshots::Vector{T},
-        eta_snapshots::Vector{Matrix{T}},
-    )
+    ice_load(c::PhysicalConstants{T}, H::T)
 
-Initialize a [FastIsoResults](@ref FastIsoResults) struct.
+Compute ice load based on ice thickness.
 """
-function init_fastiso_results(
-    Omega::ComputationDomain{T},
-    t_out::Vector{T},
-    t_Hice_snapshots::Vector{T},
-    Hice_snapshots::Vector{Matrix{T}},
-    t_eta_snapshots::Vector{T},
-    eta_snapshots::Vector{Matrix{T}},
-) where {T<:AbstractFloat}
-
-    zerofield = fill(T(0.0), Omega.N, Omega.N, length(t_out))
-    if Omega.use_cuda
-        Hice_snapshots = convert2CuArray(Hice_snapshots)
-        eta_snapshots = convert2CuArray(eta_snapshots)
-    end
-    Hice = linear_interpolation(t_Hice_snapshots, Hice_snapshots)
-    eta = linear_interpolation(t_eta_snapshots, eta_snapshots)
-
-    return FastIsoResults( t_out, [zerofield for k in 1:4]..., Hice, eta )
-end
-
-function ice_load(c::PhysicalConstants{T}, H::T) where {T<:AbstractFloat}
-    return -c.ice_density * c.g * H
+function ice_load(c::PhysicalConstants{T}, H::Matrix{T}) where {T<:AbstractFloat}
+    return -c.ice_density .* c.g .* H
 end
 
 #####################################################
@@ -108,7 +81,7 @@ function precompute_fastiso(
     end
 
     rhog = p.mean_density .* c.g
-    geoid_green = get_geoid_green.(Omega.Θ, c)
+    geoid_green = get_geoid_green(Omega.Θ, c)
 
     return PrecomputedFastiso(
         loadresponse, fft(loadresponse),
@@ -119,163 +92,95 @@ function precompute_fastiso(
     )
 end
 
-
 #####################################################
 # Forward integration
 #####################################################
 
-"""
-
-    forward_isostasy!(Omega, t_out, u3D_elastic, u3D_viscous, sigma_zz, tools, p, c)
-
-Integrates isostasy model over provided time vector `t_out` for a given
-`ComputationDomain` `Omega`, pre-allocated arrays `u3D_elastic` and `u3D_viscous`
-containing the solution, `sigma_zz` a time-interpolator ofthe vertical load applied
-upon the bedrock, `tools` some pre-computed terms to speed up the computation, `p` some
-`MultilayerEarth` parameters and `c` the `PhysicalConstants` of the problem.
-"""
-function forward_isostasy!(
+function isostasy(
+    t_out::Vector{T},
     Omega::ComputationDomain{T},
-    t_out::AbstractVector{T},       # the output time vector
-    u3D_elastic::Array{T, 3},
-    u3D_viscous::Array{T, 3},
-    dudt3D_viscous::Array{T, 3},
-    geoid3D::Array{T, 3},
-    sigma_zz_snapshots::Tuple{Vector{T}, Vector{Matrix{T}}},
     tools::PrecomputedFastiso{T},
     p::MultilayerEarth{T},
-    c::PhysicalConstants{T};
-    dt = fill(T(years2seconds(1.0)), length(t_out)-1)::AbstractVector{T},
-) where {T}
+    c::PhysicalConstants{T},
+    t_Hice_snapshots::Vector{T},
+    Hice_snapshots::Vector{Matrix{T}},
+    t_eta_snapshots::Vector{T},
+    eta_snapshots::Vector{Matrix{T}};
+    u_viscous_0::Matrix{T} = fill(T(0.0), Omega.N, Omega.N),
+    u_elastic_0::Matrix{T} = fill(T(0.0), Omega.N, Omega.N),
+    geoid_0::Matrix{T} = fill(T(0.0), Omega.N, Omega.N),
+) where {T<:AbstractFloat}
 
-    if Omega.use_cuda
-        sigma_zz_values = convert2CuArray(sigma_zz_snapshots[2])
-    else
-        sigma_zz_values = sigma_zz_snapshots[2]
-    end
-    sigma_zz = linear_interpolation(sigma_zz_snapshots[1], sigma_zz_values)
+    Hice = linear_interpolation(t_Hice_snapshots, Hice_snapshots)
+    eta = linear_interpolation(t_eta_snapshots, eta_snapshots)
+    sol, dudt = compute_viscous_response(t_out, u_viscous_0, Omega, Hice, tools, p, c)
 
-    for i in eachindex(t_out)[1:end-1]
+    u_elastic = [u_elastic_0 for time in t_out]
+    geoid = [geoid_0 for time in t_out]
+    for i in eachindex(t_out)[1:end]
         t = t_out[i]
-        println("t = $(Int(round(seconds2years(t)))) years...")
-        dt_out = t_out[i+1] - t_out[i]
-        u3D_elastic[:, :, i+1] .= compute_elastic_response(Omega, tools, -Array(sigma_zz(t)) ./ c.g )
-
-        u3D_viscous[:, :, i+1], dudt3D_viscous[:, :, i+1] = forwardstep_viscous_response(
-            Omega,
-            t,
-            dt[i],
-            dt_out,
-            u3D_viscous[:, :, i],
-            dudt3D_viscous[:, :, i],
-            sigma_zz,
-            tools,
-            p,
-        )
-
-        update_columnchanges!(lc, u3D_viscous[:, :, i+1], H_ice)
-        geoid3D[:, :, i+1] = compute_geoid_response(
-            c, p, Omega,
-            tools,
-            lc,
-        )
-
+        u_elastic[i] .+= compute_elastic_response(Omega, tools, -c.ice_density.*Hice(t))
+        # update_columnchanges!(lc, sol.u[i], Hice(t))
+        # geoid[i] .+= compute_geoid_response(c, p, Omega, tools, lc)
     end
+
+    return FastIsoResults(t_out, sol.u, dudt, u_elastic, geoid, Hice, eta)
 end
 
-"""
-
-    forwardstep_viscous_response(Omega, dt, dt_out, u_viscous, sigma_zz, tools, p)
-
-Perform GIA computation one step forward w.r.t. the time vector used for storing the
-output. This implies performing a number of in-between steps (for numerical stability
-and accuracy) that are given by the ratio between `dt_out` and `dt`.
-"""
-function forwardstep_viscous_response(
-    Omega::ComputationDomain,
-    t::T,
-    dt::T,
-    dt_out::T,
+function compute_viscous_response(
+    t_out::Vector{T},
     u_viscous::AbstractMatrix{T},
-    dudt_viscous::AbstractMatrix{T},
-    sigma_zz::Interpolations.Extrapolation,
+    Omega::ComputationDomain,
+    Hice::Interpolations.Extrapolation,
     tools::PrecomputedFastiso,
     p::MultilayerEarth,
+    c::PhysicalConstants,
 ) where {T<:AbstractFloat}
 
-    if Omega.use_cuda
-        u_viscous, dudt_viscous = convert2CuArray([u_viscous, dudt_viscous])
-    end
-
-    t_internal = range(t, stop = t + dt_out, step = dt)
-    u_viscous_next = copy(u_viscous)
-    dudt_viscous_next = copy(dudt_viscous)
-    for i in eachindex(t_internal)[1:end-1]
-        viscous_response!(
-            Omega,
-            t_internal[i],
-            dt,
-            u_viscous_next,
-            dudt_viscous_next,
-            sigma_zz,
-            tools,
-            p,
-        )
-        apply_bc!(u_viscous_next)
-        apply_bc!(dudt_viscous_next)
-    end
-
-    if Omega.use_cuda
-        u_viscous_next, dudt_viscous_next = convert2Array(
-            [u_viscous_next, dudt_viscous_next])
-    end
-    return u_viscous_next, dudt_viscous_next
+    params = ODEParams(Omega, c, p, Hice, tools)
+    prob = ODEProblem(f!, u_viscous, extrema(t_out), params)
+    sol = solve(prob, BS3(), saveat = t_out)
+    dudt = [sol(t, Val{1}) for t in t_out]
+    return sol, dudt
 end
 
-#####################################################
-# RHS
-#####################################################
+function f!(du::Matrix{T}, u::Matrix{T}, params::ODEParams{T}, t::T) where {T<:AbstractFloat}
+    # println("t = $(Int(round(seconds2years(t)))) years...")
+    Omega = params.Omega
+    c = params.c
+    p = params.p
+    tools = params.tools
+    Hice = params.Hice
 
-"""
-
-    viscous_response!(Omega, dt, u_current, sigma_zz, tools, c, p)
-
-Return viscous response based on explicit Euler time discretization and Fourier 
-collocation. Valid for multilayer parameters that can vary over x, y.
-"""
-function viscous_response!(
-    Omega::ComputationDomain,
-    t::T,
-    dt::T,
-    u::AbstractMatrix{T},
-    dudt::AbstractMatrix{T},
-    sigma_zz::Interpolations.Extrapolation,
-    tools::PrecomputedFastiso,
-    p::MultilayerEarth,
-) where {T<:AbstractFloat}
-
+    apply_bc!(u)
     uf = tools.pfft * u
     harmonic_uf = real.(tools.pifft * ( Omega.harmonic_coeffs .* uf ))
     biharmonic_uf = real.( tools.pifft * ( Omega.biharmonic_coeffs .* uf ) )
 
-    term1 = sigma_zz(t)
+    term1 = ice_load(c, Hice(t))
     term2 = - tools.rhog .* u
     term3 = - p.litho_rigidity .* biharmonic_uf
-    term4 = - T(2) .* tools.Dx .* mixed_fdx(harmonic_uf, Omega.dx)
-    term5 = - T(2) .* tools.Dy .* mixed_fdy(harmonic_uf, Omega.dy)
     term6 = - real.(tools.pifft * (Omega.harmonic_coeffs .* (tools.pfft * (p.litho_rigidity .* harmonic_uf))))
-    term7 = tools.Dxx .* mixed_fdyy(u, Omega.dy)
-    term8 = - T(2) .* tools.Dxy .* mixed_fdy( mixed_fdx(u, Omega.dx), Omega.dy )
-    term9 = tools.Dyy .* mixed_fdxx(u, Omega.dx)
 
-    rhs = term1 + term2 + term3 + 
-            term4 + term5 + term6 + (T(1) - p.litho_poissonratio) .*
-            (term7 + term8 + term9)
+    if tools.negligible_gradD
+        rhs = term1 + term2 + term3 + term6
+    else
+        term4 = - T(2) .* tools.Dx .* mixed_fdx(harmonic_uf, Omega.dx)
+        term5 = - T(2) .* tools.Dy .* mixed_fdy(harmonic_uf, Omega.dy)
+        term7 = tools.Dxx .* mixed_fdyy(u, Omega.dy)
+        term8 = - T(2) .* tools.Dxy .* mixed_fdy( mixed_fdx(u, Omega.dx), Omega.dy )
+        term9 = tools.Dyy .* mixed_fdxx(u, Omega.dx)
+
+        rhs = term1 + term2 + term3 + 
+                term4 + term5 + term6 + (T(1) - p.litho_poissonratio) .*
+                (term7 + term8 + term9)
+    end
 
     dudtf = (tools.pfft * rhs) ./ Omega.pseudodiff_coeffs
-    dudt .= real.(tools.pifft * dudtf) ./ (T(2) .* p.effective_viscosity)
-    u .+= dt .* dudt
+    du[:, :] .= real.(tools.pifft * dudtf) ./ (T(2) .* p.effective_viscosity)
+    apply_bc!(du)
 
+    return nothing
 end
 
 #####################################################

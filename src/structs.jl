@@ -67,3 +67,11 @@ struct PrecomputedFastiso{T<:AbstractFloat}
     rhog::T
     geoid_green::AbstractMatrix{T}
 end
+
+struct ODEParams{T<:AbstractFloat}
+    Omega::ComputationDomain{T}
+    c::PhysicalConstants{T}
+    p::MultilayerEarth{T}
+    Hice::Interpolations.Extrapolation
+    tools::PrecomputedFastiso{T}
+end

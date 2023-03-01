@@ -4,6 +4,15 @@ function mask_disc(X::AbstractMatrix{T}, Y::AbstractMatrix{T}, R::T) where {T<:A
     return T.(X .^ 2 + Y .^ 2 .< R^2)
 end
 
+function uniform_ice_cylinder(
+    Omega::ComputationDomain,
+    R::T,
+    H::T,
+) where {T<:AbstractFloat}
+    M = mask_disc(Omega.X, Omega.Y, R)
+    return - M .* H
+end
+
 function generate_uniform_disc_load(
     Omega::ComputationDomain,
     c::PhysicalConstants,
