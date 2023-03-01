@@ -28,7 +28,7 @@ end
 Compute ice load based on ice thickness.
 """
 function ice_load(c::PhysicalConstants{T}, H::Matrix{T}) where {T<:AbstractFloat}
-    return -c.ice_density .* c.g .* H
+    return c.ice_density .* c.g .* H
 end
 
 #####################################################
@@ -109,19 +109,22 @@ function isostasy(
     u_viscous_0::Matrix{T} = fill(T(0.0), Omega.N, Omega.N),
     u_elastic_0::Matrix{T} = fill(T(0.0), Omega.N, Omega.N),
     geoid_0::Matrix{T} = fill(T(0.0), Omega.N, Omega.N),
+    hw_0::Matrix{T} = fill(T(0.0), Omega.N, Omega.N),
+    b0::Matrix{T} = fill(T(0.0), Omega.N, Omega.N),
 ) where {T<:AbstractFloat}
 
     Hice = linear_interpolation(t_Hice_snapshots, Hice_snapshots)
     eta = linear_interpolation(t_eta_snapshots, eta_snapshots)
     sol, dudt = compute_viscous_response(t_out, u_viscous_0, Omega, Hice, tools, p, c)
+    lc = ColumnChanges( Hice(0.0), Hice(0.0), hw_0, hw_0, b0, b0)
 
     u_elastic = [u_elastic_0 for time in t_out]
     geoid = [geoid_0 for time in t_out]
     for i in eachindex(t_out)[1:end]
         t = t_out[i]
         u_elastic[i] .+= compute_elastic_response(Omega, tools, -c.ice_density.*Hice(t))
-        # update_columnchanges!(lc, sol.u[i], Hice(t))
-        # geoid[i] .+= compute_geoid_response(c, p, Omega, tools, lc)
+        update_columnchanges!(lc, sol.u[i] .+ u_elastic[i], Hice(t))
+        geoid[i] .+= compute_geoid_response(c, p, Omega, tools, lc)
     end
 
     return FastIsoResults(t_out, sol.u, dudt, u_elastic, geoid, Hice, eta)

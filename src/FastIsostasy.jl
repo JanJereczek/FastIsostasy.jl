@@ -66,5 +66,8 @@ export ice_load
 
 # geoid.jl
 export get_geoid_green
+export update_columnchanges!
+export compute_geoid_response
+export get_load_change
 
 end

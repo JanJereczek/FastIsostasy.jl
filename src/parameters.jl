@@ -5,6 +5,7 @@
 g = 9.81                                # Mean Earth acceleration at surface (m/s^2)
 seconds_per_year = 60^2 * 24 * 365.25   # (s)
 ice_density = 0.910e3                   # (kg/m^3)
+seawater_density = 1.023e3              # (kg/m^3)
 r_equator = 6.371e6                     # Earth radius at equator (m)
 r_pole = 6.357e6                        # Earth radius at pole (m)
 G = 6.674e-11                           # Gravity constant (m^3 kg^-1 s^-2)
@@ -23,6 +24,7 @@ function init_physical_constants(;T::Type=Float64, ice_density = ice_density)
         T(g),
         T(seconds_per_year),
         T(ice_density),
+        T(seawater_density),
         T(r_equator),
         T(r_pole),
         T(G),

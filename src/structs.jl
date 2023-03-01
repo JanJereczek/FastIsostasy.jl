@@ -24,6 +24,7 @@ struct PhysicalConstants{T<:AbstractFloat}
     g::T
     seconds_per_year::T
     ice_density::T
+    seawater_density::T
     r_equator::T
     r_pole::T
     G::T

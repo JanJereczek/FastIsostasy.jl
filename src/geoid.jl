@@ -33,7 +33,7 @@ function get_load_change(
     lc::ColumnChanges{T},
 ) where {T<:AbstractFloat}
     return c.ice_density .* (lc.hi - lc.hi0) + 
-           c.water_density .* (lc.hw - lc.hw0) +
+           c.seawater_density .* (lc.hw - lc.hw0) +
            p.mean_density .* (lc.b - lc.b0)
 end
 
@@ -42,7 +42,8 @@ function get_geoid_green(
     theta::AbstractMatrix{T},
     c::PhysicalConstants{T},
 ) where {T<:AbstractFloat}
-    return c.r_equator ./ ( 2 .* c.mE .* sin.(theta ./ 2) )
+    eps = 1e-12
+    return c.r_equator ./ ( 2 .* c.mE .* sin.(theta ./ 2 .+ eps) )
 end
 
 function init_columnchanges(
