@@ -6,9 +6,14 @@ using FFTW
 using FastGaussQuadrature
 using DSP
 using CUDA
-using OrdinaryDiffEq
+using OrdinaryDiffEq: ODEProblem, solve
 using Reexport
 @reexport using Interpolations
+@reexport using OrdinaryDiffEq: BS3, Tsit5, TanYam7, Vern9, VCABM
+
+# Euler, Midpoint, Heun, Ralston, RK4, OwrenZen3, OwrenZen4, OwrenZen5, DP5, RKO65,
+# TanYam7, DP8, Feagin10, Feagin12, Feagin14, TsitPap8,  BS5, Vern6, Vern7, Vern8,
+# KuttaPRK2p5(dt=), Trapezoid(autodiff = false), PDIRK44(autodiff = false)
 
 include("structs.jl")
 include("parameters.jl")

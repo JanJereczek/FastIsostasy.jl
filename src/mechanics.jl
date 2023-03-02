@@ -111,11 +111,12 @@ function isostasy(
     geoid_0::Matrix{T} = fill(T(0.0), Omega.N, Omega.N),
     hw_0::Matrix{T} = fill(T(0.0), Omega.N, Omega.N),
     b0::Matrix{T} = fill(T(0.0), Omega.N, Omega.N),
+    ODEsolver::Any = BS3(),
 ) where {T<:AbstractFloat}
 
     Hice = linear_interpolation(t_Hice_snapshots, Hice_snapshots)
     eta = linear_interpolation(t_eta_snapshots, eta_snapshots)
-    sol, dudt = compute_viscous_response(t_out, u_viscous_0, Omega, Hice, tools, p, c)
+    sol, dudt = viscous_response(t_out, u_viscous_0, Omega, Hice, tools, p, c, ODEsolver)
     lc = ColumnChanges( Hice(0.0), Hice(0.0), hw_0, hw_0, b0, b0)
 
     u_elastic = [u_elastic_0 for time in t_out]
@@ -130,7 +131,11 @@ function isostasy(
     return FastIsoResults(t_out, sol.u, dudt, u_elastic, geoid, Hice, eta)
 end
 
-function compute_viscous_response(
+"""
+
+List of all available solvers [here](https://docs.sciml.ai/DiffEqDocs/stable/solvers/ode_solve/#OrdinaryDiffEq.jl-for-Non-Stiff-Equations).
+"""
+function viscous_response(
     t_out::Vector{T},
     u_viscous::AbstractMatrix{T},
     Omega::ComputationDomain,
@@ -138,11 +143,12 @@ function compute_viscous_response(
     tools::PrecomputedFastiso,
     p::MultilayerEarth,
     c::PhysicalConstants,
+    ODEsolver,
 ) where {T<:AbstractFloat}
 
     params = ODEParams(Omega, c, p, Hice, tools)
     prob = ODEProblem(f!, u_viscous, extrema(t_out), params)
-    sol = solve(prob, BS3(), saveat = t_out)
+    sol = solve(prob, ODEsolver, saveat = t_out)
     dudt = [sol(t, Val{1}) for t in t_out]
     return sol, dudt
 end
@@ -163,13 +169,13 @@ function f!(du::Matrix{T}, u::Matrix{T}, params::ODEParams{T}, t::T) where {T<:A
     term1 = ice_load(c, Hice(t))
     term2 = - tools.rhog .* u
     term3 = - p.litho_rigidity .* biharmonic_uf
-    term6 = - real.(tools.pifft * (Omega.harmonic_coeffs .* (tools.pfft * (p.litho_rigidity .* harmonic_uf))))
 
     if tools.negligible_gradD
-        rhs = term1 + term2 + term3 + term6
+        rhs = term1 + term2 + term3
     else
         term4 = - T(2) .* tools.Dx .* mixed_fdx(harmonic_uf, Omega.dx)
         term5 = - T(2) .* tools.Dy .* mixed_fdy(harmonic_uf, Omega.dy)
+        term6 = - real.(tools.pifft * (Omega.harmonic_coeffs .* (tools.pfft * (p.litho_rigidity .* harmonic_uf))))
         term7 = tools.Dxx .* mixed_fdyy(u, Omega.dy)
         term8 = - T(2) .* tools.Dxy .* mixed_fdy( mixed_fdx(u, Omega.dx), Omega.dy )
         term9 = tools.Dyy .* mixed_fdxx(u, Omega.dx)
