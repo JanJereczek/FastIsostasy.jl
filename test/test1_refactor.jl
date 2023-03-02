@@ -45,6 +45,8 @@ jldsave(
     p = p,
     results = results,
     t_fastiso = t_fastiso,
+    R = R,
+    H = H,
 )
 
 # """
