@@ -27,7 +27,7 @@ function lineplot_timestep!(ax1, t, t_out, r, sol, linestyle)
     lines!(ax1, r, u, linestyle = linestyle)
 end
 
-@inline function main(
+function main(
     n::Int,                     # 2^n x 2^n cells on domain, (1)
 )
 

@@ -4,7 +4,7 @@ using DelimitedFiles
 # Visualization
 ################################################
 
-@inline function plot_response(
+function plot_response(
     Omega::ComputationDomain,
     sigma::Matrix{T},
     u_plot::Vector{Matrix{T}},
@@ -57,7 +57,7 @@ using DelimitedFiles
     return fig
 end
 
-@inline function slice_spada(
+function slice_spada(
     Omega::ComputationDomain,
     c::PhysicalConstants,
     t_vec::AbstractVector{T},
@@ -133,7 +133,7 @@ end
 end
 
 
-@inline function slice_test3(
+function slice_test3(
     Omega::ComputationDomain,
     c::PhysicalConstants,
     t_vec::AbstractVector{T},
@@ -194,7 +194,7 @@ end
     return fig
 end
 
-@inline function animate_viscous_response(
+function animate_viscous_response(
     t_vec::AbstractVector{T},
     Omega::ComputationDomain,
     u::Array{T, 3},
@@ -295,7 +295,7 @@ u_tinf = vcat(u_tinf_vk, u_tinf_gs, u_tinf_zm)
 
 u_benchmark = cat(u_t0, u_t1, u_t5, u_t10, u_tinf, dims = 3)
 
-@inline function get_spada_displacements()
+function get_spada_displacements()
     prefix ="data/test2/Spada/"
     cases = ["u_cap", "u_disc", "dudt_cap", "dudt_disc"]
     snapshots = ["0", "1", "2", "5", "10", "inf"]

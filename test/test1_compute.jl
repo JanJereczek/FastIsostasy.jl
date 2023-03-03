@@ -3,7 +3,7 @@ using FastIsostasy
 using JLD2
 include("helpers_compute.jl")
 
-@inline function main(
+function main(
     n::Int,                     # 2^n x 2^n cells on domain, (1)
     case::String;               # Application case
     use_cuda = true::Bool,

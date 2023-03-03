@@ -11,7 +11,7 @@ Compared to [1, 2], FastIsostasy.jl does not assume constant fields for paramete
 
 ## [Getting started](@id getting_started)
 
-`FastIsostasy.jl` is work under development and must be downloaded from GitHub to be used. It will hopefully become a registered julia package in future.
+`FastIsostasy.jl` is work under development and must be downloaded from GitHub to be used. It will hopefully become a registered julia package in the future.
 <!-- 
 ## A three-layer model
 
@@ -22,3 +22,10 @@ Let x, y be the coordinates spanning the projection of the Earth surface and z t
 The two-layer model is a special case of this and can be obtained by setting the channel parameters to be the same as the ones of the half space.
 
 ![Schematic representation of the three-layer model](assets/sketch_3layer_model.png) -->
+
+## Arrays
+
+Array dimensions correspond to the spatial dimension of the variable they describe.
+If they evolve over time, they are stored as vector of arrays.
+For instance, the vertical displacement of the bedrock is a 2D variable that evolves
+over time. Therefore, it is stored in a `Vector{Matrix}`.

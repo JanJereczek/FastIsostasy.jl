@@ -8,7 +8,7 @@ include("helpers_compute.jl")
 include("external_load_maps.jl")
 include("external_viscosity_maps.jl")
 
-@inline function main(
+function main(
     n::Int,             # 2^n cells on domain (1)
     case::String,       # Application case
 )

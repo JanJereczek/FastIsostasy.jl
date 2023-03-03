@@ -1,4 +1,20 @@
 #####################################################
+# Unit conversion utils
+#####################################################
+
+function years2seconds(t::T) where {T<:AbstractFloat}
+    return t * seconds_per_year
+end
+
+function seconds2years(t::T) where {T<:AbstractFloat}
+    return t / seconds_per_year
+end
+
+function m_per_sec2mm_per_yr(dudt::T) where {T<:AbstractFloat}
+    return dudt * 1e3 * seconds_per_year
+end
+
+#####################################################
 # Array utils
 #####################################################
 
@@ -8,7 +24,7 @@
 
 Generate a vector of constant matrices from a vector of constants.
 """
-@inline function matrify_vectorconstant(x::Vector{T}, N::Int) where {T<:AbstractFloat}
+function matrify_vectorconstant(x::Vector{T}, N::Int) where {T<:AbstractFloat}
     X = zeros(T, N, N, length(x))
     for i in eachindex(x)
         X[:, :, i] = matrify_constant(x[i], N)
@@ -22,12 +38,12 @@ end
 
 Generate a constant matrix from a constant.
 """
-@inline function matrify_constant(x::T, N::Int) where {T<:AbstractFloat}
+function matrify_constant(x::T, N::Int) where {T<:AbstractFloat}
     return fill(x, N, N)
 end
 
 #####################################################
-# Domain utils
+# Domain and projection utils
 #####################################################
 
 """
@@ -36,7 +52,7 @@ end
 
 Get euclidean distance of point (x, y) to origin.
 """
-get_r(x::T, y::T) where {T<:Real} = LinearAlgebra.norm([x, y])
+get_r(x::T, y::T) where {T<:Real} = sqrt(x^2 + y^2)
 
 """
 
@@ -44,9 +60,36 @@ get_r(x::T, y::T) where {T<:Real} = LinearAlgebra.norm([x, y])
 
 Return a 2D meshgrid spanned by `x, y`.
 """
-@inline function meshgrid(x::AbstractVector{T}, y::AbstractVector{T}) where {T<:AbstractFloat}
+function meshgrid(x::AbstractVector{T}, y::AbstractVector{T}) where {T<:AbstractFloat}
     one_x, one_y = ones(T, length(x)), ones(T, length(y))
     return one_y * x', (one_x * y')'
+end
+
+"""
+
+    dist2angle_stereographic()
+
+"""
+function dist2angle_stereographic(
+    dist::T,
+) where {T<:Real}
+    r_equator = 6.371e6
+    return 2 * atan( dist / (2 * r_equator) )
+end
+
+"""
+
+    sphericaldistance2origin()
+
+"""
+function sphericaldistance(
+    lat::T,
+    lon::T;
+    lat0::T = T(-pi / 2),   # default origin is south pole
+    lon0::T = T(0),         # default origin is south pole
+) where {T<:Real}
+    r_equator = 6.371e6
+    return r_equator * acos( sin(lat) * sin(lat0) + cos(lat) * cos(lat0) * (lon - lon0) )
 end
 
 """
@@ -55,12 +98,18 @@ end
 
 Initialize a square computational domain with length `2*L` and `2^n` grid cells.
 """
-@inline function init_domain(
+function init_domain(
     L::T,
     n::Int;
     use_cuda=false::Bool
 ) where {T<:AbstractFloat}
 
+    if use_cuda
+        arraykernel = CuArray
+    else
+        arraykernel = Array
+    end
+    # Geometry
     Lx, Ly = L, L
     N = 2^n
     N2 = Int(floor(N/2))
@@ -69,190 +118,38 @@ Initialize a square computational domain with length `2*L` and `2^n` grid cells.
     x = collect(-Lx+dx:dx:Lx)
     y = collect(-Ly+dy:dy:Ly)
     X, Y = meshgrid(x, y)
+    R = get_r.(X, Y)
+    Θ = dist2angle_stereographic.(R)
+
+    # Elastic response variables
     distance, loadresponse_coeffs = get_loadresponse_coeffs(T)
     loadresponse_matrix, loadresponse_function = build_loadresponse_matrix(
-        X, Y,
-        distance,
-        loadresponse_coeffs,
-    )
+        X, Y, distance, loadresponse_coeffs )
+
     pseudodiff, harmonic, biharmonic = get_differential_fourier(L, N2)
 
     # Avoid division by zero. Tolerance ϵ of the order of the neighboring terms.
     # Tests show that it does not lead to errors wrt analytical or benchmark solutions.
     pseudodiff[1, 1] = mean([pseudodiff[1,2], pseudodiff[2,1]])
-
-    if use_cuda
-        pseudodiff, harmonic, biharmonic = convert2CuArray(
-            [pseudodiff, harmonic, biharmonic])
-    end
+    pseudodiff, harmonic, biharmonic = kernelpromote(
+            [pseudodiff, harmonic, biharmonic], arraykernel)
     
     return ComputationDomain(
-        Lx,
-        Ly,
-        N,
-        N2,
-        dx,
-        dy,
-        x,
-        y,
-        X,
-        Y,
-        loadresponse_matrix,
-        loadresponse_function,
-        pseudodiff,
-        harmonic,
-        biharmonic,
-        use_cuda,
+        Lx, Ly, N, N2,
+        dx, dy, x, y,
+        X, Y, R, Θ,
+        loadresponse_matrix, loadresponse_function,
+        pseudodiff, harmonic, biharmonic,
+        use_cuda, arraykernel
     )
 end
 
-struct ComputationDomain{T<:AbstractFloat}
-    Lx::T
-    Ly::T
-    N::Int
-    N2::Int
-    dx::T
-    dy::T
-    x::Vector{T}
-    y::Vector{T}
-    X::AbstractMatrix{T}
-    Y::AbstractMatrix{T}
-    loadresponse_matrix::AbstractMatrix{T}
-    loadresponse_function::Function
-    pseudodiff_coeffs::AbstractMatrix{T}
-    harmonic_coeffs::AbstractMatrix{T}
-    biharmonic_coeffs::AbstractMatrix{T}
-    use_cuda::Bool
-end
 
 #####################################################
-# Differential utils
+# Math utils
 #####################################################
 
-# Fourier
-"""
-    get_differential_fourier(L, N2)
-
-Compute the matrices representing the differential operators in the fourier space.
-"""
-@inline function get_differential_fourier(
-    L::T,
-    N2::Int,
-) where {T<:Real}
-    mu = T(π / L)
-    raw_coeffs = mu .* T.( vcat(0:N2, N2-1:-1:1) )
-    x_coeffs, y_coeffs = raw_coeffs, raw_coeffs
-    X_coeffs, Y_coeffs = meshgrid(x_coeffs, y_coeffs)
-    harmonic_coeffs = X_coeffs .^ 2 + Y_coeffs .^ 2
-    pseudodiff_coeffs = sqrt.(harmonic_coeffs)
-    biharmonic_coeffs = harmonic_coeffs .^ 2
-    return pseudodiff_coeffs, harmonic_coeffs, biharmonic_coeffs
-end
-
-@inline function precomp_fourier_dxdy(
-    M::AbstractMatrix{T},
-    L1::T,
-    L2::T,
-) where {T<:AbstractFloat}
-    n1, n2 = size(M)
-    k1 = 2 * π / L1 .* vcat(0:n1/2-1, 0, -n1/2+1:-1)
-    k2 = 2 * π / L2 .* vcat(0:n2/2-1, 0, -n2/2+1:-1)
-    p1, p2 = plan_fft(k1), plan_fft(k2)
-    ip1, ip2 = plan_ifft(k1), plan_ifft(k2)
-    return k1, k2, p1, p2, ip1, ip2
-end
-
-@inline function fourier_dnx(
-    M::AbstractMatrix{T},
-    k1::Vector{T},
-    p1::AbstractFFTs.Plan,
-    ip1::AbstractFFTs.ScaledPlan,
-) where {T<:AbstractFloat}
-    return vcat( [real.(ip1 * ( ( im .* k1 ) .^ n .* (p1 * M[i, :]) ))' for i in axes(M,1)]... )
-end
-
-# FDM in x, 1st order
-@inline function central_fdx(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
-    n2 = size(M, 2)
-    return (view(M, :, 3:n2) - view(M, :, 1:n2-2)) ./ (2*h)
-end
-
-@inline function forward_fdx(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
-    return (view(M, :, 2) - view(M, :, 1)) ./ h
-end
-
-@inline function backward_fdx(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
-    n2 = size(M, 2)
-    return (view(M, :, n2) - view(M, :, n2-1)) ./ h
-end
-
-# FDM in y, 1st order
-@inline function mixed_fdx(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
-    return cat( forward_fdx(M,h), central_fdx(M,h), backward_fdx(M,h), dims=2 )
-end
-
-@inline function central_fdy(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
-    n1 = size(M, 1)
-    return (view(M, 3:n1, :) - view(M, 1:n1-2, :)) ./ (2*h)
-end
-
-@inline function forward_fdy(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
-    return (view(M, 2, :) - view(M, 1, :)) ./ h
-end
-
-@inline function backward_fdy(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
-    n1 = size(M, 1)
-    return (view(M, n1, :) - view(M, n1-1, :)) ./ h
-end
-
-@inline function mixed_fdy(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
-    return cat( forward_fdy(M,h)', central_fdy(M,h), backward_fdy(M,h)', dims=1 )
-end
-
-# FDM in x, 2nd order
-@inline function central_fdxx(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
-    n2 = size(M, 2)
-    return (view(M, :, 3:n2) - 2 .* view(M, :, 2:n2-1) + view(M, :, 1:n2-2)) ./ h^2
-end
-
-@inline function forward_fdxx(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
-    return (view(M, :, 3) - 2 .* view(M, :, 2) + view(M, :, 1)) ./ h^2
-end
-
-@inline function backward_fdxx(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
-    n2 = size(M, 2)
-    return (view(M, :, n2) - 2 .* view(M, :, n2-1) + view(M, :, n2-2)) ./ h^2
-end
-
-@inline function mixed_fdxx(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
-    return cat( forward_fdxx(M,h), central_fdxx(M,h), backward_fdxx(M,h), dims=2 )
-end
-
-# FDM in y, 2nd order
-@inline function central_fdyy(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
-    n1 = size(M, 1)
-    return (view(M, 3:n1, :) - 2 .* view(M, 2:n1-1, :) + view(M, 1:n1-2, :)) ./ h^2
-end
-
-@inline function forward_fdyy(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
-    return (view(M, 3, :) - 2 .* view(M, 2, :) + view(M, 1, :)) ./ h^2
-end
-
-@inline function backward_fdyy(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
-    n1 = size(M, 1)
-    return (view(M, n1, :) - 2 .* view(M, n1-1, :) + view(M, n1-2, :)) ./ h^2
-end
-
-@inline function mixed_fdyy(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
-    return cat( forward_fdyy(M,h)', central_fdyy(M,h), backward_fdyy(M,h)', dims=1 )
-end
-
-@inline function gauss_distr(x::T, mu::Vector{T}, sigma::Matrix{T}) where {T<:AbstractFloat}
-    k = length(mu)
-    return (2 * π)^(k/2) * det(sigma) * exp( -0.5 * (x .- mu)' * inv(sigma) * (x .- mu) )
-end
-
-@inline function gauss_distr(
+function gauss_distr(
     X::AbstractMatrix{T},
     Y::AbstractMatrix{T},
     mu::Vector{T},
@@ -267,64 +164,6 @@ end
             -0.5 * ([X[i,j], Y[i,j]] .- mu)' * invsigma * ([X[i,j], Y[i,j]] .- mu) )
     end
     return G
-end
-
-#####################################################
-# Physical constants
-#####################################################
-
-g = 9.81                                # Mean Earth acceleration at surface (m/s^2)
-seconds_per_year = 60^2 * 24 * 365.25   # (s)
-ice_density = 0.910e3                   # (kg/m^3)
-r_equator = 6.371e6                     # Earth radius at equator (m)
-r_pole = 6.357e6                        # Earth radius at pole (m)
-G = 6.674e-11                           # Gravity constant (m^3 kg^-1 s^-2)
-mE = 5.972e24                           # Earth's mass (kg)
-rho_0 = 13.1e3                          # Density of Earth's core (kg m^-3)
-rho_1 = 3.0e3                           # Mean density of solid-Earth surface (kg m^-3)
-# Note: rho_0 and rho_1 are chosen such that g(pole) ≈ 9.81
-
-"""
-    init_physical_constants()
-
-Return struct containing physical constants.
-"""
-@inline function init_physical_constants(;T::Type=Float64, ice_density = ice_density)
-    return PhysicalConstants(
-        T(g),
-        T(seconds_per_year),
-        T(ice_density),
-        T(r_equator),
-        T(r_pole),
-        T(G),
-        T(mE),
-        T(rho_0),
-        T(rho_1),
-    )
-end
-
-struct PhysicalConstants{T<:AbstractFloat}
-    g::T
-    seconds_per_year::T
-    ice_density::T
-    r_equator::T
-    r_pole::T
-    G::T
-    mE::T
-    rho_0::T
-    rho_1::T
-end
-
-function years2seconds(t::T) where {T<:AbstractFloat}
-    return t * seconds_per_year
-end
-
-function seconds2years(t::T) where {T<:AbstractFloat}
-    return t / seconds_per_year
-end
-
-function m_per_sec2mm_per_yr(dudt::T) where {T<:AbstractFloat}
-    return dudt * 1e3 * seconds_per_year
 end
 
 #####################################################
@@ -352,7 +191,7 @@ layers_begin = [88e3, 400e3]
 
 Return struct with solid-Earth parameters for mutliple channel layers and a halfspace.
 """
-@inline function init_multilayer_earth(
+function init_multilayer_earth(
     Omega::ComputationDomain{T},
     c::PhysicalConstants{T};
     layers_begin::A = layers_begin,
@@ -362,8 +201,8 @@ Return struct with solid-Earth parameters for mutliple channel layers and a half
     litho_poissonratio::D = litho_poissonratio,
 ) where {
     T<:AbstractFloat,
-    A<:Union{Vector{T}, AbstractArray{T, 3}},
-    B<:Union{Vector{T}, AbstractArray{T, 3}},
+    A<:Union{Vector{T}, Array{T, 3}},
+    B<:Union{Vector{T}, Array{T, 3}},
     C<:Union{T, AbstractMatrix{T}},
     D<:Union{T, AbstractMatrix{T}},
 }
@@ -383,11 +222,7 @@ Return struct with solid-Earth parameters for mutliple channel layers and a half
     end
 
     layers_thickness = diff( layers_begin, dims=3 )
-    if Omega.use_cuda
-        pseudodiff_coeffs = Array(Omega.pseudodiff_coeffs)
-    else
-        pseudodiff_coeffs = Omega.pseudodiff_coeffs
-    end
+    pseudodiff_coeffs = kernelpromote(Omega.pseudodiff_coeffs, Omega.arraykernel)
     effective_viscosity = get_effective_viscosity(
         Omega,
         layers_viscosity,
@@ -398,11 +233,8 @@ Return struct with solid-Earth parameters for mutliple channel layers and a half
     # mean_density = get_matrix_mean_density(layers_thickness, layers_density)
     mean_density = fill(layers_density[1], Omega.N, Omega.N)
 
-    if Omega.use_cuda
-        litho_rigidity, effective_viscosity, mean_density = convert2CuArray(
-            [litho_rigidity, effective_viscosity, mean_density]
-        )
-    end
+    litho_rigidity, effective_viscosity, mean_density = kernelpromote(
+        [litho_rigidity, effective_viscosity, mean_density], Omega.arraykernel)
 
     return MultilayerEarth(
         c.g,
@@ -418,19 +250,7 @@ Return struct with solid-Earth parameters for mutliple channel layers and a half
 
 end
 
-struct MultilayerEarth{T<:AbstractFloat}
-    mean_gravity::T
-    mean_density::T
-    effective_viscosity::AbstractMatrix{T}
-    litho_thickness::AbstractMatrix{T}
-    litho_rigidity::AbstractMatrix{T}
-    litho_poissonratio::T
-    layers_density::Vector{T}
-    layers_viscosity::AbstractArray{T, 3}
-    layers_begin::AbstractArray{T, 3}
-end
-
-@inline function get_rigidity(
+function get_rigidity(
     t::T,
     E::T,
     nu::T,
@@ -438,8 +258,8 @@ end
     return (E * t^3) / (12 * (1 - nu^2))
 end
 
-@inline function get_matrix_mean_density(
-    layers_thickness::AbstractArray{T, 3},
+function get_matrix_mean_density(
+    layers_thickness::Array{T, 3},
     layers_density::Vector{T},
 ) where {T<:AbstractFloat}
     mean_density = zeros(T, size(layers_thickness)[1:2])
@@ -449,14 +269,14 @@ end
     return mean_density
 end
 
-@inline function get_mean_density(
+function get_mean_density(
     layers_thickness::Vector{T},
     layers_density::Vector{T},
 ) where {T<:AbstractFloat}
     return sum( (layers_thickness ./ (sum(layers_thickness)))' * layers_density )
 end
 
-@inline function matrified_mean_gravity()
+function matrified_mean_gravity()
     fixed_mean_gravity = true
     if fixed_mean_gravity
         mean_gravity = c.g
@@ -469,7 +289,7 @@ end
     end
 end
 
-@inline function get_mean_gravity(
+function get_mean_gravity(
     layers_begin::Vector{T},
     layers_thickness::Vector{T},
     gz::Function,
@@ -489,10 +309,10 @@ end
 Compute equivalent viscosity for multilayer model by recursively applying
 the formula for a halfspace and a channel from Lingle and Clark (1975).
 """
-@inline function get_effective_viscosity(
+function get_effective_viscosity(
     Omega::ComputationDomain{T},
-    layers_viscosity::AbstractArray{T, 3},
-    layers_thickness::AbstractArray{T, 3},
+    layers_viscosity::Array{T, 3},
+    layers_thickness::Array{T, 3},
     # pseudodiff_coeffs::AbstractMatrix{T},
 ) where {T<:AbstractFloat}
 
@@ -529,7 +349,7 @@ Return the viscosity ratio between channel and half-space as specified in
 Bueler (2007) below equation 15.
 
 """
-@inline function get_viscosity_ratio(
+function get_viscosity_ratio(
     channel_viscosity::Matrix{T},
     halfspace_viscosity::Matrix{T},
 ) where {T<:AbstractFloat}
@@ -549,7 +369,7 @@ Return the viscosity scaling for three-layer model as given in
 Bueler (2007) below equation 15.
 
 """
-@inline function three_layer_scaling(
+function three_layer_scaling(
     # kappa::Matrix{T},
     Omega::ComputationDomain{T},
     visc_ratio::Matrix{T},
@@ -579,10 +399,10 @@ end
 Compute a log-interpolator of the equivalent viscosity from provided viscosity
 fields `layers_viscosity` at time stamps `tvec`.
 """
-@inline function loginterp_viscosity(
+function loginterp_viscosity(
     tvec::AbstractVector{T},
-    layers_viscosity::AbstractArray{T, 4},
-    layers_thickness::AbstractArray{T, 3},
+    layers_viscosity::Array{T, 4},
+    layers_thickness::Array{T, 3},
     pseudodiff_coeffs::AbstractMatrix,
 ) where {T<:AbstractFloat}
     n1, n2, n3, nt = size(layers_viscosity)
@@ -605,7 +425,7 @@ end
 
 Return hyperbolic coefficients for equivalent viscosity computation.
 """
-@inline function hyperbolic_channel_coeffs(
+function hyperbolic_channel_coeffs(
     channel_thickness::T,
     kappa::T,
 ) where {T<:AbstractFloat}
@@ -664,7 +484,7 @@ Compute the load response matrix of the solid Earth based on Green's function
 is subsequently transformed back into the time domain.
 Use pre-computed integration tools to accelerate computation.
 """
-@inline function build_loadresponse_matrix(
+function build_loadresponse_matrix(
     X::AbstractMatrix{T},
     Y::AbstractMatrix{T},
     distance::Vector{T},
@@ -685,7 +505,7 @@ Use pre-computed integration tools to accelerate computation.
     return loadresponse_matrix, loadresponse_function
 end
 
-@inline function compute_loadresponse_entry(
+function compute_loadresponse_entry(
     r::T,
     rm::Vector{T},
     loadresponse_coeffs::Vector{T},
@@ -708,7 +528,7 @@ end
 Integrate load response over field by using 2D quadrature with specified
 support points and associated coefficients.
 """
-@inline function get_integrated_loadresponse(
+function get_integrated_loadresponse(
     Omega::ComputationDomain,
     quad_support::Vector{T},
     quad_coeffs::Vector{T},
@@ -718,7 +538,7 @@ support points and associated coefficients.
     N = Omega.N
     integrated_loadresponse = similar(Omega.X)
 
-    @inline for i = 1:N, j = 1:N
+    for i = 1:N, j = 1:N
         p = i - Omega.N2 - 1
         q = j - Omega.N2 - 1
         integrated_loadresponse[i, j] = quadrature2D(
@@ -745,7 +565,7 @@ end
 Return support points and associated coefficients with specified Type
 for Gauss-Legendre quadrature.
 """
-@inline function get_quad_coeffs(T::Type, n::Int)
+function get_quad_coeffs(T::Type, n::Int)
     x, w = gausslegendre( n )
     return T.(x), T.(w)
 end
@@ -758,7 +578,7 @@ end
 Compute 1D Gauss-Legendre quadrature of `f` between `x1` and `x2`
 based on `n` support points.
 """
-@inline function quadrature1D(f::Function, n::Int, x1::T, x2::T) where {T<:AbstractFloat}
+function quadrature1D(f::Function, n::Int, x1::T, x2::T) where {T<:AbstractFloat}
     x, w = get_quad_coeffs(T, n)
     m, p = get_normalized_lin_transform(x1, x2)
     sum = 0
@@ -789,7 +609,7 @@ function quadrature2D(
     mx, px = get_normalized_lin_transform(x1, x2)
     my, py = get_normalized_lin_transform(y1, y2)
     sum = T(0)
-    @inline for i=1:n, j=1:n
+    for i=1:n, j=1:n
         sum = sum + f(
             normalized_lin_transform(x[i], mx, px),
             normalized_lin_transform(x[j], my, py),
@@ -804,7 +624,7 @@ end
 
 Return parameters of linear function mapping `x1, x2` onto `-1, 1`.
 """
-@inline function get_normalized_lin_transform(x1::T, x2::T) where {T<:AbstractFloat}
+function get_normalized_lin_transform(x1::T, x2::T) where {T<:AbstractFloat}
     x1_norm, x2_norm = T(-1), T(1)
     m = (x2_norm - x1_norm) / (x2 - x1)
     p = x1_norm - m * x1
@@ -817,7 +637,7 @@ end
 
 Apply normalized linear transformation with slope `m` and bias `p` on `y`.
 """
-@inline function normalized_lin_transform(y::T, m::T, p::T) where {T<:AbstractFloat}
+function normalized_lin_transform(y::T, m::T, p::T) where {T<:AbstractFloat}
     return (y-p)/m
 end
 
@@ -826,11 +646,19 @@ end
 # Kernel utils
 #####################################################
 
-@inline function convert2CuArray(X::Vector)
+function kernelpromote(X::M, arraykernel) where {M<:AbstractArray{T}} where {T<:Real}
+    return arraykernel(X)
+end
+
+function kernelpromote(X::Vector{M}, arraykernel) where {M<:AbstractArray{T}} where {T<:Real}
+    return [arraykernel(x) for x in X]
+end
+
+function convert2CuArray(X::Vector)
     return [CuArray(x) for x in X]
 end
 
-@inline function convert2Array(X::Vector)
+function convert2Array(X::Vector)
     return [Array(x) for x in X]
 end
 

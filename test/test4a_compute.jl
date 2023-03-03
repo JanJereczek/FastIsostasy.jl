@@ -7,7 +7,7 @@ include("helpers_plot.jl")
 include("helpers_compute.jl")
 include("external_viscosity_maps.jl")
 
-@inline function main(
+function main(
     case::String;       # Application case
     make_anim = false,
 )

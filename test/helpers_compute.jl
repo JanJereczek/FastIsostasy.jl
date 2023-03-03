@@ -1,10 +1,19 @@
 using LinearAlgebra
 
-@inline function mask_disc(X::AbstractMatrix{T}, Y::AbstractMatrix{T}, R::T) where {T<:AbstractFloat}
+function mask_disc(X::AbstractMatrix{T}, Y::AbstractMatrix{T}, R::T) where {T<:AbstractFloat}
     return T.(X .^ 2 + Y .^ 2 .< R^2)
 end
 
-@inline function generate_uniform_disc_load(
+function uniform_ice_cylinder(
+    Omega::ComputationDomain,
+    R::T,
+    H::T,
+) where {T<:AbstractFloat}
+    M = mask_disc(Omega.X, Omega.Y, R)
+    return M .* H
+end
+
+function generate_uniform_disc_load(
     Omega::ComputationDomain,
     c::PhysicalConstants,
     R::T,
@@ -14,13 +23,13 @@ end
     return - M .* (c.ice_density * c.g * H)
 end
 
-@inline function generate_cap_load(
+function generate_cap_load(
     Omega::ComputationDomain,
     c::PhysicalConstants,
     alpha_deg::T,
     H::T,
 ) where {T<:AbstractFloat}
-    R = sqrt.( Omega.X .^ 2 + Omega.Y .^ 2 )
+    R = XY2R(Omega.X, Omega.Y)
     Theta = R ./ c.r_equator
     alpha = deg2rad(alpha_deg)
     M = Theta .< alpha
@@ -31,7 +40,7 @@ end
 ################################################
 # Analytic solution for constant viscosity
 ################################################
-@inline function analytic_solution(
+function analytic_solution(
     r::T,
     t::T,
     c::PhysicalConstants,
@@ -51,7 +60,7 @@ end
     end
 end
 
-@inline function looped_quadrature1D( 
+function looped_quadrature1D( 
     f::Function,
     domains::Vector{T},
     n::Int,
@@ -63,7 +72,7 @@ end
     return integral
 end
 
-@inline function analytic_integrand(
+function analytic_integrand(
     kappa::T,
     r::T,
     t::T,
@@ -80,7 +89,7 @@ end
     return (exp(-beta*t/(2*eta*kappa))-1) * j0 * j1 / beta
 end
 
-@inline function equilibrium_integrand(
+function equilibrium_integrand(
     kappa::T,
     r::T,
     c::PhysicalConstants,
@@ -98,7 +107,7 @@ end
 # Analytic solution for radially dependent viscosity
 ################################################
 
-@inline function analytic_radial_solution(
+function analytic_radial_solution(
     Omega::ComputationDomain,
     i::Int,
     j::Int,
@@ -115,7 +124,7 @@ end
     return scaling .* looped_quadrature1D( radial_integrand, domains, n_quad_support )
 end
 
-@inline function analytic_radial_integrand(
+function analytic_radial_integrand(
     Omega::ComputationDomain,
     i::Int,
     j::Int,

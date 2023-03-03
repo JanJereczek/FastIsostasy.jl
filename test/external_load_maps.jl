@@ -8,7 +8,7 @@ using CairoMakie
 # GLAC1D
 #####################################################
 
-@inline function interpolated_glac1d_snapshots(Omega::ComputationDomain{T}) where {T<:AbstractFloat}
+function interpolated_glac1d_snapshots(Omega::ComputationDomain{T}) where {T<:AbstractFloat}
     xl, yl, Hl, tvecl = load_glac1d("data/GLAC1D/output/ANT-16KM_GLAC1D-nn4041ANT-30kto0k.nc") # load_full_glac1d()
     tvecl = years2seconds.(tvecl .* 1e3)    # (kyr) --> (s)
     xl .*= 1e3                              # (km) --> (m)
@@ -30,7 +30,7 @@ using CairoMakie
     return tvecl, deltaH, H
 end
 
-@inline function load_full_glac1d()
+function load_full_glac1d()
     x1, y1, H1, tvec1 = load_glac1d("data/GLAC1D/output/ANT-16KM_GLAC1D-nn4041ANT-120kto30k.nc")
     x2, y2, H2, tvec2 = load_glac1d("data/GLAC1D/output/ANT-16KM_GLAC1D-nn4041ANT-30kto0k.nc")
     println(sum(x1 .!= x2))
@@ -40,7 +40,7 @@ end
     return x1, y1, H, tvec
 end
 
-@inline function load_glac1d(filename)
+function load_glac1d(filename)
     ds = NCDataset(filename, "r")
     x = copy(ds["xc"][:,:])
     y = copy(ds["yc"][:,:])
@@ -57,7 +57,7 @@ end
     return x, y, Hnonmissing, tvec
 end
 
-@inline function map2nearestneighbour(M1, x1, y1, X2, Y2)
+function map2nearestneighbour(M1, x1, y1, X2, Y2)
     X1, Y1 = meshgrid(x1, y1)
     M2 = similar(X2)
     for i in axes(M2, 1), j in axes(M2, 2)
@@ -71,7 +71,7 @@ end
 # ICE-7G
 #####################################################
 
-@inline function stereographic_projection(
+function stereographic_projection(
     lat::T,
     lon::T,
     R::T;
