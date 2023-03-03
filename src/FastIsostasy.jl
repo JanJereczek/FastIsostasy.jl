@@ -26,7 +26,7 @@ include("mechanics.jl")
 export ComputationDomain
 export PhysicalConstants
 export MultilayerEarth
-export ColumnChanges
+export ColumnHeights
 export PrecomputedFastiso
 
 # parameters.jl

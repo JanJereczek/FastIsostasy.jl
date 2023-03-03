@@ -45,7 +45,7 @@ struct MultilayerEarth{T<:AbstractFloat}
     layers_begin::Array{T, 3}
 end
 
-mutable struct ColumnChanges{T<:AbstractFloat}
+mutable struct ColumnHeights{T<:AbstractFloat}
     hi::AbstractMatrix{T}
     hi0::AbstractMatrix{T}
     hw::AbstractMatrix{T}

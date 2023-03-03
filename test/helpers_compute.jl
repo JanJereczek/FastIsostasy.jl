@@ -10,7 +10,7 @@ function uniform_ice_cylinder(
     H::T,
 ) where {T<:AbstractFloat}
     M = mask_disc(Omega.X, Omega.Y, R)
-    return - M .* H
+    return M .* H
 end
 
 function generate_uniform_disc_load(

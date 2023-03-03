@@ -18,23 +18,23 @@ function compute_geoid_response(
     p::MultilayerEarth{T},
     Omega::ComputationDomain{T},
     tools::PrecomputedFastiso{T},
-    lc::ColumnChanges{T},
+    lc::ColumnHeights{T},
 ) where {T<:AbstractFloat}
-    load_change = get_load_change(c, p, lc)
     return conv(
         tools.geoid_green,
-        load_change,
+        get_load_change(Omega, c, p, lc),
     )[Omega.N2:end-Omega.N2, Omega.N2:end-Omega.N2]
 end
 
 function get_load_change(
+    Omega::ComputationDomain{T},
     c::PhysicalConstants{T},
     p::MultilayerEarth{T},
-    lc::ColumnChanges{T},
+    lc::ColumnHeights{T},
 ) where {T<:AbstractFloat}
-    return c.ice_density .* (lc.hi - lc.hi0) + 
-           c.seawater_density .* (lc.hw - lc.hw0) +
-           p.mean_density .* (lc.b - lc.b0)
+    return (Omega.dx * Omega.dy) .* (c.ice_density .* (lc.hi - lc.hi0) + 
+        c.seawater_density .* (lc.hw - lc.hw0) +
+        p.mean_density .* (lc.b - lc.b0) )
 end
 
 # TODO: for test 2, I observe distortions compared to Spada in the far-field because I don't transform with stereographic!
@@ -46,6 +46,19 @@ function get_geoid_green(
     return c.r_equator ./ ( 2 .* c.mE .* sin.(theta ./ 2 .+ eps) )
 end
 
+function get_geoid_green(
+    Omega::ComputationDomain{T},
+    c::PhysicalConstants{T},
+) where {T<:AbstractFloat}
+    geoid = c.r_equator ./ ( 2 .* c.mE .* sin.( Omega.R ./ (2 .* c.r_equator) ) )
+
+    # Set the resolution as tolerance for the computation of the geoid's Green function
+    max_geoid = c.r_equator ./
+        ( 2 .* c.mE .* sin.( mean([Omega.dx, Omega.dy]) ./ (2 .* c.r_equator) ) )
+    geoid[geoid .> max_geoid] .= max_geoid
+    return geoid
+end
+
 function init_columnchanges(
     Omega::ComputationDomain{T};
     hi::AbstractMatrix{T} = fill(T(0), Omega.N, Omega.N),
@@ -55,11 +68,11 @@ function init_columnchanges(
     b::AbstractMatrix{T} = fill(T(0), Omega.N, Omega.N),
     b0::AbstractMatrix{T} = fill(T(0), Omega.N, Omega.N),
 ) where {T<:AbstractFloat}
-    return ColumnChanges(hi, hi0, hw, hw0, b, b0)
+    return ColumnHeights(hi, hi0, hw, hw0, b, b0)
 end
 
 function update_columnchanges!(
-    lc::ColumnChanges{T},
+    lc::ColumnHeights{T},
     u::AbstractMatrix{T},
     H_ice::AbstractMatrix{T},
 ) where {T<:AbstractFloat}

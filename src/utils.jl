@@ -79,6 +79,21 @@ end
 
 """
 
+    sphericaldistance2origin()
+
+"""
+function sphericaldistance(
+    lat::T,
+    lon::T;
+    lat0::T = T(-pi / 2),   # default origin is south pole
+    lon0::T = T(0),         # default origin is south pole
+) where {T<:Real}
+    r_equator = 6.371e6
+    return r_equator * acos( sin(lat) * sin(lat0) + cos(lat) * cos(lat0) * (lon - lon0) )
+end
+
+"""
+
     init_domain(L, n)
 
 Initialize a square computational domain with length `2*L` and `2^n` grid cells.
