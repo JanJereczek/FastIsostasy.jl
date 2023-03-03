@@ -17,8 +17,9 @@ function main(
     R = T(1000e3)               # ice disc radius (m)
     H = T(1000)                 # ice disc thickness (m)
 
-    filename = "$(case)_N$(Omega.N)"
-    println("Computing $case on $(Omega.N) x $(Omega.N) grid...")
+    kernel = use_cuda ? "gpu" : "cpu"
+    filename = "$(case)_N$(Omega.N)_$kernel"
+    println("Computing $case on $kernel and $(Omega.N) x $(Omega.N) grid...")
 
     t_out = years2seconds.([0.0, 100.0, 500.0, 1500.0, 5000.0, 10_000.0, 50_000.0])
 
@@ -53,5 +54,5 @@ end
 
 case = "refactor"
 for n in 5:7
-    main(n, case, use_cuda = false)
+    main(n, case, use_cuda = true)
 end
