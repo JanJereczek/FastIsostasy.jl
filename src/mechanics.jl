@@ -27,7 +27,7 @@ end
 
 Compute ice load based on ice thickness.
 """
-function ice_load(c::PhysicalConstants{T}, H::Matrix{T}) where {T<:AbstractFloat}
+function ice_load(c::PhysicalConstants{T}, H::AbstractMatrix{T}) where {T<:AbstractFloat}
     return - c.ice_density .* c.g .* H
 end
 
@@ -54,12 +54,13 @@ function precompute_fastiso(
     quad_support, quad_coeffs = get_quad_coeffs(T, quad_precision)
     loadresponse = get_integrated_loadresponse(Omega, quad_support, quad_coeffs)
 
-    # Space-derivatives of rigidity 
-    Dx = mixed_fdx(p.litho_rigidity, Omega.dx)
-    Dy = mixed_fdy(p.litho_rigidity, Omega.dy)
-    Dxx = mixed_fdxx(p.litho_rigidity, Omega.dx)
-    Dyy = mixed_fdyy(p.litho_rigidity, Omega.dy)
-    Dxy = mixed_fdy( mixed_fdx(p.litho_rigidity, Omega.dx), Omega.dy )
+    # Space-derivatives of rigidity
+    D = kernelpromote(p.litho_rigidity, Array)
+    Dx = mixed_fdx(D, Omega.dx)
+    Dy = mixed_fdy(D, Omega.dy)
+    Dxx = mixed_fdxx(D, Omega.dx)
+    Dyy = mixed_fdyy(D, Omega.dy)
+    Dxy = mixed_fdy( mixed_fdx(D, Omega.dx), Omega.dy )
 
     omega_zeros = fill(T(0.0), Omega.N, Omega.N)
     zero_tol = 1e-2
@@ -96,7 +97,7 @@ end
 # Forward integration
 #####################################################
 
-function isostasy(
+function forward_isostasy(
     t_out::Vector{T},
     Omega::ComputationDomain{T},
     tools::PrecomputedFastiso{T},
@@ -115,20 +116,27 @@ function isostasy(
     ODEsolver::Any = BS3(),
 ) where {T<:AbstractFloat}
 
-    Hice = linear_interpolation(t_Hice_snapshots, Hice_snapshots)
-    eta = linear_interpolation(t_eta_snapshots, eta_snapshots)
-    sol, dudt = viscous_response(t_out, u_viscous_0, Omega, Hice, tools, p, c, ODEsolver)
-    lc = ColumnHeights( Hice(0.0), hi_0, hw_0, hw_0, b0, b0)
+    Hice = linear_interpolation( t_Hice_snapshots, Hice_snapshots )
+    Hice_ode = linear_interpolation( t_Hice_snapshots,
+        kernelpromote(Hice_snapshots, Omega.arraykernel) )
+    eta = linear_interpolation(t_eta_snapshots,
+        kernelpromote(eta_snapshots, Omega.arraykernel) )
 
+    u_viscous_0 = kernelpromote(u_viscous_0, Omega.arraykernel)
+    sol, dudt = viscous_response(t_out, u_viscous_0, Omega,
+        Hice_ode, tools, p, c, ODEsolver)
+    u_viscous, dudt_viscous = kernelpromote(sol.u, Array), kernelpromote(dudt, Array)
+
+    lc = ColumnHeights( Hice(0.0), hi_0, hw_0, hw_0, b0, b0)
     u_elastic = [copy(u_elastic_0) for time in t_out]
     geoid = [copy(geoid_0) for time in t_out]
     for i in eachindex(t_out)[1:end]
         t = t_out[i]
         u_elastic[i] .+= compute_elastic_response(Omega, tools, c.ice_density .* Hice(t))
-        update_columnchanges!(lc, sol.u[i], Hice(t)) # .+ u_elastic[i]
+        update_columnchanges!(lc, u_viscous[i], Hice(t)) # .+ u_elastic[i]
         geoid[i] .+= compute_geoid_response(c, p, Omega, tools, lc)
     end
-    return FastIsoResults(t_out, sol.u, dudt, u_elastic, geoid, Hice, eta)
+    return FastIsoResults(t_out, u_viscous, dudt_viscous, u_elastic, geoid, Hice, eta)
 end
 
 """
@@ -138,11 +146,11 @@ List of all available solvers [here](https://docs.sciml.ai/DiffEqDocs/stable/sol
 function viscous_response(
     t_out::Vector{T},
     u_viscous::AbstractMatrix{T},
-    Omega::ComputationDomain,
+    Omega::ComputationDomain{T},
     Hice::Interpolations.Extrapolation,
-    tools::PrecomputedFastiso,
-    p::MultilayerEarth,
-    c::PhysicalConstants,
+    tools::PrecomputedFastiso{T},
+    p::MultilayerEarth{T},
+    c::PhysicalConstants{T},
     ODEsolver,
 ) where {T<:AbstractFloat}
 
@@ -154,8 +162,8 @@ function viscous_response(
 end
 
 function viscous_dudt!(
-    du::Matrix{T},
-    u::Matrix{T},
+    du::AbstractMatrix{T},
+    u::AbstractMatrix{T},
     params::ODEParams{T},
     t::T,
 ) where {T<:AbstractFloat}

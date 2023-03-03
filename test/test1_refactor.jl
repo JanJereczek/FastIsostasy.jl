@@ -10,7 +10,7 @@ function main(
 )
     T = Float64
     L = T(3000e3)               # half-length of the square domain (m)
-    Omega = init_domain(L, n, use_cuda = false)
+    Omega = init_domain(L, n, use_cuda = use_cuda)
     c = init_physical_constants()
     p = init_multilayer_earth(Omega, c)
 
@@ -27,12 +27,14 @@ function main(
     Hice_snapshots = [Hcylinder, Hcylinder]
 
     t_eta_snapshots = [t_out[1], t_out[end]]
-    eta_snapshots = [p.effective_viscosity, p.effective_viscosity]
+    eta_snapshots = kernelpromote([p.effective_viscosity, p.effective_viscosity], Array)
+    # TODO: make this more elegant
 
     tools = precompute_fastiso(Omega, p, c)
     t1 = time()
-    results = isostasy(t_out, Omega, tools, p, c,
-        t_Hice_snapshots, Hice_snapshots, t_eta_snapshots, eta_snapshots)
+    results = forward_isostasy(t_out, Omega, tools, p, c,
+        t_Hice_snapshots, Hice_snapshots, t_eta_snapshots, eta_snapshots,
+        ODEsolver = BS3())
     t_fastiso = time() - t1
     println("Took $t_fastiso seconds!")
     println("-------------------------------------")
@@ -50,6 +52,6 @@ function main(
 end
 
 case = "refactor"
-for n in 5:5
+for n in 5:7
     main(n, case, use_cuda = false)
 end

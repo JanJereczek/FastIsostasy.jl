@@ -18,6 +18,7 @@ struct ComputationDomain{T<:AbstractFloat}
     harmonic_coeffs::AbstractMatrix{T}
     biharmonic_coeffs::AbstractMatrix{T}
     use_cuda::Bool
+    arraykernel     # Array or CuArray depending on chosen hardware
 end
 
 struct PhysicalConstants{T<:AbstractFloat}

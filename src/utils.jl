@@ -104,6 +104,11 @@ function init_domain(
     use_cuda=false::Bool
 ) where {T<:AbstractFloat}
 
+    if use_cuda
+        arraykernel = CuArray
+    else
+        arraykernel = Array
+    end
     # Geometry
     Lx, Ly = L, L
     N = 2^n
@@ -121,19 +126,13 @@ function init_domain(
     loadresponse_matrix, loadresponse_function = build_loadresponse_matrix(
         X, Y, distance, loadresponse_coeffs )
 
-    # Geoid response variables
-
-
     pseudodiff, harmonic, biharmonic = get_differential_fourier(L, N2)
 
     # Avoid division by zero. Tolerance ϵ of the order of the neighboring terms.
     # Tests show that it does not lead to errors wrt analytical or benchmark solutions.
     pseudodiff[1, 1] = mean([pseudodiff[1,2], pseudodiff[2,1]])
-
-    if use_cuda
-        pseudodiff, harmonic, biharmonic = convert2CuArray(
-            [pseudodiff, harmonic, biharmonic])
-    end
+    pseudodiff, harmonic, biharmonic = kernelpromote(
+            [pseudodiff, harmonic, biharmonic], arraykernel)
     
     return ComputationDomain(
         Lx, Ly, N, N2,
@@ -141,7 +140,7 @@ function init_domain(
         X, Y, R, Θ,
         loadresponse_matrix, loadresponse_function,
         pseudodiff, harmonic, biharmonic,
-        use_cuda,
+        use_cuda, arraykernel
     )
 end
 
@@ -223,11 +222,7 @@ function init_multilayer_earth(
     end
 
     layers_thickness = diff( layers_begin, dims=3 )
-    if Omega.use_cuda
-        pseudodiff_coeffs = Array(Omega.pseudodiff_coeffs)
-    else
-        pseudodiff_coeffs = Omega.pseudodiff_coeffs
-    end
+    pseudodiff_coeffs = kernelpromote(Omega.pseudodiff_coeffs, Omega.arraykernel)
     effective_viscosity = get_effective_viscosity(
         Omega,
         layers_viscosity,
@@ -238,11 +233,8 @@ function init_multilayer_earth(
     # mean_density = get_matrix_mean_density(layers_thickness, layers_density)
     mean_density = fill(layers_density[1], Omega.N, Omega.N)
 
-    if Omega.use_cuda
-        litho_rigidity, effective_viscosity, mean_density = convert2CuArray(
-            [litho_rigidity, effective_viscosity, mean_density]
-        )
-    end
+    litho_rigidity, effective_viscosity, mean_density = kernelpromote(
+        [litho_rigidity, effective_viscosity, mean_density], Omega.arraykernel)
 
     return MultilayerEarth(
         c.g,
@@ -653,6 +645,14 @@ end
 #####################################################
 # Kernel utils
 #####################################################
+
+function kernelpromote(X::M, arraykernel) where {M<:AbstractArray{T}} where {T<:Real}
+    return arraykernel(X)
+end
+
+function kernelpromote(X::Vector{M}, arraykernel) where {M<:AbstractArray{T}} where {T<:Real}
+    return [arraykernel(x) for x in X]
+end
 
 function convert2CuArray(X::Vector)
     return [CuArray(x) for x in X]
