@@ -28,7 +28,7 @@ end
 Compute ice load based on ice thickness.
 """
 function ice_load(c::PhysicalConstants{T}, H::Matrix{T}) where {T<:AbstractFloat}
-    return c.ice_density .* c.g .* H
+    return - c.ice_density .* c.g .* H
 end
 
 #####################################################
@@ -81,7 +81,7 @@ function precompute_fastiso(
     end
 
     rhog = p.mean_density .* c.g
-    geoid_green = get_geoid_green(Omega.Θ, c)
+    geoid_green = get_geoid_green(Omega, c) # get_geoid_green(Omega.Θ, c)
 
     return PrecomputedFastiso(
         loadresponse, fft(loadresponse),
@@ -109,6 +109,7 @@ function isostasy(
     u_viscous_0::Matrix{T} = fill(T(0.0), Omega.N, Omega.N),
     u_elastic_0::Matrix{T} = fill(T(0.0), Omega.N, Omega.N),
     geoid_0::Matrix{T} = fill(T(0.0), Omega.N, Omega.N),
+    hi_0::Matrix{T} = fill(T(0.0), Omega.N, Omega.N),
     hw_0::Matrix{T} = fill(T(0.0), Omega.N, Omega.N),
     b0::Matrix{T} = fill(T(0.0), Omega.N, Omega.N),
     ODEsolver::Any = BS3(),
@@ -117,17 +118,16 @@ function isostasy(
     Hice = linear_interpolation(t_Hice_snapshots, Hice_snapshots)
     eta = linear_interpolation(t_eta_snapshots, eta_snapshots)
     sol, dudt = viscous_response(t_out, u_viscous_0, Omega, Hice, tools, p, c, ODEsolver)
-    lc = ColumnChanges( Hice(0.0), Hice(0.0), hw_0, hw_0, b0, b0)
+    lc = ColumnHeights( Hice(0.0), hi_0, hw_0, hw_0, b0, b0)
 
-    u_elastic = [u_elastic_0 for time in t_out]
-    geoid = [geoid_0 for time in t_out]
+    u_elastic = [copy(u_elastic_0) for time in t_out]
+    geoid = [copy(geoid_0) for time in t_out]
     for i in eachindex(t_out)[1:end]
         t = t_out[i]
-        u_elastic[i] .+= compute_elastic_response(Omega, tools, -c.ice_density.*Hice(t))
-        update_columnchanges!(lc, sol.u[i] .+ u_elastic[i], Hice(t))
+        u_elastic[i] .+= compute_elastic_response(Omega, tools, c.ice_density .* Hice(t))
+        update_columnchanges!(lc, sol.u[i], Hice(t)) # .+ u_elastic[i]
         geoid[i] .+= compute_geoid_response(c, p, Omega, tools, lc)
     end
-
     return FastIsoResults(t_out, sol.u, dudt, u_elastic, geoid, Hice, eta)
 end
 
@@ -147,13 +147,18 @@ function viscous_response(
 ) where {T<:AbstractFloat}
 
     params = ODEParams(Omega, c, p, Hice, tools)
-    prob = ODEProblem(f!, u_viscous, extrema(t_out), params)
-    sol = solve(prob, ODEsolver, saveat = t_out)
+    prob = ODEProblem(viscous_dudt!, u_viscous, extrema(t_out), params)
+    sol = solve(prob, ODEsolver, saveat = t_out, dt = years2seconds(T(1)))
     dudt = [sol(t, Val{1}) for t in t_out]
     return sol, dudt
 end
 
-function f!(du::Matrix{T}, u::Matrix{T}, params::ODEParams{T}, t::T) where {T<:AbstractFloat}
+function viscous_dudt!(
+    du::Matrix{T},
+    u::Matrix{T},
+    params::ODEParams{T},
+    t::T,
+) where {T<:AbstractFloat}
     # println("t = $(Int(round(seconds2years(t)))) years...")
     Omega = params.Omega
     c = params.c
