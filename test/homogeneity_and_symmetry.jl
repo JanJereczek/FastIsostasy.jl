@@ -29,9 +29,9 @@ sigma_zz_zero = copy(u3D[:, :, 1])          # test a zero-load field (N/m^2)
 tools = precompute_terms(dt, Omega, p, c)
 
 @testset "symmetry of load response" begin
-    @test isapprox( tools.loadresponse, tools.loadresponse', rtol = T(1e-6) )
-    @test isapprox( tools.loadresponse, reverse(tools.loadresponse, dims=1), rtol = T(1e-6) )
-    @test isapprox( tools.loadresponse, reverse(tools.loadresponse, dims=2), rtol = T(1e-6) )
+    @test isapprox( tools.elasticgreen, tools.elasticgreen', rtol = T(1e-6) )
+    @test isapprox( tools.elasticgreen, reverse(tools.elasticgreen, dims=1), rtol = T(1e-6) )
+    @test isapprox( tools.elasticgreen, reverse(tools.elasticgreen, dims=2), rtol = T(1e-6) )
 end
 
 @testset "homogeneous response to zero load" begin

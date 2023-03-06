@@ -9,17 +9,20 @@ include("helpers_plot.jl")
 
 function main()
 
-    case = "euler3layers"
+    case = "SimpleEuler"
     N = 256
     N2 = Int(N/2)
     N4 = Int(N/4)
-    hash = "$(case)_gpu_N$(N)"
+    hash = "$(case)_N$(N)_gpu"
     sol = load("data/test1/$hash.jld2")
     Omega, c, p, H, R = sol["Omega"], sol["c"], sol["p"], sol["H"], sol["R"]
-    t_out = sol["t_out"]
+    results = sol["results"]
+
+    t_out = results.t_out
 
     fig = Figure(resolution = (1600, 900), fontsize = 20)
-    t_2Dplot = [100.0, 1000.0, 100000.0]
+    t_2Dplot = [100.0, 1500.0, 50_000.0]
+
     clim = (-300, 10)
     # cmap = cgrad(:PuOr_5, rev = true)
     cmap = cgrad(:cool, rev = true)
@@ -29,7 +32,7 @@ function main()
         tyr = Int(round(t_2Dplot[i]))
         t = years2seconds(t_2Dplot[i])
         k = argmin( (t_out .- t) .^ 2 )
-        u_numeric = sol["u3D_viscous"][:, :, k]
+        u_numeric = results.viscous[k]
 
         letter = letters[i]
         ax3D = Axis3(
@@ -70,7 +73,6 @@ function main()
 
 
     t_plot = years2seconds.([100.0, 500.0, 1500.0, 5000.0, 10_000.0, 50_000.0])
-    # colors = [:black, :orange, :blue, :red, :gray, :purple]
     colors = [:gray80, :gray65, :gray50, :gray35, :gray20, :gray5]
     analytic_support = vcat(1.0e-14, 10 .^ (-10:0.05:-3), 1.0)
     xoffset = [1, 1, 1, 1, 1, 28]
@@ -88,7 +90,7 @@ function main()
         analytic_solution_r(r) = analytic_solution(r, t, c, p, H, R, analytic_support)
         u_analytic = analytic_solution_r.( sqrt.( x .^ 2 + y .^ 2 ) )
         k = argmin( (t_out .- t) .^ 2 )
-        u_numeric = diag(sol["u3D_viscous"][:, :, k])
+        u_numeric = diag(results.viscous[k])
         tyr = Int(round(seconds2years(t)))
 
         if i == 1
@@ -135,22 +137,23 @@ function main()
     axislegend(ax3, position = :rc)
 
 
-    Nvec = 2 .^ (4:9)
+    Nvec = 2 .^ (4:8)
     maxerror = Float64[]
     meanerror = Float64[]
     delta_x = Float64[]
     t_end = years2seconds(1e5)
 
     for N in Nvec
-        hash = "$(case)_gpu_N$(N)"
+        hash = "$(case)_N$(N)_gpu"
         sol = load("data/test1/$hash.jld2")
 
         islice, jslice = Int(round(N/2)), Int(round(N/2))
         Omega, c, p, H, R = sol["Omega"], sol["c"], sol["p"], sol["H"], sol["R"]
+        results = sol["results"]
         x, y = Omega.X[islice, jslice:end], Omega.Y[islice, jslice:end] 
         analytic_solution_r(r) = analytic_solution(r, t_end, c, p, H, R, analytic_support)
         u_analytic = analytic_solution_r.( sqrt.( x .^ 2 + y .^ 2 ) )
-        u_numeric = sol["u3D_viscous"][:, :, end]
+        u_numeric = results.viscous[end]
         abs_error = abs.(u_analytic - u_numeric[islice, jslice:end])
 
         append!(delta_x, Omega.Lx * 1e-3 / N)
@@ -190,7 +193,7 @@ function main()
         runtime = Float64[]
         delta_x = Float64[]
         for N in Nvec
-            hash = "$(case)_$(kernel)_N$(N)"
+            hash = "$(case)_N$(N)_$(kernel)"
             sol = load("data/test1/$hash.jld2")
             append!(runtime, sol["t_fastiso"])
             append!(delta_x, 2*sol["Omega"].Lx * 1e-3 / N)

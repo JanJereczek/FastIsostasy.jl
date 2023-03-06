@@ -6,7 +6,7 @@ using FFTW
 using FastGaussQuadrature
 using DSP
 using CUDA
-using OrdinaryDiffEq: ODEProblem, solve
+using OrdinaryDiffEq: ODEProblem, solve, OrdinaryDiffEqAlgorithm
 using Reexport
 @reexport using Interpolations
 @reexport using OrdinaryDiffEq: Euler, BS3, Tsit5, TanYam7, Vern9, VCABM
@@ -28,6 +28,7 @@ export PhysicalConstants
 export MultilayerEarth
 export ColumnHeights
 export PrecomputedFastiso
+export GeoState
 
 # parameters.jl
 export init_domain
@@ -63,14 +64,14 @@ export precompute_fastiso
 export quadrature1D
 export meshgrid
 export get_quad_coeffs
-export get_integrated_loadresponse
+export get_elasticgreen
 export forward_isostasy
 export apply_bc!
 export ice_load
 
 # geoid.jl
-export get_geoid_green
-export update_columnchanges!
+export get_geoidgreen
+export update_loadcolumns!
 export compute_geoid_response
 export get_load_change
 

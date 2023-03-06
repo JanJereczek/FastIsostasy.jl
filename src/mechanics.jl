@@ -1,28 +1,5 @@
 """
 
-    FastIsoResults
-
-A mutable struct containing the results of FastIsostasy:
-    - `t_out` the time output vector
-    - `u3D_elastic` the elastic response over `t_out`
-    - `u3D_viscous` the viscous response over `t_out`
-    - `dudt3D_viscous` the displacement rate over `t_out`
-    - `geoid3D` the geoid response over `t_out`
-    - `Hice` an interpolator of the ice thickness over time
-    - `eta` an interpolator of the upper-mantle viscosity over time
-"""
-struct FastIsoResults{T<:AbstractFloat}
-    t_out::Vector{T}
-    viscous::Vector{Matrix{T}}
-    displacement_rate::Vector{Matrix{T}}
-    elastic::Vector{Matrix{T}}
-    geoid::Vector{Matrix{T}}
-    Hice::Interpolations.Extrapolation
-    eta::Interpolations.Extrapolation
-end
-
-"""
-
     ice_load(c::PhysicalConstants{T}, H::T)
 
 Compute ice load based on ice thickness.
@@ -50,9 +27,11 @@ function precompute_fastiso(
     quad_precision::Int = 4,
 ) where {T<:AbstractFloat}
 
-    # Elastic response
+    # Elastic response variables
+    distance, greenintegrand_coeffs = get_greenintegrand_coeffs(T)
+    greenintegrand_function = build_greenintegrand(distance, greenintegrand_coeffs)
     quad_support, quad_coeffs = get_quad_coeffs(T, quad_precision)
-    loadresponse = get_integrated_loadresponse(Omega, quad_support, quad_coeffs)
+    elasticgreen = get_elasticgreen(Omega, greenintegrand_function, quad_support, quad_coeffs)
 
     # Space-derivatives of rigidity
     D = kernelpromote(p.litho_rigidity, Array)
@@ -73,8 +52,7 @@ function precompute_fastiso(
     # FFT plans depening on CPU vs. GPU usage
     if Omega.use_cuda
         Xgpu = CuArray(Omega.X)
-        p1 = CUDA.CUFFT.plan_fft(Xgpu)
-        p2 = CUDA.CUFFT.plan_ifft(Xgpu)
+        p1, p2 = CUDA.CUFFT.plan_fft(Xgpu), CUDA.CUFFT.plan_ifft(Xgpu)
         # Dx, Dy, Dxx, Dyy, Dxy, rhog = convert2CuArray([Dx, Dy, Dxx, Dxy, Dyy, rhog])
         Dx, Dy, Dxx, Dyy, Dxy = convert2CuArray([Dx, Dy, Dxx, Dxy, Dyy])
     else
@@ -82,14 +60,14 @@ function precompute_fastiso(
     end
 
     rhog = p.mean_density .* c.g
-    geoid_green = get_geoid_green(Omega, c) # get_geoid_green(Omega.Θ, c)
+    geoidgreen = get_geoidgreen(Omega, c) # get_geoidgreen(Omega.Θ, c)
 
     return PrecomputedFastiso(
-        loadresponse, fft(loadresponse),
+        elasticgreen, fft(elasticgreen),
         p1, p2,
         Dx, Dy, Dxx, Dyy, Dxy, negligible_gradD,
         rhog,
-        geoid_green,
+        geoidgreen,
     )
 end
 
@@ -97,6 +75,13 @@ end
 # Forward integration
 #####################################################
 
+"""
+
+forward_isostasy()
+
+Main function.
+List of all available solvers [here](https://docs.sciml.ai/DiffEqDocs/stable/solvers/ode_solve/#OrdinaryDiffEq.jl-for-Non-Stiff-Equations).
+"""
 function forward_isostasy(
     t_out::Vector{T},
     Omega::ComputationDomain{T},
@@ -110,10 +95,12 @@ function forward_isostasy(
     u_viscous_0::Matrix{T} = fill(T(0.0), Omega.N, Omega.N),
     u_elastic_0::Matrix{T} = fill(T(0.0), Omega.N, Omega.N),
     geoid_0::Matrix{T} = fill(T(0.0), Omega.N, Omega.N),
+    sealevel_0::Matrix{T} = fill(T(0.0), Omega.N, Omega.N),
     hi_0::Matrix{T} = fill(T(0.0), Omega.N, Omega.N),
     hw_0::Matrix{T} = fill(T(0.0), Omega.N, Omega.N),
-    b0::Matrix{T} = fill(T(0.0), Omega.N, Omega.N),
-    ODEsolver::Any = BS3(),
+    b_ref::Matrix{T} = fill(T(0.0), Omega.N, Omega.N),
+    ODEsolver::Any = "SimpleEuler",
+    dt::T = T(years2seconds(1.0)),
 ) where {T<:AbstractFloat}
 
     Hice = linear_interpolation( t_Hice_snapshots, Hice_snapshots )
@@ -122,52 +109,23 @@ function forward_isostasy(
     eta = linear_interpolation(t_eta_snapshots,
         kernelpromote(eta_snapshots, Omega.arraykernel) )
 
+    params = ODEParams(Omega, c, p, Hice_ode, tools)
     u_viscous_0 = kernelpromote(u_viscous_0, Omega.arraykernel)
-    sol, dudt = viscous_response(t_out, u_viscous_0, Omega,
-        Hice_ode, tools, p, c, ODEsolver)
-    u_viscous, dudt_viscous = kernelpromote(sol.u, Array), kernelpromote(dudt, Array)
+    geostate = GeoState(Hice(0.0), hi_0, hw_0, hw_0, b_ref, b_ref, geoid_0, sealevel_0)
+    u, dudt, u_elastic, geoid, sealevel = solve_isostasy(
+        t_out, u_viscous_0, geostate, params, ODEsolver)
 
-    lc = ColumnHeights( Hice(0.0), hi_0, hw_0, hw_0, b0, b0)
-    u_elastic = [copy(u_elastic_0) for time in t_out]
-    geoid = [copy(geoid_0) for time in t_out]
-    for i in eachindex(t_out)[1:end]
-        t = t_out[i]
-        u_elastic[i] .+= compute_elastic_response(Omega, tools, c.ice_density .* Hice(t))
-        update_columnchanges!(lc, u_viscous[i], Hice(t)) # .+ u_elastic[i]
-        geoid[i] .+= compute_geoid_response(c, p, Omega, tools, lc)
-    end
-    return FastIsoResults(t_out, u_viscous, dudt_viscous, u_elastic, geoid, Hice, eta)
+    return FastIsoResults(t_out, u, dudt, u_elastic, geoid, sealevel, Hice, eta)
 end
 
-"""
-
-List of all available solvers [here](https://docs.sciml.ai/DiffEqDocs/stable/solvers/ode_solve/#OrdinaryDiffEq.jl-for-Non-Stiff-Equations).
-"""
-function viscous_response(
-    t_out::Vector{T},
-    u_viscous::AbstractMatrix{T},
-    Omega::ComputationDomain{T},
-    Hice::Interpolations.Extrapolation,
-    tools::PrecomputedFastiso{T},
-    p::MultilayerEarth{T},
-    c::PhysicalConstants{T},
-    ODEsolver,
-) where {T<:AbstractFloat}
-
-    params = ODEParams(Omega, c, p, Hice, tools)
-    prob = ODEProblem(viscous_dudt!, u_viscous, extrema(t_out), params)
-    sol = solve(prob, ODEsolver, saveat = t_out, dt = years2seconds(T(1)))
-    dudt = [sol(t, Val{1}) for t in t_out]
-    return sol, dudt
-end
 
 function viscous_dudt!(
-    du::AbstractMatrix{T},
+    dudt::AbstractMatrix{T},
     u::AbstractMatrix{T},
     params::ODEParams{T},
     t::T,
 ) where {T<:AbstractFloat}
-    # println("t = $(Int(round(seconds2years(t)))) years...")
+
     Omega = params.Omega
     c = params.c
     p = params.p
@@ -176,8 +134,8 @@ function viscous_dudt!(
 
     apply_bc!(u)
     uf = tools.pfft * u
-    harmonic_uf = real.(tools.pifft * ( Omega.harmonic_coeffs .* uf ))
-    biharmonic_uf = real.( tools.pifft * ( Omega.biharmonic_coeffs .* uf ) )
+    harmonic_uf = real.(tools.pifft * ( Omega.harmonic .* uf ))
+    biharmonic_uf = real.( tools.pifft * ( Omega.biharmonic .* uf ) )
 
     term1 = ice_load(c, Hice(t))
     term2 = - tools.rhog .* u
@@ -188,7 +146,7 @@ function viscous_dudt!(
     else
         term4 = - T(2) .* tools.Dx .* mixed_fdx(harmonic_uf, Omega.dx)
         term5 = - T(2) .* tools.Dy .* mixed_fdy(harmonic_uf, Omega.dy)
-        term6 = - real.(tools.pifft * (Omega.harmonic_coeffs .* (tools.pfft * (p.litho_rigidity .* harmonic_uf))))
+        term6 = - real.(tools.pifft * (Omega.harmonic .* (tools.pfft * (p.litho_rigidity .* harmonic_uf))))
         term7 = tools.Dxx .* mixed_fdyy(u, Omega.dy)
         term8 = - T(2) .* tools.Dxy .* mixed_fdy( mixed_fdx(u, Omega.dx), Omega.dy )
         term9 = tools.Dyy .* mixed_fdxx(u, Omega.dx)
@@ -198,11 +156,69 @@ function viscous_dudt!(
                 (term7 + term8 + term9)
     end
 
-    dudtf = (tools.pfft * rhs) ./ Omega.pseudodiff_coeffs
-    du[:, :] .= real.(tools.pifft * dudtf) ./ (T(2) .* p.effective_viscosity)
-    apply_bc!(du)
+    dudtf = (tools.pfft * rhs) ./ Omega.pseudodiff
+    dudt[:, :] .= real.(tools.pifft * dudtf) ./ (T(2) .* p.effective_viscosity)
+    apply_bc!(dudt)
 
     return nothing
+end
+
+function simple_euler!(
+    u::AbstractMatrix{T},
+    dudt::AbstractMatrix{T},
+    dt::T,
+) where {T<:AbstractFloat}
+    u .+= dudt .* dt
+    return nothing
+end
+
+function solve_isostasy(
+    t_out::Vector{T},
+    u::AbstractMatrix{T},
+    geostate::GeoState{T},
+    params::ODEParams{T},
+    ODEsolver::Any,
+) where {T<:AbstractFloat}
+
+    # initialize with placeholders
+    placeholder = kernelpromote(u, Array)
+    u_out = [copy(placeholder) for time in t_out]
+    dudt_out = [copy(placeholder) for time in t_out]
+    u_el_out = [copy(placeholder) for time in t_out]
+    geoid_out = [copy(placeholder) for time in t_out]
+    sealevel_out = [copy(placeholder) for time in t_out]
+
+    dudt = copy(u)
+    dt = years2seconds( T(1.0) )
+
+    for k in eachindex(t_out)[1:end]
+        t0 = k == 1 ? T(0.0) : t_out[k-1]
+        println("Computing until t = $(Int(round(seconds2years(t_out[k])))) years...")
+
+        if isa(ODEsolver, OrdinaryDiffEqAlgorithm)
+            prob = ODEProblem(viscous_dudt!, u, (t0, t_out[k]), params)
+            sol = solve(prob, ODEsolver, reltol = 1e-3)
+
+            u .= sol(t_out[k], Val{0})
+            dudt .= sol(t_out[k], Val{1})
+        else
+            for t in t0:dt:t_out[k]
+                viscous_dudt!(dudt, u, params, t)
+                simple_euler!(u, dudt, dt)
+            end
+        end
+
+        u_out[k] .= kernelpromote(u, Array)
+        dudt_out[k] .= kernelpromote(dudt, Array)
+
+        update_loadcolumns!(geostate, u_out[k],
+            kernelpromote(params.Hice(t_out[k]), Array) )
+        update_geoid!(geostate, params)
+        # update_sealevel!(geostate)
+        geoid_out[k] .= copy(geostate.geoid)
+        sealevel_out[k] .= copy(geostate.sealevel)
+    end
+    return u_out, dudt_out, u_el_out, geoid_out, sealevel_out
 end
 
 #####################################################
@@ -245,5 +261,5 @@ function compute_elastic_response(
     tools::PrecomputedFastiso,
     load::AbstractMatrix{T},
 ) where {T<:AbstractFloat}
-    return conv(load, tools.loadresponse)[Omega.N2:end-Omega.N2, Omega.N2:end-Omega.N2]
+    return conv(load, tools.elasticgreen)[Omega.N2:end-Omega.N2, Omega.N2:end-Omega.N2]
 end

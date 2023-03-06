@@ -29,14 +29,7 @@ function main(
 
     @testset "analytic solution" begin
         sol = analytic_solution(
-            T(0),
-            timespan[end],
-            c,
-            p,
-            H,
-            R,
-            analytic_support,
-        )
+            T(0), timespan[end], c, p, H, R, analytic_support)
         @test isapprox( sol, -1000*c.ice_density/mean(p.mean_density), rtol=T(1e-2) )
     end
 

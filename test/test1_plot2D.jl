@@ -20,9 +20,10 @@ function main(
     timespan = years2seconds.([0.0, 5e4])       # (yr) -> (s)
     dt_out = years2seconds(100.0)               # (yr) -> (s), time step for saving output
     t_vec = timespan[1]:dt_out:timespan[2]      # (s)
-    sol = load("data/test1/$(case)_gpu_N$N.jld2")
-    Omega, c, p, R, H = sol["Omega"], sol["c"], sol["p"], sol["R"], sol["H"]
-    u3D_elastic, u3D_viscous = sol["u3D_elastic"], sol["u3D_viscous"]
+    sol = load("data/test1/$(case)_N$(N)_cpu.jld2")
+    R, H, Omega, c, p = sol["R"], sol["H"], sol["Omega"], sol["c"], sol["p"]
+    results = sol["results"]
+    u3D_elastic, u3D_viscous = results.elastic, results.viscous
     sigma_zz_disc = generate_uniform_disc_load(Omega, c, R, H)
 
     # Computing analytical solution is quite expensive as it involves
@@ -53,10 +54,10 @@ function main(
 
     u_plot = [
         u_analytic,
-        u3D_viscous[:,:,end],
-        u3D_elastic[:,:,end],
-        u3D_viscous[:,:,end] - u_analytic,
-        u3D_elastic[:,:,end] + u3D_viscous[:,:,end],
+        u3D_viscous[end][:,:],
+        u3D_elastic[end][:,:],
+        u3D_viscous[end][:,:] - u_analytic,
+        u3D_elastic[end][:,:] + u3D_viscous[end][:,:],
     ]
     panels = [
         (2,1),
@@ -96,7 +97,7 @@ Application cases:
     - "euler2layers"
     - "euler3layers"
 """
-case = "euler3layers"
-for n in 6:8
+case = "SimpleEuler"
+for n in 5:8
     main(n, case, make_anim = false)
 end

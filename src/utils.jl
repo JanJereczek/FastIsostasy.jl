@@ -104,11 +104,6 @@ function init_domain(
     use_cuda=false::Bool
 ) where {T<:AbstractFloat}
 
-    if use_cuda
-        arraykernel = CuArray
-    else
-        arraykernel = Array
-    end
     # Geometry
     Lx, Ly = L, L
     N = 2^n
@@ -120,25 +115,21 @@ function init_domain(
     X, Y = meshgrid(x, y)
     R = get_r.(X, Y)
     Θ = dist2angle_stereographic.(R)
-
-    # Elastic response variables
-    distance, loadresponse_coeffs = get_loadresponse_coeffs(T)
-    loadresponse_matrix, loadresponse_function = build_loadresponse_matrix(
-        X, Y, distance, loadresponse_coeffs )
-
+    
+    arraykernel = use_cuda ? CuArray : Array
+    
+    # Differential operators in Fourier space
     pseudodiff, harmonic, biharmonic = get_differential_fourier(L, N2)
-
-    # Avoid division by zero. Tolerance ϵ of the order of the neighboring terms.
-    # Tests show that it does not lead to errors wrt analytical or benchmark solutions.
     pseudodiff[1, 1] = mean([pseudodiff[1,2], pseudodiff[2,1]])
     pseudodiff, harmonic, biharmonic = kernelpromote(
             [pseudodiff, harmonic, biharmonic], arraykernel)
-    
+    # Avoid division by zero. Tolerance ϵ of the order of the neighboring terms.
+    # Tests show that it does not lead to errors wrt analytical or benchmark solutions.
+
     return ComputationDomain(
         Lx, Ly, N, N2,
         dx, dy, x, y,
         X, Y, R, Θ,
-        loadresponse_matrix, loadresponse_function,
         pseudodiff, harmonic, biharmonic,
         use_cuda, arraykernel
     )
@@ -222,12 +213,12 @@ function init_multilayer_earth(
     end
 
     layers_thickness = diff( layers_begin, dims=3 )
-    pseudodiff_coeffs = kernelpromote(Omega.pseudodiff_coeffs, Omega.arraykernel)
+    # pseudodiff = kernelpromote(Omega.pseudodiff, Omega.arraykernel)
     effective_viscosity = get_effective_viscosity(
         Omega,
         layers_viscosity,
         layers_thickness,
-        # pseudodiff_coeffs,
+        # pseudodiff,
     )
 
     # mean_density = get_matrix_mean_density(layers_thickness, layers_density)
@@ -313,7 +304,7 @@ function get_effective_viscosity(
     Omega::ComputationDomain{T},
     layers_viscosity::Array{T, 3},
     layers_thickness::Array{T, 3},
-    # pseudodiff_coeffs::AbstractMatrix{T},
+    # pseudodiff::AbstractMatrix{T},
 ) where {T<:AbstractFloat}
 
     # Recursion has to start with half space = n-th layer:
@@ -325,7 +316,7 @@ function get_effective_viscosity(
         viscosity_ratio = get_viscosity_ratio(channel_viscosity, effective_viscosity)
         viscosity_scaling = three_layer_scaling(
             Omega,
-            # pseudodiff_coeffs,
+            # pseudodiff,
             viscosity_ratio,
             channel_thickness,
         )
@@ -394,7 +385,7 @@ end
 
 """
 
-    loginterp_viscosity(tvec, layers_viscosity, layers_thickness, pseudodiff_coeffs)
+    loginterp_viscosity(tvec, layers_viscosity, layers_thickness, pseudodiff)
 
 Compute a log-interpolator of the equivalent viscosity from provided viscosity
 fields `layers_viscosity` at time stamps `tvec`.
@@ -403,7 +394,7 @@ function loginterp_viscosity(
     tvec::AbstractVector{T},
     layers_viscosity::Array{T, 4},
     layers_thickness::Array{T, 3},
-    pseudodiff_coeffs::AbstractMatrix,
+    pseudodiff::AbstractMatrix,
 ) where {T<:AbstractFloat}
     n1, n2, n3, nt = size(layers_viscosity)
     log_eqviscosity = [fill(T(0.0), n1, n2) for k in 1:nt]
@@ -411,7 +402,7 @@ function loginterp_viscosity(
     [log_eqviscosity[k] .= log10.(get_effective_viscosity(
         layers_viscosity[:, :, :, k],
         layers_thickness,
-        pseudodiff_coeffs,
+        pseudodiff,
     )) for k in 1:nt]
 
     log_interp = linear_interpolation(tvec, log_eqviscosity)
@@ -438,12 +429,12 @@ end
 
 """
 
-    get_loadresponse_coeffs(T)
+    get_greenintegrand_coeffs(T)
 
 Return the load response coefficients with type `T` and listed in table A3 of
 Farrell (1972).
 """
-function get_loadresponse_coeffs(T::Type)
+function get_greenintegrand_coeffs(T::Type)
 
     # Angles of table A3 of
     # Deformation of the Earth by surface Loads, Farrell 1972
@@ -477,72 +468,68 @@ end
 
 """
 
-    build_loadresponse_matrix(x, y)
+    build_greenintegrand(x, y)
 
 Compute the load response matrix of the solid Earth based on Green's function
 (c.f. Farell 1972). In the Fourier space, this corresponds to a product which
 is subsequently transformed back into the time domain.
 Use pre-computed integration tools to accelerate computation.
 """
-function build_loadresponse_matrix(
-    X::AbstractMatrix{T},
-    Y::AbstractMatrix{T},
+function build_greenintegrand(
     distance::Vector{T},
-    loadresponse_coeffs::Vector{T},
+    greenintegrand_coeffs::Vector{T},
 ) where {T<:AbstractFloat}
 
-    loadresponse_interp = linear_interpolation(distance, loadresponse_coeffs)
-    compute_loadresponse_entry_r(r::T) = compute_loadresponse_entry(
+    greenintegrand_interp = linear_interpolation(distance, greenintegrand_coeffs)
+    compute_greenintegrand_entry_r(r::T) = compute_greenintegrand_entry(
         r,
         distance,
-        loadresponse_coeffs,
-        loadresponse_interp,
+        greenintegrand_coeffs,
+        greenintegrand_interp,
     )
-    loadresponse_matrix = compute_loadresponse_entry_r.( get_r.(X, Y) )
-    loadresponse_function(x::T, y::T) = compute_loadresponse_entry_r( get_r(x, y) )
-    loadresponse_matrix = loadresponse_function.(X, Y)
-    
-    return loadresponse_matrix, loadresponse_function
+    greenintegrand_function(x::T, y::T) = compute_greenintegrand_entry_r( get_r(x, y) )
+    return greenintegrand_function
 end
 
-function compute_loadresponse_entry(
+function compute_greenintegrand_entry(
     r::T,
     rm::Vector{T},
-    loadresponse_coeffs::Vector{T},
-    interp_loadresponse_::Interpolations.Extrapolation,
+    greenintegrand_coeffs::Vector{T},
+    interp_greenintegrand_::Interpolations.Extrapolation,
 ) where {T<:AbstractFloat}
 
     if r < 0.01
-        return loadresponse_coeffs[1] / ( rm[2] * T(1e12) )
+        return greenintegrand_coeffs[1] / ( rm[2] * T(1e12) )
     elseif r > rm[end]
         return T(0.0)
     else
-        return interp_loadresponse_(r) / ( r * T(1e12) )
+        return interp_greenintegrand_(r) / ( r * T(1e12) )
     end
 end
 
 """
 
-    get_integrated_loadresponse(Omega, quad_support, quad_coeffs)
+    get_elasticgreen(Omega, quad_support, quad_coeffs)
 
 Integrate load response over field by using 2D quadrature with specified
 support points and associated coefficients.
 """
-function get_integrated_loadresponse(
-    Omega::ComputationDomain,
+function get_elasticgreen(
+    Omega::ComputationDomain{T},
+    greenintegrand_function::Function,
     quad_support::Vector{T},
     quad_coeffs::Vector{T},
 ) where {T<:AbstractFloat}
 
     h = Omega.dx
     N = Omega.N
-    integrated_loadresponse = similar(Omega.X)
+    elasticgreen = similar(Omega.X)
 
     for i = 1:N, j = 1:N
         p = i - Omega.N2 - 1
         q = j - Omega.N2 - 1
-        integrated_loadresponse[i, j] = quadrature2D(
-            Omega.loadresponse_function,
+        elasticgreen[i, j] = quadrature2D(
+            greenintegrand_function,
             quad_support,
             quad_coeffs,
             p*h,
@@ -551,7 +538,7 @@ function get_integrated_loadresponse(
             q*h+h,
         )
     end
-    return integrated_loadresponse
+    return elasticgreen
 end
 
 #####################################################

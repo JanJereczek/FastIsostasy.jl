@@ -37,6 +37,18 @@ function generate_cap_load(
            sqrt.( M .* (cos.(Theta) .- cos(alpha)) ./ (1 - cos(alpha)) )
 end
 
+function ice_cap(
+    Omega::ComputationDomain,
+    c::PhysicalConstants,
+    alpha_deg::T,
+    H::T,
+) where {T<:AbstractFloat}
+    R = XY2R(Omega.X, Omega.Y)
+    Theta = R ./ c.r_equator
+    alpha = deg2rad(alpha_deg)
+    M = Theta .< alpha
+    return H .* sqrt.( M .* (cos.(Theta) .- cos(alpha)) ./ (1 - cos(alpha)) )
+end
 ################################################
 # Analytic solution for constant viscosity
 ################################################

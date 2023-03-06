@@ -15,9 +15,9 @@ function main(
 )
 
     N = 2^n
-    sol = load("data/test1/$(case)_N$(N).jld2")
+    sol = load("data/test1/$(case)_N$(N)_cpu.jld2")
     R, H, Omega, c, p = sol["R"], sol["H"], sol["Omega"], sol["c"], sol["p"]
-    t_out = sol["t_out"]
+    results = sol["results"]
     analytic_support = vcat(1.0e-14, 10 .^ (-10:0.05:0))
 
     t_plot = years2seconds.([100.0, 500.0, 1500.0, 5000.0, 10_000.0, 50_000.0])
@@ -35,8 +35,8 @@ function main(
             Omega.Y[islice, jslice:end] .^ 2 
         ) )
 
-        k = argmin( (t_out .- t).^2 )
-        u_numeric = sol["u3D_viscous"][islice:end, jslice, k]
+        k = argmin( (results.t_out .- t).^2 )
+        u_numeric = results.viscous[k][islice:end, jslice]
 
         lines!(
             ax,
@@ -59,16 +59,7 @@ function main(
     save("plots/test1/$(case)_transients_N$N.pdf", fig)
 end
 
-"""
-Application cases:
-    - "cn2layers"
-    - "cn3layers"
-    - "euler2layers_cpu"
-    - "euler3layers_cpu"
-    - "euler2layers_gpu"
-    - "euler3layers_gpu"
-"""
-case = "euler3layers_gpu"
-for n in 4:5
+case = "SimpleEuler"
+for n in 7:7
     main(n, case)
 end
