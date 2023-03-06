@@ -11,9 +11,9 @@
     get_viscosity_ratio
     three_layer_scaling
     get_r
-    get_loadresponse_coeffs
-    build_loadresponse_matrix
-    get_integrated_loadresponse
+    get_greenintegrand_coeffs
+    build_greenintegrand
+    get_elasticgreen
     get_quad_coeffs
     quadrature1D
     quadrature2D
