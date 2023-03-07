@@ -112,12 +112,14 @@ function forward_isostasy(
     params = ODEParams(Omega, c, p, Hice_ode, tools)
     u_viscous_0 = kernelpromote(u_viscous_0, Omega.arraykernel)
     geostate = GeoState(
-        Hice(0.0), hi_ref,
-        hw_ref, hw_ref,
-        b_ref, b_ref,
-        geoid_0, sealevel_0,
-        T(0.0), T(0.0), T(0.0),
-        T(0.0), T(0.0), T(0.0),
+        Hice(0.0), hi_ref,          # ice column
+        hw_ref, hw_ref,             # water column
+        b_ref, b_ref,               # bedrock position
+        geoid_0,                    # geoid perturbation
+        sealevel_0, sealevel_0,     # sealevel
+        T(0.0), T(0.0), T(0.0),     # potential ocean volume (pov terms)
+        T(0.0), T(0.0), T(0.0),     # density-related terms
+        T(0.0), T(0.0),             # total sealevel contribution and conservation term
     )
     u, dudt, u_elastic, geoid, sealevel = solve_isostasy(
         t_out, u_viscous_0, geostate, params, ODEsolver)
@@ -235,7 +237,7 @@ function solve_isostasy(
         update_loadcolumns!(geostate, u_out[k],
             kernelpromote(params.Hice(t_out[k]), Array) )
         update_geoid!(geostate, params)
-        # update_sealevel!(geostate)
+        # update_slc!(geostate)
         geoid_out[k] .= copy(geostate.geoid)
         sealevel_out[k] .= copy(geostate.sealevel)
     end

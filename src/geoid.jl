@@ -1,9 +1,9 @@
 
 """
 
-    compute_geoid_response(c, p, Omega, tools, lc)
+    compute_geoid_response(c, p, Omega, tools, geostate)
 
-Compute the geoid response to the load changes `lc`, with `Omega` the computation
+Compute the geoid response to the load changes `geostate`, with `Omega` the computation
 domain, `c` the physical constants, `p` the solid-Earth parameters and `tools` the
 precomputed terms to accelerate FastIsostasy.
 
@@ -18,11 +18,11 @@ function compute_geoid_response(
     p::MultilayerEarth{T},
     Omega::ComputationDomain{T},
     tools::PrecomputedFastiso{T},
-    lc::GeoState{T},
+    geostate::GeoState{T},
 ) where {T<:AbstractFloat}
     return conv(
         tools.geoidgreen,
-        get_load_change(Omega, c, p, lc),
+        get_load_change(Omega, c, p, geostate),
     )[Omega.N2:end-Omega.N2, Omega.N2:end-Omega.N2]
 end
 
@@ -59,8 +59,6 @@ function get_geoidgreen(
     return geoid
 end
 
-
-
 function update_loadcolumns!(
     geostate::GeoState{T},
     u::AbstractMatrix{T},
@@ -82,6 +80,13 @@ function update_geoid!(
 end
 
 function update_sealevel!(
+    geostate::GeoState{T},
+)
+    geostate.sealevel = geostate.sealevel_ref + geostate.geoid + geostate.slc + geostate.conservation_term
+    return nothing
+end
+
+function update_slc!(
     Omega::ComputationDomain{T},
     c::PhysicalConstants{T},
     geostate::GeoState{T},
@@ -91,7 +96,7 @@ function update_sealevel!(
     update_volume_den!(Omega, c, geostate)
     update_slc_pov!(c, geostate)
     update_slc_den!(c, geostate)
-    geostate.sealevel = slc_af + geostate.slc_pov + geostate.slc_den
+    geostate.slc = slc_af + geostate.slc_pov + geostate.slc_den
     return nothing
 end
 
@@ -100,7 +105,7 @@ function update_volume_pov!(
     geostate::GeoState{T},
 ) where {T<:AbstractFloat}
     geostate.volume_pov = sum( 
-        max.(-geostate.b, T(0.0)) ./ (Omega.kn .^ 2) .* (Omega.dx * Omega.dy) )
+        max.(-geostate.b, T(0.0)) ./ (Omega.K .^ 2) .* (Omega.dx * Omega.dy) )
     return nothing
 end
 
@@ -111,7 +116,7 @@ function update_volume_den!(
 ) where {T<:AbstractFloat}
     density_factor = c.ice_density / c.water_density - c.ice_density / c.seawater_density
     geostate.volume_den = sum( 
-        geostate.hi .* density_factor ./ (Omega.kn .^ 2) .* (Omega.dx * Omega.dy) )
+        geostate.hi .* density_factor ./ (Omega.K .^ 2) .* (Omega.dx * Omega.dy) )
     return nothing
 end
 

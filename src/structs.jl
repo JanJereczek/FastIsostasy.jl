@@ -47,20 +47,23 @@ struct MultilayerEarth{T<:AbstractFloat}
 end
 
 mutable struct GeoState{T<:AbstractFloat}
-    hi::AbstractMatrix{T}           # current height of ice column
-    hi_ref::AbstractMatrix{T}       # reference
-    hw::AbstractMatrix{T}           # current height of water column
-    hw_ref::AbstractMatrix{T}       # reference
-    b::AbstractMatrix{T}            # vertical bedrock position
-    b_ref::AbstractMatrix{T}        # reference
-    geoid::AbstractMatrix{T}        # current geoid displacement
-    sealevel::AbstractMatrix{T}     # current sealevel field
-    volume_pov::T                   # current potential ocean volume
-    volume_pov_ref::T               # reference
-    slc_pov::T                      # sea-level contribution associated with volume_pov
-    volume_den::T                   # potential ocean volume associated with density differences
-    volume_den_ref::T               # reference
-    slc_den::T                      # sea-level contribution associated with volume_den
+    hi::Matrix{T}               # current height of ice column
+    hi_ref::Matrix{T}           # reference
+    hw::Matrix{T}               # current height of water column
+    hw_ref::Matrix{T}           # reference
+    b::Matrix{T}                # vertical bedrock position
+    b_ref::Matrix{T}            # reference
+    geoid::Matrix{T}            # current geoid displacement
+    sealevel::Matrix{T}         # current sealevel field
+    sealevel_ref::Matrix{T}     # reference sealevel field
+    volume_pov::T               # current potential ocean volume
+    volume_pov_ref::T           # reference
+    slc_pov::T                  # sea-level contribution associated with volume_pov
+    volume_den::T               # potential ocean volume associated with density differences
+    volume_den_ref::T           # reference
+    slc_den::T                  # sea-level contribution associated with volume_den
+    slc::T                      # total sealevel contribution
+    conservation_term::T        # a term for mass conservation
 end
 
 struct PrecomputedFastiso{T<:AbstractFloat}
