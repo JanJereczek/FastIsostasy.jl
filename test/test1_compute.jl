@@ -20,14 +20,8 @@ function main(
 
     R = T(1000e3)               # ice disc radius (m)
     H = T(1000)                 # ice disc thickness (m)
-    t_out = years2seconds.([0.0, 100.0, 500.0, 1500.0, 5000.0, 10_000.0, 50_000.0])
-
     Hcylinder = uniform_ice_cylinder(Omega, R, H)
-    # t_Hice_snapshots = [t_out[1], t_out[end]]
-    # Hice_snapshots = [Hcylinder, Hcylinder]
-
-    # t_eta_snapshots = [t_out[1], t_out[end]]
-    # eta_snapshots = kernelpromote([p.effective_viscosity, p.effective_viscosity], Array)
+    t_out = years2seconds.([0.0, 100.0, 500.0, 1500.0, 5000.0, 10_000.0, 50_000.0])
 
     tools = precompute_fastiso(Omega, p, c)
     t1 = time()
@@ -42,13 +36,10 @@ function main(
 
     jldsave(
         "data/test1/$filename.jld2",
-        Omega = Omega,
-        c = c,
-        p = p,
+        Omega = Omega, c = c, p = p,
         results = results,
         t_fastiso = t_fastiso,
-        R = R,
-        H = H,
+        R = R, H = H,
     )
 end
 

@@ -53,6 +53,7 @@ end
 Get euclidean distance of point (x, y) to origin.
 """
 get_r(x::T, y::T) where {T<:Real} = sqrt(x^2 + y^2)
+get_r(X::Matrix{T}, Y::Matrix{T}) where {T<:Real} = get_r.(X, Y)
 
 """
 
@@ -67,10 +68,10 @@ end
 
 """
 
-    dist2angle_stereographic()
+    dist2angulardist()
 
 """
-function dist2angle_stereographic(
+function dist2angulardist(
     dist::T,
 ) where {T<:Real}
     r_equator = 6.371e6
@@ -79,7 +80,7 @@ end
 
 """
 
-    sphericaldistance2origin()
+    sphericaldistance()
 
 """
 function sphericaldistance(
@@ -87,9 +88,78 @@ function sphericaldistance(
     lon::T;
     lat0::T = T(-pi / 2),   # default origin is south pole
     lon0::T = T(0),         # default origin is south pole
+    R::T = T(6.371e6),      # Earth radius
 ) where {T<:Real}
-    r_equator = 6.371e6
-    return r_equator * acos( sin(lat) * sin(lat0) + cos(lat) * cos(lat0) * (lon - lon0) )
+    return R * acos( sin(lat) * sin(lat0) + cos(lat) * cos(lat0) * (lon - lon0) )
+end
+
+"""
+
+    latlon2stereo()
+
+Convert latitude-longitude coordinates to stereographically projected (x,y).
+Reference: John P. Snyder (1987), p. 157, eq. (21-2), (21-3), (21-4).
+"""
+function latlon2stereo(
+    lat::T,
+    lon::T;
+    lat0=T(-90.0),          # reference latitude of projection, FIXME: does not work properly with lat0 = -71° for now
+    lon0=T(0.0),            # reference longitude of projection
+    R::T = T(6.371e6),      # Earth radius
+    k0::T = T(1.0),         # Scale factor
+) where {T<:Real}
+    lat, lon, lat0, lon0 = deg2rad.([lat, lon, lat0, lon0])
+    k = 2*k0 / (1 + sin(lat0)*sin(lat) + cos(lat0)*cos(lat)*cos(lon-lon0))
+    x = R * k * cos(lat) * sin(lon - lon0)
+    y = R * k * (cos(lat0) * sin(lat) - sin(lat0) * cos(lat) * cos(lon-lon0))
+    return k, x, y
+end
+
+function latlon2stereo(
+    lat::AbstractMatrix{T},
+    lon::AbstractMatrix{T};
+    kwargs...,
+) where {T<:Real}
+    K, X, Y = copy(lat), copy(lat), copy(lat)
+    for idx in CartesianIndices(lat)
+        K[idx], X[idx], Y[idx] = latlon2stereo(lat[idx], lon[idx], kwargs...)
+    end
+    return K, X, Y
+end
+
+"""
+
+    stereo2latlon()
+
+Convert stereographic (x,y)-coordinates to latitude-longitude.
+Reference: John P. Snyder (1987), p. 159, eq. (20-14), (20-15), (20-18), (21-15).
+"""
+function stereo2latlon(
+    x::T,
+    y::T;
+    lat0=T(-90.0),          # reference latitude of projection, FIXME: does not work properly with lat0 = -71° for now
+    lon0=T(0.0),            # reference longitude of projection
+    R::T = T(6.371e6),      # Earth radius
+    k0::T = T(1.0), 
+) where {T<:Real}
+    lat0, lon0 = deg2rad.([lat0, lon0])
+    r = get_r(x, y) + 1e-12     # add small tolerance to avoid division by zero
+    c = 2 * atan( r/(2*R*k0) )
+    lat = asin( cos(c) * sin(lat0) + y/r * sin(c) * cos(lat0) )
+    lon = lon0 + atan( x*sin(c), (r * cos(lat0) * cos(c) - y * sin(lat0) * sin(c)) )
+    return rad2deg(lat), rad2deg(lon)
+end
+
+function stereo2latlon(
+    x::AbstractMatrix{T},
+    y::AbstractMatrix{T};
+    kwargs...,
+) where {T<:Real}
+    Lat, Lon = copy(x), copy(x)
+    for idx in CartesianIndices(x)
+        Lat[idx], Lon[idx] = stereo2latlon(x[idx], y[idx], kwargs...)
+    end
+    return Lat, Lon
 end
 
 """
@@ -114,7 +184,10 @@ function init_domain(
     y = collect(-Ly+dy:dy:Ly)
     X, Y = meshgrid(x, y)
     R = get_r.(X, Y)
-    Θ = dist2angle_stereographic.(R)
+
+    Lat, Lon = stereo2latlon(x, y)
+
+    Θ = dist2angulardist.(R)
     
     arraykernel = use_cuda ? CuArray : Array
     

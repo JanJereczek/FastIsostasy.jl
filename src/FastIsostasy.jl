@@ -39,7 +39,10 @@ export years2seconds
 export seconds2years
 export m_per_sec2mm_per_yr
 
-export dist2angle_stereographic
+export meshgrid
+export dist2angulardist
+export latlon2stereo
+export stereo2latlon
 
 export kernelpromote
 export convert2Array
