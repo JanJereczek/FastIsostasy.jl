@@ -10,7 +10,10 @@ struct ComputationDomain{T<:AbstractFloat}
     X::AbstractMatrix{T}
     Y::AbstractMatrix{T}
     R::AbstractMatrix{T}
-    Θ::AbstractMatrix{T}
+    Theta::AbstractMatrix{T}
+    Lat::AbstractMatrix{T}
+    Lon::AbstractMatrix{T}
+    K::AbstractMatrix{T}
     pseudodiff::AbstractMatrix{T}
     harmonic::AbstractMatrix{T}
     biharmonic::AbstractMatrix{T}

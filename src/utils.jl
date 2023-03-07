@@ -95,6 +95,38 @@ end
 
 """
 
+    scalefactor()
+
+Compute scaling factor of stereographic projection.
+Reference: John P. Snyder (1987), p. 157, eq. (21-4).
+"""
+function scalefactor(
+    lat::T,
+    lon::T;
+    lat0::T = T(deg2rad(-90.0)),
+    lon0::T = T(deg2rad(0.0)),
+    k0::T = T(1),
+) where {T<:Real}
+    return 2*k0 / (1 + sin(lat0)*sin(lat) + cos(lat0)*cos(lat)*cos(lon-lon0))
+end
+
+# TODO: make angles and units really consistent here.
+function scalefactor(
+    lat::AbstractMatrix{T},
+    lon::AbstractMatrix{T};
+    lat0::T = T(deg2rad(-90.0)),
+    lon0::T = T(deg2rad(0.0)),
+    k0::T = T(1),
+) where {T<:Real}
+    K = copy(lat)
+    for idx in CartesianIndices(lat)
+        K[idx] = scalefactor(deg2rad(lat[idx]), deg2rad(lon[idx]))
+    end
+    return K
+end
+
+"""
+
     latlon2stereo()
 
 Convert latitude-longitude coordinates to stereographically projected (x,y).
@@ -109,7 +141,7 @@ function latlon2stereo(
     k0::T = T(1.0),         # Scale factor
 ) where {T<:Real}
     lat, lon, lat0, lon0 = deg2rad.([lat, lon, lat0, lon0])
-    k = 2*k0 / (1 + sin(lat0)*sin(lat) + cos(lat0)*cos(lat)*cos(lon-lon0))
+    k = scalefactor(lat, lon)
     x = R * k * cos(lat) * sin(lon - lon0)
     y = R * k * (cos(lat0) * sin(lat) - sin(lat0) * cos(lat) * cos(lon-lon0))
     return k, x, y
@@ -184,10 +216,10 @@ function init_domain(
     y = collect(-Ly+dy:dy:Ly)
     X, Y = meshgrid(x, y)
     R = get_r.(X, Y)
+    Theta = dist2angulardist.(R)
 
-    Lat, Lon = stereo2latlon(x, y)
-
-    Θ = dist2angulardist.(R)
+    Lat, Lon = stereo2latlon(X, Y)
+    K = scalefactor(Lat, Lon)
     
     arraykernel = use_cuda ? CuArray : Array
     
@@ -202,9 +234,10 @@ function init_domain(
     return ComputationDomain(
         Lx, Ly, N, N2,
         dx, dy, x, y,
-        X, Y, R, Θ,
+        X, Y, R, Theta,
+        Lat, Lon, K,
         pseudodiff, harmonic, biharmonic,
-        use_cuda, arraykernel
+        use_cuda, arraykernel,
     )
 end
 

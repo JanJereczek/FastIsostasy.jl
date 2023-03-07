@@ -60,7 +60,7 @@ function precompute_fastiso(
     end
 
     rhog = p.mean_density .* c.g
-    geoidgreen = get_geoidgreen(Omega, c) # get_geoidgreen(Omega.Θ, c)
+    geoidgreen = get_geoidgreen(Omega, c)
 
     return PrecomputedFastiso(
         elasticgreen, fft(elasticgreen),
