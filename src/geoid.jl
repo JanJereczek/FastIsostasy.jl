@@ -18,23 +18,12 @@ function compute_geoid_response(
     p::MultilayerEarth{T},
     Omega::ComputationDomain{T},
     tools::PrecomputedFastiso{T},
-    lc::ColumnHeights{T},
+    lc::GeoState{T},
 ) where {T<:AbstractFloat}
     return conv(
         tools.geoidgreen,
         get_load_change(Omega, c, p, lc),
     )[Omega.N2:end-Omega.N2, Omega.N2:end-Omega.N2]
-end
-
-function get_load_change(
-    Omega::ComputationDomain{T},
-    c::PhysicalConstants{T},
-    p::MultilayerEarth{T},
-    lc::ColumnHeights{T},
-) where {T<:AbstractFloat}
-    return (Omega.dx * Omega.dy) .* (c.ice_density .* (lc.hi - lc.hi_ref) + 
-        c.seawater_density .* (lc.hw - lc.hw_ref) +
-        p.mean_density .* (lc.b - lc.b_ref) )
 end
 
 function get_load_change(
@@ -70,17 +59,7 @@ function get_geoidgreen(
     return geoid
 end
 
-# function init_columnchanges(
-#     Omega::ComputationDomain{T};
-#     hi::AbstractMatrix{T} = fill(T(0), Omega.N, Omega.N),
-#     hi_ref::AbstractMatrix{T} = fill(T(0), Omega.N, Omega.N),
-#     hw::AbstractMatrix{T} = fill(T(0), Omega.N, Omega.N),
-#     hw_ref::AbstractMatrix{T} = fill(T(0), Omega.N, Omega.N),
-#     b::AbstractMatrix{T} = fill(T(0), Omega.N, Omega.N),
-#     b_ref::AbstractMatrix{T} = fill(T(0), Omega.N, Omega.N),
-# ) where {T<:AbstractFloat}
-#     return ColumnHeights(hi, hi_ref, hw, hw_ref, b, b_ref)
-# end
+
 
 function update_loadcolumns!(
     geostate::GeoState{T},
@@ -121,7 +100,7 @@ function update_volume_pov!(
     geostate::GeoState{T},
 ) where {T<:AbstractFloat}
     geostate.volume_pov = sum( 
-        max.(-geostate.b, Omega.zero) ./ (Omega.kn .^ 2) .* (Omega.dx * Omega.dy) )
+        max.(-geostate.b, T(0.0)) ./ (Omega.kn .^ 2) .* (Omega.dx * Omega.dy) )
     return nothing
 end
 

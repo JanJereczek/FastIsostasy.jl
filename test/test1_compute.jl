@@ -23,17 +23,15 @@ function main(
     t_out = years2seconds.([0.0, 100.0, 500.0, 1500.0, 5000.0, 10_000.0, 50_000.0])
 
     Hcylinder = uniform_ice_cylinder(Omega, R, H)
-    t_Hice_snapshots = [t_out[1], t_out[end]]
-    Hice_snapshots = [Hcylinder, Hcylinder]
+    # t_Hice_snapshots = [t_out[1], t_out[end]]
+    # Hice_snapshots = [Hcylinder, Hcylinder]
 
-    t_eta_snapshots = [t_out[1], t_out[end]]
-    eta_snapshots = kernelpromote([p.effective_viscosity, p.effective_viscosity], Array)
+    # t_eta_snapshots = [t_out[1], t_out[end]]
+    # eta_snapshots = kernelpromote([p.effective_viscosity, p.effective_viscosity], Array)
 
     tools = precompute_fastiso(Omega, p, c)
     t1 = time()
-    results = forward_isostasy(t_out, Omega, tools, p, c,
-        t_Hice_snapshots, Hice_snapshots, t_eta_snapshots, eta_snapshots,
-        ODEsolver = solver)
+    results = forward_isostasy(t_out, Omega, tools, p, c, Hcylinder, ODEsolver=solver)
     t_fastiso = time() - t1
     println("Took $t_fastiso seconds!")
     println("-------------------------------------")
@@ -56,7 +54,7 @@ end
 
 # for s in ["SimpleEuler", BS3(), Tsit5()]
 for s in ["SimpleEuler"]
-    for n in 4:8
-        main(n, use_cuda = true, solver = s)
+    for n in 6:6
+        main(n, use_cuda = false, solver = s)
     end
 end

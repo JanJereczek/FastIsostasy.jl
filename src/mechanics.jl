@@ -89,15 +89,15 @@ function forward_isostasy(
     p::MultilayerEarth{T},
     c::PhysicalConstants{T},
     t_Hice_snapshots::Vector{T},
-    Hice_snapshots::Vector{Matrix{T}},
-    t_eta_snapshots::Vector{T},
-    eta_snapshots::Vector{Matrix{T}};
+    Hice_snapshots::Vector{Matrix{T}};
+    t_eta_snapshots::Vector{T} = [t_out[1], t_out[end]],
+    eta_snapshots::Vector{Matrix{T}} = [p.effective_viscosity, p.effective_viscosity],
     u_viscous_0::Matrix{T} = fill(T(0.0), Omega.N, Omega.N),
     u_elastic_0::Matrix{T} = fill(T(0.0), Omega.N, Omega.N),
     geoid_0::Matrix{T} = fill(T(0.0), Omega.N, Omega.N),
     sealevel_0::Matrix{T} = fill(T(0.0), Omega.N, Omega.N),
-    hi_0::Matrix{T} = fill(T(0.0), Omega.N, Omega.N),
-    hw_0::Matrix{T} = fill(T(0.0), Omega.N, Omega.N),
+    hi_ref::Matrix{T} = fill(T(0.0), Omega.N, Omega.N),
+    hw_ref::Matrix{T} = fill(T(0.0), Omega.N, Omega.N),
     b_ref::Matrix{T} = fill(T(0.0), Omega.N, Omega.N),
     ODEsolver::Any = "SimpleEuler",
     dt::T = T(years2seconds(1.0)),
@@ -111,13 +111,34 @@ function forward_isostasy(
 
     params = ODEParams(Omega, c, p, Hice_ode, tools)
     u_viscous_0 = kernelpromote(u_viscous_0, Omega.arraykernel)
-    geostate = GeoState(Hice(0.0), hi_0, hw_0, hw_0, b_ref, b_ref, geoid_0, sealevel_0)
+    geostate = GeoState(
+        Hice(0.0), hi_ref,
+        hw_ref, hw_ref,
+        b_ref, b_ref,
+        geoid_0, sealevel_0,
+        T(0.0), T(0.0), T(0.0),
+        T(0.0), T(0.0), T(0.0),
+    )
     u, dudt, u_elastic, geoid, sealevel = solve_isostasy(
         t_out, u_viscous_0, geostate, params, ODEsolver)
 
     return FastIsoResults(t_out, u, dudt, u_elastic, geoid, sealevel, Hice, eta)
 end
 
+function forward_isostasy(
+    t_out::Vector{T},
+    Omega::ComputationDomain{T},
+    tools::PrecomputedFastiso{T},
+    p::MultilayerEarth{T},
+    c::PhysicalConstants{T},
+    Hice_snapshot::Matrix{T};
+    kwargs...
+) where {T<:AbstractFloat}
+    t_Hice_snapshots = [t_out[1], t_out[end]]
+    Hice_snapshots = [Hice_snapshot, Hice_snapshot]
+    return forward_isostasy(
+        t_out, Omega, tools, p, c, t_Hice_snapshots, Hice_snapshots)
+end
 
 function viscous_dudt!(
     dudt::AbstractMatrix{T},

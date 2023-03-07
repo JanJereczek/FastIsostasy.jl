@@ -60,6 +60,6 @@ function main(
 end
 
 case = "SimpleEuler"
-for n in 7:7
+for n in 6:6
     main(n, case)
 end
