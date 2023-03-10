@@ -14,6 +14,7 @@ struct ComputationDomain{T<:AbstractFloat}
     Lat::AbstractMatrix{T}
     Lon::AbstractMatrix{T}
     K::AbstractMatrix{T}
+    null::AbstractMatrix{T}     # a zero matrix of size Nx x Ny
     pseudodiff::AbstractMatrix{T}
     harmonic::AbstractMatrix{T}
     biharmonic::AbstractMatrix{T}

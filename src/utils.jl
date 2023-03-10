@@ -220,6 +220,7 @@ function ComputationDomain(
 
     Lat, Lon = stereo2latlon(X, Y)
     K = scalefactor(Lat, Lon)
+    null = fill(T(0.0), N, N)
     
     arraykernel = use_cuda ? CuArray : Array
     
@@ -235,7 +236,7 @@ function ComputationDomain(
         Lx, Ly, N, N2,
         dx, dy, x, y,
         X, Y, R, Theta,
-        Lat, Lon, K,
+        Lat, Lon, K, null,
         pseudodiff, harmonic, biharmonic,
         use_cuda, arraykernel,
     )
