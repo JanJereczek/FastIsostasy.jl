@@ -18,13 +18,13 @@ function main(
 
     T = Float64
     L = T(3000e3)               # half-length of the square domain (m)
-    Omega = init_domain(L, n, use_cuda = use_cuda)
+    Omega = ComputationDomain(L, n, use_cuda = use_cuda)
     R = T(1000e3)               # ice disc radius (m)
     H = T(1000)                 # ice disc thickness (m)
     filename = "$(case)_$(kernel)_N$(Omega.N)"
     println("Computing $case on $(Omega.N) x $(Omega.N) grid...")
 
-    c = init_physical_constants()
+    c = PhysicalConstants()
     p = choose_case(case, Omega, c)
     t_out_yr = [0.0, 1.0, 1e1, 1e2, 1e3, 2e3, 5e3, 1e4, 1e5]
     t_out = years2seconds.(t_out_yr)
@@ -34,7 +34,7 @@ function main(
     dudt3D_viscous = copy(u3D)
 
     sigma_zz_disc = generate_uniform_disc_load(Omega, c, R, H)
-    tools = precompute_fastiso(Omega, p, c)
+    tools = PrecomputedFastiso(Omega, p, c)
     dt = fill( years2seconds(1.0), length(t_out)-1 )
 
     t1 = time()

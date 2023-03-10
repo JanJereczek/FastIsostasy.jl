@@ -196,11 +196,11 @@ end
 
 """
 
-    init_domain(L, n)
+    ComputationDomain(L, n)
 
 Initialize a square computational domain with length `2*L` and `2^n` grid cells.
 """
-function init_domain(
+function ComputationDomain(
     L::T,
     n::Int;
     use_cuda=false::Bool
@@ -278,7 +278,7 @@ layers_begin = [88e3, 400e3]
 
 """
 
-    init_multilayer_earth(
+    MultilayerEarth(
         Omega::ComputationDomain{T};
         litho_rigidity<:Union{Vector{T}, Vector{AbstractMatrix{T}}},
         layers_density::Vector{T},
@@ -288,7 +288,7 @@ layers_begin = [88e3, 400e3]
 
 Return struct with solid-Earth parameters for mutliple channel layers and a halfspace.
 """
-function init_multilayer_earth(
+function MultilayerEarth(
     Omega::ComputationDomain{T},
     c::PhysicalConstants{T};
     layers_begin::A = layers_begin,
@@ -762,9 +762,9 @@ function copystructs2cpu(
 ) where {T<:AbstractFloat}
 
     n = Int( round( log2(Omega.N) ) )
-    Omega_cpu = init_domain(Omega.Lx, n, use_cuda = false)
+    Omega_cpu = ComputationDomain(Omega.Lx, n, use_cuda = false)
 
-    p_cpu = init_multilayer_earth(
+    p_cpu = MultilayerEarth(
         Omega_cpu,
         c;
         layers_begin = Array(p.layers_begin),

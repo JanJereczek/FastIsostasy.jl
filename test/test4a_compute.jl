@@ -16,15 +16,15 @@ function main(
     n = 6
     T = Float64
     L = T(3000e3)               # half-length of the square domain (m)
-    Omega = init_domain(L, n)   # domain parameters
+    Omega = ComputationDomain(L, n)   # domain parameters
     R = T(2000e3)               # ice disc radius (m)
     H = T(1000)                 # ice disc thickness (m)
-    c = init_physical_constants()
+    c = PhysicalConstants()
     if occursin("homogeneous", case)
         channel_viscosity = fill(1e20, Omega.N, Omega.N)
         halfspace_viscosity = fill(1e21, Omega.N, Omega.N)
         lv = cat(channel_viscosity, halfspace_viscosity, dims=3)
-        p = init_multilayer_earth(
+        p = MultilayerEarth(
             Omega,
             c,
             layers_viscosity = lv,
@@ -34,7 +34,7 @@ function main(
         channel_viscosity = 10 .^ (log10_eta_channel)
         halfspace_viscosity = fill(1e21, Omega.N, Omega.N)
         lv = cat(channel_viscosity, halfspace_viscosity, dims=3)
-        p = init_multilayer_earth(
+        p = MultilayerEarth(
             Omega,
             c,
             layers_viscosity = lv,
@@ -52,7 +52,7 @@ function main(
             halfspace_logviscosity,
             dims=3,
         )
-        p = init_multilayer_earth(
+        p = MultilayerEarth(
             Omega,
             c,
             layers_begin = lb,
@@ -148,7 +148,7 @@ function main(
     u3D_elastic = copy(u3D)
     u3D_viscous = copy(u3D)
     dudt3D_viscous = copy(u3D)
-    tools = precompute_fastiso(Omega, p, c)
+    tools = PrecomputedFastiso(Omega, p, c)
     if n >= 7
         dt = fill( years2seconds(0.1), length(t_out)-1 )
     else

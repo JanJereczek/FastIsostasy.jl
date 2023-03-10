@@ -15,8 +15,8 @@ function main(
 
     T = Float64
     L = T(4000e3)               # half-length of the square domain (m)
-    Omega = init_domain(L, n)   # domain parameters
-    c = init_physical_constants()
+    Omega = ComputationDomain(L, n)   # domain parameters
+    c = PhysicalConstants()
 
     lb = [88e3, 180e3, 280e3, 400e3]
     halfspace_logviscosity = fill(21.0, Omega.N, Omega.N)
@@ -28,7 +28,7 @@ function main(
         halfspace_logviscosity,
         dims=3,
     )
-    p = init_multilayer_earth(
+    p = MultilayerEarth(
         Omega,
         c,
         layers_begin = lb,
@@ -43,7 +43,7 @@ function main(
     u3D_elastic = copy(u3D)
     u3D_viscous = copy(u3D)
     dudt3D_viscous = copy(u3D)
-    tools = precompute_fastiso(Omega, p, c)
+    tools = PrecomputedFastiso(Omega, p, c)
     if n >= 7
         dt = fill( years2seconds(0.1), length(t_out)-1 )
     else

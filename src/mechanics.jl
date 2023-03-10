@@ -14,13 +14,13 @@ end
 
 """
 
-    precompute_fastiso(dt, Omega, p, c)
+    PrecomputedFastiso(dt, Omega, p, c)
 
 Return a `struct` containing pre-computed tools to perform forward-stepping. Takes the
 time step `dt`, the ComputationDomain `Omega`, the solid-Earth parameters `p` and 
 physical constants `c` as input.
 """
-function precompute_fastiso(
+function PrecomputedFastiso(
     Omega::ComputationDomain{T},
     p::MultilayerEarth{T},
     c::PhysicalConstants{T};

@@ -10,9 +10,9 @@ function main(
 )
     T = Float64
     L = T(3000e3)               # half-length of the square domain (m)
-    Omega = init_domain(L, n, use_cuda = use_cuda)
-    c = init_physical_constants()
-    p = init_multilayer_earth(Omega, c)
+    Omega = ComputationDomain(L, n, use_cuda = use_cuda)
+    c = PhysicalConstants()
+    p = MultilayerEarth(Omega, c)
 
     kernel = use_cuda ? "gpu" : "cpu"
     filename = "$(solver)_N$(Omega.N)_$kernel"
@@ -23,7 +23,7 @@ function main(
     Hcylinder = uniform_ice_cylinder(Omega, R, H)
     t_out = years2seconds.([0.0, 100.0, 500.0, 1500.0, 5000.0, 10_000.0, 50_000.0])
 
-    tools = precompute_fastiso(Omega, p, c)
+    tools = PrecomputedFastiso(Omega, p, c)
     t1 = time()
     results = forward_isostasy(t_out, Omega, tools, p, c, Hcylinder, ODEsolver=solver)
     t_fastiso = time() - t1

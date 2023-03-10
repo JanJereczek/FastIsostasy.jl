@@ -4,10 +4,9 @@
 
 ```@docs
     meshgrid
-    init_domain
+    ComputationDomain
     get_differential_fourier
-    init_physical_constants
-    init_solidearth_params
+    PhysicalConstants
     get_viscosity_ratio
     three_layer_scaling
     get_r

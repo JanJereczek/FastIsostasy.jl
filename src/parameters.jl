@@ -17,11 +17,11 @@ A_ocean = 3.625e14                      # Ocean surface (m) as in Goelzer (2020)
 # Note: rho_0 and rho_1 are chosen such that g(pole) ≈ 9.81
 
 """
-    init_physical_constants()
+    PhysicalConstants()
 
 Return struct containing physical constants.
 """
-function init_physical_constants(;T::Type=Float64, ice_density = ice_density)
+function PhysicalConstants(;T::Type=Float64, ice_density = ice_density)
     return PhysicalConstants(
         T(g),
         T(seconds_per_year),

@@ -13,15 +13,15 @@ function main(
 
     T = Float64
     L = T(3000e3)               # half-length of the square domain (m)
-    Omega = init_domain(L, n)
+    Omega = ComputationDomain(L, n)
     R = T(1000e3)               # ice disc radius (m)
     H = T(1000)                 # ice disc thickness (m)
-    c = init_physical_constants()
+    c = PhysicalConstants()
     if occursin("2layers", case)
         layers_viscosity = [1e21, 1e21]
-        p = init_multilayer_earth(Omega, c, layers_viscosity = layers_viscosity)
+        p = MultilayerEarth(Omega, c, layers_viscosity = layers_viscosity)
     elseif occursin("3layers", case)
-        p = init_multilayer_earth(Omega, c)
+        p = MultilayerEarth(Omega, c)
     end
 
     timespan = years2seconds.([0.0, 5e4])           # (yr) -> (s)

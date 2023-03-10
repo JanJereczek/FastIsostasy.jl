@@ -12,14 +12,14 @@ function main(
 
     T = Float64
     L = T(3000e3)               # half-length of the square domain (m)
-    Omega = init_domain(L, n, use_cuda = use_cuda)
-    c = init_physical_constants(ice_density = 0.931e3)
+    Omega = ComputationDomain(L, n, use_cuda = use_cuda)
+    c = PhysicalConstants(ice_density = 0.931e3)
 
     G = 0.50605e11              # shear modulus (Pa)
     nu = 0.5
     E = G * 2 * (1 + nu)
     lb = c.r_equator .- [6301e3, 5951e3, 5701e3]
-    p = init_multilayer_earth(
+    p = MultilayerEarth(
         Omega,
         c,
         layers_begin = lb,
@@ -50,7 +50,7 @@ function main(
     t_eta_snapshots = [t_out[1], t_out[end]]
     eta_snapshots = kernelpromote([p.effective_viscosity, p.effective_viscosity], Array)
 
-    tools = precompute_fastiso(Omega, p, c)
+    tools = PrecomputedFastiso(Omega, p, c)
     t1 = time()
     results = forward_isostasy(t_out, Omega, tools, p, c,
         t_Hice_snapshots, Hice_snapshots, t_eta_snapshots, eta_snapshots,

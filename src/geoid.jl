@@ -81,7 +81,7 @@ end
 
 function update_sealevel!(
     geostate::GeoState{T},
-)
+) where {T<:AbstractFloat}
     geostate.sealevel = geostate.sealevel_ref + geostate.geoid + geostate.slc + geostate.conservation_term
     return nothing
 end

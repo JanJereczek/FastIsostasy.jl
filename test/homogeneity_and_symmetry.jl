@@ -6,13 +6,13 @@ using Test
 T = Float64
 n = 6
 L = T(2000e3)               # half-length of the square domain (m)
-Omega = init_domain(L, n)   # domain parameters
+Omega = ComputationDomain(L, n)   # domain parameters
 R = T(1000e3)               # ice disc radius (m)
 H = T(1000)                 # ice disc thickness (m)
 
 eta_channel = fill(1e21, size(Omega.X)...)
 p = init_solidearth_params(T, Omega, channel_viscosity = eta_channel)
-c = init_physical_constants(T)
+c = PhysicalConstants(T)
 
 timespan = T.([0, 1e4]) * T(c.seconds_per_year)     # (yr) -> (s)
 dt = T(100) * T(c.seconds_per_year)                 # (yr) -> (s)
