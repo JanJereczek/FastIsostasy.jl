@@ -77,12 +77,12 @@ end
 
 """
 
-forward_isostasy()
+fastisostasy()
 
 Main function.
 List of all available solvers [here](https://docs.sciml.ai/DiffEqDocs/stable/solvers/ode_solve/#OrdinaryDiffEq.jl-for-Non-Stiff-Equations).
 """
-function forward_isostasy(
+function fastisostasy(
     t_out::Vector{T},
     Omega::ComputationDomain{T},
     tools::PrecomputedFastiso{T},
@@ -123,13 +123,13 @@ function forward_isostasy(
         T(0.0), T(0.0), T(0.0),                 # V_den terms
         T(0.0), T(0.0),                         # total sl-contribution & conservation term
     )
-    u, dudt, u_elastic, geoid, sealevel = solve_isostasy(
+    u, dudt, u_elastic, geoid, sealevel = forward_isostasy(
         t_out, u_viscous_0, gs, params, ODEsolver)
 
     return FastIsoResults(t_out, u, dudt, u_elastic, geoid, sealevel, Hice, eta)
 end
 
-function forward_isostasy(
+function fastisostasy(
     t_out::Vector{T},
     Omega::ComputationDomain{T},
     tools::PrecomputedFastiso{T},
@@ -140,29 +140,42 @@ function forward_isostasy(
 ) where {T<:AbstractFloat}
     t_Hice_snapshots = [t_out[1], t_out[end]]
     Hice_snapshots = [Hice_snapshot, Hice_snapshot]
-    return forward_isostasy(
+    return fastisostasy(
         t_out, Omega, tools, p, c, t_Hice_snapshots, Hice_snapshots)
 end
 
-function viscous_dudt!(
+function forwardstep_isostasy!(
     dudt::AbstractMatrix{T},
     u::AbstractMatrix{T},
     params::ODEParams{T},
     t::T,
 ) where {T<:AbstractFloat}
+    apply_bc!(u)
+    update_geostate!(
+        params.gs, kernelpromote(u, Array), kernelpromote(Hice(t), Array),
+        params.Omega, params.c, params.p, params.tools,
+    )
+    dudt_isostasy!(dudt, u, params, t)
+    return nothing
+end
 
+function dudt_isostasy!(
+    dudt::AbstractMatrix{T},
+    u::AbstractMatrix{T},
+    params::ODEParams{T},
+    t::T,
+) where {T<:AbstractFloat}
     Omega = params.Omega
     c = params.c
     p = params.p
     tools = params.tools
-    Hice = params.Hice
 
-    apply_bc!(u)
     uf = tools.pfft * u
     harmonic_uf = real.(tools.pifft * ( Omega.harmonic .* uf ))
     biharmonic_uf = real.( tools.pifft * ( Omega.biharmonic .* uf ) )
 
-    term1 = ice_load(c, Hice(t))
+    term1 = kernelpromote( get_loadchange(gs, Omega, c, p), Omega.arraykernel )
+    # term1 = ice_load(c, Hice(t))
     term2 = - tools.rhog .* u
     term3 = - p.litho_rigidity .* biharmonic_uf
 
@@ -184,7 +197,6 @@ function viscous_dudt!(
     dudtf = (tools.pfft * rhs) ./ Omega.pseudodiff
     dudt[:, :] .= real.(tools.pifft * dudtf) ./ (T(2) .* p.effective_viscosity)
     apply_bc!(dudt)
-
     return nothing
 end
 
@@ -197,7 +209,7 @@ function simple_euler!(
     return nothing
 end
 
-function solve_isostasy(
+function forward_isostasy(
     t_out::Vector{T},
     u::AbstractMatrix{T},
     gs::GeoState{T},
@@ -221,23 +233,20 @@ function solve_isostasy(
         println("Computing until t = $(Int(round(seconds2years(t_out[k])))) years...")
 
         if isa(ODEsolver, OrdinaryDiffEqAlgorithm)
-            prob = ODEProblem(viscous_dudt!, u, (t0, t_out[k]), params)
+            prob = ODEProblem(forwardstep_isostasy!, u, (t0, t_out[k]), params)
             sol = solve(prob, ODEsolver, reltol = 1e-3)
 
             u .= sol(t_out[k], Val{0})
             dudt .= sol(t_out[k], Val{1})
         else
             for t in t0:dt:t_out[k]
-                viscous_dudt!(dudt, u, params, t)
+                forwardstep_isostasy!(dudt, u, params, t)
                 simple_euler!(u, dudt, dt)
             end
         end
 
         u_out[k] .= kernelpromote(u, Array)
         dudt_out[k] .= kernelpromote(dudt, Array)
-
-        update_geostate!(gs, u_out[k], params.Hice(t_out[k]),
-            params.Omega, params.c, params.p, params.tools)
         geoid_out[k] .= copy(gs.geoid)
         sealevel_out[k] .= copy(gs.sealevel)
     end

@@ -24,7 +24,7 @@
 
 ```@docs
     precompute_terms
-    forward_isostasy!
+    fastisostasy
     forwardstep_isostasy
     cranknicolson_viscous_response
     euler_viscous_response
