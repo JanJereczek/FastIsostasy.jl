@@ -29,11 +29,6 @@ export MultilayerEarth
 export PrecomputedFastiso
 export GeoState
 
-# parameters.jl
-export init_domain
-export init_physical_constants
-export init_multilayer_earth
-
 # utils.jl
 export years2seconds
 export seconds2years
@@ -61,8 +56,6 @@ export mixed_fdxx
 export mixed_fdyy
 
 # mechanics.jl
-export init_fastiso_results
-export precompute_fastiso
 export quadrature1D
 export meshgrid
 export get_quad_coeffs
