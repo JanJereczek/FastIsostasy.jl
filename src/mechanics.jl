@@ -96,8 +96,8 @@ function forward_isostasy(
     u_elastic_0::Matrix{T} = fill(T(0.0), Omega.N, Omega.N),
     geoid_0::Matrix{T} = fill(T(0.0), Omega.N, Omega.N),
     sealevel_0::Matrix{T} = fill(T(0.0), Omega.N, Omega.N),
-    hi_ref::Matrix{T} = fill(T(0.0), Omega.N, Omega.N),
-    hw_ref::Matrix{T} = fill(T(0.0), Omega.N, Omega.N),
+    H_ice_ref::Matrix{T} = fill(T(0.0), Omega.N, Omega.N),
+    H_water_ref::Matrix{T} = fill(T(0.0), Omega.N, Omega.N),
     b_ref::Matrix{T} = fill(T(0.0), Omega.N, Omega.N),
     ODEsolver::Any = "SimpleEuler",
     dt::T = T(years2seconds(1.0)),
@@ -112,12 +112,13 @@ function forward_isostasy(
     params = ODEParams(Omega, c, p, Hice_ode, tools)
     u_viscous_0 = kernelpromote(u_viscous_0, Omega.arraykernel)
     geostate = GeoState(
-        Hice(0.0), hi_ref,          # ice column
-        hw_ref, hw_ref,             # water column
+        Hice(0.0), H_ice_ref,          # ice column
+        H_water_ref, H_water_ref,             # water column
         b_ref, b_ref,               # bedrock position
         geoid_0,                    # geoid perturbation
+        sealevel_0,                 # reference for external sl-forcing
         sealevel_0, sealevel_0,     # sealevel
-        T(0.0), T(0.0), T(0.0),     # potential ocean volume (pov terms)
+        T(0.0), T(0.0), T(0.0),     # potential ocean volume (V_pov terms)
         T(0.0), T(0.0), T(0.0),     # density-related terms
         T(0.0), T(0.0),             # total sealevel contribution and conservation term
     )

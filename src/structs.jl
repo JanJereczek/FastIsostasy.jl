@@ -47,22 +47,40 @@ struct MultilayerEarth{T<:AbstractFloat}
 end
 
 mutable struct GeoState{T<:AbstractFloat}
-    hi::Matrix{T}               # current height of ice column
-    hi_ref::Matrix{T}           # reference
-    hw::Matrix{T}               # current height of water column
-    hw_ref::Matrix{T}           # reference
+    H_ice::Matrix{T}               # current height of ice column
+    H_ice_ref::Matrix{T}           # reference
+    H_water::Matrix{T}               # current height of water column
+    H_water_ref::Matrix{T}           # reference
     b::Matrix{T}                # vertical bedrock position
     b_ref::Matrix{T}            # reference
     geoid::Matrix{T}            # current geoid displacement
+    z0::Matrix{T}               # reference height to allow external sea-level forcing
     sealevel::Matrix{T}         # current sealevel field
     sealevel_ref::Matrix{T}     # reference sealevel field
-    volume_pov::T               # current potential ocean volume
-    volume_pov_ref::T           # reference
-    slc_pov::T                  # sea-level contribution associated with volume_pov
-    volume_den::T               # potential ocean volume associated with density differences
-    volume_den_ref::T           # reference
-    slc_den::T                  # sea-level contribution associated with volume_den
+    V_af::T                     # ice volume above floatation
+    sle_af::T                   # sl-equivalent of ice volume above floatation
+    sle_af_ref::T               # reference sl-equivalent of ice volume above floatation
+    slc_af::T                   # sl-contribution of ice volume above floatation
+    V_pov::T                    # current potential ocean volume
+    V_pov_ref::T                # reference
+    slc_pov::T                  # sea-level contribution associated with V_pov
+    V_den::T                    # potential ocean volume associated with density differences
+    V_den_ref::T                # reference
+    slc_den::T                  # sea-level contribution associated with V_den
     slc::T                      # total sealevel contribution
+    conservation_term::T        # a term for mass conservation
+end
+
+struct ReferenceGeoState{T<:AbstractFloat}
+    H_ice_ref::Matrix{T}           # reference
+    H_water_ref::Matrix{T}           # reference
+    b_ref::Matrix{T}            # reference
+    z0::Matrix{T}               # reference height to allow external sea-level forcing
+    sealevel_ref::Matrix{T}     # reference sealevel field
+    V_af_ref::T                 # ice volume above floatation
+    sle_af_ref::T               # reference sl-equivalent of ice volume above floatation
+    V_pov_ref::T                # reference
+    V_den_ref::T                # reference
     conservation_term::T        # a term for mass conservation
 end
 

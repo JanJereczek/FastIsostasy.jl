@@ -19,7 +19,7 @@ include("structs.jl")
 include("parameters.jl")
 include("utils.jl")
 include("derivatives.jl")
-include("geoid.jl")
+include("geostate.jl")
 include("mechanics.jl")
 
 # structs.jl
@@ -64,10 +64,9 @@ export forward_isostasy
 export apply_bc!
 export ice_load
 
-# geoid.jl
+# geostate.jl
 export get_geoidgreen
 export update_loadcolumns!
-export compute_geoid_response
 export get_load_change
 
 end
