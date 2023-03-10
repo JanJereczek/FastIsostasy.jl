@@ -15,7 +15,6 @@ function main(
     p = MultilayerEarth(Omega, c)
 
     kernel = use_cuda ? "gpu" : "cpu"
-    filename = "$(solver)_N$(Omega.N)_$kernel"
     println("Computing on $kernel and $(Omega.N) x $(Omega.N) grid...")
 
     R = T(1000e3)               # ice disc radius (m)
@@ -34,6 +33,7 @@ function main(
         Omega, p = copystructs2cpu(Omega, p, c)
     end
 
+    filename = "$(solver)_N$(Omega.N)_$kernel"
     jldsave(
         "data/test1/$filename.jld2",
         Omega = Omega, c = c, p = p,

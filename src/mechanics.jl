@@ -5,7 +5,7 @@
 Compute ice load based on ice thickness.
 """
 function ice_load(c::PhysicalConstants{T}, H::AbstractMatrix{T}) where {T<:AbstractFloat}
-    return - c.ice_density .* c.g .* H
+    return - c.rho_ice .* c.g .* H
 end
 
 #####################################################
@@ -109,22 +109,23 @@ function fastisostasy(
     eta = linear_interpolation(t_eta_snapshots,
         kernelpromote(eta_snapshots, Omega.arraykernel) )
 
-    params = ODEParams(Omega, c, p, Hice_ode, tools)
     u_viscous_0 = kernelpromote(u_viscous_0, Omega.arraykernel)
-    gs = GeoState(
+    geostate = GeoState(
         Hice(0.0), H_ice_ref,                   # ice column
-        H_water_ref, H_water_ref,               # water column
-        b_ref, b_ref,                           # bedrock position
+        copy(H_water_ref), H_water_ref,         # water column
+        copy(b_ref), b_ref,                     # bedrock position
         geoid_0,                                # geoid perturbation
         copy(sealevel_0),                       # reference for external sl-forcing
-        sealevel_0, sealevel_0,                 # sealevel
+        copy(sealevel_0), sealevel_0,           # sealevel
         T(0.0), T(0.0), T(0.0), T(0.0),         # V_af terms
         T(0.0), T(0.0), T(0.0),                 # V_pov terms
         T(0.0), T(0.0), T(0.0),                 # V_den terms
         T(0.0), T(0.0),                         # total sl-contribution & conservation term
     )
+    sstruct = SuperStruct(Omega, c, p, Hice_ode, tools, geostate)
+
     u, dudt, u_elastic, geoid, sealevel = forward_isostasy(
-        dt, t_out, u_viscous_0, gs, params, ODEsolver)
+        dt, t_out, u_viscous_0, geostate, sstruct, ODEsolver)
 
     return FastIsoResults(t_out, u, dudt, u_elastic, geoid, sealevel, Hice, eta)
 end
@@ -147,34 +148,34 @@ end
 function forwardstep_isostasy!(
     dudt::AbstractMatrix{T},
     u::AbstractMatrix{T},
-    params::ODEParams{T},
+    sstruct::SuperStruct{T},
     t::T,
 ) where {T<:AbstractFloat}
     apply_bc!(u)
     update_geostate!(
-        params.gs, kernelpromote(u, Array), kernelpromote(Hice(t), Array),
-        params.Omega, params.c, params.p, params.tools,
+        sstruct.geostate, kernelpromote(u, Array), kernelpromote(sstruct.Hice(t), Array),
+        sstruct.Omega, sstruct.c, sstruct.p, sstruct.tools,
     )
-    dudt_isostasy!(dudt, u, params, t)
+    dudt_isostasy!(dudt, u, sstruct, t)
     return nothing
 end
 
 function dudt_isostasy!(
     dudt::AbstractMatrix{T},
     u::AbstractMatrix{T},
-    params::ODEParams{T},
+    sstruct::SuperStruct{T},
     t::T,
 ) where {T<:AbstractFloat}
-    Omega = params.Omega
-    c = params.c
-    p = params.p
-    tools = params.tools
+    Omega = sstruct.Omega
+    c = sstruct.c
+    p = sstruct.p
+    tools = sstruct.tools
 
     uf = tools.pfft * u
     harmonic_uf = real.(tools.pifft * ( Omega.harmonic .* uf ))
     biharmonic_uf = real.( tools.pifft * ( Omega.biharmonic .* uf ) )
 
-    term1 = kernelpromote(get_loadchange(params.gs, c, p), Omega.arraykernel)
+    term1 = kernelpromote(get_loadchange(sstruct.geostate, c, p), Omega.arraykernel)
     # term1 = ice_load(c, Hice(t))
     term2 = - tools.rhog .* u
     term3 = - p.litho_rigidity .* biharmonic_uf
@@ -213,8 +214,8 @@ function forward_isostasy(
     dt::T,
     t_out::Vector{T},
     u::AbstractMatrix{T},
-    gs::GeoState{T},
-    params::ODEParams{T},
+    geostate::GeoState{T},
+    sstruct::SuperStruct{T},
     ODEsolver::Any,
 ) where {T<:AbstractFloat}
 
@@ -232,22 +233,22 @@ function forward_isostasy(
         println("Computing until t = $(Int(round(seconds2years(t_out[k])))) years...")
 
         if isa(ODEsolver, OrdinaryDiffEqAlgorithm)
-            prob = ODEProblem(forwardstep_isostasy!, u, (t0, t_out[k]), params)
+            prob = ODEProblem(forwardstep_isostasy!, u, (t0, t_out[k]), sstruct)
             sol = solve(prob, ODEsolver, reltol = 1e-3)
 
             u .= sol(t_out[k], Val{0})
             dudt .= sol(t_out[k], Val{1})
         else
             for t in t0:dt:t_out[k]
-                forwardstep_isostasy!(dudt, u, params, t)
+                forwardstep_isostasy!(dudt, u, sstruct, t)
                 simple_euler!(u, dudt, dt)
             end
         end
 
-        u_out[k] .= kernelpromote(u, Array)
-        dudt_out[k] .= kernelpromote(dudt, Array)
-        geoid_out[k] .= copy(gs.geoid)
-        sealevel_out[k] .= copy(gs.sealevel)
+        u_out[k] .= copy(kernelpromote(u, Array))
+        dudt_out[k] .= copy(kernelpromote(dudt, Array))
+        geoid_out[k] .= copy(geostate.geoid)
+        sealevel_out[k] .= copy(geostate.sealevel)
     end
     return u_out, dudt_out, u_el_out, geoid_out, sealevel_out
 end

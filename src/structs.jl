@@ -1,10 +1,10 @@
 struct ComputationDomain{T<:AbstractFloat}
-    Lx::T           # Domain length in x (m)
-    Ly::T           # Domain length in y (m)
-    N::Int          # Average number of grid points in one dimension (1)
-    N2::Int         # N/2
-    dx::T           # Spatial discretization in x
-    dy::T           # Spatial discretization in y
+    Lx::T                       # Domain length in x (m)
+    Ly::T                       # Domain length in y (m)
+    N::Int                      # Average number of grid points along one dimension
+    N2::Int                     # N/2
+    dx::T                       # Spatial discretization in x
+    dy::T                       # Spatial discretization in y
     x::Vector{T}
     y::Vector{T}
     X::AbstractMatrix{T}
@@ -14,23 +14,25 @@ struct ComputationDomain{T<:AbstractFloat}
     Lat::AbstractMatrix{T}
     Lon::AbstractMatrix{T}
     K::AbstractMatrix{T}
-    null::AbstractMatrix{T}     # a zero matrix of size Nx x Ny
-    pseudodiff::AbstractMatrix{T}
-    harmonic::AbstractMatrix{T}
-    biharmonic::AbstractMatrix{T}
+    null::AbstractMatrix{T}         # a zero matrix of size Nx x Ny
+    pseudodiff::AbstractMatrix{T}   # pseudodiff operator
+    harmonic::AbstractMatrix{T}     # harmonic operator
+    biharmonic::AbstractMatrix{T}   # biharmonic operator
     use_cuda::Bool
-    arraykernel     # Array or CuArray depending on chosen hardware
+    arraykernel                     # Array or CuArray depending on chosen hardware
 end
 
 struct PhysicalConstants{T<:AbstractFloat}
-    g::T
-    seconds_per_year::T
-    ice_density::T
-    seawater_density::T
+    mE::T
     r_equator::T
     r_pole::T
+    A_ocean::T
+    g::T
     G::T
-    mE::T
+    seconds_per_year::T
+    rho_ice::T
+    rho_water::T
+    rho_seawater::T
     rho_0::T
     rho_1::T
 end
@@ -100,12 +102,13 @@ struct PrecomputedFastiso{T<:AbstractFloat}
     geoidgreen::AbstractMatrix{T}
 end
 
-struct ODEParams{T<:AbstractFloat}
+struct SuperStruct{T<:AbstractFloat}
     Omega::ComputationDomain{T}
     c::PhysicalConstants{T}
     p::MultilayerEarth{T}
     Hice::Interpolations.Extrapolation
     tools::PrecomputedFastiso{T}
+    geostate::GeoState{T}
 end
 
 """
