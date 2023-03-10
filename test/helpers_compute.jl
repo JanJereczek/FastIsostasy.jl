@@ -20,7 +20,7 @@ function generate_uniform_disc_load(
     H::T,
 ) where {T<:AbstractFloat}
     M = mask_disc(Omega.X, Omega.Y, R)
-    return - M .* (c.ice_density * c.g * H)
+    return - M .* (c.rho_ice * c.g * H)
 end
 
 function generate_cap_load(
@@ -33,7 +33,7 @@ function generate_cap_load(
     Theta = R ./ c.r_equator
     alpha = deg2rad(alpha_deg)
     M = Theta .< alpha
-    return - (c.ice_density * H * c.g) .* 
+    return - (c.rho_ice * H * c.g) .* 
            sqrt.( M .* (cos.(Theta) .- cos(alpha)) ./ (1 - cos(alpha)) )
 end
 
@@ -62,7 +62,7 @@ function analytic_solution(
     domains::Vector{T};
     n_quad_support=5::Int,
 ) where {T<:AbstractFloat}
-    scaling = c.ice_density * c.g * H0 * R0
+    scaling = c.rho_ice * c.g * H0 * R0
     if t == T(Inf)
         equilibrium_integrand_r(kappa) = equilibrium_integrand(kappa, r, c, p, R0)
         return scaling .* looped_quadrature1D( equilibrium_integrand_r, domains, n_quad_support )
@@ -131,7 +131,7 @@ function analytic_radial_solution(
     domains::Vector{T};
     n_quad_support=5::Int,
 ) where {T<:AbstractFloat}
-    scaling = c.ice_density * c.g * H0 * R0
+    scaling = c.rho_ice * c.g * H0 * R0
     radial_integrand(kappa) = analytic_radial_integrand(Omega, i, j, kappa, t, c, p, R0)
     return scaling .* looped_quadrature1D( radial_integrand, domains, n_quad_support )
 end

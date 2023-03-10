@@ -36,7 +36,7 @@ function main(
     )
 
     t_out, deltaH, H = interpolated_glac1d_snapshots(Omega)
-    delta_sigma = - (c.g * c.ice_density) .* deltaH
+    delta_sigma = - (c.g * c.rho_ice) .* deltaH
     sigma_zz_snapshots = (t_out, [delta_sigma[:, :, k] for k in axes(delta_sigma, 3) ])
 
     u3D = zeros( T, (size(Omega.X)..., length(t_out)) )

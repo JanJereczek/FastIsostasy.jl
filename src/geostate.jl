@@ -23,7 +23,8 @@ end
 
 """
 
-    update_geoid!(gs::GeoState, params::ODEParams)
+    update_geoid!(gs::GeoState, Omega::ComputationDomain,
+        c::PhysicalConstants, p::MultilayerEarth, tools::PrecomputedFastiso)
 
 Update the geoid of a `::GeoState` by convoluting the Green's function with the load change.
 """
@@ -66,7 +67,7 @@ function get_loadchange(
     c::PhysicalConstants{T},
     p::MultilayerEarth{T},
 ) where {T<:AbstractFloat}
-    return - c.g .* get_columnchange(gs, c, p)
+    return - c.g .* get_columnchange(gs, c)
 end
 
 function get_columnchange(
@@ -74,9 +75,16 @@ function get_columnchange(
     c::PhysicalConstants{T},
     p::MultilayerEarth{T},
 ) where {T<:AbstractFloat}
-    return c.ice_density .* (gs.H_ice - gs.H_ice_ref) + 
-        c.seawater_density .* (gs.H_water - gs.H_water_ref) +
+    return get_columnchange(gs, c) +
         p.mean_density .* (gs.b - gs.b_ref)
+end
+
+function get_columnchange(
+    gs::GeoState{T},
+    c::PhysicalConstants{T},
+) where {T<:AbstractFloat}
+    return c.rho_ice .* (gs.H_ice - gs.H_ice_ref) + 
+        c.rho_seawater .* (gs.H_water - gs.H_water_ref)
 end
 
 # TODO: transform results with stereographic utils for test2!
@@ -94,7 +102,7 @@ function get_geoidgreen(
     Omega::ComputationDomain{T},
     c::PhysicalConstants{T},
 ) where {T<:AbstractFloat}
-    geoidgreen = get_geoidgreen(R, c)
+    geoidgreen = get_geoidgreen(Omega.R, c)
     max_geoidgreen = get_geoidgreen(mean([Omega.dx, Omega.dy]), c)  # tolerance = resolution
     return min.(geoidgreen, max_geoidgreen)
     # equivalent to: geoidgreen[geoidgreen .> max_geoidgreen] .= max_geoidgreen
@@ -117,7 +125,8 @@ function update_loadcolumns!(
 ) where {T<:AbstractFloat}
     gs.b .= gs.b_ref .+ u
     gs.H_ice .= H_ice
-    gs.H_water .= gs.sealevel - gs.b
+    gs.H_water .= max.(gs.sealevel - gs.b, T(0.0))
+    return nothing
 end
 
 """
@@ -136,7 +145,7 @@ function update_sealevel!(
     c::PhysicalConstants{T},
 ) where {T<:AbstractFloat}
     update_slc!(gs, Omega, c)
-    gs.sealevel = gs.sealevel_ref + gs.geoid + gs.slc + gs.conservation_term
+    gs.sealevel = gs.sealevel_ref .+ gs.geoid .+ gs.slc .+ gs.conservation_term
     return nothing
 end
 
@@ -183,7 +192,7 @@ function update_V_af!(
     c::PhysicalConstants{T},
 ) where {T<:AbstractFloat}
     gs.V_af = sum( gs.H_ice .+ min.(gs.b .- gs.z0, T(0.0)) .*
-        (c.seawater_density / c.ice_density) .* (Omega.dx * Omega.dy) ./ (Omega.K .^ 2) )
+        (c.rho_seawater / c.rho_ice) .* (Omega.dx * Omega.dy) ./ (Omega.K .^ 2) )
     return nothing
 end
 
@@ -201,7 +210,7 @@ function update_slc_af!(
     gs::GeoState{T},
     c::PhysicalConstants{T},
 ) where {T<:AbstractFloat}
-    gs.sle_af = gs.V_af / c.A_ocean * c.ice_density / c.seawater_density
+    gs.sle_af = gs.V_af / c.A_ocean * c.rho_ice / c.rho_seawater
     gs.slc_af = -( gs.sle_af - gs.sle_af_ref )
     return nothing
 end
@@ -262,7 +271,7 @@ function update_V_den!(
     Omega::ComputationDomain{T},
     c::PhysicalConstants{T},
 ) where {T<:AbstractFloat}
-    density_factor = c.ice_density / c.water_density - c.ice_density / c.seawater_density
+    density_factor = c.rho_ice / c.rho_water - c.rho_ice / c.rho_seawater
     gs.V_den = sum( gs.H_ice .* density_factor ./ (Omega.K .^ 2) .* (Omega.dx * Omega.dy) )
     return nothing
 end

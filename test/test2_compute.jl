@@ -13,7 +13,7 @@ function main(
     T = Float64
     L = T(3000e3)               # half-length of the square domain (m)
     Omega = ComputationDomain(L, n, use_cuda = use_cuda)
-    c = PhysicalConstants(ice_density = 0.931e3)
+    c = PhysicalConstants(rho_ice = 0.931e3)
 
     G = 0.50605e11              # shear modulus (Pa)
     nu = 0.5
