@@ -52,7 +52,7 @@ function main(
 
     tools = PrecomputedFastiso(Omega, p, c)
     t1 = time()
-    results = forward_isostasy(t_out, Omega, tools, p, c,
+    results = fastisostasy(t_out, Omega, tools, p, c,
         t_Hice_snapshots, Hice_snapshots, t_eta_snapshots, eta_snapshots,
         ODEsolver = solver)
     t_fastiso = time() - t1

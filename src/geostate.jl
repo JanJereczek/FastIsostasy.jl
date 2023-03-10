@@ -36,14 +36,14 @@ function update_geoid!(
 ) where {T<:AbstractFloat}
     gs.geoid .= conv(
         tools.geoidgreen,
-        get_load_change(gs, Omega, c, p),
+        get_loadchange(gs, Omega, c, p),
     )[Omega.N2:end-Omega.N2, Omega.N2:end-Omega.N2]
     return nothing
 end
 
 """
 
-    get_load_change(gs::GeoState, Omega::ComputationDomain, c::PhysicalConstants,
+    get_loadchange(gs::GeoState, Omega::ComputationDomain, c::PhysicalConstants,
         p::MultilayerEarth)
 
 Compute the load change compared to the reference configuration.
@@ -52,7 +52,7 @@ Compute the load change compared to the reference configuration.
 
 Coulon et al. 2021.
 """
-function get_load_change(
+function get_loadchange(
     gs::GeoState{T},
     Omega::ComputationDomain{T},
     c::PhysicalConstants{T},

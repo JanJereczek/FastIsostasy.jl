@@ -25,7 +25,7 @@ function main(
 
     tools = PrecomputedFastiso(Omega, p, c)
     t1 = time()
-    results = forward_isostasy(t_out, Omega, tools, p, c, Hcylinder, ODEsolver=solver)
+    results = fastisostasy(t_out, Omega, tools, p, c, Hcylinder, ODEsolver=solver)
     t_fastiso = time() - t1
     println("Took $t_fastiso seconds!")
     println("-------------------------------------")

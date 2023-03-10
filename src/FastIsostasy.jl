@@ -60,14 +60,14 @@ export quadrature1D
 export meshgrid
 export get_quad_coeffs
 export get_elasticgreen
-export forward_isostasy
+export fastisostasy
 export apply_bc!
 export ice_load
 
 # geostate.jl
 export update_geostate!
 export update_geoid!
-export get_load_change
+export get_loadchange
 export get_geoidgreen
 export update_loadcolumns!
 export update_sealevel!
