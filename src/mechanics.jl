@@ -111,19 +111,20 @@ function forward_isostasy(
 
     params = ODEParams(Omega, c, p, Hice_ode, tools)
     u_viscous_0 = kernelpromote(u_viscous_0, Omega.arraykernel)
-    geostate = GeoState(
-        Hice(0.0), H_ice_ref,          # ice column
-        H_water_ref, H_water_ref,             # water column
-        b_ref, b_ref,               # bedrock position
-        geoid_0,                    # geoid perturbation
-        sealevel_0,                 # reference for external sl-forcing
-        sealevel_0, sealevel_0,     # sealevel
-        T(0.0), T(0.0), T(0.0),     # potential ocean volume (V_pov terms)
-        T(0.0), T(0.0), T(0.0),     # density-related terms
-        T(0.0), T(0.0),             # total sealevel contribution and conservation term
+    gs = GeoState(
+        Hice(0.0), H_ice_ref,                   # ice column
+        H_water_ref, H_water_ref,               # water column
+        b_ref, b_ref,                           # bedrock position
+        geoid_0,                                # geoid perturbation
+        copy(sealevel_0),                       # reference for external sl-forcing
+        sealevel_0, sealevel_0,                 # sealevel
+        T(0.0), T(0.0), T(0.0), T(0.0),         # V_af terms
+        T(0.0), T(0.0), T(0.0),                 # V_pov terms
+        T(0.0), T(0.0), T(0.0),                 # V_den terms
+        T(0.0), T(0.0),                         # total sl-contribution & conservation term
     )
     u, dudt, u_elastic, geoid, sealevel = solve_isostasy(
-        t_out, u_viscous_0, geostate, params, ODEsolver)
+        t_out, u_viscous_0, gs, params, ODEsolver)
 
     return FastIsoResults(t_out, u, dudt, u_elastic, geoid, sealevel, Hice, eta)
 end
@@ -199,7 +200,7 @@ end
 function solve_isostasy(
     t_out::Vector{T},
     u::AbstractMatrix{T},
-    geostate::GeoState{T},
+    gs::GeoState{T},
     params::ODEParams{T},
     ODEsolver::Any,
 ) where {T<:AbstractFloat}
@@ -235,12 +236,10 @@ function solve_isostasy(
         u_out[k] .= kernelpromote(u, Array)
         dudt_out[k] .= kernelpromote(dudt, Array)
 
-        update_loadcolumns!(geostate, u_out[k],
-            kernelpromote(params.Hice(t_out[k]), Array) )
-        update_geoid!(geostate, params)
-        # update_slc!(geostate)
-        geoid_out[k] .= copy(geostate.geoid)
-        sealevel_out[k] .= copy(geostate.sealevel)
+        update_geostate!(gs, u_out[k], params.Hice(t_out[k]),
+            params.Omega, params.c, params.p, params.tools)
+        geoid_out[k] .= copy(gs.geoid)
+        sealevel_out[k] .= copy(gs.sealevel)
     end
     return u_out, dudt_out, u_el_out, geoid_out, sealevel_out
 end

@@ -65,8 +65,18 @@ export apply_bc!
 export ice_load
 
 # geostate.jl
+export update_geostate!
+export update_geoid!
+export get_load_change
 export get_geoidgreen
 export update_loadcolumns!
-export get_load_change
+export update_sealevel!
+export update_slc!
+export update_V_af!
+export update_slc_af!
+export update_V_pov!
+export update_slc_pov!
+export update_V_den!
+export update_slc_den!
 
 end

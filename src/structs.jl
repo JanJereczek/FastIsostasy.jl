@@ -72,15 +72,15 @@ mutable struct GeoState{T<:AbstractFloat}
 end
 
 struct ReferenceGeoState{T<:AbstractFloat}
-    H_ice_ref::Matrix{T}           # reference
-    H_water_ref::Matrix{T}           # reference
-    b_ref::Matrix{T}            # reference
+    H_ice::Matrix{T}           # reference
+    H_water::Matrix{T}           # reference
+    b::Matrix{T}            # reference
     z0::Matrix{T}               # reference height to allow external sea-level forcing
-    sealevel_ref::Matrix{T}     # reference sealevel field
-    V_af_ref::T                 # ice volume above floatation
-    sle_af_ref::T               # reference sl-equivalent of ice volume above floatation
-    V_pov_ref::T                # reference
-    V_den_ref::T                # reference
+    sealevel::Matrix{T}     # reference sealevel field
+    V_af::T                 # ice volume above floatation
+    sle_af::T               # reference sl-equivalent of ice volume above floatation
+    V_pov::T                # reference
+    V_den::T                # reference
     conservation_term::T        # a term for mass conservation
 end
 

@@ -1,3 +1,25 @@
+"""
+
+    update_geostate!(gs::GeoState, u::Matrix, H_ice::Matrix, Omega::ComputationDomain,
+        c::PhysicalConstants, p::MultilayerEarth, tools::PrecomputedFastiso)
+
+Update the `::GeoState` computing the current geoid perturbation, the sea-level changes
+and the load columns for the next time step of the isostasy integration.
+"""
+function update_geostate!(
+    gs::GeoState{T},
+    u::Matrix{T},
+    H_ice::Matrix{T},
+    Omega::ComputationDomain{T},
+    c::PhysicalConstants{T},
+    p::MultilayerEarth{T},
+    tools::PrecomputedFastiso{T},
+) where {T<:AbstractFloat}
+    update_geoid!(gs, Omega, c, p, tools)
+    update_sealevel!(gs, Omega, c)
+    update_loadcolumns!(gs, u, H_ice)
+    return nothing
+end
 
 """
 
@@ -7,12 +29,15 @@ Update the geoid of a `::GeoState` by convoluting the Green's function with the 
 """
 function update_geoid!(
     gs::GeoState{T},
-    params::ODEParams{T},
+    Omega::ComputationDomain{T},
+    c::PhysicalConstants{T},
+    p::MultilayerEarth{T},
+    tools::PrecomputedFastiso{T},
 ) where {T<:AbstractFloat}
     gs.geoid .= conv(
-        params.tools.geoidgreen,
-        get_load_change(gs, params.Omega, params.c, params.p),
-    )[params.Omega.N2:end-params.Omega.N2, params.Omega.N2:end-params.Omega.N2]
+        tools.geoidgreen,
+        get_load_change(gs, Omega, c, p),
+    )[Omega.N2:end-Omega.N2, Omega.N2:end-Omega.N2]
     return nothing
 end
 
@@ -40,7 +65,7 @@ function get_load_change(
     )
 end
 
-# TODO: for test 2, I observe distortions compared to Spada in the far-field because I don't transform with stereographic!
+# TODO: transform results with stereographic utils for test2!
 """
 
     get_geoidgreen(Omega::ComputationDomain, c::PhysicalConstants)
@@ -73,8 +98,8 @@ Update the load columns of a `::GeoState`.
 """
 function update_loadcolumns!(
     gs::GeoState{T},
-    u::AbstractMatrix{T},
-    H_ice::AbstractMatrix{T},
+    u::Matrix{T},
+    H_ice::Matrix{T},
 ) where {T<:AbstractFloat}
     gs.b .= gs.b_ref .+ u
     gs.H_ice .= H_ice
@@ -93,7 +118,10 @@ Coulon et al. (2021), Figure 1.
 """
 function update_sealevel!(
     gs::GeoState{T},
+    Omega::ComputationDomain{T},
+    c::PhysicalConstants{T},
 ) where {T<:AbstractFloat}
+    update_slc!(gs, Omega, c)
     gs.sealevel = gs.sealevel_ref + gs.geoid + gs.slc + gs.conservation_term
     return nothing
 end
@@ -243,4 +271,12 @@ function update_slc_den!(
     reference = gs.V_den_ref / c.A_ocean
     gs.slc_den = -( current - reference )
     return nothing
+end
+
+function ReferenceGeoState(gs::GeoState{T}) where {T<:AbstractFloat}
+    return ReferenceGeoState(
+        gs.H_ice, gs.H_water, gs.b,
+        gs.z0, gs.sealevel, gs.V_af, gs.sle_af,
+        gs.V_pov, gs.V_den, gs.conservation_term,
+    )
 end
