@@ -77,7 +77,7 @@ end
 
 """
 
-fastisostasy()
+    fastisostasy()
 
 Main function.
 List of all available solvers [here](https://docs.sciml.ai/DiffEqDocs/stable/solvers/ode_solve/#OrdinaryDiffEq.jl-for-Non-Stiff-Equations).
@@ -92,13 +92,13 @@ function fastisostasy(
     Hice_snapshots::Vector{Matrix{T}};
     t_eta_snapshots::Vector{T} = [t_out[1], t_out[end]],
     eta_snapshots::Vector{Matrix{T}} = [p.effective_viscosity, p.effective_viscosity],
-    u_viscous_0::Matrix{T} = fill(T(0.0), Omega.N, Omega.N),
-    u_elastic_0::Matrix{T} = fill(T(0.0), Omega.N, Omega.N),
-    geoid_0::Matrix{T} = fill(T(0.0), Omega.N, Omega.N),
-    sealevel_0::Matrix{T} = fill(T(0.0), Omega.N, Omega.N),
-    H_ice_ref::Matrix{T} = fill(T(0.0), Omega.N, Omega.N),
-    H_water_ref::Matrix{T} = fill(T(0.0), Omega.N, Omega.N),
-    b_ref::Matrix{T} = fill(T(0.0), Omega.N, Omega.N),
+    u_viscous_0::Matrix{T} = copy(Omega.null),
+    u_elastic_0::Matrix{T} = copy(Omega.null),
+    geoid_0::Matrix{T} = copy(Omega.null),
+    sealevel_0::Matrix{T} = copy(Omega.null),
+    H_ice_ref::Matrix{T} = copy(Omega.null),
+    H_water_ref::Matrix{T} = copy(Omega.null),
+    b_ref::Matrix{T} = copy(Omega.null),
     ODEsolver::Any = "SimpleEuler",
     dt::T = T(years2seconds(1.0)),
 ) where {T<:AbstractFloat}
@@ -124,7 +124,7 @@ function fastisostasy(
         T(0.0), T(0.0),                         # total sl-contribution & conservation term
     )
     u, dudt, u_elastic, geoid, sealevel = forward_isostasy(
-        t_out, u_viscous_0, gs, params, ODEsolver)
+        dt, t_out, u_viscous_0, gs, params, ODEsolver)
 
     return FastIsoResults(t_out, u, dudt, u_elastic, geoid, sealevel, Hice, eta)
 end
@@ -174,7 +174,7 @@ function dudt_isostasy!(
     harmonic_uf = real.(tools.pifft * ( Omega.harmonic .* uf ))
     biharmonic_uf = real.( tools.pifft * ( Omega.biharmonic .* uf ) )
 
-    term1 = kernelpromote( get_loadchange(gs, Omega, c, p), Omega.arraykernel )
+    term1 = kernelpromote(get_loadchange(params.gs, c, p), Omega.arraykernel)
     # term1 = ice_load(c, Hice(t))
     term2 = - tools.rhog .* u
     term3 = - p.litho_rigidity .* biharmonic_uf
@@ -210,6 +210,7 @@ function simple_euler!(
 end
 
 function forward_isostasy(
+    dt::T,
     t_out::Vector{T},
     u::AbstractMatrix{T},
     gs::GeoState{T},
@@ -224,9 +225,7 @@ function forward_isostasy(
     u_el_out = [copy(placeholder) for time in t_out]
     geoid_out = [copy(placeholder) for time in t_out]
     sealevel_out = [copy(placeholder) for time in t_out]
-
     dudt = copy(u)
-    dt = years2seconds( T(1.0) )
 
     for k in eachindex(t_out)[1:end]
         t0 = k == 1 ? T(0.0) : t_out[k-1]

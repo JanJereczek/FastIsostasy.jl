@@ -36,7 +36,7 @@ function update_geoid!(
 ) where {T<:AbstractFloat}
     gs.geoid .= conv(
         tools.geoidgreen,
-        get_loadchange(gs, Omega, c, p),
+        get_greenloadchange(gs, Omega, c, p),
     )[Omega.N2:end-Omega.N2, Omega.N2:end-Omega.N2]
     return nothing
 end
@@ -52,17 +52,31 @@ Compute the load change compared to the reference configuration.
 
 Coulon et al. 2021.
 """
-function get_loadchange(
+function get_greenloadchange(
     gs::GeoState{T},
     Omega::ComputationDomain{T},
     c::PhysicalConstants{T},
     p::MultilayerEarth{T},
 ) where {T<:AbstractFloat}
-    return (Omega.dx * Omega.dy) .* (
-        c.ice_density .* (gs.H_ice - gs.H_ice_ref) + 
+    return (Omega.dx * Omega.dy) .* get_columnchange(gs, c, p)
+end
+
+function get_loadchange(
+    gs::GeoState{T},
+    c::PhysicalConstants{T},
+    p::MultilayerEarth{T},
+) where {T<:AbstractFloat}
+    return - c.g .* get_columnchange(gs, c, p)
+end
+
+function get_columnchange(
+    gs::GeoState{T},
+    c::PhysicalConstants{T},
+    p::MultilayerEarth{T},
+) where {T<:AbstractFloat}
+    return c.ice_density .* (gs.H_ice - gs.H_ice_ref) + 
         c.seawater_density .* (gs.H_water - gs.H_water_ref) +
         p.mean_density .* (gs.b - gs.b_ref)
-    )
 end
 
 # TODO: transform results with stereographic utils for test2!
