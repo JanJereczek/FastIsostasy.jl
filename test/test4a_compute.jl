@@ -174,7 +174,7 @@ function main(
     t_fastiso = time() - t1
 
     # if use_cuda
-    #     Omega, p = copystructs2cpu(Omega, p, c)
+    #     Omega, p = copystructs2cpu(Omega, c, p)
     # end
 
     # lowest_eta = minimum(p.effective_viscosity[Omega.X.^2 + Omega.Y.^2 .< (1.8e6)^2])

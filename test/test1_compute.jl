@@ -6,7 +6,7 @@ include("helpers_compute.jl")
 function main(
     n::Int;                     # 2^n x 2^n cells on domain, (1)
     use_cuda::Bool = false,
-    solver::Any = "SimpleEuler",
+    solver::Any = "ExplicitEuler",
 )
     T = Float64
     L = T(3000e3)               # half-length of the square domain (m)
@@ -22,15 +22,14 @@ function main(
     Hcylinder = uniform_ice_cylinder(Omega, R, H)
     t_out = years2seconds.([0.0, 100.0, 500.0, 1500.0, 5000.0, 10_000.0, 50_000.0])
 
-    tools = PrecomputedFastiso(Omega, p, c)
     t1 = time()
-    results = fastisostasy(t_out, Omega, tools, p, c, Hcylinder, ODEsolver=solver)
+    results = fastisostasy(t_out, Omega, c, p, Hcylinder, ODEsolver=solver)
     t_fastiso = time() - t1
     println("Took $t_fastiso seconds!")
     println("-------------------------------------")
 
     if use_cuda
-        Omega, p = copystructs2cpu(Omega, p, c)
+        Omega, p = copystructs2cpu(Omega, c, p)
     end
 
     filename = "$(solver)_N$(Omega.N)_$kernel"
@@ -43,8 +42,8 @@ function main(
     )
 end
 
-# for s in ["SimpleEuler", BS3(), Tsit5()]
-for s in ["SimpleEuler"]
+# for s in ["ExplicitEuler", BS3(), Tsit5()]
+for s in ["ExplicitEuler"]
     for n in 6:6
         main(n, use_cuda = false, solver = s)
     end

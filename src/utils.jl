@@ -741,11 +741,19 @@ end
 #####################################################
 
 function kernelpromote(X::M, arraykernel) where {M<:AbstractArray{T}} where {T<:Real}
-    return arraykernel(X)
+    if isa(X, arraykernel)
+        return X
+    else
+        return arraykernel(X)
+    end
 end
 
 function kernelpromote(X::Vector{M}, arraykernel) where {M<:AbstractArray{T}} where {T<:Real}
-    return [arraykernel(x) for x in X]
+    if isa(X[1], arraykernel)
+        return X
+    else
+        return [arraykernel(x) for x in X]
+    end
 end
 
 function convert2CuArray(X::Vector)
@@ -758,8 +766,8 @@ end
 
 function copystructs2cpu(
     Omega::ComputationDomain{T},
-    p::MultilayerEarth{T},
     c::PhysicalConstants{T},
+    p::MultilayerEarth{T},
 ) where {T<:AbstractFloat}
 
     n = Int( round( log2(Omega.N) ) )

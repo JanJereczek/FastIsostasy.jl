@@ -53,7 +53,7 @@ function main(
     t_fastiso = time() - t1
 
     if use_cuda
-        Omega, p = copystructs2cpu(Omega, p, c)
+        Omega, p = copystructs2cpu(Omega, c, p)
     end
 
     jldsave(

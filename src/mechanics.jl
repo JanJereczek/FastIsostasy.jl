@@ -85,9 +85,8 @@ List of all available solvers [here](https://docs.sciml.ai/DiffEqDocs/stable/sol
 function fastisostasy(
     t_out::Vector{T},
     Omega::ComputationDomain{T},
-    tools::PrecomputedFastiso{T},
-    p::MultilayerEarth{T},
     c::PhysicalConstants{T},
+    p::MultilayerEarth{T},
     t_Hice_snapshots::Vector{T},
     Hice_snapshots::Vector{Matrix{T}};
     t_eta_snapshots::Vector{T} = [t_out[1], t_out[end]],
@@ -99,17 +98,20 @@ function fastisostasy(
     H_ice_ref::Matrix{T} = copy(Omega.null),
     H_water_ref::Matrix{T} = copy(Omega.null),
     b_ref::Matrix{T} = copy(Omega.null),
-    ODEsolver::Any = "SimpleEuler",
+    ODEsolver::Any = "ExplicitEuler",
     dt::T = T(years2seconds(1.0)),
+    active_geostate::Bool = true,
 ) where {T<:AbstractFloat}
 
-    Hice = linear_interpolation( t_Hice_snapshots, Hice_snapshots )
-    Hice_ode = linear_interpolation( t_Hice_snapshots,
+    tools = PrecomputedFastiso(Omega, p, c)
+    Hice = linear_interpolation( t_Hice_snapshots,
         kernelpromote(Hice_snapshots, Omega.arraykernel) )
+    Hice_cpu = linear_interpolation( t_Hice_snapshots,
+        kernelpromote(Hice_snapshots, Array) )
     eta = linear_interpolation(t_eta_snapshots,
         kernelpromote(eta_snapshots, Omega.arraykernel) )
-
     u_viscous_0 = kernelpromote(u_viscous_0, Omega.arraykernel)
+
     geostate = GeoState(
         Hice(0.0), H_ice_ref,                   # ice column
         copy(H_water_ref), H_water_ref,         # water column
@@ -122,20 +124,20 @@ function fastisostasy(
         T(0.0), T(0.0), T(0.0),                 # V_den terms
         T(0.0), T(0.0),                         # total sl-contribution & conservation term
     )
-    sstruct = SuperStruct(Omega, c, p, Hice_ode, tools, geostate)
+    sstruct = SuperStruct(Omega, c, p, Hice, Hice_cpu, tools, geostate, active_geostate)
 
     u, dudt, u_elastic, geoid, sealevel = forward_isostasy(
         dt, t_out, u_viscous_0, geostate, sstruct, ODEsolver)
 
-    return FastIsoResults(t_out, u, dudt, u_elastic, geoid, sealevel, Hice, eta)
+    return FastIsoResults(t_out, tools, u, dudt, u_elastic, geoid, sealevel, Hice, eta)
 end
 
 function fastisostasy(
     t_out::Vector{T},
     Omega::ComputationDomain{T},
     tools::PrecomputedFastiso{T},
-    p::MultilayerEarth{T},
     c::PhysicalConstants{T},
+    p::MultilayerEarth{T},
     Hice_snapshot::Matrix{T};
     kwargs...
 ) where {T<:AbstractFloat}
@@ -152,10 +154,12 @@ function forwardstep_isostasy!(
     t::T,
 ) where {T<:AbstractFloat}
     apply_bc!(u)
-    update_geostate!(
-        sstruct.geostate, kernelpromote(u, Array), kernelpromote(sstruct.Hice(t), Array),
-        sstruct.Omega, sstruct.c, sstruct.p, sstruct.tools,
-    )
+    if sstruct.active_geostate
+        update_geostate!(
+            sstruct.geostate, kernelpromote(u, Array), sstruct.Hice_cpu(t),
+            sstruct.Omega, sstruct.c, sstruct.p, sstruct.tools,
+        )
+    end
     dudt_isostasy!(dudt, u, sstruct, t)
     return nothing
 end
@@ -175,8 +179,12 @@ function dudt_isostasy!(
     harmonic_uf = real.(tools.pifft * ( Omega.harmonic .* uf ))
     biharmonic_uf = real.( tools.pifft * ( Omega.biharmonic .* uf ) )
 
-    term1 = kernelpromote(get_loadchange(sstruct.geostate, c, p), Omega.arraykernel)
-    # term1 = ice_load(c, Hice(t))
+    if sstruct.active_geostate
+        term1 = kernelpromote(get_loadchange(sstruct.geostate, c, p), Omega.arraykernel)
+    else
+        term1 = ice_load(c, sstruct.Hice(t))
+    end
+
     term2 = - tools.rhog .* u
     term3 = - p.litho_rigidity .* biharmonic_uf
 

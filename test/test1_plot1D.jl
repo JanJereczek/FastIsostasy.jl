@@ -59,7 +59,7 @@ function main(
     save("plots/test1/$(case)_transients_N$N.pdf", fig)
 end
 
-case = "SimpleEuler"
+case = "ExplicitEuler"
 for n in 6:6
     main(n, case)
 end

@@ -9,7 +9,7 @@ include("helpers_plot.jl")
 
 function main()
 
-    case = "SimpleEuler"
+    case = "ExplicitEuler"
     N = 256
     N2 = Int(N/2)
     N4 = Int(N/4)
