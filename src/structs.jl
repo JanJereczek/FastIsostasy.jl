@@ -107,8 +107,10 @@ struct SuperStruct{T<:AbstractFloat}
     c::PhysicalConstants{T}
     p::MultilayerEarth{T}
     Hice::Interpolations.Extrapolation
+    Hice_cpu::Interpolations.Extrapolation
     tools::PrecomputedFastiso{T}
     geostate::GeoState{T}
+    active_geostate::Bool
 end
 
 """
@@ -126,6 +128,7 @@ A mutable struct containing the results of FastIsostasy:
 """
 struct FastIsoResults{T<:AbstractFloat}
     t_out::Vector{T}
+    tools::PrecomputedFastiso{T}
     viscous::Vector{Matrix{T}}
     displacement_rate::Vector{Matrix{T}}
     elastic::Vector{Matrix{T}}

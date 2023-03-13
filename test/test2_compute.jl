@@ -7,7 +7,7 @@ function main(
     n::Int,             # 2^n cells on domain (1)
     case::String;       # Application case
     use_cuda = true::Bool,
-    solver::Any = "SimpleEuler",
+    solver::Any = "ExplicitEuler",
 )
 
     T = Float64
@@ -52,7 +52,7 @@ function main(
 
     tools = PrecomputedFastiso(Omega, p, c)
     t1 = time()
-    results = fastisostasy(t_out, Omega, tools, p, c,
+    results = fastisostasy(t_out, Omega, tools, c, p,
         t_Hice_snapshots, Hice_snapshots, t_eta_snapshots, eta_snapshots,
         ODEsolver = solver)
     t_fastiso = time() - t1
@@ -60,7 +60,7 @@ function main(
     println("-------------------------------------")
 
     if use_cuda
-        Omega, p = copystructs2cpu(Omega, p, c)
+        Omega, p = copystructs2cpu(Omega, c, p)
     end
 
     jldsave(
