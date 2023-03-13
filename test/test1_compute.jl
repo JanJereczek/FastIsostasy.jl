@@ -7,6 +7,7 @@ function main(
     n::Int;                     # 2^n x 2^n cells on domain, (1)
     use_cuda::Bool = false,
     solver::Any = "ExplicitEuler",
+    active_gs::Bool = true,
 )
     T = Float64
     L = T(3000e3)               # half-length of the square domain (m)
@@ -23,7 +24,7 @@ function main(
     t_out = years2seconds.([0.0, 100.0, 500.0, 1500.0, 5000.0, 10_000.0, 50_000.0])
 
     t1 = time()
-    results = fastisostasy(t_out, Omega, c, p, Hcylinder, ODEsolver=solver)
+    results = fastisostasy(t_out, Omega, c, p, Hcylinder, ODEsolver=solver, active_geostate=active_gs)
     t_fastiso = time() - t1
     println("Took $t_fastiso seconds!")
     println("-------------------------------------")
@@ -32,7 +33,8 @@ function main(
         Omega, p = copystructs2cpu(Omega, c, p)
     end
 
-    filename = "$(solver)_N$(Omega.N)_$kernel"
+    gs = active_gs ? "geostate" : "isostate"
+    filename = "$(solver)_N$(Omega.N)_$(kernel)_$(gs)"
     jldsave(
         "data/test1/$filename.jld2",
         Omega = Omega, c = c, p = p,
@@ -42,9 +44,11 @@ function main(
     )
 end
 
-# for s in ["ExplicitEuler", BS3(), Tsit5()]
-for s in ["ExplicitEuler"]
-    for n in 6:6
-        main(n, use_cuda = false, solver = s)
+# ["ExplicitEuler", BS3(), VCABM(), Rosenbrock23(autodiff=false)]
+for use_cuda in [false, true]
+    for active_gs in [false, true]
+        for n in 3:8
+            main(n, use_cuda = use_cuda, solver = "ExplicitEuler", active_gs = active_gs)
+        end
     end
 end

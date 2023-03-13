@@ -8,8 +8,8 @@ and the load columns for the next time step of the isostasy integration.
 """
 function update_geostate!(
     gs::GeoState{T},
-    u::Matrix{T},
-    H_ice::Matrix{T},
+    u::AbstractMatrix{T},
+    H_ice::AbstractMatrix{T},
     Omega::ComputationDomain{T},
     c::PhysicalConstants{T},
     p::MultilayerEarth{T},
@@ -35,10 +35,15 @@ function update_geoid!(
     p::MultilayerEarth{T},
     tools::PrecomputedFastiso{T},
 ) where {T<:AbstractFloat}
-    gs.geoid .= conv(
-        tools.geoidgreen,
-        get_greenloadchange(gs, Omega, c, p),
-    )[Omega.N2:end-Omega.N2, Omega.N2:end-Omega.N2]
+    gs.geoid .= view(
+        conv( tools.geoidgreen, get_greenloadchange(gs, Omega, c, p)),
+        Omega.N2:2*Omega.N-1-Omega.N2,
+        Omega.N2:2*Omega.N-1-Omega.N2,
+    )
+    # conv(
+    #     tools.geoidgreen,
+    #     get_greenloadchange(gs, Omega, c, p),
+    # )[Omega.N2:end-Omega.N2, Omega.N2:end-Omega.N2]
     return nothing
 end
 
@@ -52,6 +57,7 @@ Compute the load change compared to the reference configuration.
 # Reference
 
 Coulon et al. 2021.
+Difference to Coulon: HERE WE SCALE WITH CORRECTION FACTOR FOR PROJECTION!
 """
 function get_greenloadchange(
     gs::GeoState{T},
@@ -59,32 +65,33 @@ function get_greenloadchange(
     c::PhysicalConstants{T},
     p::MultilayerEarth{T},
 ) where {T<:AbstractFloat}
-    return (Omega.dx * Omega.dy) .* get_columnchange(gs, c, p)
+    return (Omega.dx * Omega.dy) .* get_columnchange(gs, Omega, c, p)
 end
 
 function get_loadchange(
     gs::GeoState{T},
+    Omega::ComputationDomain{T},
     c::PhysicalConstants{T},
-    p::MultilayerEarth{T},
 ) where {T<:AbstractFloat}
-    return - c.g .* get_columnchange(gs, c)
+    return - c.g .* get_columnchange(gs, Omega, c)
 end
 
 function get_columnchange(
     gs::GeoState{T},
+    Omega::ComputationDomain{T},
     c::PhysicalConstants{T},
     p::MultilayerEarth{T},
 ) where {T<:AbstractFloat}
-    return get_columnchange(gs, c) +
-        p.mean_density .* (gs.b - gs.b_ref)
+    return get_columnchange(gs, Omega, c) + Omega.K .* p.mean_density .* (gs.b - gs.b_ref)
 end
 
 function get_columnchange(
     gs::GeoState{T},
+    Omega::ComputationDomain{T},
     c::PhysicalConstants{T},
 ) where {T<:AbstractFloat}
-    return c.rho_ice .* (gs.H_ice - gs.H_ice_ref) + 
-        c.rho_seawater .* (gs.H_water - gs.H_water_ref)
+    return Omega.K .* (c.rho_ice .* (gs.H_ice - gs.H_ice_ref) + 
+        c.rho_seawater .* (gs.H_water - gs.H_water_ref) )
 end
 
 # TODO: transform results with stereographic utils for test2!
@@ -120,8 +127,8 @@ Update the load columns of a `::GeoState`.
 """
 function update_loadcolumns!(
     gs::GeoState{T},
-    u::Matrix{T},
-    H_ice::Matrix{T},
+    u::AbstractMatrix{T},
+    H_ice::AbstractMatrix{T},
 ) where {T<:AbstractFloat}
     gs.b .= gs.b_ref .+ u
     gs.H_ice .= H_ice
@@ -231,8 +238,7 @@ function update_V_pov!(
     gs::GeoState{T},
     Omega::ComputationDomain{T},
 ) where {T<:AbstractFloat}
-    gs.V_pov = sum( max.(gs.z0 .- gs.b, T(0.0)) .*
-        (Omega.dx*Omega.dy)./(Omega.K .^ 2) )
+    gs.V_pov = sum( max.(gs.z0 .- gs.b, T(0.0)) .* (Omega.dx*Omega.dy)./(Omega.K .^ 2) )
     return nothing
 end
 

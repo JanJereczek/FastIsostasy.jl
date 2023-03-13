@@ -50,16 +50,16 @@ struct MultilayerEarth{T<:AbstractFloat}
 end
 
 mutable struct GeoState{T<:AbstractFloat}
-    H_ice::Matrix{T}               # current height of ice column
-    H_ice_ref::Matrix{T}           # reference
-    H_water::Matrix{T}               # current height of water column
-    H_water_ref::Matrix{T}           # reference
-    b::Matrix{T}                # vertical bedrock position
-    b_ref::Matrix{T}            # reference
-    geoid::Matrix{T}            # current geoid displacement
-    z0::Matrix{T}               # reference height to allow external sea-level forcing
-    sealevel::Matrix{T}         # current sealevel field
-    sealevel_ref::Matrix{T}     # reference sealevel field
+    H_ice::AbstractMatrix{T}            # current height of ice column
+    H_ice_ref::AbstractMatrix{T}        # reference
+    H_water::AbstractMatrix{T}          # current height of water column
+    H_water_ref::AbstractMatrix{T}      # reference
+    b::AbstractMatrix{T}                # vertical bedrock position
+    b_ref::AbstractMatrix{T}            # reference
+    geoid::AbstractMatrix{T}            # current geoid displacement
+    z0::AbstractMatrix{T}               # reference height to allow external sea-level forcing
+    sealevel::AbstractMatrix{T}         # current sealevel field
+    sealevel_ref::AbstractMatrix{T}     # reference sealevel field
     V_af::T                     # ice volume above floatation
     sle_af::T                   # sl-equivalent of ice volume above floatation
     sle_af_ref::T               # reference sl-equivalent of ice volume above floatation
@@ -75,16 +75,16 @@ mutable struct GeoState{T<:AbstractFloat}
 end
 
 struct ReferenceGeoState{T<:AbstractFloat}
-    H_ice::Matrix{T}           # reference
-    H_water::Matrix{T}           # reference
-    b::Matrix{T}            # reference
-    z0::Matrix{T}               # reference height to allow external sea-level forcing
-    sealevel::Matrix{T}     # reference sealevel field
-    V_af::T                 # ice volume above floatation
-    sle_af::T               # reference sl-equivalent of ice volume above floatation
-    V_pov::T                # reference
-    V_den::T                # reference
-    conservation_term::T        # a term for mass conservation
+    H_ice::AbstractMatrix{T}        # reference
+    H_water::AbstractMatrix{T}      # reference
+    b::AbstractMatrix{T}            # reference
+    z0::AbstractMatrix{T}           # reference height to allow external sea-level forcing
+    sealevel::AbstractMatrix{T}     # reference sealevel field
+    V_af::T                         # ice volume above floatation
+    sle_af::T                       # reference sl-equivalent of ice volume above floatation
+    V_pov::T                        # reference
+    V_den::T                        # reference
+    conservation_term::T            # a term for mass conservation
 end
 
 struct PrecomputedFastiso{T<:AbstractFloat}

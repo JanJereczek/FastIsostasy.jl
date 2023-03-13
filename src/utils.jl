@@ -217,12 +217,11 @@ function ComputationDomain(
     X, Y = meshgrid(x, y)
     R = get_r.(X, Y)
     Theta = dist2angulardist.(R)
-
     Lat, Lon = stereo2latlon(X, Y)
-    K = scalefactor(Lat, Lon)
-    null = fill(T(0.0), N, N)
     
     arraykernel = use_cuda ? CuArray : Array
+    K = kernelpromote(scalefactor(Lat, Lon), arraykernel)
+    null = fill(T(0.0), N, N)
     
     # Differential operators in Fourier space
     pseudodiff, harmonic, biharmonic = get_differential_fourier(L, N2)

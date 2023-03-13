@@ -67,7 +67,7 @@ function PrecomputedFastiso(
         p1, p2,
         Dx, Dy, Dxx, Dyy, Dxy, negligible_gradD,
         rhog,
-        geoidgreen,
+        kernelpromote(geoidgreen, Omega.arraykernel),
     )
 end
 
@@ -90,9 +90,9 @@ function fastisostasy(
     t_Hice_snapshots::Vector{T},
     Hice_snapshots::Vector{Matrix{T}};
     t_eta_snapshots::Vector{T} = [t_out[1], t_out[end]],
-    eta_snapshots::Vector{Matrix{T}} = [p.effective_viscosity, p.effective_viscosity],
+    eta_snapshots::Vector{<:AbstractMatrix{T}} = [p.effective_viscosity, p.effective_viscosity],
     u_viscous_0::Matrix{T} = copy(Omega.null),
-    u_elastic_0::Matrix{T} = copy(Omega.null),
+    # u_elastic_0::Matrix{T} = copy(Omega.null),
     geoid_0::Matrix{T} = copy(Omega.null),
     sealevel_0::Matrix{T} = copy(Omega.null),
     H_ice_ref::Matrix{T} = copy(Omega.null),
@@ -102,7 +102,10 @@ function fastisostasy(
     dt::T = T(years2seconds(1.0)),
     active_geostate::Bool = true,
 ) where {T<:AbstractFloat}
-
+    u_viscous_0, geoid_0, sealevel_0, H_ice_ref, H_water_ref, b_ref = kernelpromote(
+        [u_viscous_0, geoid_0, sealevel_0, H_ice_ref, H_water_ref, b_ref],
+        Omega.arraykernel,
+    )
     tools = PrecomputedFastiso(Omega, p, c)
     Hice = linear_interpolation( t_Hice_snapshots,
         kernelpromote(Hice_snapshots, Omega.arraykernel) )
@@ -129,22 +132,23 @@ function fastisostasy(
     u, dudt, u_elastic, geoid, sealevel = forward_isostasy(
         dt, t_out, u_viscous_0, geostate, sstruct, ODEsolver)
 
-    return FastIsoResults(t_out, tools, u, dudt, u_elastic, geoid, sealevel, Hice, eta)
+    return FastIsoResults(
+        t_out, tools, u, dudt, u_elastic,
+        geoid, sealevel, Hice, eta,
+    )
 end
 
 function fastisostasy(
     t_out::Vector{T},
     Omega::ComputationDomain{T},
-    tools::PrecomputedFastiso{T},
     c::PhysicalConstants{T},
     p::MultilayerEarth{T},
     Hice_snapshot::Matrix{T};
-    kwargs...
+    kwargs...,
 ) where {T<:AbstractFloat}
     t_Hice_snapshots = [t_out[1], t_out[end]]
     Hice_snapshots = [Hice_snapshot, Hice_snapshot]
-    return fastisostasy(
-        t_out, Omega, tools, p, c, t_Hice_snapshots, Hice_snapshots)
+    return fastisostasy(t_out, Omega, c, p, t_Hice_snapshots, Hice_snapshots; kwargs...)
 end
 
 function forwardstep_isostasy!(
@@ -156,7 +160,7 @@ function forwardstep_isostasy!(
     apply_bc!(u)
     if sstruct.active_geostate
         update_geostate!(
-            sstruct.geostate, kernelpromote(u, Array), sstruct.Hice_cpu(t),
+            sstruct.geostate, u, sstruct.Hice(t),
             sstruct.Omega, sstruct.c, sstruct.p, sstruct.tools,
         )
     end
@@ -180,7 +184,7 @@ function dudt_isostasy!(
     biharmonic_uf = real.( tools.pifft * ( Omega.biharmonic .* uf ) )
 
     if sstruct.active_geostate
-        term1 = kernelpromote(get_loadchange(sstruct.geostate, c, p), Omega.arraykernel)
+        term1 = get_loadchange(sstruct.geostate, Omega, c)
     else
         term1 = ice_load(c, sstruct.Hice(t))
     end
@@ -242,7 +246,7 @@ function forward_isostasy(
 
         if isa(ODEsolver, OrdinaryDiffEqAlgorithm)
             prob = ODEProblem(forwardstep_isostasy!, u, (t0, t_out[k]), sstruct)
-            sol = solve(prob, ODEsolver, reltol = 1e-3)
+            sol = solve(prob, ODEsolver, reltol=1e-3) #, dtmin = years2seconds(0.1))
 
             u .= sol(t_out[k], Val{0})
             dudt .= sol(t_out[k], Val{1})
@@ -255,8 +259,8 @@ function forward_isostasy(
 
         u_out[k] .= copy(kernelpromote(u, Array))
         dudt_out[k] .= copy(kernelpromote(dudt, Array))
-        geoid_out[k] .= copy(geostate.geoid)
-        sealevel_out[k] .= copy(geostate.sealevel)
+        geoid_out[k] .= copy(kernelpromote(geostate.geoid, Array))
+        sealevel_out[k] .= copy(kernelpromote(geostate.sealevel, Array))
     end
     return u_out, dudt_out, u_el_out, geoid_out, sealevel_out
 end
