@@ -7,18 +7,11 @@ include("helpers_plot.jl")
 include("helpers_compute.jl")
 include("external_viscosity_maps.jl")
 
-function main(
-    case::String;       # Application case
-    make_anim = false,
-)
+function main(n::Int, case::String; use_cuda::Bool = true)
 
-    # Fix resolution --> fast but not 100% accurate results for sanity check.
-    n = 6
     T = Float64
-    L = T(3000e3)               # half-length of the square domain (m)
+    L = T(4000e3)               # half-length of the square domain (m)
     Omega = ComputationDomain(L, n)   # domain parameters
-    R = T(2000e3)               # ice disc radius (m)
-    H = T(1000)                 # ice disc thickness (m)
     c = PhysicalConstants()
     if occursin("homogeneous", case)
         channel_viscosity = fill(1e20, Omega.N, Omega.N)
@@ -59,123 +52,24 @@ function main(
             layers_viscosity = lv,
         )
     end
+    
+    kernel = use_cuda ? "gpu" : "cpu"
+    println("Computing on $kernel and $(Omega.N) x $(Omega.N) grid...")
 
-    if occursin("homogeneous", case) | occursin("meanviscosity", case)
-        checkfig = Figure(resolution = (1600, 700), fontsize = 20)
-        labels = [
-            L"$z \in [88, 400]$ km",
-            L"$z \, > \, 400$ km",
-            L"Equivalent half-space viscosity $\,$",
-        ]
-    elseif occursin("scaledviscosity", case)
-        checkfig = Figure(resolution = (1600, 550), fontsize = 20)
-        labels = [
-            L"$z \in [88, 180]$ km",
-            L"$z \in ]180, 280]$ km",
-            L"$z \in ]280, 400]$ km",
-            L"$z \, > \, 400$ km",
-            L"Equivalent half-space viscosity $\,$",
-        ]
-    end
-
-    clim = (18.0, 23.0)
-    cmap = cgrad(:jet, rev = true)
-    for k in axes(lv, 3)
-        ax = Axis(
-            checkfig[1, k],
-            aspect = DataAspect(),
-            title = labels[k],
-            xlabel = L"$x \: \mathrm{(10^3 \: km)}$",
-            ylabel = L"$y \: \mathrm{(10^3 \: km)}$",
-            xticks = (-3e6:1e6:3e6, num2latexstring.(-3:3)),
-            yticks = (-3e6:1e6:3e6, num2latexstring.(-3:3)),
-        )
-        if k > 1
-            hideydecorations!(ax)
-        end
-        heatmap!(
-            ax,
-            Omega.X,
-            Omega.Y,
-            log10.(lv[:, :, k])',
-            colormap = cmap,
-            colorrange = clim,
-        )
-        scatter!(
-            [Omega.X[20, 24], Omega.X[36, 38]],
-            [Omega.Y[20, 24], Omega.Y[36, 38]],
-            color = :white,
-            markersize = 20,
-        )
-    end
-    ax = Axis(
-        checkfig[1, size(lv, 3)+1],
-        aspect = DataAspect(),
-        title = labels[size(lv, 3)+1],
-        xlabel = L"$x \: \mathrm{(10^3 \: km)}$",
-        ylabel = L"$y \: \mathrm{(10^3 \: km)}$",
-        xticks = (-3e6:1e6:3e6, num2latexstring.(-3:3)),
-        yticks = (-3e6:1e6:3e6, num2latexstring.(-3:3)),
-    )
-    hideydecorations!(ax)
-
-    hm = heatmap!(
-        ax,
-        Omega.X,
-        Omega.Y,
-        log10.(p.effective_viscosity)',
-        colormap = cmap,
-        colorrange = clim,
-    )
-    scatter!(
-        [Omega.X[20, 24], Omega.X[36, 38]],
-        [Omega.Y[20, 24], Omega.Y[36, 38]],
-        color = :white,
-        markersize = 20,
-    )
-    Colorbar(
-        checkfig[2, :],
-        hm,
-        vertical = false,
-        width = Relative(0.3),
-        label = L"log viscosity $\,$",
-    )
-    save("plots/test4a/$(case)_visclayers.png", checkfig)
-
-    t_out_yr = 0.0:100:2e4
-    t_out = years2seconds.(t_out_yr)
-    u3D = zeros( T, (size(Omega.X)..., length(t_out)) )
-    u3D_elastic = copy(u3D)
-    u3D_viscous = copy(u3D)
-    dudt3D_viscous = copy(u3D)
-    tools = PrecomputedFastiso(Omega, p, c)
-    if n >= 7
-        dt = fill( years2seconds(0.1), length(t_out)-1 )
-    else
-        dt = fill( years2seconds(1.0), length(t_out)-1 )
-    end
-
-    sigma_zz_disc = generate_uniform_disc_load(Omega, c, R, H)
-    sigma_zz_snapshots = ([t_out[1], t_out[end]], [sigma_zz_disc, sigma_zz_disc])
+    R = T(2000e3)               # ice disc radius (m)
+    H = T(1000)                 # ice disc thickness (m)
+    Hcylinder = uniform_ice_cylinder(Omega, R, H)
+    t_out = years2seconds.(0.0:10:2e4)
 
     t1 = time()
-    @time forward_isostasy!(
-        Omega,
-        t_out,
-        u3D_elastic,
-        u3D_viscous,
-        dudt3D_viscous,
-        sigma_zz_snapshots,
-        tools,
-        p,
-        c,
-        dt = dt,
-    )
+    results = fastisostasy(t_out, Omega, c, p, Hcylinder)
     t_fastiso = time() - t1
+    println("Took $t_fastiso seconds!")
+    println("-------------------------------------")
 
-    # if use_cuda
-    #     Omega, p = copystructs2cpu(Omega, c, p)
-    # end
+    if use_cuda
+        Omega, p = copystructs2cpu(Omega, c, p)
+    end
 
     # lowest_eta = minimum(p.effective_viscosity[Omega.X.^2 + Omega.Y.^2 .< (1.8e6)^2])
     # point_lowest_eta = argmin( (p.effective_viscosity .- lowest_eta).^2 )
@@ -187,36 +81,19 @@ function main(
 
     jldsave(
         "data/test4a/discload_$(case)_N$(Omega.N).jld2",
-        u3D_elastic = u3D_elastic,
-        u3D_viscous = u3D_viscous,
-        dudt3D_viscous = dudt3D_viscous,
-        sigma_zz = sigma_zz_disc,
-        Omega = Omega,
-        c = c,
-        p = p,
-        R = R,
-        H = H,
+        Omega = Omega, c = c, p = p,
+        results = results,
         t_fastiso = t_fastiso,
-        t_out = t_out,
+        R = R, H = H,
         eta_extrema = points,
     )
 
     ##############
-    if make_anim
-        anim_name = "plots/test4a/discload_$(case)_N$(Omega.N)"
-        animate_viscous_response(
-            t_out,
-            Omega,
-            u3D_viscous,
-            anim_name,
-            (-300.0, 50.0),
-            points,
-            20,
-        )
-    end
+
 end
 
 cases = ["homogeneous_viscosity", "wiens_scaledviscosity", "wiens_meanviscosity"]
+n = 6
 for case in cases
-    main(case, make_anim = true)
+    main(n, case)
 end
