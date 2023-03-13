@@ -10,7 +10,8 @@ include("external_viscosity_maps.jl")
 
 function main(
     n::Int,             # 2^n cells on domain (1)
-    case::String,       # Application case
+    case::String;       # Application case
+    use_cuda::Bool = false,
 )
 
     T = Float64
@@ -35,39 +36,20 @@ function main(
         layers_viscosity = lv,
     )
 
-    t_out, deltaH, H = interpolated_glac1d_snapshots(Omega)
-    delta_sigma = - (c.g * c.rho_ice) .* deltaH
-    sigma_zz_snapshots = (t_out, [delta_sigma[:, :, k] for k in axes(delta_sigma, 3) ])
+    kernel = use_cuda ? "gpu" : "cpu"
+    println("Computing on $kernel and $(Omega.N) x $(Omega.N) grid...")
 
-    u3D = zeros( T, (size(Omega.X)..., length(t_out)) )
-    u3D_elastic = copy(u3D)
-    u3D_viscous = copy(u3D)
-    dudt3D_viscous = copy(u3D)
-    tools = PrecomputedFastiso(Omega, p, c)
-    if n >= 7
-        dt = fill( years2seconds(0.1), length(t_out)-1 )
-    else
-        dt = fill( years2seconds(1.0), length(t_out)-1 )
-    end
+    t_out, deltaH, H = interpolated_glac1d_snapshots(Omega)
 
     t1 = time()
-    @time forward_isostasy!(
-        Omega,
-        t_out,
-        u3D_elastic,
-        u3D_viscous,
-        dudt3D_viscous,
-        sigma_zz_snapshots,
-        tools,
-        p,
-        c,
-        dt = dt,
-    )
+    results = fastisostasy(t_out, Omega, c, p, Hcylinder)
     t_fastiso = time() - t1
+    println("Took $t_fastiso seconds!")
+    println("-------------------------------------")
 
-    # if use_cuda
-    #     Omega, p = copystructs2cpu(Omega, c, p)
-    # end
+    if use_cuda
+        Omega, p = copystructs2cpu(Omega, c, p)
+    end
 
     lowest_eta = minimum(p.effective_viscosity[abs.(deltaH[:, :, end]) .> 1])
     point_lowest_eta = argmin( (p.effective_viscosity .- lowest_eta).^2 )
@@ -76,15 +58,10 @@ function main(
 
     jldsave(
         "data/test4b/$(case)_N$(Omega.N).jld2",
-        u3D_elastic = u3D_elastic,
-        u3D_viscous = u3D_viscous,
-        dudt3D_viscous = dudt3D_viscous,
-        sigma_zz_snapshots = sigma_zz_snapshots,
-        Omega = Omega,
-        c = c,
-        p = p,
+        Omega = Omega, c = c, p = p,
+        results = results,
         t_fastiso = t_fastiso,
-        t_out = t_out,
+        R = R, H = H,
         eta_extrema = points,
     )
 end

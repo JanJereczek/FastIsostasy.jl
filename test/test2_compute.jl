@@ -7,14 +7,12 @@ function main(
     n::Int,             # 2^n cells on domain (1)
     case::String;       # Application case
     use_cuda = true::Bool,
-    solver::Any = "ExplicitEuler",
 )
 
     T = Float64
     L = T(3000e3)               # half-length of the square domain (m)
     Omega = ComputationDomain(L, n, use_cuda = use_cuda)
     c = PhysicalConstants(rho_ice = 0.931e3)
-
     G = 0.50605e11              # shear modulus (Pa)
     nu = 0.5
     E = G * 2 * (1 + nu)
@@ -30,31 +28,22 @@ function main(
     )
 
     kernel = use_cuda ? "gpu" : "cpu"
-    filename = "$(case)_N$(Omega.N)_$(kernel)"
+    println("Computing on $kernel and $(Omega.N) x $(Omega.N) grid...")
 
-    t_out = years2seconds.([0.0, 1.0, 1e3, 2e3, 5e3, 1e4, 1e5])
     if occursin("disc", case)
         alpha = T(10)                       # max latitude (°) of uniform ice disc
         Hmax = T(1000)                      # uniform ice thickness (m)
         R = deg2rad(alpha) * c.r_equator    # disc radius (m), (Earth radius as in Spada)
-        H_ice = uniform_ice_cylinder(Omega, R, Hmax)
+        H_ice = stereo_ice_cylinder(Omega, R, Hmax)
     elseif occursin("cap", case)
         alpha = T(10)                       # max latitude (°) of ice cap
         Hmax = T(1500)
-        H_ice = ice_cap(Omega, c, alpha, Hmax)
+        H_ice = stereo_ice_cap(Omega, c, alpha, Hmax)
     end
+    t_out = years2seconds.([0.0, 1.0, 1e3, 2e3, 5e3, 1e4, 1e5])
 
-    t_Hice_snapshots = [t_out[1], t_out[end]]
-    Hice_snapshots = [H_ice, H_ice]
-
-    t_eta_snapshots = [t_out[1], t_out[end]]
-    eta_snapshots = kernelpromote([p.effective_viscosity, p.effective_viscosity], Array)
-
-    tools = PrecomputedFastiso(Omega, p, c)
     t1 = time()
-    results = fastisostasy(t_out, Omega, tools, c, p,
-        t_Hice_snapshots, Hice_snapshots, t_eta_snapshots, eta_snapshots,
-        ODEsolver = solver)
+    results = fastisostasy(t_out, Omega, c, p, H_ice)
     t_fastiso = time() - t1
     println("Took $t_fastiso seconds!")
     println("-------------------------------------")
@@ -63,13 +52,13 @@ function main(
         Omega, p = copystructs2cpu(Omega, c, p)
     end
 
+    filename = "$(case)_N$(Omega.N)_$(kernel)"
     jldsave(
         "data/test2/$filename.jld2",
-        Omega = Omega,
-        c = c,
-        p = p,
+        Omega = Omega, c = c, p = p,
         results = results,
         t_fastiso = t_fastiso,
+        H = H,
     )
 
 end
@@ -77,8 +66,6 @@ end
 cases = ["disc", "cap"]
 for n in 8:8
     for case in cases
-        N = 2^n
-        println("Computing $case on $N x $N grid...")
         main(n, case, use_cuda = true)
     end
 end
