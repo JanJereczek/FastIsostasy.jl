@@ -1,9 +1,6 @@
 push!(LOAD_PATH, "../")
 using FastIsostasy
 using JLD2
-using CairoMakie
-using Interpolations
-include("helpers_plot.jl")
 include("helpers_compute.jl")
 include("external_load_maps.jl")
 include("external_viscosity_maps.jl")

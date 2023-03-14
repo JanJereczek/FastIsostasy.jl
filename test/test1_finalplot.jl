@@ -13,7 +13,7 @@ function main()
     N = 256
     N2 = Int(N/2)
     N4 = Int(N/4)
-    hash = "$(case)_N$(N)_gpu"
+    hash = "$(case)_N$(N)_gpu_isostate"
     sol = load("data/test1/$hash.jld2")
     Omega, c, p, H, R = sol["Omega"], sol["c"], sol["p"], sol["H"], sol["R"]
     results = sol["results"]
@@ -21,7 +21,7 @@ function main()
     t_out = results.t_out
 
     fig = Figure(resolution = (1600, 900), fontsize = 20)
-    t_2Dplot = [100.0, 1500.0, 50_000.0]
+    t_2Dplot = [500.0, 1500.0, 50_000.0]
 
     clim = (-300, 10)
     # cmap = cgrad(:PuOr_5, rev = true)
@@ -61,6 +61,8 @@ function main()
             linewidth = 0.08,
             color = :black,
         )
+
+        zlims!(ax3D, clim)
     end
     Colorbar(
         fig[1, :],
@@ -144,7 +146,7 @@ function main()
     t_end = years2seconds(1e5)
 
     for N in Nvec
-        hash = "$(case)_N$(N)_gpu"
+        hash = "$(case)_N$(N)_gpu_isostate"
         sol = load("data/test1/$hash.jld2")
 
         islice, jslice = Int(round(N/2)), Int(round(N/2))
@@ -193,7 +195,7 @@ function main()
         runtime = Float64[]
         delta_x = Float64[]
         for N in Nvec
-            hash = "$(case)_N$(N)_$(kernel)"
+            hash = "$(case)_N$(N)_$(kernel)_isostate"
             sol = load("data/test1/$hash.jld2")
             append!(runtime, sol["t_fastiso"])
             append!(delta_x, 2*sol["Omega"].Lx * 1e-3 / N)
