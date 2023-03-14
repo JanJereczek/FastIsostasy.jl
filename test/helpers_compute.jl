@@ -36,7 +36,7 @@ function generate_uniform_disc_load(
     return - M .* (c.rho_ice * c.g * H)
 end
 
-function ice_cap(
+function stereo_ice_cap(
     Omega::ComputationDomain,
     alpha_deg::T,
     H::T,

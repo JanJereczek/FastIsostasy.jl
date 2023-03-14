@@ -38,12 +38,13 @@ function main(
     elseif occursin("cap", case)
         alpha = T(10)                       # max latitude (°) of ice cap
         Hmax = T(1500)
-        H_ice = stereo_ice_cap(Omega, c, alpha, Hmax)
+        H_ice = stereo_ice_cap(Omega, alpha, Hmax)
     end
     t_out = years2seconds.([0.0, 1.0, 1e3, 2e3, 5e3, 1e4, 1e5])
 
+    sl0 = fill(-Inf, Omega.N, Omega.N)
     t1 = time()
-    results = fastisostasy(t_out, Omega, c, p, H_ice)
+    results = fastisostasy(t_out, Omega, c, p, H_ice, sealevel_0=sl0)
     t_fastiso = time() - t1
     println("Took $t_fastiso seconds!")
     println("-------------------------------------")
@@ -58,14 +59,14 @@ function main(
         Omega = Omega, c = c, p = p,
         results = results,
         t_fastiso = t_fastiso,
-        H = H,
+        H = H_ice,
     )
 
 end
 
 cases = ["disc", "cap"]
-for n in 8:8
+for n in 7:7
     for case in cases
-        main(n, case, use_cuda = true)
+        main(n, case, use_cuda = false)
     end
 end

@@ -57,82 +57,6 @@ function plot_response(
     return fig
 end
 
-function slice_spada(
-    Omega::ComputationDomain,
-    c::PhysicalConstants,
-    t_vec::AbstractVector{T},
-    t_plot::AbstractVector{T},
-    Uvec::Vector{Array{T, 3}},
-    labels,
-    xlabels,
-    ylabels,
-    plotname::String,
-) where {T<:AbstractFloat}
-
-    ncases = length(Uvec)
-    data = get_spada_displacements()
-    keys = ["u_cap", "u_disc", "dudt_cap", "dudt_disc"]
-
-    fig = Figure(resolution=(1600, 900), fontsize = 24)
-    nrows, ncols = 2,2
-    axs = [Axis(
-        fig[i, j],
-        title = labels[(i-1)*2 + j],
-        xlabel = xlabels[(i-1)*2 + j],
-        ylabel = ylabels[(i-1)*2 + j],
-        xminorticks = IntervalsBetween(5),
-        yminorticks = IntervalsBetween(2),
-        xminorgridvisible = true,
-        yminorgridvisible = true,
-        xticklabelsvisible = i == 2 ? true : false,
-        yticklabelsvisible = j == 1 ? true : false,
-    ) for j in 1:2, i in 1:2]
-    # colors = [:black, :orange, :blue, :red, :gray, :purple]
-    colors = [:gray80, :gray65, :gray50, :gray35, :gray20, :gray5]
-
-    for i in 1:ncases
-        U = Uvec[i]
-        n1, n2, nt = size(U)
-        slicey, slicex = Int(round(n1/2)), Int(round(n2/2))
-        theta = rad2deg.( Omega.X[slicey, slicex:end] ./ c.r_equator)
-
-        bm_data = data[keys[i]]
-        for k in eachindex(bm_data)
-            lines!(
-                axs[i],
-                bm_data[k][:, 1],
-                bm_data[k][:, 2],
-                color = colors[k],
-                linestyle = :dash,
-            )
-        end
-
-        for l in eachindex(t_plot)
-            t = t_plot[l]
-            k = argmin( (t_vec .- t) .^ 2 )
-            tyr = Int(round( seconds2years(t) ))
-            lines!(
-                axs[i],
-                theta,
-                U[slicey, slicex:end, k],
-                label = L"$t = %$tyr $ yr",
-                color = colors[l],
-            )
-        end
-        if i <= 2
-            ylims!(axs[i], (-450, 50))
-        else
-            ylims!(axs[i], (-85, 10))
-        end
-        xlims!(axs[i], (0, 15))
-    end
-    axislegend(axs[1], position = :rb)
-    save("plots/$plotname.png", fig)
-    save("plots/$plotname.pdf", fig)
-    return fig
-end
-
-
 function slice_test3(
     Omega::ComputationDomain,
     c::PhysicalConstants,
@@ -294,19 +218,3 @@ u_tinf_zm = [NaN, NaN, NaN, NaN]'
 u_tinf = vcat(u_tinf_vk, u_tinf_gs, u_tinf_zm)
 
 u_benchmark = cat(u_t0, u_t1, u_t5, u_t10, u_tinf, dims = 3)
-
-function get_spada_displacements()
-    prefix ="data/test2/Spada/"
-    cases = ["u_cap", "u_disc", "dudt_cap", "dudt_disc"]
-    snapshots = ["0", "1", "2", "5", "10", "inf"]
-    data = Dict{String, Vector{Matrix{Float64}}}()
-    for case in cases
-        tmp = Matrix{Float64}[]
-        for snapshot in snapshots
-            fname = string(prefix, case, "_", snapshot, ".csv")
-            append!(tmp, [readdlm(fname, ',', Float64)])
-        end
-        data[case] = tmp
-    end
-    return data
-end
