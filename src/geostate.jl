@@ -132,7 +132,7 @@ function update_loadcolumns!(
 ) where {T<:AbstractFloat}
     gs.b .= gs.b_ref .+ u
     gs.H_ice .= H_ice
-    gs.H_water .= max.(gs.sealevel - gs.b, T(0.0))
+    gs.H_water .= max.(gs.sealevel - (gs.b + H_ice), T(0.0))
     return nothing
 end
 
