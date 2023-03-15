@@ -36,7 +36,7 @@ function update_geoid!(
     tools::PrecomputedFastiso{T},
 ) where {T<:AbstractFloat}
     gs.geoid .= view(
-        conv( tools.geoidgreen, get_greenloadchange(gs, Omega, c, p)),
+        conv( tools.geoidgreen, get_greenloadchange(gs, Omega, c) ),
         Omega.N2:2*Omega.N-1-Omega.N2,
         Omega.N2:2*Omega.N-1-Omega.N2,
     )
@@ -63,9 +63,8 @@ function get_greenloadchange(
     gs::GeoState{T},
     Omega::ComputationDomain{T},
     c::PhysicalConstants{T},
-    p::MultilayerEarth{T},
 ) where {T<:AbstractFloat}
-    return (Omega.dx * Omega.dy) .* get_columnchange(gs, Omega, c, p)
+    return (Omega.dx * Omega.dy) .* get_fullcolumnchange(gs, Omega, c, p)
 end
 
 function get_loadchange(
@@ -73,19 +72,19 @@ function get_loadchange(
     Omega::ComputationDomain{T},
     c::PhysicalConstants{T},
 ) where {T<:AbstractFloat}
-    return - c.g .* get_columnchange(gs, Omega, c)
+    return - c.g .* get_loadcolumnchange(gs, Omega, c)
 end
 
-function get_columnchange(
+function get_fullcolumnchange(
     gs::GeoState{T},
     Omega::ComputationDomain{T},
     c::PhysicalConstants{T},
-    p::MultilayerEarth{T},
+    p::PhysicalConstants{T},
 ) where {T<:AbstractFloat}
-    return get_columnchange(gs, Omega, c) + Omega.K .* p.mean_density .* (gs.b - gs.b_ref)
+    return get_loadcolumnchange(gs, Omega, c) + Omega.K .* p.layers_density[1] .* (gs.b - gs.b_ref)
 end
 
-function get_columnchange(
+function get_loadcolumnchange(
     gs::GeoState{T},
     Omega::ComputationDomain{T},
     c::PhysicalConstants{T},
