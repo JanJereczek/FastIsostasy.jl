@@ -33,8 +33,8 @@ struct PhysicalConstants{T<:AbstractFloat}
     rho_ice::T
     rho_water::T
     rho_seawater::T
-    rho_0::T
-    rho_1::T
+    rho_core::T
+    rho_topastheno::T
 end
 
 struct MultilayerEarth{T<:AbstractFloat}
