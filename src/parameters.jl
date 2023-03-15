@@ -12,8 +12,9 @@ seconds_per_year = 60^2 * 24 * 365.25   # (s)
 rho_ice = 0.910e3                   # (kg/m^3)
 rho_water = 1.023e3                 # (kg/m^3)
 rho_seawater = 1.023e3              # (kg/m^3)
-rho_0 = 13.1e3                          # Density of Earth's core (kg m^-3)
-rho_1 = 3.0e3                           # Mean density of solid-Earth surface (kg m^-3)
+rho_core = 13.1e3                        # Density of Earth's core (kg m^-3)
+rho_topastheno = 3.3e3                           # Mean density of solid-Earth surface (kg m^-3)
+rho_litho = 3.0e3                       # Mean density of solid-Earth surface (kg m^-3)
 # Note: rho_0 and rho_1 are chosen such that g(pole) ≈ 9.81
 
 """
@@ -33,7 +34,7 @@ function PhysicalConstants(;T::Type=Float64, rho_ice = rho_ice)
         T(rho_ice),
         T(rho_water),
         T(rho_seawater),
-        T(rho_0),
-        T(rho_1),
+        T(rho_core),
+        T(rho_topastheno),
     )
 end
