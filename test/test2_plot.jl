@@ -85,7 +85,7 @@ function slice_spada(
         elseif i <= 2*ncols
             ylims!(axs[i], (-85, 10))
         elseif i <= 3*ncols
-            ylims!(axs[i], (-5, 45))
+            ylims!(axs[i], (-5, 50))
         end
         xlims!(axs[i], (0, 15))
     end
@@ -168,7 +168,7 @@ end
 
 cases = ["viscoelastic", "viscous"]
 for case in cases[2:2]
-    for n in 7:7
+    for n in 8:8
         main(case, n, kernel = "cpu")
     end
 end

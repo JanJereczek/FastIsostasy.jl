@@ -36,7 +36,7 @@ function update_geoid!(
     tools::PrecomputedFastiso{T},
 ) where {T<:AbstractFloat}
     gs.geoid .= view(
-        conv( tools.geoidgreen, get_greenloadchange(gs, Omega, c) ),
+        conv( tools.geoidgreen, get_greenloadchange(gs, Omega, c, p) ),
         Omega.N2:2*Omega.N-1-Omega.N2,
         Omega.N2:2*Omega.N-1-Omega.N2,
     )
@@ -63,6 +63,7 @@ function get_greenloadchange(
     gs::GeoState{T},
     Omega::ComputationDomain{T},
     c::PhysicalConstants{T},
+    p::MultilayerEarth{T},
 ) where {T<:AbstractFloat}
     return (Omega.dx * Omega.dy) .* get_fullcolumnchange(gs, Omega, c, p)
 end
@@ -79,9 +80,9 @@ function get_fullcolumnchange(
     gs::GeoState{T},
     Omega::ComputationDomain{T},
     c::PhysicalConstants{T},
-    p::PhysicalConstants{T},
+    p::MultilayerEarth{T},
 ) where {T<:AbstractFloat}
-    return get_loadcolumnchange(gs, Omega, c) + Omega.K .* p.layers_density[1] .* (gs.b - gs.b_ref)
+    return get_loadcolumnchange(gs, Omega, c) + p.mean_density[1] .* (gs.b - gs.b_ref) # .* Omega.K
 end
 
 function get_loadcolumnchange(
@@ -89,8 +90,8 @@ function get_loadcolumnchange(
     Omega::ComputationDomain{T},
     c::PhysicalConstants{T},
 ) where {T<:AbstractFloat}
-    return Omega.K .* (c.rho_ice .* (gs.H_ice - gs.H_ice_ref) + 
-        c.rho_seawater .* (gs.H_water - gs.H_water_ref) )
+    return (c.rho_ice .* (gs.H_ice - gs.H_ice_ref) + 
+        c.rho_seawater .* (gs.H_water - gs.H_water_ref) ) # .* Omega.K
 end
 
 # TODO: transform results with stereographic utils for test2!
@@ -109,7 +110,7 @@ function get_geoidgreen(
     c::PhysicalConstants{T},
 ) where {T<:AbstractFloat}
     geoidgreen = get_geoidgreen(Omega.R, c)
-    max_geoidgreen = get_geoidgreen(mean([Omega.dx, Omega.dy]), c)  # tolerance = resolution
+    max_geoidgreen = get_geoidgreen(norm([Omega.dx, Omega.dy]), c)  # tolerance = resolution
     return min.(geoidgreen, max_geoidgreen)
     # equivalent to: geoidgreen[geoidgreen .> max_geoidgreen] .= max_geoidgreen
 end
