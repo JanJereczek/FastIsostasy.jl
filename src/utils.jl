@@ -102,9 +102,9 @@ Reference: John P. Snyder (1987), p. 157, eq. (21-4).
 """
 function scalefactor(
     lat::T,
-    lon::T;
-    lat0::T = T(deg2rad(-90.0)),
-    lon0::T = T(deg2rad(0.0)),
+    lon::T,
+    lat0::T,
+    lon0::T;
     k0::T = T(1),
 ) where {T<:Real}
     return 2*k0 / (1 + sin(lat0)*sin(lat) + cos(lat0)*cos(lat)*cos(lon-lon0))
@@ -113,14 +113,14 @@ end
 # TODO: make angles and units really consistent here.
 function scalefactor(
     lat::AbstractMatrix{T},
-    lon::AbstractMatrix{T};
-    lat0::T = T(deg2rad(-90.0)),
-    lon0::T = T(deg2rad(0.0)),
+    lon::AbstractMatrix{T},
+    lat0::T,
+    lon0::T;
     k0::T = T(1),
 ) where {T<:Real}
     K = copy(lat)
     for idx in CartesianIndices(lat)
-        K[idx] = scalefactor(deg2rad(lat[idx]), deg2rad(lon[idx]))
+        K[idx] = scalefactor(deg2rad(lat[idx]), deg2rad(lon[idx]), lat0, lon0)
     end
     return K
 end
@@ -134,14 +134,14 @@ Reference: John P. Snyder (1987), p. 157, eq. (21-2), (21-3), (21-4).
 """
 function latlon2stereo(
     lat::T,
-    lon::T;
-    lat0=T(-90.0),          # reference latitude of projection, FIXME: does not work properly with lat0 = -71° for now
-    lon0=T(0.0),            # reference longitude of projection
+    lon::T,
+    lat0::T,                # reference latitude of projection, FIXME: does not work properly with lat0 = -71° for now
+    lon0::T;                # reference longitude of projection
     R::T = T(6.371e6),      # Earth radius
     k0::T = T(1.0),         # Scale factor
 ) where {T<:Real}
     lat, lon, lat0, lon0 = deg2rad.([lat, lon, lat0, lon0])
-    k = scalefactor(lat, lon)
+    k = scalefactor(lat, lon, lat0, lon0)
     x = R * k * cos(lat) * sin(lon - lon0)
     y = R * k * (cos(lat0) * sin(lat) - sin(lat0) * cos(lat) * cos(lon-lon0))
     return k, x, y
@@ -149,12 +149,14 @@ end
 
 function latlon2stereo(
     lat::AbstractMatrix{T},
-    lon::AbstractMatrix{T};
-    kwargs...,
+    lon::AbstractMatrix{T},
+    lat0::T,
+    lon0::T;
+    k0::T = T(1),
 ) where {T<:Real}
     K, X, Y = copy(lat), copy(lat), copy(lat)
     for idx in CartesianIndices(lat)
-        K[idx], X[idx], Y[idx] = latlon2stereo(lat[idx], lon[idx], kwargs...)
+        K[idx], X[idx], Y[idx] = latlon2stereo(lat[idx], lon[idx], lat0, lon0)
     end
     return K, X, Y
 end
@@ -168,14 +170,14 @@ Reference: John P. Snyder (1987), p. 159, eq. (20-14), (20-15), (20-18), (21-15)
 """
 function stereo2latlon(
     x::T,
-    y::T;
-    lat0=T(-90.0),          # reference latitude of projection, FIXME: does not work properly with lat0 = -71° for now
-    lon0=T(0.0),            # reference longitude of projection
+    y::T,
+    lat0::T,          # reference latitude of projection, FIXME: does not work properly with lat0 = -71° for now
+    lon0::T;            # reference longitude of projection
     R::T = T(6.371e6),      # Earth radius
     k0::T = T(1.0), 
 ) where {T<:Real}
     lat0, lon0 = deg2rad.([lat0, lon0])
-    r = get_r(x, y) + 1e-12     # add small tolerance to avoid division by zero
+    r = get_r(x, y) + 1e-20     # add small tolerance to avoid division by zero
     c = 2 * atan( r/(2*R*k0) )
     lat = asin( cos(c) * sin(lat0) + y/r * sin(c) * cos(lat0) )
     lon = lon0 + atan( x*sin(c), (r * cos(lat0) * cos(c) - y * sin(lat0) * sin(c)) )
@@ -184,12 +186,15 @@ end
 
 function stereo2latlon(
     x::AbstractMatrix{T},
-    y::AbstractMatrix{T};
-    kwargs...,
+    y::AbstractMatrix{T},
+    lat0::T,
+    lon0::T;
+    R::T = T(6.371e6),      # Earth radius
+    k0::T = T(1.0),
 ) where {T<:Real}
     Lat, Lon = copy(x), copy(x)
     for idx in CartesianIndices(x)
-        Lat[idx], Lon[idx] = stereo2latlon(x[idx], y[idx], kwargs...)
+        Lat[idx], Lon[idx] = stereo2latlon(x[idx], y[idx], lat0, lon0)
     end
     return Lat, Lon
 end
@@ -203,7 +208,9 @@ Initialize a square computational domain with length `2*L` and `2^n` grid cells.
 function ComputationDomain(
     L::T,
     n::Int;
-    use_cuda=false::Bool
+    use_cuda=false::Bool,
+    lat0::T=T(-71.0),
+    lon0::T=T(0.0),
 ) where {T<:AbstractFloat}
 
     # Geometry
@@ -220,7 +227,7 @@ function ComputationDomain(
     Lat, Lon = stereo2latlon(X, Y)
     
     arraykernel = use_cuda ? CuArray : Array
-    K = kernelpromote(scalefactor(Lat, Lon), arraykernel)
+    K = kernelpromote(scalefactor(Lat, Lon, lat0, lon0), arraykernel)
     null = fill(T(0.0), N, N)
     
     # Differential operators in Fourier space
@@ -380,7 +387,7 @@ function matrified_mean_gravity()
     else
         # Earth acceleration over depth z.
         # Use the pole radius because GIA most important at poles.
-        gr(r) = 4*π/3*c.G*c.rho_0* r - π*c.G*(c.rho_0 - c.rho_1) * r^2/c.r_pole
+        gr(r) = 4*π/3*c.G*c.rho_core* r - π*c.G*(c.rho_core - c.rho_topastheno) * r^2/c.r_pole
         gz(z) = gr(c.r_pole - z)
         mean_gravity = get_mean_gravity(layers_begin, layers_thickness, gz)
     end
