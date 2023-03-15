@@ -44,7 +44,7 @@ function main(
 
     sl0 = fill(-Inf, Omega.N, Omega.N)
     t1 = time()
-    results = fastisostasy(t_out, Omega, c, p, H_ice, sealevel_0=sl0)
+    results = fastisostasy(t_out, Omega, c, p, H_ice, sealevel_0=sl0, active_geostate=true)
     t_fastiso = time() - t1
     println("Took $t_fastiso seconds!")
     println("-------------------------------------")
@@ -65,7 +65,7 @@ function main(
 end
 
 cases = ["disc", "cap"]
-for n in 6:6
+for n in 8:8
     for case in cases
         main(n, case, use_cuda = false)
     end

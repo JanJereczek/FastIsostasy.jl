@@ -224,7 +224,7 @@ function ComputationDomain(
     X, Y = meshgrid(x, y)
     R = get_r.(X, Y)
     Theta = dist2angulardist.(R)
-    Lat, Lon = stereo2latlon(X, Y)
+    Lat, Lon = stereo2latlon(X, Y, lat0, lon0)
     
     arraykernel = use_cuda ? CuArray : Array
     K = kernelpromote(scalefactor(Lat, Lon, lat0, lon0), arraykernel)
@@ -335,7 +335,7 @@ function MultilayerEarth(
     )
 
     # mean_density = get_matrix_mean_density(layers_thickness, layers_density)
-    mean_density = fill(layers_density[1], Omega.N, Omega.N)
+    mean_density = fill(mean(layers_density), Omega.N, Omega.N)
 
     litho_rigidity, effective_viscosity, mean_density = kernelpromote(
         [litho_rigidity, effective_viscosity, mean_density], Omega.arraykernel)
