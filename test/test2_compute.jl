@@ -65,7 +65,7 @@ function main(
 end
 
 cases = ["disc", "cap"]
-for n in 7:7
+for n in 6:6
     for case in cases
         main(n, case, use_cuda = false)
     end

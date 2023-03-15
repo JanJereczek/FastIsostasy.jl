@@ -191,30 +191,3 @@ function animate_viscous_response(
         i[] = k
     end
 end
-
-u_t0_vk = [-27.81, -23.65, -7.49, -1.20]'
-u_t0_gs = [-27.77, -23.64, -7.33, -1.20]'
-u_t0_zm = [-27.77, -23.65, -7.38, -1.20]'
-u_t0 = vcat(u_t0_vk, u_t0_gs, u_t0_zm)
-
-u_t1_vk = [-94.49, -79.59, -25.25, -1.72]'
-u_t1_gs = [-94.40, -79.53, -24.80, -1.72]'
-u_t1_zm = [-94.42, -79.55, -24.92, -1.72]'
-u_t1 = vcat(u_t1_vk, u_t1_gs, u_t1_zm)
-
-u_t5_vk = [-237.58, -199.62, -48.88, 3.87]'
-u_t5_gs = [-237.49, -199.59, -47.73, 3.85]'
-u_t5_zm = [-237.50, -199.60, -48.04, 3.85]'
-u_t5 = vcat(u_t5_vk, u_t5_gs, u_t5_zm)
-
-u_t10_vk = [-303.03, -256.98, -50.94, 7.07]'
-u_t10_gs = [-303.01, -257.05, -49.35, 7.03]'
-u_t10_zm = [-302.99, -257.03, -49.77, 7.04]'
-u_t10 = vcat(u_t10_vk, u_t10_gs, u_t10_zm)
-
-u_tinf_vk = [NaN, NaN, NaN, NaN]'
-u_tinf_gs = [-388.11, -338.30, -59.24, 8.55]'
-u_tinf_zm = [NaN, NaN, NaN, NaN]'
-u_tinf = vcat(u_tinf_vk, u_tinf_gs, u_tinf_zm)
-
-u_benchmark = cat(u_t0, u_t1, u_t5, u_t10, u_tinf, dims = 3)
