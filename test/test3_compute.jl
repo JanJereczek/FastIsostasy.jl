@@ -7,7 +7,7 @@ include("helpers_compute.jl")
 function main(
     n::Int,                     # 2^n x 2^n cells on domain, (1)
     case::String;               # Application case
-    use_cuda = true::Bool,
+    use_cuda = false::Bool,
 )
 
     T = Float64
@@ -46,10 +46,9 @@ end
 
 #= Application cases:
 ["binaryD", "binaryη", "binaryDη"]
-["gaussian_lo_D", "gaussian_hi_D", "gaussian_lo_η", "gaussian_hi_η"]
 =#
 for n in 5:5
-    for case in ["gaussian_hi_η"]
+    for case in ["gaussian_lo_D", "gaussian_hi_D", "gaussian_lo_η", "gaussian_hi_η"]
         main(n, case, use_cuda = false)
     end
 end
