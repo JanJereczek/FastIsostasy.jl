@@ -81,10 +81,10 @@ Colorbar(
     width = Relative(0.3),
     label = L"log viscosity $\,$",
 )
-save("plots/test4a/$(case)_visclayers.png", checkfig)
+save("plots/test4/$(case)_visclayers.png", checkfig)
 
 if make_anim
-    anim_name = "plots/test4a/discload_$(case)_N$(Omega.N)"
+    anim_name = "plots/test4/discload_$(case)_N$(Omega.N)"
     animate_viscous_response(
         t_out,
         Omega,

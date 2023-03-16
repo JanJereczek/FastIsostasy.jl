@@ -170,8 +170,8 @@ function main(
 )
 
     N = 2^n
-    sol = load("data/test4b/$(case)_N$(N).jld2")
-    anim_name = "plots/test4b/loaduplift_$(case)_N$(N)"
+    sol = load("data/test5/$(case)_N$(N).jld2")
+    anim_name = "plots/test5/loaduplift_$(case)_N$(N)"
     t_out, deltaH, H = interpolated_glac1d_snapshots(sol["Omega"])
     load_itp = linear_interpolation(t_out, [H[:, :, k] for k in axes(H,3)])
     load_out = cat( [ load_itp(t) for t in sol["t_out"] ]..., dims = 3 )

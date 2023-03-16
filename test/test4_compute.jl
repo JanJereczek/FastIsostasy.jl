@@ -80,7 +80,7 @@ function main(n::Int, case::String; use_cuda::Bool = true)
     points = [CartesianIndex(20, 24), CartesianIndex(36, 38)]
 
     jldsave(
-        "data/test4a/discload_$(case)_N$(Omega.N).jld2",
+        "data/test4/discload_$(case)_N$(Omega.N).jld2",
         Omega = Omega, c = c, p = p,
         results = results,
         t_fastiso = t_fastiso,
