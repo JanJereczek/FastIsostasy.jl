@@ -151,6 +151,49 @@ function fastisostasy(
     return fastisostasy(t_out, Omega, c, p, t_Hice_snapshots, Hice_snapshots; kwargs...)
 end
 
+function forward_isostasy(
+    dt::T,
+    t_out::Vector{T},
+    u::AbstractMatrix{T},
+    geostate::GeoState{T},
+    sstruct::SuperStruct{T},
+    ODEsolver::Any,
+) where {T<:AbstractFloat}
+
+    # initialize with placeholders
+    placeholder = kernelpromote(u, Array)
+    u_out = [copy(placeholder) for time in t_out]
+    dudt_out = [copy(placeholder) for time in t_out]
+    u_el_out = [copy(placeholder) for time in t_out]
+    geoid_out = [copy(placeholder) for time in t_out]
+    sealevel_out = [copy(placeholder) for time in t_out]
+    dudt = copy(u)
+
+    for k in eachindex(t_out)[1:end]
+        t0 = k == 1 ? T(0.0) : t_out[k-1]
+        println("Computing until t = $(Int(round(seconds2years(t_out[k])))) years...")
+
+        if isa(ODEsolver, OrdinaryDiffEqAlgorithm)
+            prob = ODEProblem(forwardstep_isostasy!, u, (t0, t_out[k]), sstruct)
+            sol = solve(prob, ODEsolver, reltol=1e-3, dt=dt) #, dtmin = years2seconds(0.1))
+
+            u .= sol(t_out[k], Val{0})
+            dudt .= sol(t_out[k], Val{1})
+        else
+            for t in t0:dt:t_out[k]
+                forwardstep_isostasy!(dudt, u, sstruct, t)
+                simple_euler!(u, dudt, dt)
+            end
+        end
+
+        u_out[k] .= copy(kernelpromote(u, Array))
+        dudt_out[k] .= copy(kernelpromote(dudt, Array))
+        geoid_out[k] .= copy(kernelpromote(geostate.geoid, Array))
+        sealevel_out[k] .= copy(kernelpromote(geostate.sealevel, Array))
+    end
+    return u_out, dudt_out, u_el_out, geoid_out, sealevel_out
+end
+
 function forwardstep_isostasy!(
     dudt::AbstractMatrix{T},
     u::AbstractMatrix{T},
@@ -222,48 +265,6 @@ function simple_euler!(
     return nothing
 end
 
-function forward_isostasy(
-    dt::T,
-    t_out::Vector{T},
-    u::AbstractMatrix{T},
-    geostate::GeoState{T},
-    sstruct::SuperStruct{T},
-    ODEsolver::Any,
-) where {T<:AbstractFloat}
-
-    # initialize with placeholders
-    placeholder = kernelpromote(u, Array)
-    u_out = [copy(placeholder) for time in t_out]
-    dudt_out = [copy(placeholder) for time in t_out]
-    u_el_out = [copy(placeholder) for time in t_out]
-    geoid_out = [copy(placeholder) for time in t_out]
-    sealevel_out = [copy(placeholder) for time in t_out]
-    dudt = copy(u)
-
-    for k in eachindex(t_out)[1:end]
-        t0 = k == 1 ? T(0.0) : t_out[k-1]
-        println("Computing until t = $(Int(round(seconds2years(t_out[k])))) years...")
-
-        if isa(ODEsolver, OrdinaryDiffEqAlgorithm)
-            prob = ODEProblem(forwardstep_isostasy!, u, (t0, t_out[k]), sstruct)
-            sol = solve(prob, ODEsolver, reltol=1e-3) #, dtmin = years2seconds(0.1))
-
-            u .= sol(t_out[k], Val{0})
-            dudt .= sol(t_out[k], Val{1})
-        else
-            for t in t0:dt:t_out[k]
-                forwardstep_isostasy!(dudt, u, sstruct, t)
-                simple_euler!(u, dudt, dt)
-            end
-        end
-
-        u_out[k] .= copy(kernelpromote(u, Array))
-        dudt_out[k] .= copy(kernelpromote(dudt, Array))
-        geoid_out[k] .= copy(kernelpromote(geostate.geoid, Array))
-        sealevel_out[k] .= copy(kernelpromote(geostate.sealevel, Array))
-    end
-    return u_out, dudt_out, u_el_out, geoid_out, sealevel_out
-end
 
 #####################################################
 # BCs

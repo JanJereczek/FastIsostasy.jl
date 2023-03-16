@@ -2,14 +2,32 @@
 # Unit conversion utils
 #####################################################
 
-function years2seconds(t::T) where {T<:AbstractFloat}
+"""
+
+    years2seconds(t)
+
+Convert input time `t` from years to seconds.
+"""
+function years2seconds(t::T) where {T<:Real}
     return t * seconds_per_year
 end
 
-function seconds2years(t::T) where {T<:AbstractFloat}
+"""
+
+    seconds2years(t)
+
+Convert input time `t` from seconds to years.
+"""
+function seconds2years(t::T) where {T<:Real}
     return t / seconds_per_year
 end
 
+"""
+
+    m_per_sec2mm_per_yr(dudt)
+
+Convert displacement rate `dudt` from 
+""" # $$\mathrm{mm \, s^{-1}}$$ to $$\mathrm{m \, yr^{-1}}$$.
 function m_per_sec2mm_per_yr(dudt::T) where {T<:AbstractFloat}
     return dudt * 1e3 * seconds_per_year
 end
@@ -95,7 +113,7 @@ end
 
 """
 
-    scalefactor()
+    scalefactor(lat, lon, lat0, lon0)
 
 Compute scaling factor of stereographic projection.
 Reference: John P. Snyder (1987), p. 157, eq. (21-4).
@@ -127,7 +145,7 @@ end
 
 """
 
-    latlon2stereo()
+    latlon2stereo(lat, lon, lat0, lon0)
 
 Convert latitude-longitude coordinates to stereographically projected (x,y).
 Reference: John P. Snyder (1987), p. 157, eq. (21-2), (21-3), (21-4).
@@ -163,7 +181,7 @@ end
 
 """
 
-    stereo2latlon()
+    stereo2latlon(x, y, lat0, lon0)
 
 Convert stereographic (x,y)-coordinates to latitude-longitude.
 Reference: John P. Snyder (1987), p. 159, eq. (20-14), (20-15), (20-18), (21-15).

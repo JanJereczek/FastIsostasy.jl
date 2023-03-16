@@ -25,10 +25,10 @@ function main(
     p_plots = vcat(D_plot, η_plot)
 
     labels = [
-        L"Small lithospheric thickness $T$",
-        L"Large lithospheric thickness $T$",
-        L"Low viscosity $\eta$",
-        L"High viscosity $\eta$",
+        L"(a) $\,$", # L"Small lithospheric thickness $T$",
+        L"(b) $\,$", # L"Large lithospheric thickness $T$",
+        L"(c) $\,$", # L"Low upper-mantle viscosity $\eta$",
+        L"(d) $\,$", # L"High upper-mantle viscosity $\eta$",
         "",
         "",
         "",
@@ -40,14 +40,14 @@ function main(
         "",
         "",
         "",
-        L"$x$ (km)",
-        L"$x$ (km)",
-        L"$x$ (km)",
-        L"$x$ (km)",
+        L"$x \: (10^3 \, \mathrm{km})$",
+        L"$x \: (10^3 \, \mathrm{km})$",
+        L"$x \: (10^3 \, \mathrm{km})$",
+        L"$x \: (10^3 \, \mathrm{km})$",
     ]
 
     ylabels = [
-        L"$y$ (km)",
+        L"$y \: (10^3 \, \mathrm{km})$",
         "",
         "",
         "",
@@ -56,24 +56,32 @@ function main(
         "",
         "",
     ]
+    xticks = (-3e6:1e6:3e6, num2latexstring.(-3:3))
+    yticks = (-3e6:1e6:3e6, num2latexstring.(-3:3))
+    ulim = (-350, 50)
+    uticks = (ulim[1]:50:ulim[2], num2latexstring.(ulim[1]:50:ulim[2]))
 
-    t_plot = years2seconds.([1.0, 1e1, 1e2, 1e3, 1e4, 1e5])
+    logt_plot = collect(0:5)
+    texlabels = [L"$10^{%$t}$ years" for t in logt_plot]
+    t_plot = years2seconds.(10 .^ logt_plot)
     plotname = "test3/$suffix"
     Omega, c = sol_lo_D["Omega"], sol_lo_D["c"]
     t_out = results[1].t_out
 
     ncases = length(var_plots)
-    fig = Figure(resolution=(1600, 900), fontsize = 24)
+    fig = Figure(resolution=(1600, 800), fontsize = 24)
     nrows, ncols = 2, 4
     axs = [Axis(
-        fig[i, j],
+        fig[i+1, j],
         title = labels[(i-1)*ncols + j],
         xlabel = xlabels[(i-1)*ncols + j],
         ylabel = ylabels[(i-1)*ncols + j],
-        xminorticks = IntervalsBetween(5),
-        yminorticks = IntervalsBetween(2),
-        xminorgridvisible = true,
-        yminorgridvisible = true,
+        xticks = xticks,
+        yticks = i==1 ? yticks : uticks,
+        # xminorticks = IntervalsBetween(5),
+        # yminorticks = IntervalsBetween(2),
+        # xminorgridvisible = true,
+        # yminorgridvisible = true,
         xticklabelsvisible = i == nrows ? true : false,
         yticklabelsvisible = j == 1 ? true : false,
     ) for j in 1:ncols, i in 1:nrows]
@@ -85,6 +93,12 @@ function main(
     #    cgrad(:PuOr, rev=true), cgrad(:PuOr, rev=true)]
 
     clims = [(50e3, 250e3), (50e3, 250e3), (19, 23), (19, 23)]
+    lins = Lines[]
+    cticks = [
+        (50e3:50e3:250e3, num2latexstring.(50:50:250)),
+        (19:23, num2latexstring.(19:23)),
+    ]
+    clabels = [L"Lithospheric thickness (km) $\,$", L"Upper-mantle log-viscosity ($\mathrm{Pa \, s}$)"]
 
     for j in 1:ncases
 
@@ -100,10 +114,12 @@ function main(
         if rem(j, 2) == 0
             k = Int(j/2)
             Colorbar(
-                fig[3, 2*k-1:2*k],
+                fig[1, 2*k-1:2*k],
                 hm,
                 vertical = false,
                 width = Relative(0.6),
+                ticks = cticks[k],
+                label = clabels[k],
             )
         end
 
@@ -114,27 +130,30 @@ function main(
         n1, n2 = size(varplot[1])
         slicey, slicex = Int(n1/2), 1:n2
         x = Omega.X[slicey, slicex]
-
         for l in eachindex(t_plot)
             t = t_plot[l]
             k = argmin( (t_out .- t) .^ 2 )
             tyr = Int(round( seconds2years(t) ))
-            lines!(
+            lin = lines!(
                 axs[i],
                 x,
                 varplot[k][slicey, slicex],
                 label = L"$%$tyr $ yr",
                 color = colors[l],
             )
+            if i == ncols + 1
+                push!(lins, lin)
+            end
         end
-        ylims!(axs[i], (-600, 50))
+        ylims!(axs[i], ulim)
     end
-    axislegend(axs[5], position = :rb, nbanks=2)
+    # Legend(fig[4, :], lins, texlabels, nbanks=6)
+    Legend(fig[3, 5], lins, texlabels, nbanks=1)
     save("plots/$(plotname)_gaussian.png", fig)
     save("plots/$(plotname)_gaussian.pdf", fig)
 
 end
 
-for n in 5:5
+for n in 6:6
     main(n, kernel = "cpu")
 end
