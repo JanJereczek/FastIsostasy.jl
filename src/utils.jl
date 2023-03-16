@@ -451,10 +451,7 @@ function get_effective_viscosity(
             viscosity_ratio,
             channel_thickness,
         )
-        copy!( 
-            effective_viscosity,
-            effective_viscosity .* viscosity_scaling,
-        )
+        effective_viscosity .*= viscosity_scaling
     end
     return effective_viscosity
 end
@@ -499,7 +496,7 @@ function three_layer_scaling(
 ) where {T<:AbstractFloat}
 
     # FIXME: What is kappa in that context???
-    kappa = π / Omega.Lx
+    kappa = π / Omega.L
     C = cosh.(channel_thickness .* kappa)
     S = sinh.(channel_thickness .* kappa)
 
