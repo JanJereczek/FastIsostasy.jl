@@ -8,6 +8,10 @@ function num2latexstring(x::Real)
     return L"%$x"
 end
 
+function string2latexstring(x::String)
+    return L"%$x $\,$"
+end
+
 function plot_response(
     Omega::ComputationDomain,
     sigma::Matrix{T},

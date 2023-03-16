@@ -3,15 +3,14 @@ using FastIsostasy
 using JLD2
 using CairoMakie
 using Interpolations
-include("helpers_plot.jl")
 include("helpers_compute.jl")
 include("external_viscosity_maps.jl")
 
-function main(n::Int, case::String; use_cuda::Bool = true)
+function main(n::Int, case::String; use_cuda::Bool = true, solver = "ExplicitEuler")
 
     T = Float64
-    L = T(4000e3)               # half-length of the square domain (m)
-    Omega = ComputationDomain(L, n)   # domain parameters
+    L = T(4000e3)                       # half-length of the square domain (m)
+    Omega = ComputationDomain(L, n)     # domain parameters
     c = PhysicalConstants()
     if occursin("homogeneous", case)
         channel_viscosity = fill(1e20, Omega.N, Omega.N)
@@ -62,7 +61,10 @@ function main(n::Int, case::String; use_cuda::Bool = true)
     t_out = years2seconds.(0.0:10:2e4)
 
     t1 = time()
-    results = fastisostasy(t_out, Omega, c, p, Hcylinder)
+    results = fastisostasy(t_out, Omega, c, p, Hcylinder,
+        active_geostate = false,
+        ODEsolver=solver,
+    )
     t_fastiso = time() - t1
     println("Took $t_fastiso seconds!")
     println("-------------------------------------")
@@ -94,6 +96,6 @@ end
 
 cases = ["homogeneous_viscosity", "wiens_scaledviscosity", "wiens_meanviscosity"]
 n = 6
-for case in cases
-    main(n, case)
+for case in cases[1:2]
+    main(n, case, use_cuda=false, solver="ExplicitEuler")
 end
