@@ -34,7 +34,7 @@ function slice_spada(
     data = get_spada()
     keys = ["u_disc", "u_cap", "dudt_disc", "dudt_cap", "n_disc", "n_cap"]
 
-    fig = Figure(resolution=(1200, 1200), fontsize = 24)
+    fig = Figure(resolution=(1200, 1000), fontsize = 20)
     nrows, ncols = 3, 2
     axs = [Axis(
         fig[i, j],
