@@ -25,7 +25,7 @@ function main(
     t_out = years2seconds.([0.0, 1e0, 1e1, 1e2, 1e3, 1e4, 1e5])
 
     t1 = time()
-    results = fastisostasy(t_out, Omega, c, p, Hcylinder, active_geostate=false)
+    results = fastisostasy(t_out, Omega, c, p, Hcylinder, active_geostate=false, ODEsolver=BS3())
     t_fastiso = time() - t1
     println("Took $t_fastiso seconds!")
     println("-------------------------------------")
@@ -47,8 +47,8 @@ end
 #= Application cases:
 ["binaryD", "binaryη", "binaryDη"]
 =#
-for n in 8:8
+for n in 6:6
     for case in ["gaussian_lo_D", "gaussian_hi_D", "gaussian_lo_η", "gaussian_hi_η"]
-        main(n, case, use_cuda = true)
+        main(n, case, use_cuda = false)
     end
 end

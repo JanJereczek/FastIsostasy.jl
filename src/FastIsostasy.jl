@@ -9,7 +9,7 @@ using CUDA
 using OrdinaryDiffEq: ODEProblem, solve, OrdinaryDiffEqAlgorithm
 using Reexport
 @reexport using Interpolations
-@reexport using OrdinaryDiffEq: Euler, BS3, Tsit5, TanYam7, Vern9, VCABM, Rosenbrock23, QNDF, FBDF
+@reexport using OrdinaryDiffEq: Euler, BS3, Tsit5, TanYam7, Vern9, VCABM, Rosenbrock23, QNDF, FBDF, ImplicitEuler
 
 # Euler, Midpoint, Heun, Ralston, RK4, OwrenZen3, OwrenZen4, OwrenZen5, DP5, RKO65,
 # TanYam7, DP8, Feagin10, Feagin12, Feagin14, TsitPap8,  BS5, Vern6, Vern7, Vern8,

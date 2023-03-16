@@ -6,10 +6,6 @@ include("helpers_plot.jl")
 include("external_load_maps.jl")
 include("external_viscosity_maps.jl")
 
-function num2latexstring(x::Real)
-    return L"%$x"
-end
-
 function animate_deglaciation(
     t_vec::AbstractVector{T},
     Omega::ComputationDomain,
