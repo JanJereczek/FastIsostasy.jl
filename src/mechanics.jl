@@ -251,7 +251,7 @@ function dudt_isostasy!(
     end
 
     dudtf = (tools.pfft * rhs) ./ Omega.pseudodiff
-    dudt[:, :] .= real.(tools.pifft * dudtf) ./ (T(2) .* p.effective_viscosity)
+    dudt[:, :] .= T.( real.(tools.pifft * dudtf) ./ (2 .* p.effective_viscosity) )
     apply_bc!(dudt)
     return nothing
 end
