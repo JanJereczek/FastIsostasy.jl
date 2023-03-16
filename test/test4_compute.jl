@@ -9,7 +9,7 @@ include("external_viscosity_maps.jl")
 function main(n::Int, case::String; use_cuda::Bool = true, solver = "ExplicitEuler")
 
     T = Float64
-    L = T(4000e3)                       # half-length of the square domain (m)
+    L = T(3000e3)                       # half-length of the square domain (m)
     Omega = ComputationDomain(L, n)     # domain parameters
     c = PhysicalConstants()
     if occursin("homogeneous", case)
@@ -58,7 +58,7 @@ function main(n::Int, case::String; use_cuda::Bool = true, solver = "ExplicitEul
     R = T(2000e3)               # ice disc radius (m)
     H = T(1000)                 # ice disc thickness (m)
     Hcylinder = uniform_ice_cylinder(Omega, R, H)
-    t_out = years2seconds.(0.0:10:2e4)
+    t_out = years2seconds.(0.0:100:1e4)
 
     t1 = time()
     results = fastisostasy(t_out, Omega, c, p, Hcylinder,
@@ -73,21 +73,12 @@ function main(n::Int, case::String; use_cuda::Bool = true, solver = "ExplicitEul
         Omega, p = copystructs2cpu(Omega, c, p)
     end
 
-    # lowest_eta = minimum(p.effective_viscosity[Omega.X.^2 + Omega.Y.^2 .< (1.8e6)^2])
-    # point_lowest_eta = argmin( (p.effective_viscosity .- lowest_eta).^2 )
-    # highest_eta = maximum(p.effective_viscosity[Omega.X.^2 + Omega.Y.^2 .< (1.8e6)^2]) 
-    # point_highest_eta = argmin( (p.effective_viscosity .- highest_eta).^2 )
-    # points = [point_lowest_eta, point_highest_eta]
-    # display(points) 
-    points = [CartesianIndex(20, 24), CartesianIndex(36, 38)]
-
     jldsave(
         "data/test4/discload_$(case)_N$(Omega.N).jld2",
         Omega = Omega, c = c, p = p,
         results = results,
         t_fastiso = t_fastiso,
         R = R, H = H,
-        eta_extrema = points,
     )
 
     ##############
@@ -95,7 +86,7 @@ function main(n::Int, case::String; use_cuda::Bool = true, solver = "ExplicitEul
 end
 
 cases = ["homogeneous_viscosity", "wiens_scaledviscosity", "wiens_meanviscosity"]
-n = 6
+n = 7
 for case in cases[1:2]
     main(n, case, use_cuda=false, solver="ExplicitEuler")
 end

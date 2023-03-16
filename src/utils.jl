@@ -496,7 +496,7 @@ function three_layer_scaling(
 ) where {T<:AbstractFloat}
 
     # FIXME: What is kappa in that context???
-    kappa = π / Omega.L
+    kappa = π / Omega.Lx
     C = cosh.(channel_thickness .* kappa)
     S = sinh.(channel_thickness .* kappa)
 

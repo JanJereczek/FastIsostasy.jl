@@ -16,31 +16,27 @@ function main(
     res_het = sol_het["results"]
     t_out = res_het.t_out
     Omega, p = sol_het["Omega"], sol_het["p"]
-    # points = sol_het["eta_extrema"]
     points = [
-        CartesianIndex(2 * Omega.N ÷ 5, 2 * Omega.N ÷ 5),
-        CartesianIndex(3 * Omega.N ÷ 5, 3 * Omega.N ÷ 5),
+        CartesianIndex(2^(n-6) * 20, 2^(n-6) * 24),
+        CartesianIndex(2^(n-6) * 36, 2^(n-6) * 36),
     ]
     lv = [p.layers_viscosity[:, :, i] for i in axes(p.layers_viscosity, 3)]
     push!(lv, p.effective_viscosity)
 
-    labels = ([
-        L"\textbf{(a)} $\,$", L"\textbf{(b)} $\,$", L"\textbf{(c)} $\,$",
-        L"\textbf{(d)} $\,$", L"\textbf{(e)} $\,$", L"\textbf{(f)} $\,$",
-        L"\textbf{(g)} $\,$", L"\textbf{(h)} $\,$", L"\textbf{(i)} $\,$",
-    ])
+    labels = [L"$\textbf{(%$char)}$" for char in ["a", "b", "c", "d", "e", "f", "h", "i", "j"]]
 
-    xticks = (-4e6:1e6:4e6, num2latexstring.(-4:4))
-    yticks = (-4e6:1e6:4e6, num2latexstring.(-4:4))
-    tticks = (years2seconds.(0:5e3:20e3), num2latexstring.(0:5:20))
-    ulim = (-350, 50)
+    xticks = (-3e6:1e6:3e6, num2latexstring.(-3:3))
+    yticks = (-3e6:1e6:3e6, num2latexstring.(-3:3))
+    tticks = (years2seconds.(0:2e3:10e3), num2latexstring.(0:2:10))
+    ulim = (-400, 100)
     umap = cgrad(:cool, rev=true)
     uticks = (ulim[1]:50:ulim[2], num2latexstring.(ulim[1]:50:ulim[2]))
+    uticks_sparse = (ulim[1]:100:ulim[2], num2latexstring.(ulim[1]:100:ulim[2]))
     visclim = (18, 23)
     viscmap = cgrad(:jet)
     viscticks = (visclim[1]:visclim[2], num2latexstring.(visclim[1]:visclim[2]))
 
-    t_plot_hm_yr = [200, 2000, 20000]
+    t_plot_hm_yr = [400, 2000, 10000]
     # labels_hm = [L"$t = %$tyr \: \mathrm{yr}$" for tyr in t_plot_hm_yr]
     t_plot_hm = years2seconds.(t_plot_hm_yr)
 
@@ -80,11 +76,12 @@ function main(
     ]
     Xposition = [:top, :top, :top, :bottom, :bottom, :bottom, :bottom, :bottom, :bottom]
     Yposition = [:left, :left, :right, :left, :left, :right, :left, :left, :right]
-    fig = Figure(resolution = (1500, 1500), fontsize = 20)
+    fig = Figure(resolution = (1300, 1500), fontsize = 20)
     nrows, ncols = 3, 3
     axs = [Axis(
         fig[i+1, j],
         title = labels[(i-1)*ncols + j],
+        titlegap = 10.0,
         xlabel = xlabels[(i-1)*ncols + j],
         ylabel = ylabels[(i-1)*ncols + j],
         xticks = Xticks[(i-1)*ncols + j],
@@ -93,8 +90,9 @@ function main(
         yticklabelsvisible = Yticksvisible[(i-1)*ncols + j],
         xaxisposition = Xposition[(i-1)*ncols + j],
         yaxisposition = Yposition[(i-1)*ncols + j],
-        xticksmirrored = true,
-        yticksmirrored = true,
+        xticksmirrored = i == 2 ? true : false,
+        yticksmirrored = j == 2 ? true : false,
+        aspect = AxisAspect(1),
     ) for j in 1:ncols, i in 1:nrows]
     fig
 
@@ -103,7 +101,7 @@ function main(
             axs[k],
             Omega.X,
             Omega.Y,
-            log10.(lv[k]),
+            log10.(lv[k])',
             colormap = viscmap,
             colorrange = visclim,
         )
@@ -122,11 +120,11 @@ function main(
     u2hom = [res_hom.viscous[k][points[2]] for k in eachindex(t_out)]
     lines!(axs[6], t_out, u1het, label = L"point 1, $\eta(x,y)$")
     lines!(axs[6], t_out, u2het, label = L"point 2, $\eta(x,y)$")
-    lines!(axs[6], t_out, u1hom, label = L"point 1, $\eta(x,y) = \eta$")
-    lines!(axs[6], t_out, u2hom, label = L"point 2, $\eta(x,y) = \eta$")
+    lines!(axs[6], t_out, u1hom, label = L"point 1, $\eta(x,y) = c$")
+    lines!(axs[6], t_out, u2hom, label = L"point 2, $\eta(x,y) = c$")
     vlines!(axs[6], t_plot_hm, color = :red)
     axislegend(axs[6])
-    # xlims!(axs[6], (0, years2seconds(2e3)))
+    xlims!(axs[6], (0, years2seconds(10e3)))
 
     for k in 7:9
         t = t_plot_hm[k-6]
@@ -135,7 +133,7 @@ function main(
             axs[k],
             Omega.X,
             Omega.Y,
-            res_het.viscous[kt],
+            res_het.viscous[kt]',
             colormap = umap,
             colorrange = ulim,
         )
@@ -165,14 +163,28 @@ function main(
         vertical = false,
         width = Relative(0.3),
         label = L"vertical displacement (m) $\,$",
-        ticks = uticks,
+        ticks = uticks_sparse,
     )
 
     save("plots/test4/$suffix.png", fig)
     save("plots/test4/$suffix.pdf", fig)
 end
 
-main(6)
+n = 7
+main(n)
+
+
+# lowest_eta = minimum(p.effective_viscosity[Omega.X.^2 + Omega.Y.^2 .< (1.8e6)^2])
+# point_lowest_eta = argmin( (p.effective_viscosity .- lowest_eta).^2 )
+# highest_eta = maximum(p.effective_viscosity[Omega.X.^2 + Omega.Y.^2 .< (1.8e6)^2]) 
+# point_highest_eta = argmin( (p.effective_viscosity .- highest_eta).^2 )
+# points = [point_lowest_eta, point_highest_eta]
+# display(points) 
+# points = [CartesianIndex(20, 24), CartesianIndex(36, 38)]
+
+# points = sol_het["eta_extrema"]
+# CartesianIndex(2 * Omega.N ÷ 5, 2 * Omega.N ÷ 5),
+# CartesianIndex(3 * Omega.N ÷ 5, 3 * Omega.N ÷ 5),
 
 # if make_anim
 #     anim_name = "plots/test4/discload_$(case)_N$(Omega.N)"
