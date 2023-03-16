@@ -223,8 +223,8 @@ function dudt_isostasy!(
     tools = sstruct.tools
 
     uf = tools.pfft * u
-    harmonic_uf = real.(tools.pifft * ( Omega.harmonic .* uf ))
-    biharmonic_uf = real.( tools.pifft * ( Omega.biharmonic .* uf ) )
+    harmonic_u = real.(tools.pifft * ( Omega.harmonic .* uf ))
+    biharmonic_u = real.( tools.pifft * ( Omega.biharmonic .* uf ) )
 
     if sstruct.active_geostate
         term1 = get_loadchange(sstruct.geostate, Omega, c)
@@ -233,14 +233,14 @@ function dudt_isostasy!(
     end
 
     term2 = - tools.rhog .* u
-    term3 = - p.litho_rigidity .* biharmonic_uf
+    term3 = - p.litho_rigidity .* biharmonic_u
 
     if tools.negligible_gradD
         rhs = term1 + term2 + term3
     else
-        term4 = - T(2) .* tools.Dx .* mixed_fdx(harmonic_uf, Omega.dx)
-        term5 = - T(2) .* tools.Dy .* mixed_fdy(harmonic_uf, Omega.dy)
-        term6 = - real.(tools.pifft * (Omega.harmonic .* (tools.pfft * (p.litho_rigidity .* harmonic_uf))))
+        term4 = - T(2) .* tools.Dx .* mixed_fdx(harmonic_u, Omega.dx)
+        term5 = - T(2) .* tools.Dy .* mixed_fdy(harmonic_u, Omega.dy)
+        term6 = - real.(tools.pifft * (Omega.harmonic .* (tools.pfft * (p.litho_rigidity .* harmonic_u))))
         term7 = tools.Dxx .* mixed_fdyy(u, Omega.dy)
         term8 = - T(2) .* tools.Dxy .* mixed_fdy( mixed_fdx(u, Omega.dx), Omega.dy )
         term9 = tools.Dyy .* mixed_fdxx(u, Omega.dx)
