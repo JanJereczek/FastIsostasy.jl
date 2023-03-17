@@ -185,7 +185,7 @@ function forward_isostasy(
                 simple_euler!(u, dudt, dt)
             end
         end
-
+        
         u_out[k] .= copy(kernelpromote(u, Array))
         dudt_out[k] .= copy(kernelpromote(dudt, Array))
         geoid_out[k] .= copy(kernelpromote(geostate.geoid, Array))
@@ -307,4 +307,8 @@ function compute_elastic_response(
     load::AbstractMatrix{T},
 ) where {T<:AbstractFloat}
     return conv(load, tools.elasticgreen)[Omega.N2:end-Omega.N2, Omega.N2:end-Omega.N2]
+end
+
+function welcome_user()
+    println("Welcome to FastIso")
 end
