@@ -31,7 +31,7 @@ function main(
     H2D = @lift(H[:, :, $i]')
     time_stamp = @lift(latexstring( string("t = ", t_out_kyr[$i], L"\: \mathrm{kyr}")))
 
-    fig = Figure(resolution = (1600, 650))
+    fig = Figure(resolution = (1500, 650), fontsize=22)
     ax1 = Axis(
         fig[2, 1],
         aspect = DataAspect(),
@@ -39,7 +39,7 @@ function main(
         ylabel = L"$y \: \mathrm{(10^3 \: km)}$",
         xticks = (-3e6:1e6:3e6, num2latexstring.(-3:3)),
         yticks = (-3e6:1e6:3e6, num2latexstring.(-3:3)),
-        title = L"$textbf{(a)}$",
+        title = L"$\textbf{(a)}$",
     )
     ax2 = Axis(
         fig[2, 2],
@@ -47,7 +47,7 @@ function main(
         xlabel = L"$x \: \mathrm{(10^3 \: km)}$",
         xticks = (-3e6:1e6:3e6, num2latexstring.(-3:3)),
         yticklabelsvisible = false,
-        title = L"$textbf{(b)}$",
+        title = L"$\textbf{(b)}$",
         #title = time_stamp,
     )
     ax3 = Axis(
@@ -56,15 +56,39 @@ function main(
         xlabel = L"$x \: \mathrm{(10^3 \: km)}$",
         xticks = (-3e6:1e6:3e6, num2latexstring.(-3:3)),
         yticklabelsvisible = false,
-        title = L"$textbf{(c)}$",
+        title = L"$\textbf{(c)}$",
     )
 
-    cmapload = cgrad(:balance)
-    cmapdudt = cgrad([:grey20, :bisque, :orange, :red3, :turquoise2])
-    cmapu = cgrad([:magenta, :lavenderblush, :cyan, :cornflowerblue, :royalblue1])
-    lims_load = (-1e3, 1e3)
+    # cmapload = cgrad(:RdBu)
+    cmapload = cgrad([:red4, :firebrick1, :lightsalmon, :white, :cornflowerblue])
+    cmapdudt = cgrad([
+        :grey20,
+        :grey60,
+        :honeydew1,
+        :papayawhip,
+        :khaki1,
+        :sandybrown,
+        :firebrick1,
+        :magenta,
+        :midnightblue,
+        :turquoise1,
+        :turquoise2,
+    ])
+    # cmapdudt = cgrad([
+    #     :grey20,
+    #     :bisque,
+    #     :orange,
+    #     :red3,
+    #     :midnightblue,
+    #     :turquoise2,
+    # ])
+    cmapu = cgrad([:magenta, :white, :cyan, :cornflowerblue, :royalblue1, :royalblue3, :midnightblue])
+    lims_load = (-1.5e3, 0.5e3)
     lims_dudt = (-3.5, 10.5)
-    lims_u = (-100.0, 400.0)
+    lims_u = (-100.0, 500.0)
+    Hticks = (-1500:500:500, num2latexstring.(-1500:500:500))
+    dudtticks = (-4:2:10, num2latexstring.(-4:2:10))
+    uticks = (-100:100:500, num2latexstring.(-100:100:500))
 
     hm_load = heatmap!(
         ax1,
@@ -89,6 +113,9 @@ function main(
         label = L"Thickness anomaly $\Delta H$ (m)",
         vertical = false,
         width = Relative(0.8),
+        ticks = Hticks,
+        minorticks = IntervalsBetween(2),
+        minorticksvisible = true,
     )
 
     hm_dudt = heatmap!(
@@ -113,6 +140,7 @@ function main(
         label = L"Uplift rate $\dot{u}^V$ (mm/year)",
         vertical = false,
         width = Relative(0.8),
+        ticks = dudtticks,
     )
 
     hm_u = heatmap!(
@@ -139,6 +167,7 @@ function main(
         label = L"Viscous displacement $u^V$ (m)",
         vertical = false,
         width = Relative(0.8),
+        ticks = uticks,
     )
 
     framerate = 24
@@ -147,13 +176,13 @@ function main(
             i[] = k
     end
 
-    save("plots/test5/$plotname.png", fig)
-    save("plots/test5/$plotname.pdf", fig)
+    save("$plotname.png", fig)
+    save("$plotname.pdf", fig)
 end
 
 cases = ["isostate", "geostate"]
 for case in cases[1:1]
-    main(8, case)
+    main(7, case)
 end
 
 
