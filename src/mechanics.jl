@@ -284,9 +284,15 @@ function apply_bc(u::AbstractMatrix{T}) where {T<:AbstractFloat}
     return apply_bc!(u_bc)
 end
 
+# function apply_bc!(u::AbstractMatrix{T}) where {T<:AbstractFloat}
+#     CUDA.allowscalar() do
+#         u .-= (u[1,1] + u[1,end] + u[end,1] + u[end,end]) / T(4)
+#     end
+# end
+
 function apply_bc!(u::AbstractMatrix{T}) where {T<:AbstractFloat}
     CUDA.allowscalar() do
-        u .-= (u[1,1] + u[1,end] + u[end,1] + u[end,end]) / T(4)
+        u .-= (u[1,:] + u[:,end] + u[end,:] + u[:,1]) / T(4)
     end
 end
 

@@ -168,7 +168,7 @@ end
 
 cases = ["viscoelastic", "viscous"]
 for case in cases[2:2]
-    for n in 8:8
+    for n in 6:6
         main(case, n, kernel = "cpu")
     end
 end

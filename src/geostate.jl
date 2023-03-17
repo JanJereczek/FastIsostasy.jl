@@ -116,7 +116,7 @@ function get_geoidgreen(
 end
 
 function get_geoidgreen(R, c::PhysicalConstants{T}) where {T<:AbstractFloat}
-    return c.r_equator ./ ( 2 .* c.mE .* sin.( R ./ (2 .* c.r_equator) ) )
+    return c.r_pole ./ ( 2 .* c.mE .* sin.( R ./ (2 .* c.r_pole) ) )
 end
 
 """
