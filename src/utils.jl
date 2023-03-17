@@ -495,7 +495,8 @@ function three_layer_scaling(
     channel_thickness::Matrix{T},
 ) where {T<:AbstractFloat}
 
-    # FIXME: What is kappa in that context???
+    # kappa is the wavenumber of the harmonic load. (see Cathles 1975, p.43)
+    # we assume this is related to the size of the domain!
     kappa = π / Omega.Lx
     C = cosh.(channel_thickness .* kappa)
     S = sinh.(channel_thickness .* kappa)

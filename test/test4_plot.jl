@@ -36,6 +36,10 @@ function main(
     viscmap = cgrad(:jet)
     viscticks = (visclim[1]:visclim[2], num2latexstring.(visclim[1]:visclim[2]))
 
+    pcolor = :black
+    marker = '⦿'
+    yoffset = 2e5
+
     t_plot_hm_yr = [400, 2000, 10000]
     # labels_hm = [L"$t = %$tyr \: \mathrm{yr}$" for tyr in t_plot_hm_yr]
     t_plot_hm = years2seconds.(t_plot_hm_yr)
@@ -94,7 +98,6 @@ function main(
         yticksmirrored = j == 2 ? true : false,
         aspect = AxisAspect(1),
     ) for j in 1:ncols, i in 1:nrows]
-    fig
 
     for k in 1:5
         heatmap!(
@@ -109,8 +112,27 @@ function main(
             axs[k],
             [Omega.X[points[1]], Omega.X[points[2]]],
             [Omega.Y[points[1]], Omega.Y[points[2]]],
-            color = :white,
+            color = k <= 3 ? :white : pcolor,
+            marker = marker,
             markersize = 20,
+        )
+        text!(
+            axs[k],
+            Omega.X[points[1]],
+            Omega.Y[points[1]] - yoffset;
+            text = L"$\textbf{1}$",
+            align = (:center, :top),
+            fontsize = 20,
+            color = k <= 3 ? :white : pcolor,
+        )
+        text!(
+            axs[k],
+            Omega.X[points[2]],
+            Omega.Y[points[2]] + yoffset;
+            text = L"$\textbf{2}$",
+            align = (:center, :bottom),
+            fontsize = 20,
+            color = k <= 3 ? :white : pcolor,
         )
     end
 
@@ -124,7 +146,7 @@ function main(
     lines!(axs[6], t_out, u2hom, label = L"point 2, $\eta(x,y) = c$")
     vlines!(axs[6], t_plot_hm, color = :red)
     axislegend(axs[6])
-    xlims!(axs[6], (0, years2seconds(10e3)))
+    xlims!(axs[6], (years2seconds(-0.1e3), years2seconds(10.1e3)))
 
     for k in 7:9
         t = t_plot_hm[k-6]
@@ -142,8 +164,27 @@ function main(
             axs[k],
             [Omega.X[points[1]], Omega.X[points[2]]],
             [Omega.Y[points[1]], Omega.Y[points[2]]],
-            color = :white,
+            color = pcolor,
+            marker = marker,
             markersize = 20,
+        )
+        text!(
+            axs[k],
+            Omega.X[points[1]],
+            Omega.Y[points[1]] - yoffset;
+            text = L"$\textbf{1}$",
+            align = (:center, :top),
+            fontsize = 20,
+            color = k <= 3 ? :white : pcolor,
+        )
+        text!(
+            axs[k],
+            Omega.X[points[2]],
+            Omega.Y[points[2]] + yoffset;
+            text = L"$\textbf{2}$",
+            align = (:center, :bottom),
+            fontsize = 20,
+            color = k <= 3 ? :white : pcolor,
         )
     end
 

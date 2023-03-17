@@ -86,7 +86,7 @@ function main(n::Int, case::String; use_cuda::Bool = true, solver = "ExplicitEul
 end
 
 cases = ["homogeneous_viscosity", "wiens_scaledviscosity", "wiens_meanviscosity"]
-n = 7
+n = 8
 for case in cases[1:2]
-    main(n, case, use_cuda=false, solver="ExplicitEuler")
+    main(n, case, use_cuda=false, solver=BS3())
 end

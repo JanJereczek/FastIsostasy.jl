@@ -5,11 +5,7 @@ include("helpers_compute.jl")
 include("external_load_maps.jl")
 include("external_viscosity_maps.jl")
 
-function main(
-    n::Int,             # 2^n cells on domain (1)
-    case::String;       # Application case
-    use_cuda::Bool = false,
-)
+function main(n::Int, active_gs::Bool; use_cuda::Bool = false,solver = "ExplicitEuler")
 
     T = Float64
     L = T(4000e3)               # half-length of the square domain (m)
@@ -37,9 +33,12 @@ function main(
     println("Computing on $kernel and $(Omega.N) x $(Omega.N) grid...")
 
     t_out, deltaH, H = interpolated_glac1d_snapshots(Omega)
-
+    dH = [deltaH[:, :, k] for k in axes(deltaH, 3)]
     t1 = time()
-    results = fastisostasy(t_out, Omega, c, p, Hcylinder)
+    results = fastisostasy(t_out, Omega, c, p, t_out, dH,
+        active_geostate = active_gs,
+        ODEsolver=solver,
+    )
     t_fastiso = time() - t1
     println("Took $t_fastiso seconds!")
     println("-------------------------------------")
@@ -48,22 +47,17 @@ function main(
         Omega, p = copystructs2cpu(Omega, c, p)
     end
 
-    lowest_eta = minimum(p.effective_viscosity[abs.(deltaH[:, :, end]) .> 1])
-    point_lowest_eta = argmin( (p.effective_viscosity .- lowest_eta).^2 )
-    point_highest_eta = argmax(p.effective_viscosity .* abs.(deltaH))
-    points = [point_lowest_eta, point_highest_eta]
-
+    case = active_gs ? "geostate" : "isostate"
     jldsave(
         "data/test5/$(case)_N$(Omega.N).jld2",
         Omega = Omega, c = c, p = p,
         results = results,
         t_fastiso = t_fastiso,
-        R = R, H = H,
-        eta_extrema = points,
+        H = dH,
     )
 end
 
-cases = ["glac1dload", "ice7gload"]
-for case in cases[1:1]
-    main(7, case)
+cases = [false, true]
+for active_gs in cases[1:1]
+    main(6, active_gs, use_cuda=false, solver="ExplicitEuler")
 end
