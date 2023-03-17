@@ -175,7 +175,7 @@ function forward_isostasy(
 
         if isa(ODEsolver, OrdinaryDiffEqAlgorithm)
             prob = ODEProblem(forwardstep_isostasy!, u, (t0, t_out[k]), sstruct)
-            sol = solve(prob, ODEsolver, reltol=1e-3, dt=dt) #, dtmin = years2seconds(0.1))
+            sol = solve(prob, ODEsolver, reltol=1e-3) #, dtmin = years2seconds(0.1)), , dt=dt
 
             u .= sol(t_out[k], Val{0})
             dudt .= sol(t_out[k], Val{1})

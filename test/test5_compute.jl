@@ -38,6 +38,7 @@ function main(n::Int, active_gs::Bool; use_cuda::Bool = false,solver = "Explicit
     results = fastisostasy(t_out, Omega, c, p, t_out, dH,
         active_geostate = active_gs,
         ODEsolver=solver,
+        dt = years2seconds(0.1),
     )
     t_fastiso = time() - t1
     println("Took $t_fastiso seconds!")
@@ -59,5 +60,5 @@ end
 
 cases = [false, true]
 for active_gs in cases[1:1]
-    main(6, active_gs, use_cuda=false, solver="ExplicitEuler")
+    main(8, active_gs, use_cuda=true, solver="ExplicitEuler")
 end
