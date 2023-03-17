@@ -73,7 +73,7 @@ function main(
         L"$y \: (10^3 \, \mathrm{km})$",
         L"$y \: (10^3 \, \mathrm{km})$",
         "",
-        L"Displacement $u \: (\mathrm{m})$",
+        L"$u \: (\mathrm{m})$",
         L"$y \: (10^3 \, \mathrm{km})$",
         "",
         L"$y \: (10^3 \, \mathrm{km})$",
@@ -194,7 +194,7 @@ function main(
         colorrange = visclim,
         vertical = false,
         width = Relative(0.3),
-        label = L"log-viscosity ($\mathrm{Pa \, s})$",
+        label = L"Log10-viscosity ($\mathrm{Pa \, s})$",
         ticks = viscticks,
     )
     Colorbar(
@@ -203,7 +203,7 @@ function main(
         colorrange = ulim,
         vertical = false,
         width = Relative(0.3),
-        label = L"vertical displacement (m) $\,$",
+        label = L"$u$ (m)",
         ticks = uticks_sparse,
     )
 

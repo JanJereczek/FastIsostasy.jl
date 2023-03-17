@@ -40,7 +40,7 @@ function main()
             title = L"(%$letter) $t = %$tyr$ yr",
             xlabel = L"$x \: (10^3 \: \mathrm{km})$",
             ylabel = L"$y \: (10^3 \: \mathrm{km})$",
-            zlabel = L"$u^V \: (\mathrm{m})$",
+            zlabel = L"$u \: (\mathrm{m})$",
             xticks = (-3e6:1e6:3e6, string.(-3:1:3)),
             yticks = (-3e6:1e6:3e6, string.(-3:1:3)),
         )
@@ -68,7 +68,7 @@ function main()
         fig[1, :],
         colorrange = clim,
         colormap = cmap,
-        label = L"Viscous displacement $u^V$ (m)$",
+        label = L"Vertical displacement $u$ (m)$",
         vertical = false,
         width = Relative(0.4),
     )
@@ -84,7 +84,7 @@ function main()
         fig[3, 1],
         title = L"(d) $\,$",
         xlabel = L"$x \: (10^3 \: \mathrm{km})$ ",
-        ylabel = L"$u^V$ (m)",
+        ylabel = L"$u$ (m)",
         xticks = (0:0.5e6:2e6, string.(0:0.5:2))
     )
     for i in eachindex(t_plot)

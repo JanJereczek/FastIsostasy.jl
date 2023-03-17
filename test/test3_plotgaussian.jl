@@ -51,7 +51,7 @@ function main(
         "",
         "",
         "",
-        L"Displacement $u \: (\mathrm{m})$",
+        L"$u \: (\mathrm{m})$",
         "",
         "",
         "",
@@ -69,7 +69,7 @@ function main(
     t_out = results[1].t_out
 
     ncases = length(var_plots)
-    fig = Figure(resolution=(1600, 800), fontsize = 24)
+    fig = Figure(resolution=(1600, 900), fontsize = 24)
     nrows, ncols = 2, 4
     axs = [Axis(
         fig[i+1, j],
@@ -84,6 +84,7 @@ function main(
         # yminorgridvisible = true,
         xticklabelsvisible = i == nrows ? true : false,
         yticklabelsvisible = j == 1 ? true : false,
+        aspect = AxisAspect(1),
     ) for j in 1:ncols, i in 1:nrows]
     colors = [:gray80, :gray65, :gray50, :gray35, :gray20, :gray5]
     rigidity_map = cgrad([:royalblue3, :white, :red3])

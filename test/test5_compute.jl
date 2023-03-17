@@ -60,5 +60,5 @@ end
 
 cases = [false, true]
 for active_gs in cases[1:1]
-    main(8, active_gs, use_cuda=true, solver="ExplicitEuler")
+    main(6, active_gs, use_cuda=true, solver="ExplicitEuler")
 end

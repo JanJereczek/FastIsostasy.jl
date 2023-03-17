@@ -58,6 +58,12 @@ function main(
         yticklabelsvisible = false,
         title = L"$\textbf{(c)}$",
     )
+    xlims!(ax1, (-3e6, 3e6))
+    xlims!(ax2, (-3e6, 3e6))
+    xlims!(ax3, (-3e6, 3e6))
+    ylims!(ax1, (-3e6, 3e6))
+    ylims!(ax2, (-3e6, 3e6))
+    ylims!(ax3, (-3e6, 3e6))
 
     # cmapload = cgrad(:RdBu)
     cmapload = cgrad([:red4, :firebrick1, :lightsalmon, :white, :cornflowerblue])
@@ -137,7 +143,7 @@ function main(
     Colorbar(
         fig[1, 2],
         hm_dudt,
-        label = L"Uplift rate $\dot{u}^V$ (mm/year)",
+        label = L"Displacement rate $\dot{u}$ (mm/year)",
         vertical = false,
         width = Relative(0.8),
         ticks = dudtticks,
@@ -164,7 +170,7 @@ function main(
     Colorbar(
         fig[1, 3],
         hm_u,
-        label = L"Viscous displacement $u^V$ (m)",
+        label = L"Vertical displacement $u$ (m)",
         vertical = false,
         width = Relative(0.8),
         ticks = uticks,
