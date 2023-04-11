@@ -28,6 +28,7 @@ export PhysicalConstants
 export MultilayerEarth
 export PrecomputedFastiso
 export GeoState
+export SuperStruct
 
 # utils.jl
 export years2seconds
@@ -61,6 +62,7 @@ export meshgrid
 export get_quad_coeffs
 export get_elasticgreen
 export fastisostasy
+export dudt_isostasy!
 export apply_bc!
 export ice_load
 

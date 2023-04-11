@@ -115,6 +115,12 @@ function fastisostasy(
         kernelpromote(eta_snapshots, Omega.arraykernel) )
     u_viscous_0 = kernelpromote(u_viscous_0, Omega.arraykernel)
 
+    if active_geostate
+        term1 = term1_activegeo
+    else
+        term1 = term1_offgeo
+    end
+
     geostate = GeoState(
         Hice(0.0), H_ice_ref,                   # ice column
         copy(H_water_ref), H_water_ref,         # water column
@@ -127,7 +133,7 @@ function fastisostasy(
         T(0.0), T(0.0), T(0.0),                 # V_den terms
         T(0.0), T(0.0),                         # total sl-contribution & conservation term
     )
-    sstruct = SuperStruct(Omega, c, p, Hice, Hice_cpu, tools, geostate, active_geostate)
+    sstruct = SuperStruct(Omega, c, p, Hice, Hice_cpu, tools, geostate, active_geostate, term1)
 
     u, dudt, u_elastic, geoid, sealevel = forward_isostasy(
         dt, t_out, u_viscous_0, geostate, sstruct, ODEsolver)
@@ -169,7 +175,7 @@ function forward_isostasy(
     sealevel_out = [copy(placeholder) for time in t_out]
     dudt = copy(u)
 
-    for k in eachindex(t_out)[1:end]
+    @inbounds for k in eachindex(t_out)[1:end]
         t0 = k == 1 ? T(0.0) : t_out[k-1]
         println("Computing until t = $(Int(round(seconds2years(t_out[k])))) years...")
 
@@ -200,7 +206,7 @@ function forwardstep_isostasy!(
     sstruct::SuperStruct{T},
     t::T,
 ) where {T<:AbstractFloat}
-    apply_bc!(u)
+    apply_bc!(u, sstruct.Omega.N)
     if sstruct.active_geostate
         update_geostate!(
             sstruct.geostate, u, sstruct.Hice(t),
@@ -221,38 +227,34 @@ function dudt_isostasy!(
     c = sstruct.c
     p = sstruct.p
     tools = sstruct.tools
+    Hice = sstruct.Hice
 
     uf = tools.pfft * u
     harmonic_u = real.(tools.pifft * ( Omega.harmonic .* uf ))
     biharmonic_u = real.( tools.pifft * ( Omega.biharmonic .* uf ) )
 
     if sstruct.active_geostate
-        term1 = get_loadchange(sstruct.geostate, Omega, c)
+        term1 = ice_load(c, Hice(t))
     else
-        term1 = ice_load(c, sstruct.Hice(t))
+        term1 = get_loadchange(sstruct.geostate, Omega, c)
     end
-
     term2 = - tools.rhog .* u
     term3 = - p.litho_rigidity .* biharmonic_u
+    rhs = term1 + term2 + term3
 
-    if tools.negligible_gradD
-        rhs = term1 + term2 + term3
-    else
-        term4 = - T(2) .* tools.Dx .* mixed_fdx(harmonic_u, Omega.dx)
-        term5 = - T(2) .* tools.Dy .* mixed_fdy(harmonic_u, Omega.dy)
+    if !(tools.negligible_gradD)
+        term4 = - 2 .* tools.Dx .* mixed_fdx(harmonic_u, Omega.dx)
+        term5 = - 2 .* tools.Dy .* mixed_fdy(harmonic_u, Omega.dy)
         term6 = - real.(tools.pifft * (Omega.harmonic .* (tools.pfft * (p.litho_rigidity .* harmonic_u))))
         term7 = tools.Dxx .* mixed_fdyy(u, Omega.dy)
-        term8 = - T(2) .* tools.Dxy .* mixed_fdy( mixed_fdx(u, Omega.dx), Omega.dy )
+        term8 = - 2 .* tools.Dxy .* mixed_fdy( mixed_fdx(u, Omega.dx), Omega.dy )
         term9 = tools.Dyy .* mixed_fdxx(u, Omega.dx)
 
-        rhs = term1 + term2 + term3 + 
-                term4 + term5 + term6 + (T(1) - p.litho_poissonratio) .*
-                (term7 + term8 + term9)
+        rhs += term4 + term5 + term6 + (1 - p.litho_poissonratio) .* (term7 + term8 + term9)
     end
 
-    dudtf = (tools.pfft * rhs) ./ Omega.pseudodiff
-    dudt[:, :] .= T.( real.(tools.pifft * dudtf) ./ (2 .* p.effective_viscosity) )
-    apply_bc!(dudt)
+    dudt[:, :] .= real.(tools.pifft * ((tools.pfft * rhs) ./ Omega.pseudodiff)) ./ (2 .* p.effective_viscosity)
+    apply_bc!(dudt, Omega.N)
     return nothing
 end
 
@@ -264,7 +266,6 @@ function simple_euler!(
     u .+= dudt .* dt
     return nothing
 end
-
 
 #####################################################
 # BCs
@@ -279,22 +280,22 @@ Assume that mean deformation at corners of domain is 0.
 Whereas Bueler et al. (2007) take the edges for this computation, we take the corners
 because they represent the far-field better.
 """
-function apply_bc(u::AbstractMatrix{T}) where {T<:AbstractFloat}
+function apply_bc(u::AbstractMatrix{T}, N) where {T<:AbstractFloat}
     u_bc = copy(u)
-    return apply_bc!(u_bc)
+    return apply_bc!(u_bc, N)
 end
 
-# function apply_bc!(u::AbstractMatrix{T}) where {T<:AbstractFloat}
-#     CUDA.allowscalar() do
-#         u .-= (u[1,1] + u[1,end] + u[end,1] + u[end,end]) / T(4)
-#     end
-# end
-
-function apply_bc!(u::AbstractMatrix{T}) where {T<:AbstractFloat}
+function apply_bc!(u::AbstractMatrix{T}, N) where {T<:AbstractFloat}
     CUDA.allowscalar() do
-        u .-= (u[1,:] + u[:,end] + u[end,:] + u[:,1]) / T(4)
+        u .-= (view(u, 1, 1) + view(u, 1, N) + view(u, N, 1) + view(u, N, N)) / T(4)
     end
 end
+
+# function apply_bc!(u::AbstractMatrix{T}, N) where {T<:AbstractFloat}
+#     CUDA.allowscalar() do
+#         u .-= sum(view(u, 1, :) + view(u, :, N) + view(u, N, :) + view(u, :, 1)) / (4*N)
+#     end
+# end
 
 #####################################################
 # Elastic response
@@ -313,8 +314,4 @@ function compute_elastic_response(
     load::AbstractMatrix{T},
 ) where {T<:AbstractFloat}
     return conv(load, tools.elasticgreen)[Omega.N2:end-Omega.N2, Omega.N2:end-Omega.N2]
-end
-
-function welcome_user()
-    println("Welcome to FastIso")
 end
