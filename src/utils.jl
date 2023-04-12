@@ -301,6 +301,13 @@ layers_begin = [88e3, 400e3]
 # 88 km: beginning of asthenosphere (Bueler 2007).
 # 400 km: beginning of homogenous half-space (Ivins 2022, Fig 12).
 
+# litho_rigidity = 5e24u"N*m"
+# litho_youngmodulus = 6.6e10u"N / m^2"
+# litho_poissonratio = 0.5
+# layers_density = [3.3e3]u"kg / m^3"
+# layers_viscosity = [1e19, 1e21]u"Pa*s"      # (Bueler 2007, Ivins 2022, Fig 12 WAIS)
+# layers_begin = [88e3, 400e3]u"m"
+
 """
 
     MultilayerEarth(

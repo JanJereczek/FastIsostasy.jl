@@ -115,12 +115,6 @@ function fastisostasy(
         kernelpromote(eta_snapshots, Omega.arraykernel) )
     u_viscous_0 = kernelpromote(u_viscous_0, Omega.arraykernel)
 
-    if active_geostate
-        term1 = term1_activegeo
-    else
-        term1 = term1_offgeo
-    end
-
     geostate = GeoState(
         Hice(0.0), H_ice_ref,                   # ice column
         copy(H_water_ref), H_water_ref,         # water column
@@ -133,7 +127,7 @@ function fastisostasy(
         T(0.0), T(0.0), T(0.0),                 # V_den terms
         T(0.0), T(0.0),                         # total sl-contribution & conservation term
     )
-    sstruct = SuperStruct(Omega, c, p, Hice, Hice_cpu, tools, geostate, active_geostate, term1)
+    sstruct = SuperStruct(Omega, c, p, Hice, Hice_cpu, tools, geostate, active_geostate)
 
     u, dudt, u_elastic, geoid, sealevel = forward_isostasy(
         dt, t_out, u_viscous_0, geostate, sstruct, ODEsolver)
@@ -213,7 +207,7 @@ function forwardstep_isostasy!(
             sstruct.Omega, sstruct.c, sstruct.p, sstruct.tools,
         )
     end
-    dudt_isostasy!(dudt, u, sstruct, t)
+    dudt_isostasy_sparse!(dudt, u, sstruct, t)
     return nothing
 end
 
@@ -245,12 +239,48 @@ function dudt_isostasy!(
     if !(tools.negligible_gradD)
         term4 = - 2 .* tools.Dx .* mixed_fdx(harmonic_u, Omega.dx)
         term5 = - 2 .* tools.Dy .* mixed_fdy(harmonic_u, Omega.dy)
-        term6 = - real.(tools.pifft * (Omega.harmonic .* (tools.pfft * (p.litho_rigidity .* harmonic_u))))
+        term6 = - real.( tools.pifft * ( (Omega.harmonic .* (tools.pfft * p.litho_rigidity)) .* (Omega.harmonic * uf) ))
         term7 = tools.Dxx .* mixed_fdyy(u, Omega.dy)
         term8 = - 2 .* tools.Dxy .* mixed_fdy( mixed_fdx(u, Omega.dx), Omega.dy )
         term9 = tools.Dyy .* mixed_fdxx(u, Omega.dx)
 
         rhs += term4 + term5 + term6 + (1 - p.litho_poissonratio) .* (term7 + term8 + term9)
+    end
+
+    dudt[:, :] .= real.(tools.pifft * ((tools.pfft * rhs) ./ Omega.pseudodiff)) ./ (2 .* p.effective_viscosity)
+    apply_bc!(dudt, Omega.N)
+    return nothing
+end
+
+
+function dudt_isostasy_sparse!(
+    dudt::AbstractMatrix{T},
+    u::AbstractMatrix{T},
+    sstruct::SuperStruct{T},
+    t::T,
+) where {T<:AbstractFloat}
+    Omega = sstruct.Omega
+    c = sstruct.c
+    p = sstruct.p
+    tools = sstruct.tools
+    Hice = sstruct.Hice
+
+    if sstruct.active_geostate
+        load = ice_load(c, Hice(t))
+    else
+        load = get_loadchange(sstruct.geostate, Omega, c)
+    end
+    rhs = load - tools.rhog .* u
+
+    if tools.negligible_gradD
+        rhs += - p.litho_rigidity .* real.( tools.pifft * ( Omega.biharmonic .* (tools.pfft * u) ) )
+    else
+        dudxx = mixed_fdxx(u, Omega.dx)
+        dudyy = mixed_fdyy(u, Omega.dy)
+        Mxx = -p.litho_rigidity .* (dudxx + p.litho_poissonratio .* dudyy)
+        Myy = -p.litho_rigidity .* (dudyy + p.litho_poissonratio .* dudxx)
+        Mxy = -p.litho_rigidity .* (1 - p.litho_poissonratio) .* mixed_fdxy(u, Omega.dx, Omega.dy)
+        rhs += mixed_fdxx(Mxx, Omega.dx) + 2 .* mixed_fdxy(Mxy, Omega.dx, Omega.dy) + mixed_fdyy(Myy, Omega.dy)
     end
 
     dudt[:, :] .= real.(tools.pifft * ((tools.pfft * rhs) ./ Omega.pseudodiff)) ./ (2 .* p.effective_viscosity)

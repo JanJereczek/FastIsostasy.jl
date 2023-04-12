@@ -155,6 +155,6 @@ function main(
 
 end
 
-for n in 6:6
+for n in 7:7
     main(n, kernel = "cpu")
 end

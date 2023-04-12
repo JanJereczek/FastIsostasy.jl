@@ -75,6 +75,10 @@ function mixed_fdyy(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
     return cat( forward_fdyy(M,h)', central_fdyy(M,h), backward_fdyy(M,h)', dims=1 )
 end
 
+function mixed_fdxy(M::AbstractMatrix{T}, hx::T, hy::T) where {T<:AbstractFloat}
+    return mixed_fdy(mixed_fdx(M, hx), hy)
+end
+
 function gauss_distr(x::T, mu::Vector{T}, sigma::Matrix{T}) where {T<:AbstractFloat}
     k = length(mu)
     return (2 * π)^(k/2) * det(sigma) * exp( -0.5 * (x .- mu)' * inv(sigma) * (x .- mu) )

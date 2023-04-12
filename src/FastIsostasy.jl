@@ -63,6 +63,7 @@ export get_quad_coeffs
 export get_elasticgreen
 export fastisostasy
 export dudt_isostasy!
+export dudt_isostasy_sparse!
 export apply_bc!
 export ice_load
 
