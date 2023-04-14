@@ -45,9 +45,9 @@ function main(
 end
 
 # ["ExplicitEuler", BS3(), VCABM(), Rosenbrock23(autodiff=false)]
-for use_cuda in [false, true]
-    for active_gs in [false, true]
-        for n in 3:8
+for use_cuda in [true] # [false, true]
+    for active_gs in [false] # [false, true]
+        for n in 4:7 # 3:8
             main(n, use_cuda = use_cuda, solver = "ExplicitEuler", active_gs = active_gs)
         end
     end

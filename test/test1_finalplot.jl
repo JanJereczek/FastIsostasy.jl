@@ -20,13 +20,17 @@ function main()
 
     t_out = results.t_out
 
-    fig = Figure(resolution = (1600, 900), fontsize = 20)
+    ftsize = 40
+    lwidth = 4
+    msize = 25
+    fig = Figure(resolution = (3300, 1800), fontsize = ftsize)
     t_2Dplot = [500.0, 1500.0, 50_000.0]
 
     clim = (-300, 10)
     # cmap = cgrad(:PuOr_5, rev = true)
     cmap = cgrad(:cool, rev = true)
     letters = ["a", "b", "c"]
+    tgap = 20.0
 
     for i in eachindex(t_2Dplot)
         tyr = Int(round(t_2Dplot[i]))
@@ -41,8 +45,12 @@ function main()
             xlabel = L"$x \: (10^3 \: \mathrm{km})$",
             ylabel = L"$y \: (10^3 \: \mathrm{km})$",
             zlabel = L"$u \: (\mathrm{m})$",
+            titlegap = tgap,
             xticks = (-3e6:1e6:3e6, string.(-3:1:3)),
             yticks = (-3e6:1e6:3e6, string.(-3:1:3)),
+            xlabeloffset = 80.0,
+            ylabeloffset = 80.0,
+            zlabeloffset = 130.0,
         )
 
         surface!(
@@ -68,11 +76,11 @@ function main()
         fig[1, :],
         colorrange = clim,
         colormap = cmap,
-        label = L"Vertical displacement $u$ (m)$",
+        label = L"Viscous displacement $u$ (m)$",
         vertical = false,
         width = Relative(0.4),
+        height = 40,
     )
-
 
     t_plot = years2seconds.([100.0, 500.0, 1500.0, 5000.0, 10_000.0, 50_000.0])
     colors = [:gray80, :gray65, :gray50, :gray35, :gray20, :gray5]
@@ -85,7 +93,8 @@ function main()
         title = L"(d) $\,$",
         xlabel = L"$x \: (10^3 \: \mathrm{km})$ ",
         ylabel = L"$u$ (m)",
-        xticks = (0:0.5e6:2e6, string.(0:0.5:2))
+        xticks = (0:0.5e6:2e6, string.(0:0.5:2)),
+        titlegap = tgap,
     )
     for i in eachindex(t_plot)
         t = t_plot[i]
@@ -102,6 +111,7 @@ function main()
                 u_numeric[N2:N2+N4],
                 label = L"numeric $\,$",
                 color = colors[i],
+                linewidth = lwidth,
             )
             lines!(
                 ax3,
@@ -110,6 +120,7 @@ function main()
                 label = L"analytic $\,$",
                 linestyle = :dash,
                 color = colors[i],
+                linewidth = lwidth,
             )
         else
             lines!(
@@ -117,6 +128,7 @@ function main()
                 x,
                 u_numeric[N2:N2+N4],
                 color = colors[i],
+                linewidth = lwidth,
             )
             lines!(
                 ax3,
@@ -124,6 +136,7 @@ function main()
                 u_analytic,
                 linestyle = :dash,
                 color = colors[i],
+                linewidth = lwidth,
             )
         end
 
@@ -131,13 +144,13 @@ function main()
             ax3,
             x[xoffset[i]],
             u_numeric[N2] + yoffset[i],
-            text = "$tyr yr",
+            text = L"$ %$tyr $ yr",
             align = (:left, :bottom),
             color = colors[i],
+            fontsize = ftsize,
         )
     end
-    axislegend(ax3, position = :rc)
-
+    axislegend(ax3, position = :rc, width = 280, linepoints = [Point2f(0, 0.5), Point2f(2.5, 0.5)], patchlabelgap = 40)
 
     Nvec = 2 .^ (4:8)
     maxerror = Float64[]
@@ -173,11 +186,12 @@ function main()
         yminorticks = IntervalsBetween(9),
         yminorticksvisible = true,
         yminorgridvisible = true,
+        titlegap = tgap,
     )
-    scatterlines!(ax1, Nvec, maxerror, label = L"Maximum $\,$")
-    scatterlines!(ax1, Nvec, meanerror, label = L"Average $\,$")
-    axislegend(ax1, position = :lb)
 
+    scatterlines!(ax1, Nvec, maxerror, label = L"Maximum $\,$", linewidth = lwidth, markersize = msize)
+    scatterlines!(ax1, Nvec, meanerror, label = L"Average $\,$", linewidth = lwidth, markersize = msize)
+    axislegend(ax1, position = :lb, width = 300, linepoints = [Point2f(0, 0.5), Point2f(2, 0.5)], patchlabelgap = 40)
 
     ax2 = Axis(
         fig[3,3],
@@ -190,6 +204,7 @@ function main()
         yminorticks = IntervalsBetween(9),
         yminorticksvisible = true,
         yminorgridvisible = true,
+        titlegap = tgap,
     )
     for kernel in ["cpu", "gpu"]
         runtime = Float64[]
@@ -200,9 +215,12 @@ function main()
             append!(runtime, sol["t_fastiso"])
             append!(delta_x, 2*sol["Omega"].Lx * 1e-3 / N)
         end
-        scatterlines!(ax2, Nvec, runtime, label = L"%$kernel $\,$")
+        scatterlines!(ax2, Nvec, runtime, label = L"%$kernel $\,$", linewidth = lwidth, markersize = msize)
     end
-    axislegend(ax2, position = :lt)
+    axislegend(ax2, position = :lt, width = 200, linepoints = [Point2f(0, 0.5), Point2f(2, 0.5)], patchlabelgap = 40)
+
+    colgap!(fig.layout, 0)
+    rowgap!(fig.layout, 50)
 
     save("plots/test1/finalplot.png", fig)
     save("plots/test1/finalplot.pdf", fig)

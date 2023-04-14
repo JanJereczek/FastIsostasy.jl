@@ -15,15 +15,13 @@ function main(
     res_hom = sol_hom["results"]
     res_het = sol_het["results"]
     t_out = res_het.t_out
-    Omega, p = sol_het["Omega"], sol_het["p"]
+    Omega = sol_het["Omega"]
     points = [
         CartesianIndex(2^(n-6) * 20, 2^(n-6) * 24),
         CartesianIndex(2^(n-6) * 36, 2^(n-6) * 36),
     ]
-    lv = [p.layers_viscosity[:, :, i] for i in axes(p.layers_viscosity, 3)]
-    push!(lv, p.effective_viscosity)
 
-    labels = [L"$\textbf{(%$char)}$" for char in ["a", "b", "c", "d", "e", "f", "h", "i", "j"]]
+    labels = [L"$\textbf{(%$char)}$" for char in ["a", "b", "c", "d"]]
 
     xticks = (-3e6:1e6:3e6, num2latexstring.(-3:3))
     yticks = (-3e6:1e6:3e6, num2latexstring.(-3:3))
@@ -32,9 +30,6 @@ function main(
     umap = cgrad(:cool, rev=true)
     uticks = (ulim[1]:50:ulim[2], num2latexstring.(ulim[1]:50:ulim[2]))
     uticks_sparse = (ulim[1]:100:ulim[2], num2latexstring.(ulim[1]:100:ulim[2]))
-    visclim = (18, 23)
-    viscmap = cgrad(:jet)
-    viscticks = (visclim[1]:visclim[2], num2latexstring.(visclim[1]:visclim[2]))
 
     pcolor = :black
     marker = '⦿'
@@ -44,46 +39,28 @@ function main(
     # labels_hm = [L"$t = %$tyr \: \mathrm{yr}$" for tyr in t_plot_hm_yr]
     t_plot_hm = years2seconds.(t_plot_hm_yr)
 
-    Xticks = [
-        xticks, xticks, xticks, xticks, xticks,
-        tticks,
-        xticks, xticks, xticks,
-    ]
-    Yticks = [
-        yticks, yticks, yticks, yticks, yticks,
-        uticks,
-        yticks, yticks, yticks,
-    ]
-    Xticksvisible = [true, true, true, false, false, true, true, true, true]
-    Yticksvisible = [true, false, true, true, false, true, true, false, true]
+    Xticks = [xticks, xticks, xticks, tticks]
+    Yticks = [yticks, yticks, yticks, uticks]
+    Xticksvisible = [true, true, true, true]
+    Yticksvisible = [true, false, false, true]
     xlabels = [
         L"$x \: (10^3 \, \mathrm{km})$",
         L"$x \: (10^3 \, \mathrm{km})$",
         L"$x \: (10^3 \, \mathrm{km})$",
-        "",
-        "",
         L"$t \: (\mathrm{kyr})$",
-        L"$x \: (10^3 \, \mathrm{km})$",
-        L"$x \: (10^3 \, \mathrm{km})$",
-        L"$x \: (10^3 \, \mathrm{km})$",
     ]
     ylabels = [
         L"$y \: (10^3 \, \mathrm{km})$",
         "",
-        L"$y \: (10^3 \, \mathrm{km})$",
-        L"$y \: (10^3 \, \mathrm{km})$",
         "",
         L"$u \: (\mathrm{m})$",
-        L"$y \: (10^3 \, \mathrm{km})$",
-        "",
-        L"$y \: (10^3 \, \mathrm{km})$",
     ]
-    Xposition = [:top, :top, :top, :bottom, :bottom, :bottom, :bottom, :bottom, :bottom]
-    Yposition = [:left, :left, :right, :left, :left, :right, :left, :left, :right]
-    fig = Figure(resolution = (1300, 1500), fontsize = 20)
-    nrows, ncols = 3, 3
+    Xposition = [:bottom, :bottom, :bottom, :bottom]
+    Yposition = [:left, :left, :left, :right]
+    fig = Figure(resolution = (1600, 550), fontsize = 20)
+    nrows, ncols = 1, 4
     axs = [Axis(
-        fig[i+1, j],
+        fig[i, j],
         title = labels[(i-1)*ncols + j],
         titlegap = 10.0,
         xlabel = xlabels[(i-1)*ncols + j],
@@ -94,62 +71,17 @@ function main(
         yticklabelsvisible = Yticksvisible[(i-1)*ncols + j],
         xaxisposition = Xposition[(i-1)*ncols + j],
         yaxisposition = Yposition[(i-1)*ncols + j],
-        xticksmirrored = i == 2 ? true : false,
-        yticksmirrored = j == 2 ? true : false,
+        yticksmirrored = true,
         aspect = AxisAspect(1),
     ) for j in 1:ncols, i in 1:nrows]
-
-    for k in 1:5
-        heatmap!(
-            axs[k],
-            Omega.X,
-            Omega.Y,
-            log10.(lv[k])',
-            colormap = viscmap,
-            colorrange = visclim,
-        )
-        scatter!(
-            axs[k],
-            [Omega.X[points[1]], Omega.X[points[2]]],
-            [Omega.Y[points[1]], Omega.Y[points[2]]],
-            color = k <= 3 ? :white : pcolor,
-            marker = marker,
-            markersize = 20,
-        )
-        text!(
-            axs[k],
-            Omega.X[points[1]],
-            Omega.Y[points[1]] - yoffset;
-            text = L"$\textbf{1}$",
-            align = (:center, :top),
-            fontsize = 20,
-            color = k <= 3 ? :white : pcolor,
-        )
-        text!(
-            axs[k],
-            Omega.X[points[2]],
-            Omega.Y[points[2]] + yoffset;
-            text = L"$\textbf{2}$",
-            align = (:center, :bottom),
-            fontsize = 20,
-            color = k <= 3 ? :white : pcolor,
-        )
-    end
 
     u1het = [res_het.viscous[k][points[1]] for k in eachindex(t_out)]
     u2het = [res_het.viscous[k][points[2]] for k in eachindex(t_out)]
     u1hom = [res_hom.viscous[k][points[1]] for k in eachindex(t_out)]
     u2hom = [res_hom.viscous[k][points[2]] for k in eachindex(t_out)]
-    lines!(axs[6], t_out, u1het, label = L"point 1, $\eta(x,y)$")
-    lines!(axs[6], t_out, u2het, label = L"point 2, $\eta(x,y)$")
-    lines!(axs[6], t_out, u1hom, label = L"point 1, $\eta(x,y) = c$")
-    lines!(axs[6], t_out, u2hom, label = L"point 2, $\eta(x,y) = c$")
-    vlines!(axs[6], t_plot_hm, color = :red)
-    axislegend(axs[6])
-    xlims!(axs[6], (years2seconds(-0.1e3), years2seconds(10.1e3)))
 
-    for k in 7:9
-        t = t_plot_hm[k-6]
+    for k in 1:3
+        t = t_plot_hm[k]
         kt = argmin( (t_out .- t) .^ 2 )
         heatmap!(
             axs[k],
@@ -188,23 +120,23 @@ function main(
         )
     end
 
+    lines!(axs[ncols], t_out, u1het, label = L"point 1, $\eta(x,y)$")
+    lines!(axs[ncols], t_out, u2het, label = L"point 2, $\eta(x,y)$")
+    lines!(axs[ncols], t_out, u1hom, label = L"point 1, $\eta(x,y) = c$")
+    lines!(axs[ncols], t_out, u2hom, label = L"point 2, $\eta(x,y) = c$")
+    vlines!(axs[ncols], t_plot_hm, color = :red)
+    axislegend(axs[ncols])
+    xlims!(axs[ncols], (years2seconds(-0.5e3), years2seconds(10.5e3)))
+
     Colorbar(
-        fig[1, :],
-        colormap = viscmap,
-        colorrange = visclim,
-        vertical = false,
-        width = Relative(0.3),
-        label = L"Log10-viscosity ($\mathrm{Pa \, s})$",
-        ticks = viscticks,
-    )
-    Colorbar(
-        fig[5, :],
+        fig[2, :],
         colormap = umap,
         colorrange = ulim,
         vertical = false,
         width = Relative(0.3),
         label = L"$u$ (m)",
         ticks = uticks_sparse,
+        flipaxis = false,
     )
 
     save("plots/test4/$suffix.png", fig)
