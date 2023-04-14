@@ -44,7 +44,7 @@ Generate a vector of constant matrices from a vector of constants.
 """
 function matrify_vectorconstant(x::Vector{T}, N::Int) where {T<:AbstractFloat}
     X = zeros(T, N, N, length(x))
-    for i in eachindex(x)
+    @inbounds for i in eachindex(x)
         X[:, :, i] = matrify_constant(x[i], N)
     end
     return X
@@ -137,7 +137,7 @@ function scalefactor(
     k0::T = T(1),
 ) where {T<:Real}
     K = copy(lat)
-    for idx in CartesianIndices(lat)
+    @inbounds for idx in CartesianIndices(lat)
         K[idx] = scalefactor(deg2rad(lat[idx]), deg2rad(lon[idx]), lat0, lon0)
     end
     return K
@@ -173,7 +173,7 @@ function latlon2stereo(
     k0::T = T(1),
 ) where {T<:Real}
     K, X, Y = copy(lat), copy(lat), copy(lat)
-    for idx in CartesianIndices(lat)
+    @inbounds for idx in CartesianIndices(lat)
         K[idx], X[idx], Y[idx] = latlon2stereo(lat[idx], lon[idx], lat0, lon0)
     end
     return K, X, Y
@@ -211,7 +211,7 @@ function stereo2latlon(
     k0::T = T(1.0),
 ) where {T<:Real}
     Lat, Lon = copy(x), copy(x)
-    for idx in CartesianIndices(x)
+    @inbounds for idx in CartesianIndices(x)
         Lat[idx], Lon[idx] = stereo2latlon(x[idx], y[idx], lat0, lon0)
     end
     return Lat, Lon
@@ -281,7 +281,7 @@ function gauss_distr(
     G = similar(X)
     invsigma = inv(sigma)
     invsqrtdetsigma = 1/sqrt(det(sigma))
-    for i in axes(X,1), j in axes(X,2)
+    @inbounds for i in axes(X,1), j in axes(X,2)
         G[i, j] = (2*π)^(-k/2) * invsqrtdetsigma * exp( 
             -0.5 * ([X[i,j], Y[i,j]] .- mu)' * invsigma * ([X[i,j], Y[i,j]] .- mu) )
     end
@@ -352,11 +352,15 @@ function MultilayerEarth(
 
     layers_thickness = diff( layers_begin, dims=3 )
     # pseudodiff = kernelpromote(Omega.pseudodiff, Omega.arraykernel)
-    effective_viscosity = get_effective_viscosity(
+    # effective_viscosity = get_effective_viscosity(
+    #     Omega,
+    #     layers_viscosity,
+    #     layers_thickness,
+    # )
+    effective_viscosity = get_fouriereffective_viscosity(
         Omega,
         layers_viscosity,
         layers_thickness,
-        # pseudodiff,
     )
 
     # mean_density = get_matrix_mean_density(layers_thickness, layers_density)
@@ -392,7 +396,7 @@ function get_matrix_mean_density(
     layers_density::Vector{T},
 ) where {T<:AbstractFloat}
     mean_density = zeros(T, size(layers_thickness)[1:2])
-    for i in axes(layers_thickness, 1), j in axes(layers_thickness, 2)
+    @inbounds for i in axes(layers_thickness, 1), j in axes(layers_thickness, 2)
         mean_density[i, j] = get_mean_density(layers_thickness[i, j, :], layers_density)
     end
     return mean_density
@@ -448,7 +452,7 @@ function get_effective_viscosity(
     # Recursion has to start with half space = n-th layer:
     effective_viscosity = layers_viscosity[:, :, end]
     # p1, p2 = plan_fft(effective_viscosity), plan_ifft(effective_viscosity)
-    for i in axes(layers_viscosity, 3)[1:end-1]
+    @inbounds for i in axes(layers_viscosity, 3)[1:end-1]
         channel_viscosity = layers_viscosity[:, :, end - i]
         channel_thickness = layers_thickness[:, :, end - i + 1]
         viscosity_ratio = get_viscosity_ratio(channel_viscosity, effective_viscosity)
@@ -463,6 +467,28 @@ function get_effective_viscosity(
     return effective_viscosity
 end
 
+function get_fouriereffective_viscosity(
+    Omega::ComputationDomain{T},
+    layers_viscosity::Array{T, 3},
+    layers_thickness::Array{T, 3},
+) where {T<:AbstractFloat}
+
+    # Recursion has to start with half space = n-th layer:
+    effective_viscosity = copy(layers_viscosity[:, :, end])
+    pfft, pifft = plan_fft(effective_viscosity), plan_ifft(effective_viscosity)
+    @inbounds for i in axes(layers_viscosity, 3)[1:end-1]
+        channel_viscosity = layers_viscosity[:, :, end - i]
+        channel_thickness = layers_thickness[:, :, end - i + 1]
+        viscosity_ratio = get_viscosity_ratio(channel_viscosity, effective_viscosity)
+        viscosity_scaling = fourier_layer_scaling(
+            Omega,
+            viscosity_ratio,
+            channel_thickness,
+        )
+        effective_viscosity[:, :] .= real.(pifft * ((pfft * effective_viscosity) .* viscosity_scaling))
+    end
+    return effective_viscosity
+end
 
 """
 
@@ -518,6 +544,27 @@ function three_layer_scaling(
     
     return (num1 + num2 + num3) ./ (denum1 + denum2 + denum3)
 end
+
+function fourier_layer_scaling(
+    Omega::ComputationDomain{T},
+    visc_ratio::Matrix{T},
+    channel_thickness::Matrix{T},
+) where {T<:AbstractFloat}
+    kappa = Omega.pseudodiff
+    C = cosh.(channel_thickness .* kappa)
+    S = sinh.(channel_thickness .* kappa)
+
+    num1 = 2 .* visc_ratio .* C .* S
+    num2 = (1 .- visc_ratio .^ 2) .* channel_thickness .^ 2 .* kappa .^ 2
+    num3 = visc_ratio .^ 2 .* S .^ 2 + C .^ 2
+
+    denum1 = (visc_ratio .+ 1 ./ visc_ratio) .* C .* S
+    denum2 = (visc_ratio .- 1 ./ visc_ratio) .* channel_thickness .* kappa
+    denum3 = S .^ 2 + C .^ 2
+    
+    return (num1 + num2 + num3) ./ (denum1 + denum2 + denum3)
+end
+
 
 """
 
@@ -661,7 +708,7 @@ function get_elasticgreen(
     N = Omega.N
     elasticgreen = similar(Omega.X)
 
-    for i = 1:N, j = 1:N
+    @inbounds for i = 1:N, j = 1:N
         p = i - Omega.N2 - 1
         q = j - Omega.N2 - 1
         elasticgreen[i, j] = quadrature2D(
@@ -705,7 +752,7 @@ function quadrature1D(f::Function, n::Int, x1::T, x2::T) where {T<:AbstractFloat
     x, w = get_quad_coeffs(T, n)
     m, p = get_normalized_lin_transform(x1, x2)
     sum = 0
-    for i=1:n
+    @inbounds for i=1:n
         sum = sum + f(normalized_lin_transform(x[i], m, p)) * w[i] / m
     end
     return sum
@@ -732,7 +779,7 @@ function quadrature2D(
     mx, px = get_normalized_lin_transform(x1, x2)
     my, py = get_normalized_lin_transform(y1, y2)
     sum = T(0)
-    for i=1:n, j=1:n
+    @inbounds for i=1:n, j=1:n
         sum = sum + f(
             normalized_lin_transform(x[i], mx, px),
             normalized_lin_transform(x[j], my, py),
