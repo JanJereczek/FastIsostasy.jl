@@ -37,7 +37,7 @@ struct PhysicalConstants{T<:AbstractFloat}
     rho_topastheno::T
 end
 
-struct MultilayerEarth{T<:AbstractFloat}
+mutable struct MultilayerEarth{T<:AbstractFloat}
     mean_gravity::T
     mean_density::T
     effective_viscosity::AbstractMatrix{T}
@@ -49,42 +49,32 @@ struct MultilayerEarth{T<:AbstractFloat}
     layers_begin::Array{T, 3}
 end
 
-mutable struct GeoState{T<:AbstractFloat}
-    H_ice::AbstractMatrix{T}            # current height of ice column
-    H_ice_ref::AbstractMatrix{T}        # reference
-    H_water::AbstractMatrix{T}          # current height of water column
-    H_water_ref::AbstractMatrix{T}      # reference
-    b::AbstractMatrix{T}                # vertical bedrock position
-    b_ref::AbstractMatrix{T}            # reference
-    geoid::AbstractMatrix{T}            # current geoid displacement
-    z0::AbstractMatrix{T}               # reference height to allow external sea-level forcing
-    sealevel::AbstractMatrix{T}         # current sealevel field
-    sealevel_ref::AbstractMatrix{T}     # reference sealevel field
-    V_af::T                     # ice volume above floatation
-    sle_af::T                   # sl-equivalent of ice volume above floatation
-    sle_af_ref::T               # reference sl-equivalent of ice volume above floatation
-    slc_af::T                   # sl-contribution of ice volume above floatation
-    V_pov::T                    # current potential ocean volume
-    V_pov_ref::T                # reference
-    slc_pov::T                  # sea-level contribution associated with V_pov
-    V_den::T                    # potential ocean volume associated with density differences
-    V_den_ref::T                # reference
-    slc_den::T                  # sea-level contribution associated with V_den
-    slc::T                      # total sealevel contribution
-    conservation_term::T        # a term for mass conservation
-end
-
 struct ReferenceGeoState{T<:AbstractFloat}
-    H_ice::AbstractMatrix{T}        # reference
-    H_water::AbstractMatrix{T}      # reference
-    b::AbstractMatrix{T}            # reference
+    H_ice::AbstractMatrix{T}        # reference height of ice column
+    H_water::AbstractMatrix{T}      # reference height of water column
+    b::AbstractMatrix{T}            # reference bedrock position
     z0::AbstractMatrix{T}           # reference height to allow external sea-level forcing
     sealevel::AbstractMatrix{T}     # reference sealevel field
-    V_af::T                         # ice volume above floatation
     sle_af::T                       # reference sl-equivalent of ice volume above floatation
-    V_pov::T                        # reference
-    V_den::T                        # reference
+    V_pov::T                        # reference potential ocean volume
+    V_den::T                        # reference potential ocean volume associated with V_den
     conservation_term::T            # a term for mass conservation
+end
+
+mutable struct GeoState{T<:AbstractFloat}
+    H_ice::AbstractMatrix{T}        # current height of ice column
+    H_water::AbstractMatrix{T}      # current height of water column
+    b::AbstractMatrix{T}            # vertical bedrock position
+    geoid::AbstractMatrix{T}        # current geoid displacement
+    sealevel::AbstractMatrix{T}     # current sealevel field
+    V_af::T                         # ice volume above floatation
+    sle_af::T                       # sl-equivalent of ice volume above floatation
+    slc_af::T                       # sl-contribution of Vice above floatation
+    V_pov::T                        # current potential ocean volume
+    slc_pov::T                      # sea-level contribution associated with V_pov
+    V_den::T                        # potential ocean volume associated with density differences
+    slc_den::T                      # sea-level contribution associated with V_den
+    slc::T                          # total sealevel contribution
 end
 
 struct PrecomputedFastiso{T<:AbstractFloat}
@@ -109,6 +99,7 @@ struct SuperStruct{T<:AbstractFloat}
     Hice::Interpolations.Extrapolation
     Hice_cpu::Interpolations.Extrapolation
     tools::PrecomputedFastiso{T}
+    refgeostate::ReferenceGeoState{T}
     geostate::GeoState{T}
     active_geostate::Bool
 end
