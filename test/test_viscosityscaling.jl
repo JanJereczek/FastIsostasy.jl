@@ -6,7 +6,7 @@ using Interpolations
 include("external_viscosity_maps.jl")
 include("helpers_plot.jl")
 
-n = 8
+n = 6
 use_cuda = false
 case = "scaledviscosity"
 
@@ -54,10 +54,10 @@ elseif occursin("scaledviscosity", case)
     )
 end
 
-lv = [p.layers_viscosity[:, :, i] for i in axes(p.layers_viscosity, 3)[1:end]]
+lv = [p.layers_viscosity[:, :, i] for i in axes(p.layers_viscosity, 3)[3:end]]
 push!(lv, p.effective_viscosity)
 
-fig = Figure(resolution = (1400, 500), fontsize = 20)
+fig = Figure(resolution = (2000, 500), fontsize = 20)
 axs = [Axis(
     fig[1, j],
     aspect = AxisAspect(1),
@@ -66,7 +66,7 @@ visclim = (18, 23)
 viscmap = cgrad(:jet)
 viscticks = (visclim[1]:visclim[2], num2latexstring.(visclim[1]:visclim[2]))
 
-for k in 1:eachindex(lv)
+for k in eachindex(lv)
     heatmap!(
         axs[k],
         Omega.X,

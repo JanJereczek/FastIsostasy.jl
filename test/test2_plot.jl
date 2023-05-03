@@ -34,7 +34,7 @@ function slice_spada(
     data = get_spada()
     keys = ["u_disc", "u_cap", "dudt_disc", "dudt_cap", "n_disc", "n_cap"]
 
-    fig = Figure(resolution=(1200, 1000), fontsize = 20)
+    fig = Figure(resolution=(1600, 1200), fontsize = 35)
     nrows, ncols = 3, 2
     axs = [Axis(
         fig[i, j],
@@ -45,11 +45,18 @@ function slice_spada(
         yminorticks = IntervalsBetween(2),
         xminorgridvisible = true,
         yminorgridvisible = true,
+        xticksvisible = i == nrows ? true : false,
         xticklabelsvisible = i == nrows ? true : false,
         yticklabelsvisible = j == 1 ? true : false,
     ) for j in 1:ncols, i in 1:nrows]
     colors = [:gray80, :gray65, :gray50, :gray35, :gray20, :gray5]
 
+    # Just for the legend
+    hlines!(axs[1], [1e10], color = :gray5, label = L"FastIsostasy.jl $\,$")
+    hlines!(axs[1], [1e10], color = :gray5, linestyle = :dash, label = L"(Spada et al. 2011) $\,$")
+    hlines!(axs[1], [1e10], color = :transparent, label = L"_______________ $\,$")
+    hlines!(axs[1], [1e10], color = :transparent, label = L" $\,$")
+    
     for i in 1:ncases
         U = vars[i]
         nt = length(U)
@@ -88,8 +95,14 @@ function slice_spada(
             ylims!(axs[i], (-5, 50))
         end
         xlims!(axs[i], (0, 15))
+
+
     end
-    axislegend(axs[1], position = :rb)
+
+    fig[:, 3] = Legend(fig, axs[1], " ", framevisible = false)
+    # axislegend(axs[1], position = :rb)
+    rowgap!(fig.layout, 5)
+    colgap!(fig.layout, 40)
     return fig
 end
 
@@ -168,7 +181,7 @@ end
 
 cases = ["viscoelastic", "viscous"]
 for case in cases[2:2]
-    for n in 6:6
+    for n in 6:8
         main(case, n, kernel = "cpu")
     end
 end
