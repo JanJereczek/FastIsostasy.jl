@@ -96,9 +96,11 @@ struct SuperStruct{T<:AbstractFloat}
     Omega::ComputationDomain{T}
     c::PhysicalConstants{T}
     p::MultilayerEarth{T}
+    tools::PrecomputedFastiso{T}
     Hice::Interpolations.Extrapolation
     Hice_cpu::Interpolations.Extrapolation
-    tools::PrecomputedFastiso{T}
+    eta::Interpolations.Extrapolation
+    eta_cpu::Interpolations.Extrapolation
     refgeostate::ReferenceGeoState{T}
     geostate::GeoState{T}
     active_geostate::Bool

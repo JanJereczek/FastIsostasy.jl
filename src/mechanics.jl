@@ -91,23 +91,23 @@ function fastisostasy(
     Hice_snapshots::Vector{Matrix{T}};
     ODEsolver::Any = "ExplicitEuler",
     dt::T = T(years2seconds(1.0)),
-    # t_eta_snapshots::Vector{T} = [t_out[1], t_out[end]],
-    # eta_snapshots::Vector{<:AbstractMatrix{T}} = [p.effective_viscosity, p.effective_viscosity],
+    t_eta_snapshots::Vector{T} = [t_out[1], t_out[end]],
+    eta_snapshots::Vector{<:AbstractMatrix{T}} = [p.effective_viscosity, p.effective_viscosity],
     u_viscous_0::Matrix{T} = copy(Omega.null),
     u_elastic_0::Matrix{T} = copy(Omega.null),
-    kwargs...,
+    active_geostate::Bool = false,
 ) where {T<:AbstractFloat}
 
     u_viscous_0, u_elastic_0 = kernelpromote(
         [u_viscous_0, u_elastic_0], Omega.arraykernel)   # Handle xPU architecture
-    sstruct = init_superstruct(Omega, p, c, t_Hice_snapshots, Hice_snapshots,
-        t_eta_snapshots, eta_snapshots, kwargs...)
+    sstruct = init_superstruct(Omega, c, p, t_Hice_snapshots, Hice_snapshots,
+        t_eta_snapshots, eta_snapshots, active_geostate)
     u, dudt, u_elastic, geoid, sealevel = forward_isostasy(
         dt, t_out, u_viscous_0, sstruct, ODEsolver)
 
     return FastIsoResults(
-        t_out, tools, u, dudt, u_elastic,
-        geoid, sealevel, Hice, eta,
+        t_out, sstruct.tools, u, dudt, u_elastic,
+        geoid, sealevel, sstruct.Hice, sstruct.eta,
     )
 end
 
@@ -116,14 +116,15 @@ function init_superstruct(
     c::PhysicalConstants{T},
     p::MultilayerEarth{T},
     t_Hice_snapshots::Vector{T},
-    Hice_snapshots::Vector{Matrix{T}};
-    # t_eta_snapshots, eta_snapshots
+    Hice_snapshots::Vector{Matrix{T}},
+    t_eta_snapshots::Vector{T},
+    eta_snapshots::Vector{Matrix{T}},
+    active_geostate::Bool;
     geoid_0::Matrix{T} = copy(Omega.null),
     sealevel_0::Matrix{T} = copy(Omega.null),
     H_ice_ref::Matrix{T} = copy(Omega.null),
     H_water_ref::Matrix{T} = copy(Omega.null),
     b_ref::Matrix{T} = copy(Omega.null),
-    active_geostate::Bool = true,
 ) where {T<:AbstractFloat}
 
     geoid_0, sealevel_0, H_ice_ref, H_water_ref, b_ref = kernelpromote(
@@ -134,8 +135,10 @@ function init_superstruct(
         kernelpromote(Hice_snapshots, Omega.arraykernel) )
     Hice_cpu = linear_interpolation( t_Hice_snapshots,
         kernelpromote(Hice_snapshots, Array) )
-    # eta = linear_interpolation(t_eta_snapshots,
-    #     kernelpromote(eta_snapshots, Omega.arraykernel) )
+    eta = linear_interpolation(t_eta_snapshots,
+        kernelpromote(eta_snapshots, Omega.arraykernel) )
+    eta_cpu = linear_interpolation(t_eta_snapshots,
+        kernelpromote(eta_snapshots, Array) )
 
     refgeostate = ReferenceGeoState(
         H_ice_ref, H_water_ref, b_ref,
@@ -157,7 +160,8 @@ function init_superstruct(
         T(0.0), T(0.0),             # V_den terms
         T(0.0),                     # total sl-contribution & conservation term
     )
-    return SuperStruct(Omega, c, p, Hice, Hice_cpu, tools, refgeostate, geostate, active_geostate)
+    return SuperStruct(Omega, c, p, tools, Hice, Hice_cpu, eta, eta_cpu,
+        refgeostate, geostate, active_geostate)
 end
 
 function fastisostasy(
@@ -228,10 +232,7 @@ function forwardstep_isostasy!(
 ) where {T<:AbstractFloat}
     apply_bc!(u, sstruct.Omega.N)
     if sstruct.active_geostate
-        update_geostate!(
-            sstruct.geostate, u, sstruct.Hice(t),
-            sstruct.Omega, sstruct.c, sstruct.p, sstruct.tools,
-        )
+        update_geostate!(sstruct.geostate, u, sstruct.Hice(t))
     end
     dudt_isostasy!(dudt, u, sstruct, t)
     return nothing
@@ -243,44 +244,30 @@ function dudt_isostasy!(
     sstruct::SuperStruct{T},
     t::T,
 ) where {T<:AbstractFloat}
-    dudt_isostasy!(dudt, u, sstruct.Omega, sstruct.c, sstruct.p, sstruct.tools,
-        sstruct.Hice, sstruct.geostate, sstruct.active_geostate, t)
-    return nothing
-end
-
-function dudt_isostasy!(
-    dudt::AbstractMatrix{T},
-    u::AbstractMatrix{T},
-    Omega::ComputationDomain{T},
-    c::PhysicalConstants{T},
-    p::MultilayerEarth{T},
-    tools::PrecomputedFastiso{T},
-    Hice::Interpolations.Extrapolation,
-    geostate::GeoState{T},
-    active_geostate::Bool,
-    t::T,
-) where {T<:AbstractFloat}
-
-    if active_geostate
-        load = ice_load(c, Hice(t))
+    if sstruct.active_geostate
+        load = ice_load(sstruct.c, sstruct.Hice(t))
     else
-        load = get_loadchange(geostate, Omega, c)
+        load = get_loadchange(sstruct)
     end
-    rhs = load - tools.rhog .* u
+    rhs = load - sstruct.tools.rhog .* u
 
-    if tools.negligible_gradD
-        rhs += - p.litho_rigidity .* real.( tools.pifft * ( Omega.biharmonic .* (tools.pfft * u) ) )
+    if sstruct.tools.negligible_gradD
+        rhs += - sstruct.p.litho_rigidity .* real.( sstruct.tools.pifft *
+            ( sstruct.Omega.biharmonic .* (sstruct.tools.pfft * u) ) )
     else
-        dudxx = mixed_fdxx(u, Omega.dx)
-        dudyy = mixed_fdyy(u, Omega.dy)
-        Mxx = -p.litho_rigidity .* (dudxx + p.litho_poissonratio .* dudyy)
-        Myy = -p.litho_rigidity .* (dudyy + p.litho_poissonratio .* dudxx)
-        Mxy = -p.litho_rigidity .* (1 - p.litho_poissonratio) .* mixed_fdxy(u, Omega.dx, Omega.dy)
-        rhs += mixed_fdxx(Mxx, Omega.dx) + 2 .* mixed_fdxy(Mxy, Omega.dx, Omega.dy) + mixed_fdyy(Myy, Omega.dy)
+        dudxx = mixed_fdxx(u, sstruct.Omega.dx)
+        dudyy = mixed_fdyy(u, sstruct.Omega.dy)
+        Mxx = -sstruct.p.litho_rigidity .* (dudxx + sstruct.p.litho_poissonratio .* dudyy)
+        Myy = -sstruct.p.litho_rigidity .* (dudyy + sstruct.p.litho_poissonratio .* dudxx)
+        Mxy = -sstruct.p.litho_rigidity .* (1 - sstruct.p.litho_poissonratio) .*
+            mixed_fdxy(u, sstruct.Omega.dx, sstruct.Omega.dy)
+        rhs += mixed_fdxx(Mxx, sstruct.Omega.dx) + mixed_fdyy(Myy, sstruct.Omega.dy) +
+            2 .* mixed_fdxy(Mxy, sstruct.Omega.dx, sstruct.Omega.dy)
     end
 
-    dudt[:, :] .= real.(tools.pifft * ((tools.pfft * rhs) ./ Omega.pseudodiff)) ./ (2 .* p.effective_viscosity)
-    apply_bc!(dudt, Omega.N)
+    dudt[:, :] .= real.(sstruct.tools.pifft * ((sstruct.tools.pfft * rhs) ./
+        sstruct.Omega.pseudodiff)) ./ (2 .* sstruct.p.effective_viscosity)
+    apply_bc!(dudt, sstruct.Omega.N)
     return nothing
 end
 
