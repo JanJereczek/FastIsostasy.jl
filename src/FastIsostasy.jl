@@ -1,14 +1,15 @@
 module FastIsostasy
 
-using LinearAlgebra
-using StatsBase
+using LinearAlgebra, Distributions, Interpolations
 using FFTW
+using StatsBase
 using FastGaussQuadrature
 using DSP
 using CUDA
 using OrdinaryDiffEq: ODEProblem, solve, OrdinaryDiffEqAlgorithm
-using Statistics: var, mean
-using Optim # : LBFGS, optimize, Options, NelderMead
+using EnsembleKalmanProcesses
+using EnsembleKalmanProcesses.Observations
+using EnsembleKalmanProcesses.ParameterDistributions
 
 using Reexport
 @reexport using Interpolations
@@ -24,6 +25,7 @@ include("utils.jl")
 include("derivatives.jl")
 include("geostate.jl")
 include("mechanics.jl")
+include("inversion.jl")
 
 # structs.jl
 export ComputationDomain
