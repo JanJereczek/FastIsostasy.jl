@@ -24,7 +24,6 @@ include("utils.jl")
 include("derivatives.jl")
 include("geostate.jl")
 include("mechanics.jl")
-include("estimation.jl")
 
 # structs.jl
 export ComputationDomain
