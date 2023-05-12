@@ -84,4 +84,9 @@ export update_V_af!, update_slc_af!
 export update_V_pov!, update_slc_pov!
 export update_V_den!, update_slc_den!
 
+# inversion.jl
+export ParamInversion
+export perform
+export extract_inversion
+
 end

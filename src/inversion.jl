@@ -1,182 +1,197 @@
 
 
-function kalman_invert(kalmaninv::KalmanInversion)
+"""
+    ParamInversion
+
+Return a struct containing all variables and configs related to the inversion of
+Solid-Earth parameter fields based on displacement fields. For now, only viscosity
+can be inverted but future versions will support lithosphere rigidity.
+For now, the unscented Kalman inversion is the only method available but ensemble
+Kalman inversion will be available in future.
+"""
+# For now, method is fixed to UKI
+struct ParamInversion
+    Omega::ComputationDomain
+    c::PhysicalConstants
+    p::MultilayerEarth
+    t::Vector
+    y::Vector
+    Hice::Vector{Matrix}
+    obs_idx::Matrix
+    case::String
+    method::Any
+    nt::Int
+    nparams::Int
+    nobs::Int
+    paramspriors::NamedTuple
+    N_iter::Int
+    α_reg::Real
+    update_freq::Int
+    n_samples::Int
+    μ_y::Vector
+    Σ_y::Matrix
+end
+
+function ParamInversion(
+    t::Vector,
+    u::Vector{Matrix},
+    Hice::Vector{Matrix};
+    L = 3000e3,
+    kwargs...,
+)
+    n1, n2 = size(u[1])
+    Omega = ComputationDomain(L, n1)
+    c = PhysicalConstants()
+    p = MultilayerEarth(Omega, c)
+    return ParamInversion(Omega, c, p, t, u, Hice; kwargs...)
+end
+
+function ParamInversion(
+    Omega::ComputationDomain,
+    c::PhysicalConstants,
+    p::MultilayerEarth,
+    t::Vector,
+    U::Vector{Matrix{T}},
+    Hice::Vector{Matrix{T}};
+    case::String = "viscosity",
+    method::Any = Unscented,
+    Htol::Real = 1.0,
+    paramspriors::NamedTuple = defaultpriors(case),
+    N_iter::Int = 20,
+    α_reg::Real = 1.0,
+    update_freq::Int = 1,
+    n_samples::Int = 100,
+    scale_obscov::Real = 10000.0,
+) where {T<:AbstractFloat}
+    if (length(t) != length(U)) ||
+        (length(t) != length(Hice)) ||
+        (length(U) != length(Hice))
+        error("The length of the provided a time vector, displacement field history and load history do not match!")
+    end
+
+    maxHtransient = max.( [abs.(H) for H in Hice]... )
+    obs_idx = where_response(maxHtransient, Htol)
+    significantload = vcat( [H[obs_idx] for H in Hice]... )
+    nt = length(t)
+    nparams = sum(obs_idx)
+    nobs = nt * nparams
+
+    if nobs != length(significantload)
+        error("The number of observations with significant loading do not correspond to the dimension of the Kalman problem.")
+    end
+
+    y = vcat([u[obs_idx] for u in U]...)
 
     # Generating noisy observations
-    y_t = zeros(length(kalmaninv.y), kalmaninv.n_samples)
-    μ = zeros(length(kalmaninv.y))
-    covH = reshape( kalmaninv.scale_obscov ./                # 10000.0
-        (Hcylinder[forced_idx] .+ 1), sum(forced_idx) )
-    Γy = convert(Array, Diagonal(vcat([covH for j in eachindex(results.viscous)[2:end]]...)) )
-    for i in 1:n_samples
-        y_t[:, i] = U .+ rand(MvNormal(μ, Γy))
+    μ_y = zeros(nobs)
+    Σ_y = uncorrelated_obs_covariance(scale_obscov, significantload)
+
+    return ParamInversion(Omega, c, p, t, y, Hice, obs_idx, case, method, nt, nparams, nobs,
+        paramspriors, N_iter, α_reg, update_freq, n_samples, μ_y, Σ_y)
+
+end
+
+function defaultpriors(case)
+    if case == "viscosity"
+        return (
+            mean = 20.5,
+            var = 0.5,
+            lowerbound = 19.0,
+            upperbound = 22.0,
+        )
+    elseif case == "rigidity"
+        error("Rigidity default choice for inversion not implemeted for now!")
     end
-    truth = Observations.Observation(y_t, Γy, ["Wiens"])
+end
+
+function perform(paraminv::ParamInversion)
+
+    ynoisy = zeros(paraminv.nobs, paraminv.n_samples)
+    for i in 1:paraminv.n_samples
+        ynoisy[:, i] = paraminv.y .+ rand(MvNormal(paraminv.μ_y, paraminv.Σ_y))
+    end
+    truth = Observations.Observation(ynoisy, paraminv.Σ_y, ["Noisy truth"])
     truth_sample = truth.mean
 
     priors = combine_distributions([constrained_gaussian( "p_$(i)",
-        kalmaninv.params_mean_prior, kalmaninv.params_var_prior,
-        kalmaninv.params_lowerbound, kalmaninv.params_upperbound) for i in 1:nparams])
+        paraminv.paramspriors.mean, paraminv.paramspriors.var,
+        paraminv.paramspriors.lowerbound, paraminv.paramspriors.upperbound) for i in 1:paraminv.nparams])
 
     # Here we also could use process = Inversion()
     process = Unscented(mean(priors), cov(priors);
-        α_reg = kalmaninv.α_reg, update_freq = kalmaninv.update_freq)
-
+        α_reg = paraminv.α_reg, update_freq = paraminv.update_freq)
     ukiobj = EnsembleKalmanProcess(truth_sample, truth.obs_noise_cov, process)
-
-    err = zeros(kalmaninv.N_iter)
-    for n in 1:N_iter
+    err = zeros(paraminv.N_iter)
+    for n in 1:paraminv.N_iter
         ϕ_n = get_ϕ_final(priors, ukiobj)       # Params in physical/constrained space
-        println("size: ", size(ϕ_n), ",  mean parameter value: $(mean(ϕ_n))")
-        G_n = [fastiso(ϕ_n[:, i]) for i in 1:size(ϕ_n)[2]]      # Evaluate forward map
+        G_n = [fastisostasy(ϕ_n[:, j], paraminv) for j in axes(ϕ_n, 2)]      # Evaluate forward map
         G_ens = hcat(G_n...)
         EnsembleKalmanProcesses.update_ensemble!(ukiobj, G_ens)
         err[n] = get_error(ukiobj)[end]
-        println("Iteration: $n, Error: $(err[n]), norm(Cov): $(norm(ukiobj.process.uu_cov[n]))")
+        print_kalmanprocess_evolution(paraminv, n, ϕ_n, err[n], ukiobj.process.uu_cov[n])
     end
     return priors, ukiobj
 end
 
 # ϕ_n = get_ϕ_final(priors, ukiobj)
 
+function fastisostasy(params::Vector, paraminv::ParamInversion)
+    if paraminv.case == "viscosity"
+        paraminv.p.effective_viscosity[paraminv.obs_idx] .= 10 .^ params
+    elseif paraminv.case == "rigidity"
+        paraminv.p.lithosphere_rigidity[paraminv.obs_idx] .= params
+    elseif paraminv.case == "both"
+        paraminv.p.effective_viscosity[paraminv.obs_idx] .= 10 .^ params[1:mparams]
+        paraminv.p.lithosphere_rigidity[paraminv.obs_idx] .= params[mparams+1:end]
+    end
 
-# For now, method is fixed to UKI
-struct KalmanInversion
-    y::Vector{Matrix}
-    t::Vector
-    Omega::ComputationDomain
-    c::PhysicalConstants
-    p::MultilayerEarth
-    Hice::Vector{Matrix}
-    nparams::Int
-    params_mean_prior::Real
-    params_var_prior::Real
-    params_lowerbound::Real
-    params_upperbound::Real
-    N_iter::Int
-    α_reg::Real
-    update_freq::Int
-    n_samples::Int
-    obsnoise_mean
-    obsnoise_var
+    t = vcat(0.0, paraminv.t)
+    results = fastisostasy( t, paraminv.Omega, paraminv.c,
+        paraminv.p, paraminv.Hice[1], ODEsolver=BS3())
+    Gx = vcat([reshape(results.viscous[j][paraminv.obs_idx],
+        paraminv.nparams) for j in eachindex(results.viscous)[2:end]]...)
+    # results are only taken from the 2nd index onwards because
+    # the first index returns the solution at time t=0.
+    return Gx
 end
-
-
-function KalmanInversion(y::Matrix, paramsconfig::NamedTuple)
-    T = Float64
-    L = T(3000e3)
-    Omega = ComputationDomain(L, n)
-    c = PhysicalConstants()
-    p = MultilayerEarth()
-
-    R = T(2000e3)               # ice disc radius (m)
-    H = T(1000)                 # ice disc thickness (m)
-    Hice = uniform_ice_cylinder(Omega, R, H)
-    Htol = 1.0
-
-    kalmaninv = KalmanInversion(y, Omega, c, p, Hice)
-
-    return kalman(kalmaninv)
-end
-
 
 """
-    find_invertibles()
+    where_response()
 
 Find points of parameter field that can be inverted. We here assume that 
 """
-function find_invertibles()
+function where_response(load, loadtol)
+    return abs.(load) .> loadtol
 end
 
-function forcingproportional_covariance()
+function uncorrelated_obs_covariance(scale_obscov, significantload)
+    diagvar = scale_obscov ./ (significantload .+ 1)   # 10000.0
+    return convert(Array, Diagonal(diagvar) )
 end
 
 # Actually, this should not be diagonal because there is a correlation between points.
-function uncorrelated_obs_covariance()
-end
-
 function correlated_obs_covariance()
 end
 
-#####################################################
-# Optimization
-#####################################################
-"""
-
-    ViscOptim()
-
-A `struct` that contains all the variables related to opitmization.
-If applied as a function, it returns the cost.
-"""
-struct ViscOptim
-    t_out::Vector
-    sstruct::SuperStruct
-    U::Vector{Matrix}
-    dUdt::Vector{Matrix}
-end
-
-# Here we denote X as the estimated viscosity field and
-# U the field of observable resulting from a ground truth viscosity field Y.
-function optimize_viscosity(
-    Omega::ComputationDomain,
-    Hice,
-    t_out,
-    U,
-    opts;
-    x0 = 21.0, # fill(21.0, Omega.N * Omega.N)
-    # x0 = fill(20.0, Omega.N * Omega.N) + rand(Omega.N * Omega.N)
-)
-    vo = init_optim(Omega, Hice, t_out, U)
-
-    # lx = fill(19.0, Omega.N * Omega.N)
-    # ux = fill(21.0, Omega.N * Omega.N)
-    # dfc = TwiceDifferentiableConstraints(lx, ux)
-
-    res = optimize(vo, [x0], LBFGS(), opts)
-    return res
-end
-
-function extract_minimizer()
-    return Matrix(reshape(res.minimizer, Omega.N, Omega.N))
-end
-
-function init_optim(Omega, Hice, t_out, U; active_geostate = false)
-    c = PhysicalConstants()
-    p = MultilayerEarth(Omega, c)
-    eta = [p.effective_viscosity for t in t_out]
-    sstruct = init_superstruct(Omega, c, p, t_out, Hice, t_out, eta, active_geostate)
-
-    if var(diff(t_out)) < 1e-3  # yr
-        dt = mean(diff(t_out))
-    else
-        error("The provided time vector is not evenly spaced!")
+function print_kalmanprocess_evolution(paraminv, n, ϕ_n, err_n, cov_n)
+    println("------------------")
+    println("size: $(size(ϕ_n))")
+    if paraminv.case == "viscosity" || paraminv.case == "rigidity"
+        println("mean $(paraminv.case): $(mean(ϕ_n))")
+    elseif paraminv.case == "both"
+        m = paraminv.nparams ÷ 2
+        meanvisc = round( mean(ϕ_n[1:m, :]), digits = 4)
+        meanrigd = round( mean(ϕ_n[m+1:end, :]), digits = 4)
+        println("mean viscosity: $meanvisc,  mean rigidity: $meanrigd")
     end
-    dUdt = (U[3:end] - U[1:end-2]) ./ (2 * dt)
-
-    return ViscOptim(years2seconds.(t_out[2:end-1]), sstruct, U[2:end-1], dUdt)
+    println("Iteration: $n, Error: $err_n, norm(Cov): $(norm(cov_n))")
+    return nothing
 end
 
-function (vo::ViscOptim)(x)
-    # vo.sstruct.p.effective_viscosity .= 10.0 .^ Matrix(reshape(x, vo.sstruct.Omega.N, vo.sstruct.Omega.N))
-    vo.sstruct.p.effective_viscosity .= 10.0 .^ fill(x[1], vo.sstruct.Omega.N, vo.sstruct.Omega.N)
-    return integrated_rmse(vo)
-end
-
-function integrated_rmse(vo::ViscOptim)
-    dudt = zeros(eltype(vo.dUdt[1]), size(vo.dUdt[1]))
-    e = 0.0 # TODO introduce a regularization term
-    for i in eachindex(vo.dUdt)
-        dudt_isostasy!(dudt, vo.U[i], vo.sstruct, vo.t_out[i])
-        e += rmse(
-            m_per_sec2mm_per_yr.(dudt),
-            m_per_sec2mm_per_yr.(vo.dUdt[i]),
-        ) / (1e5 * length(vo.t_out))
-    end
-    display(e)
-    display(mean(log10.(vo.sstruct.p.effective_viscosity[1])))
-    return e
-end
-
-function rmse(UX, UY)
-    return sum( (UX - UY).^2 )
+function extract_inversion(priors, ukiobj, paraminv)
+    p = get_ϕ_mean_final(priors, ukiobj)
+    Gx = get_g_mean_final(ukiobj)
+    e_mean = mean(abs.(paraminv.y - Gx))
+    e_sort = sort(abs.(paraminv.y - Gx))
+    return p, Gx, e_mean, e_sort
 end
