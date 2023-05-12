@@ -1,6 +1,21 @@
-# FastIsostasy
+# Introduction
 
-Glacial Isostatic Adjustment (GIA) denotes the evolution over time of the solid-Earth vertical displacement depending on the load applied on it. It is an important process for ice-sheet modelling, and more generally for Earth system modelling. `FastIsostasy.jl` performs the computation of this displacement based on a Fourier collocation method described in [ [1](https://agupubs.onlinelibrary.wiley.com/doi/abs/10.1029/JC090iC01p01100?casa_token=OEMWq5llrv4AAAAA:ok6M08OGPEbkORk44DO2apRXUPo7GkQrl2iwclQXXs6laMyI644GI7_XoluKjKSxWiJLAP5r91uQLeI), [2](https://www.cambridge.org/core/journals/annals-of-glaciology/article/fast-computation-of-a-viscoelastic-deformable-earth-model-for-icesheet-simulations/C878DBDD01271F6EB7874C9C4125196C) ]. This allows to transform the PDE describing the physics into an ODE and accelerate the computation, mainly due to the highly optimized functions available for fast-fourier transform (FFT).
+If you already know about GIA, skip to ...
+
+## What is GIA?
+
+The evolution of cryosphere components leads to changes in the ice and liquid water columnand therefore in the vertical load applied upon the solid Earth. Glacial isostatic adjustment (GIA) denotes the mechanical response of the solid Earth, which is characteized by its vertical and horizontal displacement. GIA models usually encompass related processes, such as the resulting changes in sea-surface height and sea level.
+
+## Why should you care?
+
+GIA is known to present many feedbacks on ice-sheet evolution. Their net effect is negative, meaning that GIA inhibits ice-sheet growth and retreat. In other words, it tends to stabilize a given state.
+
+## [Why FastIsosatsy.jl?](@ref motivation)
+
+
+
+
+the evolution over time of the solid-Earth vertical displacement depending on the load applied on it. It is an important process for ice-sheet modelling, and more generally for Earth system modelling. `FastIsostasy.jl` performs the computation of this displacement based on a Fourier collocation method described in [ [1](https://agupubs.onlinelibrary.wiley.com/doi/abs/10.1029/JC090iC01p01100?casa_token=OEMWq5llrv4AAAAA:ok6M08OGPEbkORk44DO2apRXUPo7GkQrl2iwclQXXs6laMyI644GI7_XoluKjKSxWiJLAP5r91uQLeI), [2](https://www.cambridge.org/core/journals/annals-of-glaciology/article/fast-computation-of-a-viscoelastic-deformable-earth-model-for-icesheet-simulations/C878DBDD01271F6EB7874C9C4125196C) ]. This allows to transform the PDE describing the physics into an ODE and accelerate the computation, mainly due to the highly optimized functions available for fast-fourier transform (FFT).
 <!-- 
 Compared to [1, 2], FastIsostasy.jl does not assume constant fields for parameters of the solid Earth. It thus offers an open-source and performant generalization of the original articles. -->
 
