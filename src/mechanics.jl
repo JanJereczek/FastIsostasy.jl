@@ -96,6 +96,7 @@ function fastisostasy(
     u_viscous_0::Matrix{T} = copy(Omega.null),
     u_elastic_0::Matrix{T} = copy(Omega.null),
     active_geostate::Bool = false,
+    verbose::Bool = true,
 ) where {T<:AbstractFloat}
 
     u_viscous_0, u_elastic_0 = kernelpromote(
@@ -103,12 +104,25 @@ function fastisostasy(
     sstruct = init_superstruct(Omega, c, p, t_Hice_snapshots, Hice_snapshots,
         t_eta_snapshots, eta_snapshots, active_geostate)
     u, dudt, u_elastic, geoid, sealevel = forward_isostasy(
-        dt, t_out, u_viscous_0, sstruct, ODEsolver)
+        dt, t_out, u_viscous_0, sstruct, ODEsolver, verbose)
 
     return FastIsoResults(
         t_out, sstruct.tools, u, dudt, u_elastic,
         geoid, sealevel, sstruct.Hice, sstruct.eta,
     )
+end
+
+function fastisostasy(
+    t_out::Vector{T},
+    Omega::ComputationDomain{T},
+    c::PhysicalConstants{T},
+    p::MultilayerEarth{T},
+    Hice_snapshot::Matrix{T};
+    kwargs...,
+) where {T<:AbstractFloat}
+    t_Hice_snapshots = [t_out[1], t_out[end]]
+    Hice_snapshots = [Hice_snapshot, Hice_snapshot]
+    return fastisostasy(t_out, Omega, c, p, t_Hice_snapshots, Hice_snapshots; kwargs...)
 end
 
 function init_superstruct(
@@ -164,25 +178,13 @@ function init_superstruct(
         refgeostate, geostate, active_geostate)
 end
 
-function fastisostasy(
-    t_out::Vector{T},
-    Omega::ComputationDomain{T},
-    c::PhysicalConstants{T},
-    p::MultilayerEarth{T},
-    Hice_snapshot::Matrix{T};
-    kwargs...,
-) where {T<:AbstractFloat}
-    t_Hice_snapshots = [t_out[1], t_out[end]]
-    Hice_snapshots = [Hice_snapshot, Hice_snapshot]
-    return fastisostasy(t_out, Omega, c, p, t_Hice_snapshots, Hice_snapshots; kwargs...)
-end
-
 function forward_isostasy(
     dt::T,
     t_out::Vector{T},
     u::AbstractMatrix{T},
     sstruct::SuperStruct{T},
     ODEsolver::Any,
+    verbose::Bool,
 ) where {T<:AbstractFloat}
 
     dudt = copy(u)
@@ -190,8 +192,9 @@ function forward_isostasy(
 
     @inbounds for k in eachindex(t_out)[1:end]
         t0 = k == 1 ? T(0.0) : t_out[k-1]
-        println("Computing until t = $(Int(round(seconds2years(t_out[k])))) years...")
-
+        if verbose
+            println("Computing until t = $(Int(round(seconds2years(t_out[k])))) years...")
+        end
         if isa(ODEsolver, OrdinaryDiffEqAlgorithm)
             prob = ODEProblem(forwardstep_isostasy!, u, (t0, t_out[k]), sstruct)
             sol = solve(prob, ODEsolver, reltol=1e-3) #, dtmin = years2seconds(0.1)), , dt=dt
@@ -267,44 +270,11 @@ function dudt_isostasy!(
 
     dudt[:, :] .= real.(sstruct.tools.pifft * ((sstruct.tools.pfft * rhs) ./
         sstruct.Omega.pseudodiff)) ./ (2 .* sstruct.p.effective_viscosity)
+    #     dudt[:, :] .= real.(tools.pifft * ((tools.pfft * (rhs ./ (2 .* p.effective_viscosity)) ) ./ Omega.pseudodiff))
+
     apply_bc!(dudt, sstruct.Omega.N)
     return nothing
 end
-
-# function dudt_isostasy_nonlocal!(
-#     dudt::AbstractMatrix{T},
-#     u::AbstractMatrix{T},
-#     sstruct::SuperStruct{T},
-#     t::T,
-# ) where {T<:AbstractFloat}
-#     Omega = sstruct.Omega
-#     c = sstruct.c
-#     p = sstruct.p
-#     tools = sstruct.tools
-#     Hice = sstruct.Hice
-
-#     if sstruct.active_geostate
-#         load = ice_load(c, Hice(t))
-#     else
-#         load = get_loadchange(sstruct.geostate, Omega, c)
-#     end
-#     rhs = load - tools.rhog .* u
-
-#     if tools.negligible_gradD
-#         rhs += - p.litho_rigidity .* real.( tools.pifft * ( Omega.biharmonic .* (tools.pfft * u) ) )
-#     else
-#         dudxx = mixed_fdxx(u, Omega.dx)
-#         dudyy = mixed_fdyy(u, Omega.dy)
-#         Mxx = -p.litho_rigidity .* (dudxx + p.litho_poissonratio .* dudyy)
-#         Myy = -p.litho_rigidity .* (dudyy + p.litho_poissonratio .* dudxx)
-#         Mxy = -p.litho_rigidity .* (1 - p.litho_poissonratio) .* mixed_fdxy(u, Omega.dx, Omega.dy)
-#         rhs += mixed_fdxx(Mxx, Omega.dx) + 2 .* mixed_fdxy(Mxy, Omega.dx, Omega.dy) + mixed_fdyy(Myy, Omega.dy)
-#     end
-
-#     dudt[:, :] .= real.(tools.pifft * ((tools.pfft * (rhs ./ (2 .* p.effective_viscosity)) ) ./ Omega.pseudodiff))
-#     apply_bc!(dudt, Omega.N)
-#     return nothing
-# end
 
 function simple_euler!(
     u::AbstractMatrix{T},

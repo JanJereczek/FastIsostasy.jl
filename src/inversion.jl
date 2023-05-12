@@ -147,7 +147,7 @@ function fastisostasy(params::Vector, paraminv::ParamInversion)
 
     t = vcat(0.0, paraminv.t)
     results = fastisostasy( t, paraminv.Omega, paraminv.c,
-        paraminv.p, paraminv.Hice[1], ODEsolver=BS3())
+        paraminv.p, paraminv.Hice[1], ODEsolver=BS3(), verbose = false)
     Gx = vcat([reshape(results.viscous[j][paraminv.obs_idx],
         paraminv.nparams) for j in eachindex(results.viscous)[2:end]]...)
     # results are only taken from the 2nd index onwards because
