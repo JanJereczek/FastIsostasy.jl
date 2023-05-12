@@ -352,16 +352,16 @@ function MultilayerEarth(
 
     layers_thickness = diff( layers_begin, dims=3 )
     # pseudodiff = kernelpromote(Omega.pseudodiff, Omega.arraykernel)
-    # effective_viscosity = get_effective_viscosity(
-    #     Omega,
-    #     layers_viscosity,
-    #     layers_thickness,
-    # )
-    effective_viscosity = get_fouriereffective_viscosity(
+    effective_viscosity = get_effective_viscosity(
         Omega,
         layers_viscosity,
         layers_thickness,
     )
+    # effective_viscosity = get_fouriereffective_viscosity(
+    #     Omega,
+    #     layers_viscosity,
+    #     layers_thickness,
+    # )
 
     # mean_density = get_matrix_mean_density(layers_thickness, layers_density)
     mean_density = fill(mean(layers_density), Omega.N, Omega.N)
@@ -482,7 +482,7 @@ function get_fouriereffective_viscosity(
         viscosity_ratio = get_viscosity_ratio(channel_viscosity, effective_viscosity)
         viscosity_scaling = fourier_layer_scaling(
             Omega,
-            viscosity_ratio,
+            pfft * viscosity_ratio,
             channel_thickness,
         )
         effective_viscosity[:, :] .= real.(pifft * ((pfft * effective_viscosity) .* viscosity_scaling))
@@ -531,6 +531,8 @@ function three_layer_scaling(
     # kappa is the wavenumber of the harmonic load. (see Cathles 1975, p.43)
     # we assume this is related to the size of the domain!
     kappa = π / Omega.Lx
+    # kappa = real.(ifft(Omega.pseudodiff))
+
     C = cosh.(channel_thickness .* kappa)
     S = sinh.(channel_thickness .* kappa)
 
@@ -547,19 +549,19 @@ end
 
 function fourier_layer_scaling(
     Omega::ComputationDomain{T},
-    visc_ratio::Matrix{T},
-    channel_thickness::Matrix{T},
+    visc_ratio_fourier::AbstractMatrix,
+    channel_thickness::AbstractMatrix,
 ) where {T<:AbstractFloat}
     kappa = Omega.pseudodiff
     C = cosh.(channel_thickness .* kappa)
     S = sinh.(channel_thickness .* kappa)
 
-    num1 = 2 .* visc_ratio .* C .* S
-    num2 = (1 .- visc_ratio .^ 2) .* channel_thickness .^ 2 .* kappa .^ 2
-    num3 = visc_ratio .^ 2 .* S .^ 2 + C .^ 2
+    num1 = 2 .* visc_ratio_fourier .* C .* S
+    num2 = (1 .- visc_ratio_fourier .^ 2) .* channel_thickness .^ 2 .* kappa .^ 2
+    num3 = visc_ratio_fourier .^ 2 .* S .^ 2 + C .^ 2
 
-    denum1 = (visc_ratio .+ 1 ./ visc_ratio) .* C .* S
-    denum2 = (visc_ratio .- 1 ./ visc_ratio) .* channel_thickness .* kappa
+    denum1 = (visc_ratio_fourier .+ 1 ./ visc_ratio_fourier) .* C .* S
+    denum2 = (visc_ratio_fourier .- 1 ./ visc_ratio_fourier) .* channel_thickness .* kappa
     denum3 = S .^ 2 + C .^ 2
     
     return (num1 + num2 + num3) ./ (denum1 + denum2 + denum3)
