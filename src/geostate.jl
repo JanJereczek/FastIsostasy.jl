@@ -100,7 +100,7 @@ function update_loadcolumns!(
 
     sstruct.geostate.b .= sstruct.refgeostate.b .+ u
     sstruct.geostate.H_ice .= H_ice
-    sstruct.geostate.H_water .= max.(sstruct.geostate.sealevel - (sstruct.geostate.b + H_ice), T(0.0))
+    sstruct.geostate.H_water .= max.(sstruct.geostate.sealevel - (sstruct.geostate.b + H_ice), 0)
     return nothing
 end
 

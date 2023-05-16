@@ -64,19 +64,21 @@ struct ReferenceGeoState{T<:AbstractFloat}
 end
 
 mutable struct GeoState{T<:AbstractFloat}
-    H_ice::XMatrix        # current height of ice column
-    H_water::XMatrix      # current height of water column
-    b::XMatrix            # vertical bedrock position
-    geoid::XMatrix        # current geoid displacement
-    sealevel::XMatrix     # current sealevel field
-    V_af::T                         # ice volume above floatation
-    sle_af::T                       # sl-equivalent of ice volume above floatation
-    slc_af::T                       # sl-contribution of Vice above floatation
-    V_pov::T                        # current potential ocean volume
-    slc_pov::T                      # sea-level contribution associated with V_pov
-    V_den::T                        # potential ocean volume associated with density differences
-    slc_den::T                      # sea-level contribution associated with V_den
-    slc::T                          # total sealevel contribution
+    H_ice::XMatrix          # current height of ice column
+    H_water::XMatrix        # current height of water column
+    b::XMatrix              # vertical bedrock position
+    geoid::XMatrix          # current geoid displacement
+    sealevel::XMatrix       # current sealevel field
+    V_af::T                 # ice volume above floatation
+    sle_af::T               # sl-equivalent of ice volume above floatation
+    slc_af::T               # sl-contribution of Vice above floatation
+    V_pov::T                # current potential ocean volume
+    slc_pov::T              # sea-level contribution associated with V_pov
+    V_den::T                # potential ocean volume associated with density differences
+    slc_den::T              # sea-level contribution associated with V_den
+    slc::T                  # total sealevel contribution
+    countupdates::Int       # count the updates of the geostate
+    dt::T                   # update step
 end
 
 struct PrecomputedFastiso{T<:AbstractFloat}

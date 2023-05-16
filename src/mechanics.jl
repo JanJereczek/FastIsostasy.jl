@@ -174,6 +174,7 @@ function init_superstruct(
         T(0.0), T(0.0),             # V_pov terms
         T(0.0), T(0.0),             # V_den terms
         T(0.0),                     # total sl-contribution & conservation term
+        0, years2seconds(10.0),     # countupdates, update step
     )
     return SuperStruct(Omega, c, p, tools, Hice, Hice_cpu, eta, eta_cpu,
         refgeostate, geostate, active_geostate)
@@ -235,8 +236,11 @@ function forwardstep_isostasy!(
     t::T,
 ) where {T<:AbstractFloat}
     apply_bc!(u, sstruct.Omega.N)
-    if sstruct.active_geostate
+    if sstruct.active_geostate &&
+        (t / sstruct.geostate.dt >= sstruct.geostate.countupdates)
         update_geostate!(sstruct, u, sstruct.Hice(t))
+        sstruct.geostate.countupdates += 1
+        # println("Updated GeoState at t=$(seconds2years(t))")
     end
     dudt_isostasy!(dudt, u, sstruct, t)
     return nothing
