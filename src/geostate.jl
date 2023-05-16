@@ -29,10 +29,12 @@ function update_geoid!(sstruct::SuperStruct{T}) where {T<:AbstractFloat}
         sstruct.Omega.N2:2*sstruct.Omega.N-1-sstruct.Omega.N2,
         sstruct.Omega.N2:2*sstruct.Omega.N-1-sstruct.Omega.N2,
     )
+    spada_calibration = 1.0
+    sstruct.geostate.geoid .-= (spada_calibration * maximum(sstruct.geostate.geoid))
     # conv(
-    #     tools.geoidgreen,
-    #     get_greenloadchange(gs, Omega, c, p),
-    # )[Omega.N2:end-Omega.N2, Omega.N2:end-Omega.N2]
+    #     sstruct.tools.geoidgreen,
+    #     get_greenloadchange(sstruct),
+    # )[sstruct.Omega.N2:end-sstruct.Omega.N2, sstruct.Omega.N2:end-sstruct.Omega.N2]
     return nothing
 end
 
@@ -51,18 +53,19 @@ function get_greenloadchange(sstruct::SuperStruct{T}) where {T<:AbstractFloat}
     return (sstruct.Omega.dx * sstruct.Omega.dy) .* get_fullcolumnchange(sstruct)
 end
 
-function get_loadchange(sstruct::SuperStruct{T}) where {T<:AbstractFloat}
-    return - sstruct.c.g .* get_loadcolumnchange(sstruct)
-end
-
 function get_fullcolumnchange(sstruct::SuperStruct{T}) where {T<:AbstractFloat}
     return get_loadcolumnchange(sstruct) + sstruct.p.mean_density[1] .*
             (sstruct.geostate.b - sstruct.refgeostate.b) # .* Omega.K
+
 end
 
 function get_loadcolumnchange(sstruct::SuperStruct{T}) where {T<:AbstractFloat}
     return (sstruct.c.rho_ice .* (sstruct.geostate.H_ice - sstruct.refgeostate.H_ice) +
         sstruct.c.rho_seawater .* (sstruct.geostate.H_water - sstruct.refgeostate.H_water) ) # .* Omega.K
+end
+
+function get_loadchange(sstruct::SuperStruct{T}) where {T<:AbstractFloat}
+    return - sstruct.c.g .* get_loadcolumnchange(sstruct)
 end
 
 # TODO: transform results with stereographic utils for test2!
@@ -76,14 +79,14 @@ Return the Green's function used to compute the changes in geoid.
 
 Coulon et al. 2021.
 """
-function get_geoidgreen(sstruct::SuperStruct{T}) where {T<:AbstractFloat}
-    geoidgreen = get_geoidgreen(sstruct.Omega.R, sstruct.c)
-    max_geoidgreen = get_geoidgreen(norm([Omega.dx, Omega.dy]), c)  # tolerance = resolution
+function get_geoidgreen(Omega::ComputationDomain, c::PhysicalConstants{T}) where {T<:AbstractFloat}
+    geoidgreen = unbounded_geoidgreen(Omega.R, c)
+    max_geoidgreen = unbounded_geoidgreen(norm([Omega.dx, Omega.dy]), c)  # tolerance = resolution
     return min.(geoidgreen, max_geoidgreen)
     # equivalent to: geoidgreen[geoidgreen .> max_geoidgreen] .= max_geoidgreen
 end
 
-function get_geoidgreen(R, c::PhysicalConstants{T}) where {T<:AbstractFloat}
+function unbounded_geoidgreen(R, c::PhysicalConstants{T}) where {T<:AbstractFloat}
     return c.r_pole ./ ( 2 .* c.mE .* sin.( R ./ (2 .* c.r_pole) ) )
 end
 
@@ -99,7 +102,7 @@ function update_loadcolumns!(
     H_ice::AbstractMatrix{T},
 ) where {T<:AbstractFloat}
 
-    sstruct.geostate.b .= sstruct.geostate.b_ref .+ u
+    sstruct.geostate.b .= sstruct.refgeostate.b .+ u
     sstruct.geostate.H_ice .= H_ice
     sstruct.geostate.H_water .= max.(sstruct.geostate.sealevel - (sstruct.geostate.b + H_ice), T(0.0))
     return nothing
@@ -158,8 +161,10 @@ Note: we do not use eq. (1) as it is only a special case of eq. (13) that does n
 allow a correct representation of external sea-level forcings.
 """
 function update_V_af!(sstruct::SuperStruct{T}) where {T<:AbstractFloat}
-    sstruct.geostate.V_af = sum( sstruct.geostate.H_ice .+ min.(sstruct.geostate.b .- sstruct.refgeostate.z0, T(0.0)) .*
-        (c.rho_seawater / c.rho_ice) .* (Omega.dx * Omega.dy) ./ (Omega.K .^ 2) )
+    sstruct.geostate.V_af = sum( sstruct.geostate.H_ice .+
+        min.(sstruct.geostate.b .- sstruct.refgeostate.z0, T(0.0)) .*
+        (sstruct.c.rho_seawater / sstruct.c.rho_ice) .*
+        (sstruct.Omega.dx * sstruct.Omega.dy) ./ (sstruct.Omega.K .^ 2) )
     return nothing
 end
 
@@ -174,7 +179,8 @@ Update the sea-level contribution of ice above floatation.
 Goelzer et al. (2020), eq. (2).
 """
 function update_slc_af!(sstruct::SuperStruct{T}) where {T<:AbstractFloat}
-    sstruct.geostate.sle_af = sstruct.geostate.V_af / c.A_ocean * c.rho_ice / c.rho_seawater
+    sstruct.geostate.sle_af = sstruct.geostate.V_af / sstruct.c.A_ocean *
+        sstruct.c.rho_ice / sstruct.c.rho_seawater
     sstruct.geostate.slc_af = -( sstruct.geostate.sle_af - sstruct.refgeostate.sle_af )
     return nothing
 end
@@ -193,7 +199,8 @@ allow a correct representation of external sea-level forcinsstruct.geostate.
 """
 function update_V_pov!(sstruct::SuperStruct{T}) where {T<:AbstractFloat}
     sstruct.geostate.V_pov = sum( max.(sstruct.refgeostate.z0 .- 
-        sstruct.geostate.b, T(0.0)) .* (Omega.dx*Omega.dy)./(Omega.K .^ 2) )
+        sstruct.geostate.b, T(0.0)) .* (sstruct.Omega.dx * sstruct.Omega.dy) ./
+        (sstruct.Omega.K .^ 2) )
     return nothing
 end
 
@@ -208,8 +215,8 @@ Update the sea-level contribution associated with the potential ocean volume.
 Goelzer et al. (2020), eq. (9).
 """
 function update_slc_pov!(sstruct::SuperStruct{T}) where {T<:AbstractFloat}
-    current = sstruct.geostate.V_pov / c.A_ocean
-    reference = sstruct.refgeostate.V_pov / c.A_ocean
+    current = sstruct.geostate.V_pov / sstruct.c.A_ocean
+    reference = sstruct.refgeostate.V_pov / sstruct.c.A_ocean
     sstruct.geostate.slc_pov = -(current - reference)
     return nothing
 end
@@ -225,8 +232,10 @@ Update the ocean volume associated with the density correction.
 Goelzer et al. (2020), eq. (10).
 """
 function update_V_den!(sstruct::SuperStruct{T}) where {T<:AbstractFloat}
-    density_factor = c.rho_ice / c.rho_water - c.rho_ice / c.rho_seawater
-    sstruct.geostate.V_den = sum( sstruct.geostate.H_ice .* density_factor ./ (Omega.K .^ 2) .* (Omega.dx * Omega.dy) )
+    density_factor = sstruct.c.rho_ice / sstruct.c.rho_water -
+        sstruct.c.rho_ice / sstruct.c.rho_seawater
+    sstruct.geostate.V_den = sum( sstruct.geostate.H_ice .* density_factor ./
+        (sstruct.Omega.K .^ 2) .* (sstruct.Omega.dx * sstruct.Omega.dy) )
     return nothing
 end
 
@@ -241,8 +250,8 @@ Update the sea-level contribution associated with the density correction.
 Goelzer et al. (2020), eq. (11).
 """
 function update_slc_den!(sstruct::SuperStruct{T}) where {T<:AbstractFloat}
-    current = sstruct.geostate.V_den / c.A_ocean
-    reference = sstruct.refgeostate.V_den / c.A_ocean
+    current = sstruct.geostate.V_den / sstruct.c.A_ocean
+    reference = sstruct.refgeostate.V_den / sstruct.c.A_ocean
     sstruct.geostate.slc_den = -( current - reference )
     return nothing
 end

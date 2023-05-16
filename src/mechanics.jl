@@ -60,7 +60,7 @@ function PrecomputedFastiso(
     end
 
     rhog = p.mean_density .* c.g
-    geoidgreen = get_geoidgreen(Omega.R, c)
+    geoidgreen = get_geoidgreen(Omega, c)
 
     return PrecomputedFastiso(
         elasticgreen, fft(elasticgreen),
@@ -97,12 +97,13 @@ function fastisostasy(
     u_elastic_0::Matrix{T} = copy(Omega.null),
     active_geostate::Bool = false,
     verbose::Bool = true,
+    kwargs...,
 ) where {T<:AbstractFloat}
 
     u_viscous_0, u_elastic_0 = kernelpromote(
         [u_viscous_0, u_elastic_0], Omega.arraykernel)   # Handle xPU architecture
     sstruct = init_superstruct(Omega, c, p, t_Hice_snapshots, Hice_snapshots,
-        t_eta_snapshots, eta_snapshots, active_geostate)
+        t_eta_snapshots, eta_snapshots, active_geostate; kwargs...)
     u, dudt, u_elastic, geoid, sealevel = forward_isostasy(
         dt, t_out, u_viscous_0, sstruct, ODEsolver, verbose)
 
@@ -235,7 +236,7 @@ function forwardstep_isostasy!(
 ) where {T<:AbstractFloat}
     apply_bc!(u, sstruct.Omega.N)
     if sstruct.active_geostate
-        update_geostate!(sstruct.geostate, u, sstruct.Hice(t))
+        update_geostate!(sstruct, u, sstruct.Hice(t))
     end
     dudt_isostasy!(dudt, u, sstruct, t)
     return nothing
