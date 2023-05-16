@@ -132,7 +132,7 @@ function init_superstruct(
     t_Hice_snapshots::Vector{T},
     Hice_snapshots::Vector{Matrix{T}},
     t_eta_snapshots::Vector{T},
-    eta_snapshots::Vector{Matrix{T}},
+    eta_snapshots::Vector{<:AbstractMatrix{T}},
     active_geostate::Bool;
     geoid_0::Matrix{T} = copy(Omega.null),
     sealevel_0::Matrix{T} = copy(Omega.null),
