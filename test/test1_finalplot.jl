@@ -20,7 +20,7 @@ function main()
 
     t_out = results.t_out
 
-    ftsize = 40
+    ftsize = 48
     lwidth = 4
     msize = 25
     fig = Figure(resolution = (3300, 1800), fontsize = ftsize)
@@ -179,7 +179,7 @@ function main()
         fig[3,2],
         title = L"(e) $\,$",
         xlabel = L"$N = N_{x} = N_{y} $ (1)",
-        ylabel = L"Error w.r.t. analytical solution (m)$\,$",
+        ylabel = L"Error (m)$\,$",
         xscale = log2,
         yscale = log10,
         yticks = (10. .^ (-1:1), [L"$10^{%$l}$" for l in -1:1]),
@@ -191,7 +191,7 @@ function main()
 
     scatterlines!(ax1, Nvec, maxerror, label = L"Maximum $\,$", linewidth = lwidth, markersize = msize)
     scatterlines!(ax1, Nvec, meanerror, label = L"Average $\,$", linewidth = lwidth, markersize = msize)
-    axislegend(ax1, position = :lb, width = 300, linepoints = [Point2f(0, 0.5), Point2f(2, 0.5)], patchlabelgap = 40)
+    axislegend(ax1, position = :lb, width = 320, linepoints = [Point2f(0, 0.5), Point2f(2, 0.5)], patchlabelgap = 40)
 
     ax2 = Axis(
         fig[3,3],
@@ -219,8 +219,8 @@ function main()
     end
     axislegend(ax2, position = :lt, width = 200, linepoints = [Point2f(0, 0.5), Point2f(2, 0.5)], patchlabelgap = 40)
 
-    colgap!(fig.layout, 0)
-    rowgap!(fig.layout, 50)
+    colgap!(fig.layout, 10)
+    rowgap!(fig.layout, 80)
 
     save("plots/test1/finalplot.png", fig)
     save("plots/test1/finalplot.pdf", fig)

@@ -10,8 +10,9 @@ function main(
 )
     N = 2^n
     suffix = "N$N"
-    sol_hom = load("data/test4/discload_homogeneous_viscosity_$suffix.jld2")
-    sol_het = load("data/test4/discload_wiens_scaledviscosity_$suffix.jld2")
+    case = "nonlocal"
+    sol_hom = load("data/test4/discload_$(case)_homogeneous_viscosity_$suffix.jld2")
+    sol_het = load("data/test4/discload_$(case)_wiens_scaledviscosity_$suffix.jld2")
     res_hom = sol_hom["results"]
     res_het = sol_het["results"]
     t_out = res_het.t_out
@@ -80,7 +81,7 @@ function main(
     u1hom = [res_hom.viscous[k][points[1]] for k in eachindex(t_out)]
     u2hom = [res_hom.viscous[k][points[2]] for k in eachindex(t_out)]
 
-    for k in 1:3
+    for k in eachindex(t_plot_hm)
         t = t_plot_hm[k]
         kt = argmin( (t_out .- t) .^ 2 )
         heatmap!(
@@ -139,8 +140,8 @@ function main(
         flipaxis = false,
     )
 
-    save("plots/test4/$suffix.png", fig)
-    save("plots/test4/$suffix.pdf", fig)
+    save("plots/test4/$(case)_$suffix.png", fig)
+    save("plots/test4/$(case)_$suffix.pdf", fig)
 end
 
 n = 7

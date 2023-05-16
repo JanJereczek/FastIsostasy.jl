@@ -1,12 +1,16 @@
 module FastIsostasy
 
-using LinearAlgebra
-using StatsBase
+using LinearAlgebra, Distributions, Interpolations
 using FFTW
+using StatsBase
 using FastGaussQuadrature
 using DSP
 using CUDA
 using OrdinaryDiffEq: ODEProblem, solve, OrdinaryDiffEqAlgorithm
+using EnsembleKalmanProcesses
+using EnsembleKalmanProcesses.Observations
+using EnsembleKalmanProcesses.ParameterDistributions
+
 using Reexport
 @reexport using Interpolations
 @reexport using OrdinaryDiffEq: Euler, BS3, Tsit5, TanYam7, Vern9, VCABM, Rosenbrock23, QNDF, FBDF, ImplicitEuler
@@ -21,6 +25,7 @@ include("utils.jl")
 include("derivatives.jl")
 include("geostate.jl")
 include("mechanics.jl")
+include("inversion.jl")
 
 # structs.jl
 export ComputationDomain
@@ -62,24 +67,26 @@ export meshgrid
 export get_quad_coeffs
 export get_elasticgreen
 export fastisostasy
+export init_superstruct
 export dudt_isostasy!
 export dudt_isostasy_sparse!
 export apply_bc!
 export ice_load
 
+# estimation.jl
+export init_optim, integrated_rmse, ViscOptim, optimize_viscosity, Options
+
 # geostate.jl
-export update_geostate!
-export update_geoid!
-export get_loadchange
-export get_geoidgreen
-export update_loadcolumns!
-export update_sealevel!
-export update_slc!
-export update_V_af!
-export update_slc_af!
-export update_V_pov!
-export update_slc_pov!
-export update_V_den!
-export update_slc_den!
+export update_geostate!, update_geoid!, update_loadcolumns!
+export get_loadchange, get_geoidgreen
+export update_sealevel!, update_slc!
+export update_V_af!, update_slc_af!
+export update_V_pov!, update_slc_pov!
+export update_V_den!, update_slc_den!
+
+# inversion.jl
+export ParamInversion
+export perform
+export extract_inversion
 
 end

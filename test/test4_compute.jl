@@ -74,7 +74,7 @@ function main(n::Int, case::String; use_cuda::Bool = true, solver = "ExplicitEul
     end
 
     jldsave(
-        "data/test4/discload_$(case)_N$(Omega.N).jld2",
+        "data/test4/discload_nonlocal_$(case)_N$(Omega.N).jld2",
         Omega = Omega, c = c, p = p,
         results = results,
         t_fastiso = t_fastiso,
@@ -86,7 +86,7 @@ function main(n::Int, case::String; use_cuda::Bool = true, solver = "ExplicitEul
 end
 
 cases = ["homogeneous_viscosity", "wiens_scaledviscosity", "wiens_meanviscosity"]
-n = 8
+n = 7
 for case in cases[1:2]
     main(n, case, use_cuda=false, solver=BS3())
 end
