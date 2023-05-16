@@ -7,8 +7,8 @@ and the load columns for the next time step of the isostasy integration.
 """
 function update_geostate!(
     sstruct::SuperStruct{T},
-    u::AbstractMatrix{T},
-    H_ice::AbstractMatrix{T},
+    u::XMatrix,
+    H_ice::XMatrix,
 ) where {T<:AbstractFloat}
 
     update_geoid!(sstruct)
@@ -29,12 +29,8 @@ function update_geoid!(sstruct::SuperStruct{T}) where {T<:AbstractFloat}
         sstruct.Omega.N2:2*sstruct.Omega.N-1-sstruct.Omega.N2,
         sstruct.Omega.N2:2*sstruct.Omega.N-1-sstruct.Omega.N2,
     )
-    spada_calibration = 1.0
-    sstruct.geostate.geoid .-= (spada_calibration * maximum(sstruct.geostate.geoid))
-    # conv(
-    #     sstruct.tools.geoidgreen,
-    #     get_greenloadchange(sstruct),
-    # )[sstruct.Omega.N2:end-sstruct.Omega.N2, sstruct.Omega.N2:end-sstruct.Omega.N2]
+    # spada_calibration = 1.0
+    # sstruct.geostate.geoid .-= (spada_calibration * maximum(sstruct.geostate.geoid))
     return nothing
 end
 
@@ -92,14 +88,14 @@ end
 
 """
 
-    update_loadcolumns!(sstruct::SuperStruct, u::AbstractMatrix, H_ice::AbstractMatrix)
+    update_loadcolumns!(sstruct::SuperStruct, u::XMatrix, H_ice::XMatrix)
 
 Update the load columns of a `::GeoState`.
 """
 function update_loadcolumns!(
     sstruct::SuperStruct{T},
-    u::AbstractMatrix{T},
-    H_ice::AbstractMatrix{T},
+    u::XMatrix,
+    H_ice::XMatrix,
 ) where {T<:AbstractFloat}
 
     sstruct.geostate.b .= sstruct.refgeostate.b .+ u
@@ -162,7 +158,7 @@ allow a correct representation of external sea-level forcings.
 """
 function update_V_af!(sstruct::SuperStruct{T}) where {T<:AbstractFloat}
     sstruct.geostate.V_af = sum( sstruct.geostate.H_ice .+
-        min.(sstruct.geostate.b .- sstruct.refgeostate.z0, T(0.0)) .*
+        min.(sstruct.geostate.b .- sstruct.refgeostate.z0, 0) .*
         (sstruct.c.rho_seawater / sstruct.c.rho_ice) .*
         (sstruct.Omega.dx * sstruct.Omega.dy) ./ (sstruct.Omega.K .^ 2) )
     return nothing

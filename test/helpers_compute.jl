@@ -1,10 +1,10 @@
 using LinearAlgebra
 
-function mask_disc(X::AbstractMatrix{T}, Y::AbstractMatrix{T}, R::T) where {T<:AbstractFloat}
+function mask_disc(X::XMatrix, Y::XMatrix, R::T) where {T<:AbstractFloat}
     return mask_disc(sqrt.(X.^2 + Y.^2), R)
 end
 
-function mask_disc(r::AbstractMatrix{T}, R::T) where {T<:AbstractFloat}
+function mask_disc(r::XMatrix, R::T) where {T<:AbstractFloat}
     return T.(r .< R)
 end
 
@@ -198,7 +198,7 @@ function generate_gaussian_field(
     z_background::T,
     xy_peak::Vector{T},
     z_peak::T,
-    sigma::AbstractMatrix{T},
+    sigma::XMatrix,
 ) where {T<:AbstractFloat}
     N = Omega.N
     G = gauss_distr( Omega.X, Omega.Y, xy_peak, sigma )

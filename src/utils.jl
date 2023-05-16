@@ -81,7 +81,7 @@ Return a 2D meshgrid spanned by `x, y`.
 """
 function meshgrid(x::AbstractVector{T}, y::AbstractVector{T}) where {T<:AbstractFloat}
     one_x, one_y = ones(T, length(x)), ones(T, length(y))
-    return one_y * x', (one_x * y')'
+    return one_y * x', Matrix((one_x * y')')
 end
 
 """
@@ -130,8 +130,8 @@ end
 
 # TODO: make angles and units really consistent here.
 function scalefactor(
-    lat::AbstractMatrix{T},
-    lon::AbstractMatrix{T},
+    lat::XMatrix,
+    lon::XMatrix,
     lat0::T,
     lon0::T;
     k0::T = T(1),
@@ -166,8 +166,8 @@ function latlon2stereo(
 end
 
 function latlon2stereo(
-    lat::AbstractMatrix{T},
-    lon::AbstractMatrix{T},
+    lat::XMatrix,
+    lon::XMatrix,
     lat0::T,
     lon0::T;
     k0::T = T(1),
@@ -203,8 +203,8 @@ function stereo2latlon(
 end
 
 function stereo2latlon(
-    x::AbstractMatrix{T},
-    y::AbstractMatrix{T},
+    x::XMatrix,
+    y::XMatrix,
     lat0::T,
     lon0::T;
     R::T = T(6.371e6),      # Earth radius
@@ -272,8 +272,8 @@ end
 #####################################################
 
 function gauss_distr(
-    X::AbstractMatrix{T},
-    Y::AbstractMatrix{T},
+    X::XMatrix,
+    Y::XMatrix,
     mu::Vector{T},
     sigma::Matrix{T}
 ) where {T<:AbstractFloat}
@@ -312,9 +312,9 @@ layers_begin = [88e3, 400e3]
 
     MultilayerEarth(
         Omega::ComputationDomain{T};
-        litho_rigidity<:Union{Vector{T}, Vector{AbstractMatrix{T}}},
+        litho_rigidity<:Union{Vector{T}, Vector{XMatrix}},
         layers_density::Vector{T},
-        layers_viscosity<:Union{Vector{T}, Vector{AbstractMatrix{T}}},
+        layers_viscosity<:Union{Vector{T}, Vector{XMatrix}},
         layers_begin::Vector{T},
     ) where {T<:AbstractFloat}
 
@@ -332,8 +332,8 @@ function MultilayerEarth(
     T<:AbstractFloat,
     A<:Union{Vector{T}, Array{T, 3}},
     B<:Union{Vector{T}, Array{T, 3}},
-    C<:Union{T, AbstractMatrix{T}},
-    D<:Union{T, AbstractMatrix{T}},
+    C<:Union{T, XMatrix},
+    D<:Union{T, XMatrix},
 }
 
     if layers_begin isa Vector
@@ -434,7 +434,7 @@ end
 """
 
     get_effective_viscosity(
-        layers_viscosity::Vector{AbstractMatrix{T}},
+        layers_viscosity::Vector{XMatrix},
         layers_thickness::Vector{T},
         Omega::ComputationDomain{T},
     ) where {T<:AbstractFloat}
@@ -446,7 +446,7 @@ function get_effective_viscosity(
     Omega::ComputationDomain{T},
     layers_viscosity::Array{T, 3},
     layers_thickness::Array{T, 3},
-    # pseudodiff::AbstractMatrix{T},
+    # pseudodiff::XMatrix,
 ) where {T<:AbstractFloat}
 
     # Recursion has to start with half space = n-th layer:
@@ -549,8 +549,8 @@ end
 
 function fourier_layer_scaling(
     Omega::ComputationDomain{T},
-    visc_ratio_fourier::AbstractMatrix,
-    channel_thickness::AbstractMatrix,
+    visc_ratio_fourier::XMatrix,
+    channel_thickness::XMatrix,
 ) where {T<:AbstractFloat}
     kappa = Omega.pseudodiff
     C = cosh.(channel_thickness .* kappa)
@@ -579,7 +579,7 @@ function loginterp_viscosity(
     tvec::AbstractVector{T},
     layers_viscosity::Array{T, 4},
     layers_thickness::Array{T, 3},
-    pseudodiff::AbstractMatrix,
+    pseudodiff::XMatrix,
 ) where {T<:AbstractFloat}
     n1, n2, n3, nt = size(layers_viscosity)
     log_eqviscosity = [fill(T(0.0), n1, n2) for k in 1:nt]

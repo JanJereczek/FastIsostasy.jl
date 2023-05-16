@@ -1,11 +1,14 @@
 module FastIsostasy
 
-using LinearAlgebra, Distributions, Interpolations
+using LinearAlgebra
+using Distributions: MvNormal
+using Interpolations: linear_interpolation, Flat
 using FFTW
 using StatsBase
 using FastGaussQuadrature
-using DSP
+using DSP: conv
 using CUDA
+using CUDA: CuArray
 using OrdinaryDiffEq: ODEProblem, solve, OrdinaryDiffEqAlgorithm
 using EnsembleKalmanProcesses
 using EnsembleKalmanProcesses.Observations
@@ -28,6 +31,7 @@ include("mechanics.jl")
 include("inversion.jl")
 
 # structs.jl
+export XMatrix
 export ComputationDomain
 export PhysicalConstants
 export MultilayerEarth

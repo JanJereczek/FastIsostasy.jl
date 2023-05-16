@@ -1,3 +1,5 @@
+XMatrix = Union{Matrix{T}, CuArray{T, 2}} where {T<:Real}
+
 struct ComputationDomain{T<:AbstractFloat}
     Lx::T                       # Domain length in x (m)
     Ly::T                       # Domain length in y (m)
@@ -7,17 +9,17 @@ struct ComputationDomain{T<:AbstractFloat}
     dy::T                       # Spatial discretization in y
     x::Vector{T}
     y::Vector{T}
-    X::AbstractMatrix{T}
-    Y::AbstractMatrix{T}
-    R::AbstractMatrix{T}
-    Theta::AbstractMatrix{T}
-    Lat::AbstractMatrix{T}
-    Lon::AbstractMatrix{T}
-    K::AbstractMatrix{T}
-    null::AbstractMatrix{T}         # a zero matrix of size Nx x Ny
-    pseudodiff::AbstractMatrix{T}   # pseudodiff operator
-    harmonic::AbstractMatrix{T}     # harmonic operator
-    biharmonic::AbstractMatrix{T}   # biharmonic operator
+    X::XMatrix
+    Y::XMatrix
+    R::XMatrix
+    Theta::XMatrix
+    Lat::XMatrix
+    Lon::XMatrix
+    K::XMatrix
+    null::XMatrix         # a zero matrix of size Nx x Ny
+    pseudodiff::XMatrix   # pseudodiff operator
+    harmonic::XMatrix     # harmonic operator
+    biharmonic::XMatrix   # biharmonic operator
     use_cuda::Bool
     arraykernel                     # Array or CuArray depending on chosen hardware
 end
@@ -40,9 +42,9 @@ end
 mutable struct MultilayerEarth{T<:AbstractFloat}
     mean_gravity::T
     mean_density::T
-    effective_viscosity::AbstractMatrix{T}
-    litho_thickness::AbstractMatrix{T}
-    litho_rigidity::AbstractMatrix{T}
+    effective_viscosity::XMatrix
+    litho_thickness::XMatrix
+    litho_rigidity::XMatrix
     litho_poissonratio::T
     layers_density::Vector{T}
     layers_viscosity::Array{T, 3}
@@ -50,11 +52,11 @@ mutable struct MultilayerEarth{T<:AbstractFloat}
 end
 
 struct ReferenceGeoState{T<:AbstractFloat}
-    H_ice::AbstractMatrix{T}        # reference height of ice column
-    H_water::AbstractMatrix{T}      # reference height of water column
-    b::AbstractMatrix{T}            # reference bedrock position
-    z0::AbstractMatrix{T}           # reference height to allow external sea-level forcing
-    sealevel::AbstractMatrix{T}     # reference sealevel field
+    H_ice::XMatrix        # reference height of ice column
+    H_water::XMatrix      # reference height of water column
+    b::XMatrix            # reference bedrock position
+    z0::XMatrix           # reference height to allow external sea-level forcing
+    sealevel::XMatrix     # reference sealevel field
     sle_af::T                       # reference sl-equivalent of ice volume above floatation
     V_pov::T                        # reference potential ocean volume
     V_den::T                        # reference potential ocean volume associated with V_den
@@ -62,11 +64,11 @@ struct ReferenceGeoState{T<:AbstractFloat}
 end
 
 mutable struct GeoState{T<:AbstractFloat}
-    H_ice::AbstractMatrix{T}        # current height of ice column
-    H_water::AbstractMatrix{T}      # current height of water column
-    b::AbstractMatrix{T}            # vertical bedrock position
-    geoid::AbstractMatrix{T}        # current geoid displacement
-    sealevel::AbstractMatrix{T}     # current sealevel field
+    H_ice::XMatrix        # current height of ice column
+    H_water::XMatrix      # current height of water column
+    b::XMatrix            # vertical bedrock position
+    geoid::XMatrix        # current geoid displacement
+    sealevel::XMatrix     # current sealevel field
     V_af::T                         # ice volume above floatation
     sle_af::T                       # sl-equivalent of ice volume above floatation
     slc_af::T                       # sl-contribution of Vice above floatation
@@ -78,18 +80,18 @@ mutable struct GeoState{T<:AbstractFloat}
 end
 
 struct PrecomputedFastiso{T<:AbstractFloat}
-    elasticgreen::AbstractMatrix{T}
-    fourier_elasticgreen::AbstractMatrix{Complex{T}}
+    elasticgreen::XMatrix
+    fourier_elasticgreen::XMatrix{Complex{T}}
     pfft::AbstractFFTs.Plan
     pifft::AbstractFFTs.ScaledPlan
-    Dx::AbstractMatrix{T}
-    Dy::AbstractMatrix{T}
-    Dxx::AbstractMatrix{T}
-    Dyy::AbstractMatrix{T}
-    Dxy::AbstractMatrix{T}
+    Dx::XMatrix
+    Dy::XMatrix
+    Dxx::XMatrix
+    Dyy::XMatrix
+    Dxy::XMatrix
     negligible_gradD::Bool
     rhog::T
-    geoidgreen::AbstractMatrix{T}
+    geoidgreen::XMatrix
 end
 
 struct SuperStruct{T<:AbstractFloat}

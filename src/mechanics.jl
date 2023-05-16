@@ -4,7 +4,7 @@
 
 Compute ice load based on ice thickness.
 """
-function ice_load(c::PhysicalConstants{T}, H::AbstractMatrix{T}) where {T<:AbstractFloat}
+function ice_load(c::PhysicalConstants{T}, H::XMatrix) where {T<:AbstractFloat}
     return - c.rho_ice .* c.g .* H
 end
 
@@ -92,7 +92,7 @@ function fastisostasy(
     ODEsolver::Any = "ExplicitEuler",
     dt::T = T(years2seconds(1.0)),
     t_eta_snapshots::Vector{T} = [t_out[1], t_out[end]],
-    eta_snapshots::Vector{<:AbstractMatrix{T}} = [p.effective_viscosity, p.effective_viscosity],
+    eta_snapshots::Vector{<:XMatrix} = [p.effective_viscosity, p.effective_viscosity],
     u_viscous_0::Matrix{T} = copy(Omega.null),
     u_elastic_0::Matrix{T} = copy(Omega.null),
     active_geostate::Bool = false,
@@ -133,7 +133,7 @@ function init_superstruct(
     t_Hice_snapshots::Vector{T},
     Hice_snapshots::Vector{Matrix{T}},
     t_eta_snapshots::Vector{T},
-    eta_snapshots::Vector{<:AbstractMatrix{T}},
+    eta_snapshots::Vector{<:XMatrix},
     active_geostate::Bool;
     geoid_0::Matrix{T} = copy(Omega.null),
     sealevel_0::Matrix{T} = copy(Omega.null),
@@ -182,7 +182,7 @@ end
 function forward_isostasy(
     dt::T,
     t_out::Vector{T},
-    u::AbstractMatrix{T},
+    u::XMatrix,
     sstruct::SuperStruct{T},
     ODEsolver::Any,
     verbose::Bool,
@@ -229,8 +229,8 @@ function init_results(u, t_out)
 end
 
 function forwardstep_isostasy!(
-    dudt::AbstractMatrix{T},
-    u::AbstractMatrix{T},
+    dudt::XMatrix,
+    u::XMatrix,
     sstruct::SuperStruct{T},
     t::T,
 ) where {T<:AbstractFloat}
@@ -243,8 +243,8 @@ function forwardstep_isostasy!(
 end
 
 function dudt_isostasy!(
-    dudt::AbstractMatrix{T},
-    u::AbstractMatrix{T},
+    dudt::XMatrix,
+    u::XMatrix,
     sstruct::SuperStruct{T},
     t::T,
 ) where {T<:AbstractFloat}
@@ -278,8 +278,8 @@ function dudt_isostasy!(
 end
 
 function simple_euler!(
-    u::AbstractMatrix{T},
-    dudt::AbstractMatrix{T},
+    u::XMatrix,
+    dudt::XMatrix,
     dt::T,
 ) where {T<:AbstractFloat}
     u .+= dudt .* dt
@@ -299,18 +299,18 @@ Assume that mean deformation at corners of domain is 0.
 Whereas Bueler et al. (2007) take the edges for this computation, we take the corners
 because they represent the far-field better.
 """
-function apply_bc(u::AbstractMatrix{T}, N) where {T<:AbstractFloat}
+function apply_bc(u::XMatrix, N)
     u_bc = copy(u)
     return apply_bc!(u_bc, N)
 end
 
-function apply_bc!(u::AbstractMatrix{T}, N) where {T<:AbstractFloat}
+function apply_bc!(u::XMatrix, N)
     CUDA.allowscalar() do
-        u .-= (view(u, 1, 1) + view(u, 1, N) + view(u, N, 1) + view(u, N, N)) / T(4)
+        u .-= (view(u, 1, 1) + view(u, 1, N) + view(u, N, 1) + view(u, N, N)) / 4
     end
 end
 
-# function apply_bc!(u::AbstractMatrix{T}, N) where {T<:AbstractFloat}
+# function apply_bc!(u::XMatrix, N) where {T<:AbstractFloat}
 #     CUDA.allowscalar() do
 #         u .-= sum(view(u, 1, :) + view(u, :, N) + view(u, N, :) + view(u, :, 1)) / (4*N)
 #     end
@@ -330,7 +330,7 @@ by convoluting the `load` with the Green's function stored in the pre-computed `
 function compute_elastic_response(
     Omega::ComputationDomain,
     tools::PrecomputedFastiso,
-    load::AbstractMatrix{T},
-) where {T<:AbstractFloat}
+    load::XMatrix,
+)
     return conv(load, tools.elasticgreen)[Omega.N2:end-Omega.N2, Omega.N2:end-Omega.N2]
 end
