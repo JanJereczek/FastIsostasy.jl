@@ -21,6 +21,7 @@ StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 [compat]
 CUDA = "^4.0"
 DSP = "~0.7"
+EnsembleKalmanProcesses = "1"
 FFTW = "^1.5"
 FastGaussQuadrature = "~0.5"
 Interpolations = "~0.14"
