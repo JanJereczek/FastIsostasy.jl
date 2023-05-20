@@ -1,7 +1,7 @@
 name: Documentationon:
     push:
       branches:
-        - master
+        - main
       tags: '*'
     pull_request:jobs:
     build:
