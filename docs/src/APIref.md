@@ -1,4 +1,17 @@
-# [API reference](@id api_ref)
+# API reference
+
+## Basic structs
+
+```@docs
+ComputationDomain
+PhysicalConstants
+MultilayerEarth
+RefSealevelState
+SealevelState
+PrecomputedFastiso
+SuperStruct
+FastisoResults
+```
 
 ## Utils
 
@@ -29,7 +42,7 @@ get_normalized_lin_transform
 normalized_lin_transform
 ```
 
-## Physics
+## Mechanics
 
 ```@docs
     precompute_terms
@@ -43,3 +56,23 @@ normalized_lin_transform
     plan_twoway_fft
     compute_elastic_response
 ```
+
+## Sea-level
+
+```@docs
+update_slstate!
+update_geoid!
+get_loadchange
+get_geoidgreen
+update_loadcolumns!
+update_sealevel!
+update_slc!
+update V_af!
+update_slc_af!
+update V_pov!
+update_slc_pov!
+update_V_den!
+update_slc_den!
+```
+
+## Parameter inversion

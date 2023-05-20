@@ -26,7 +26,7 @@ include("structs.jl")
 include("parameters.jl")
 include("utils.jl")
 include("derivatives.jl")
-include("geostate.jl")
+include("sealevel.jl")
 include("mechanics.jl")
 include("inversion.jl")
 
@@ -36,7 +36,7 @@ export ComputationDomain
 export PhysicalConstants
 export MultilayerEarth
 export PrecomputedFastiso
-export GeoState
+export SealevelState
 export SuperStruct
 
 # utils.jl
@@ -80,8 +80,8 @@ export ice_load
 # estimation.jl
 export init_optim, integrated_rmse, ViscOptim, optimize_viscosity, Options
 
-# geostate.jl
-export update_geostate!, update_geoid!, update_loadcolumns!
+# slstate.jl
+export update_slstate!, update_geoid!, update_loadcolumns!
 export get_loadchange, get_geoidgreen
 export update_sealevel!, update_slc!
 export update_V_af!, update_slc_af!

@@ -24,7 +24,7 @@ function main(
     t_out = years2seconds.([0.0, 100.0, 500.0, 1500.0, 5000.0, 10_000.0, 50_000.0])
 
     t1 = time()
-    results = fastisostasy(t_out, Omega, c, p, Hcylinder, ODEsolver=solver, active_geostate=active_gs)
+    results = fastisostasy(t_out, Omega, c, p, Hcylinder, ODEsolver=solver, interactive_sealevel=active_gs)
     t_fastiso = time() - t1
     println("Took $t_fastiso seconds!")
     println("-------------------------------------")
@@ -33,7 +33,7 @@ function main(
         Omega, p = copystructs2cpu(Omega, c, p)
     end
 
-    gs = active_gs ? "geostate" : "isostate"
+    gs = active_gs ? "slstate" : "isostate"
     filename = "$(solver)_N$(Omega.N)_$(kernel)_$(gs)"
     jldsave(
         "data/test1/$filename.jld2",

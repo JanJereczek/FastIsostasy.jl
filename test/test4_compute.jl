@@ -62,7 +62,7 @@ function main(n::Int, case::String; use_cuda::Bool = true, solver = "ExplicitEul
 
     t1 = time()
     results = fastisostasy(t_out, Omega, c, p, Hcylinder,
-        active_geostate = false,
+        interactive_sealevel = false,
         ODEsolver=solver,
     )
     t_fastiso = time() - t1

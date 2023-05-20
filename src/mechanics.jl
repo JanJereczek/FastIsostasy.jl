@@ -95,7 +95,7 @@ function fastisostasy(
     eta_snapshots::Vector{<:XMatrix} = [p.effective_viscosity, p.effective_viscosity],
     u_viscous_0::Matrix{T} = copy(Omega.null),
     u_elastic_0::Matrix{T} = copy(Omega.null),
-    active_geostate::Bool = false,
+    interactive_sealevel::Bool = false,
     verbose::Bool = true,
     kwargs...,
 ) where {T<:AbstractFloat}
@@ -103,11 +103,11 @@ function fastisostasy(
     u_viscous_0, u_elastic_0 = kernelpromote(
         [u_viscous_0, u_elastic_0], Omega.arraykernel)   # Handle xPU architecture
     sstruct = init_superstruct(Omega, c, p, t_Hice_snapshots, Hice_snapshots,
-        t_eta_snapshots, eta_snapshots, active_geostate; kwargs...)
+        t_eta_snapshots, eta_snapshots, interactive_sealevel; kwargs...)
     u, dudt, u_elastic, geoid, sealevel = forward_isostasy(
         dt, t_out, u_viscous_0, sstruct, ODEsolver, verbose)
 
-    return FastIsoResults(
+    return FastisoResults(
         t_out, sstruct.tools, u, dudt, u_elastic,
         geoid, sealevel, sstruct.Hice, sstruct.eta,
     )
@@ -134,7 +134,7 @@ function init_superstruct(
     Hice_snapshots::Vector{Matrix{T}},
     t_eta_snapshots::Vector{T},
     eta_snapshots::Vector{<:XMatrix},
-    active_geostate::Bool;
+    interactive_sealevel::Bool;
     geoid_0::Matrix{T} = copy(Omega.null),
     sealevel_0::Matrix{T} = copy(Omega.null),
     H_ice_ref::Matrix{T} = copy(Omega.null),
@@ -155,7 +155,7 @@ function init_superstruct(
     eta_cpu = linear_interpolation(t_eta_snapshots,
         kernelpromote(eta_snapshots, Array) )
 
-    refgeostate = ReferenceGeoState(
+    refslstate = RefSealevelState(
         H_ice_ref, H_water_ref, b_ref,
         copy(sealevel_0),   # z0
         sealevel_0,         # sealevel
@@ -164,7 +164,7 @@ function init_superstruct(
         T(0.0),             # V_den
         T(0.0),             # conservation_term
     )
-    geostate = GeoState(
+    slstate = SealevelState(
         Hice(0.0),                  # ice column
         copy(H_water_ref),          # water column
         copy(b_ref),                # bedrock position
@@ -177,7 +177,7 @@ function init_superstruct(
         0, years2seconds(10.0),     # countupdates, update step
     )
     return SuperStruct(Omega, c, p, tools, Hice, Hice_cpu, eta, eta_cpu,
-        refgeostate, geostate, active_geostate)
+        refslstate, slstate, interactive_sealevel)
 end
 
 function forward_isostasy(
@@ -212,8 +212,8 @@ function forward_isostasy(
         
         u_out[k] .= copy(kernelpromote(u, Array))
         dudt_out[k] .= copy(kernelpromote(dudt, Array))
-        geoid_out[k] .= copy(kernelpromote(sstruct.geostate.geoid, Array))
-        sealevel_out[k] .= copy(kernelpromote(sstruct.geostate.sealevel, Array))
+        geoid_out[k] .= copy(kernelpromote(sstruct.slstate.geoid, Array))
+        sealevel_out[k] .= copy(kernelpromote(sstruct.slstate.sealevel, Array))
     end
     return u_out, dudt_out, u_el_out, geoid_out, sealevel_out
 end
@@ -236,11 +236,11 @@ function forwardstep_isostasy!(
     t::T,
 ) where {T<:AbstractFloat}
     apply_bc!(u, sstruct.Omega.N)
-    if sstruct.active_geostate &&
-        (t / sstruct.geostate.dt >= sstruct.geostate.countupdates)
-        update_geostate!(sstruct, u, sstruct.Hice(t))
-        sstruct.geostate.countupdates += 1
-        # println("Updated GeoState at t=$(seconds2years(t))")
+    if sstruct.interactive_sealevel &&
+        (t / sstruct.slstate.dt >= sstruct.slstate.countupdates)
+        update_slstate!(sstruct, u, sstruct.Hice(t))
+        sstruct.slstate.countupdates += 1
+        # println("Updated SealevelState at t=$(seconds2years(t))")
     end
     dudt_isostasy!(dudt, u, sstruct, t)
     return nothing
@@ -252,7 +252,7 @@ function dudt_isostasy!(
     sstruct::SuperStruct{T},
     t::T,
 ) where {T<:AbstractFloat}
-    if sstruct.active_geostate
+    if sstruct.interactive_sealevel
         load = ice_load(sstruct.c, sstruct.Hice(t))
     else
         load = get_loadchange(sstruct)

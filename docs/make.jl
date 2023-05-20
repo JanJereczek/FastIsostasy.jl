@@ -11,7 +11,8 @@ using FastIsostasy
 
 # %% Build docs
 PAGES = [
-    "index.md",
+    "introduction.md",
+    "examples.md",
     "APIref.md",
 ]
 
@@ -25,7 +26,7 @@ makedocs(
             # "assets/logo-dark.ico",
             asset("https://fonts.googleapis.com/css?family=Montserrat|Source+Code+Pro&display=swap", class=:css),
         ],
-        collapselevel = 3,
+        collapselevel = 2,
         ),
     sitename = "FastIsostasy.jl",
     authors = "Jan Swierczek-Jereczek",
@@ -34,6 +35,10 @@ makedocs(
     draft = true,
 )
 # TODO write script making video of double well for large logo.
+
+deploydocs(;
+    repo="github.com/JanJereczek/FastIsostasy.jl",
+)
 
 # if CI
 #     deploydocs(

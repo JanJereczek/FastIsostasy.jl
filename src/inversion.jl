@@ -102,6 +102,12 @@ function defaultpriors(case)
     end
 end
 
+"""
+    perform(paraminv::ParamInversion)
+
+Return `priors` and `ukiobj` that allow to extract the results of the parameter
+inversion as initialized in `paraminv`.
+"""
 function perform(paraminv::ParamInversion)
 
     ynoisy = zeros(paraminv.nobs, paraminv.n_samples)

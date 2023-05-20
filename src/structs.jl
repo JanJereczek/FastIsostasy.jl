@@ -1,5 +1,11 @@
 XMatrix = Union{Matrix{T}, CuArray{T, 2}} where {T<:Real}
 
+"""
+    ComputationDomain
+
+Return a struct containing all information related to geometry of the domain
+and potentially used parallelism.
+"""
 struct ComputationDomain{T<:AbstractFloat}
     Lx::T                       # Domain length in x (m)
     Ly::T                       # Domain length in y (m)
@@ -24,6 +30,11 @@ struct ComputationDomain{T<:AbstractFloat}
     arraykernel                     # Array or CuArray depending on chosen hardware
 end
 
+"""
+    PhysicalConstants
+
+Return a struct containing important physical constants.
+"""
 struct PhysicalConstants{T<:AbstractFloat}
     mE::T
     r_equator::T
@@ -39,6 +50,12 @@ struct PhysicalConstants{T<:AbstractFloat}
     rho_topastheno::T
 end
 
+"""
+    MultilayerEarth
+
+Return a struct containing all information related to the radially layered structure of the solid Earth and
+its parameters.
+"""
 mutable struct MultilayerEarth{T<:AbstractFloat}
     mean_gravity::T
     mean_density::T
@@ -51,7 +68,12 @@ mutable struct MultilayerEarth{T<:AbstractFloat}
     layers_begin::Array{T, 3}
 end
 
-struct ReferenceGeoState{T<:AbstractFloat}
+"""
+    RefSealevelState
+
+Return a struct containing the reference slstate. We define the slstate to be all quantities related to sea-level.
+"""
+struct RefSealevelState{T<:AbstractFloat}
     H_ice::XMatrix        # reference height of ice column
     H_water::XMatrix      # reference height of water column
     b::XMatrix            # reference bedrock position
@@ -63,7 +85,12 @@ struct ReferenceGeoState{T<:AbstractFloat}
     conservation_term::T            # a term for mass conservation
 end
 
-mutable struct GeoState{T<:AbstractFloat}
+"""
+    SealevelState
+
+Return a mutable struct containing the slstate which will be updated over the simulation.
+"""
+mutable struct SealevelState{T<:AbstractFloat}
     H_ice::XMatrix          # current height of ice column
     H_water::XMatrix        # current height of water column
     b::XMatrix              # vertical bedrock position
@@ -77,10 +104,15 @@ mutable struct GeoState{T<:AbstractFloat}
     V_den::T                # potential ocean volume associated with density differences
     slc_den::T              # sea-level contribution associated with V_den
     slc::T                  # total sealevel contribution
-    countupdates::Int       # count the updates of the geostate
+    countupdates::Int       # count the updates of the slstate
     dt::T                   # update step
 end
 
+"""
+    PrecomputedFastiso
+
+Return a struct containing all the pre-computed terms needed for the forward integration of the model.
+"""
 struct PrecomputedFastiso{T<:AbstractFloat}
     elasticgreen::XMatrix
     fourier_elasticgreen::XMatrix{Complex{T}}
@@ -96,6 +128,11 @@ struct PrecomputedFastiso{T<:AbstractFloat}
     geoidgreen::XMatrix
 end
 
+"""
+    SuperStruct
+
+Return a struct containing all the other structs needed for the forward integration of the model.
+"""
 struct SuperStruct{T<:AbstractFloat}
     Omega::ComputationDomain{T}
     c::PhysicalConstants{T}
@@ -105,16 +142,16 @@ struct SuperStruct{T<:AbstractFloat}
     Hice_cpu::Interpolations.Extrapolation
     eta::Interpolations.Extrapolation
     eta_cpu::Interpolations.Extrapolation
-    refgeostate::ReferenceGeoState{T}
-    geostate::GeoState{T}
-    active_geostate::Bool
+    refslstate::RefSealevelState{T}
+    slstate::SealevelState{T}
+    interactive_sealevel::Bool
 end
 
 """
 
-    FastIsoResults
+    FastisoResults
 
-A mutable struct containing the results of FastIsostasy:
+A struct containing the results of FastIsostasy:
     - `t_out` the time output vector
     - `u3D_elastic` the elastic response over `t_out`
     - `u3D_viscous` the viscous response over `t_out`
@@ -123,7 +160,7 @@ A mutable struct containing the results of FastIsostasy:
     - `Hice` an interpolator of the ice thickness over time
     - `eta` an interpolator of the upper-mantle viscosity over time
 """
-struct FastIsoResults{T<:AbstractFloat}
+struct FastisoResults{T<:AbstractFloat}
     t_out::Vector{T}
     tools::PrecomputedFastiso{T}
     viscous::Vector{Matrix{T}}

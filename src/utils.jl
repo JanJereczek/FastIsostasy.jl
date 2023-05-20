@@ -219,9 +219,9 @@ end
 
 """
 
-    ComputationDomain(L, n)
+    ComputationDomain(W, n)
 
-Initialize a square computational domain with length `2*L` and `2^n` grid cells.
+Initialize a [`ComputationDomain`](@ref) with length `2*W` and `2^n` grid cells.
 """
 function ComputationDomain(
     L::T,
