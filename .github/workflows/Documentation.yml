@@ -1,9 +1,13 @@
-name: Documentation:
+name: Documentation
+
+on:
     push:
       branches:
         - main
       tags: '*'
-    pull_request:jobs:
+    pull_request:
+
+jobs:
     build:
       runs-on: ubuntu-latest
       steps:
