@@ -82,8 +82,8 @@ end
 
 function viscositytxt2matrix()
     dx = 40e3   # wiens worked on 40km resolution
-    L = 3000e3  # Remap this on 2L x 2L domain
-    x = collect(range( -L, stop = L, step = dx ))
+    W = 3000e3  # Remap this on 2L x 2L domain
+    x = collect(range( -W, stop = W, step = dx ))
     y = copy( x )
     X, Y = meshgrid(x, y)
     Eta, Eta_mean, z = load_wiens_2021(X, Y)

@@ -26,7 +26,7 @@ function main(
     x = Omega.X[islice, jslice:end]
 
     fig = Figure(resolution = (1000, 800))
-    ax = Axis(fig[1, 1], xlabel = L"$x$ (m)", ylabel = L"$u^v$ (m)")
+    ax = Axis(fig[1, 1], xlabel = W"$x$ (m)", ylabel = W"$u^v$ (m)")
     for i in eachindex(t_plot)
         t = t_plot[i]
         analytic_solution_r(r) = analytic_solution(r, t, c, p, H, R, analytic_support)
@@ -42,14 +42,14 @@ function main(
             ax,
             x,
             u_numeric,
-            label = i == 1 ? L"numeric $\,$" : " ",
+            label = i == 1 ? W"numeric $\,$" : " ",
             color = colors[i],
         )
         lines!(
             ax,
             x,
             u_analytic,
-            label = i == 1 ? L"analytic $\,$" : " ",
+            label = i == 1 ? W"analytic $\,$" : " ",
             linestyle = :dash,
             color = colors[i],
         )

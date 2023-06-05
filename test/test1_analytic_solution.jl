@@ -12,8 +12,8 @@ function main(
 )
 
     T = Float64
-    L = T(3000e3)               # half-length of the square domain (m)
-    Omega = ComputationDomain(L, n)
+    W = T(3000e3)               # half-length of the square domain (m)
+    Omega = ComputationDomain(W, n)
     R = T(1000e3)               # ice disc radius (m)
     H = T(1000)                 # ice disc thickness (m)
     c = PhysicalConstants()

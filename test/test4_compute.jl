@@ -9,8 +9,8 @@ include("external_viscosity_maps.jl")
 function main(n::Int, case::String; use_cuda::Bool = true, solver = "ExplicitEuler")
 
     T = Float64
-    L = T(3000e3)                       # half-length of the square domain (m)
-    Omega = ComputationDomain(L, n)     # domain parameters
+    W = T(3000e3)                       # half-length of the square domain (m)
+    Omega = ComputationDomain(W, n)     # domain parameters
     c = PhysicalConstants()
     if occursin("homogeneous", case)
         channel_viscosity = fill(1e20, Omega.N, Omega.N)

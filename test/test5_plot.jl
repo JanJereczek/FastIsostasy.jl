@@ -29,34 +29,34 @@ function main(
     dudt2D = @lift(m_per_sec2mm_per_yr.(dudt[$i]'))
     H2D_anom = @lift(H_anom[$i]')
     H2D = @lift(H[:, :, $i]')
-    time_stamp = @lift(latexstring( string("t = ", t_out_kyr[$i], L"\: \mathrm{kyr}")))
+    time_stamp = @lift(latexstring( string("t = ", t_out_kyr[$i], W"\: \mathrm{kyr}")))
 
     fig = Figure(resolution = (1500, 650), fontsize=22)
     ax1 = Axis(
         fig[2, 1],
         aspect = DataAspect(),
-        xlabel = L"$x \: \mathrm{(10^3 \: km)}$",
-        ylabel = L"$y \: \mathrm{(10^3 \: km)}$",
+        xlabel = W"$x \: \mathrm{(10^3 \: km)}$",
+        ylabel = W"$y \: \mathrm{(10^3 \: km)}$",
         xticks = (-3e6:1e6:3e6, num2latexstring.(-3:3)),
         yticks = (-3e6:1e6:3e6, num2latexstring.(-3:3)),
-        title = L"$\textbf{(a)}$",
+        title = W"$\textbf{(a)}$",
     )
     ax2 = Axis(
         fig[2, 2],
         aspect = DataAspect(),
-        xlabel = L"$x \: \mathrm{(10^3 \: km)}$",
+        xlabel = W"$x \: \mathrm{(10^3 \: km)}$",
         xticks = (-3e6:1e6:3e6, num2latexstring.(-3:3)),
         yticklabelsvisible = false,
-        title = L"$\textbf{(b)}$",
+        title = W"$\textbf{(b)}$",
         #title = time_stamp,
     )
     ax3 = Axis(
         fig[2, 3],
         aspect = DataAspect(),
-        xlabel = L"$x \: \mathrm{(10^3 \: km)}$",
+        xlabel = W"$x \: \mathrm{(10^3 \: km)}$",
         xticks = (-3e6:1e6:3e6, num2latexstring.(-3:3)),
         yticklabelsvisible = false,
-        title = L"$\textbf{(c)}$",
+        title = W"$\textbf{(c)}$",
     )
     xlims!(ax1, (-3e6, 3e6))
     xlims!(ax2, (-3e6, 3e6))
@@ -116,7 +116,7 @@ function main(
     Colorbar(
         fig[1, 1],
         hm_load,
-        label = L"Thickness anomaly $\Delta H$ (m)",
+        label = W"Thickness anomaly $\Delta H$ (m)",
         vertical = false,
         width = Relative(0.8),
         ticks = Hticks,
@@ -143,7 +143,7 @@ function main(
     Colorbar(
         fig[1, 2],
         hm_dudt,
-        label = L"Displacement rate $\dot{u}$ (mm/year)",
+        label = W"Displacement rate $\dot{u}$ (mm/year)",
         vertical = false,
         width = Relative(0.8),
         ticks = dudtticks,
@@ -170,7 +170,7 @@ function main(
     Colorbar(
         fig[1, 3],
         hm_u,
-        label = L"Vertical displacement $u$ (m)",
+        label = W"Vertical displacement $u$ (m)",
         vertical = false,
         width = Relative(0.8),
         ticks = uticks,
@@ -215,22 +215,22 @@ end
 #     ax1 = Axis(
 #         fig[2, 1],
 #         aspect = DataAspect(),
-#         xlabel = L"$x \: \mathrm{(10^3 \: km)}$",
-#         ylabel = L"$y \: \mathrm{(10^3 \: km)}$",
+#         xlabel = W"$x \: \mathrm{(10^3 \: km)}$",
+#         ylabel = W"$y \: \mathrm{(10^3 \: km)}$",
 #         xticks = (-3e6:1e6:3e6, num2latexstring.(-3:3)),
 #         yticks = (-3e6:1e6:3e6, num2latexstring.(-3:3)),
 #     )
 #     ax2 = Axis(
 #         fig[2, 2],
 #         aspect = DataAspect(),
-#         xlabel = L"$x \: \mathrm{(10^3 \: km)}$",
+#         xlabel = W"$x \: \mathrm{(10^3 \: km)}$",
 #         xticks = (-3e6:1e6:3e6, num2latexstring.(-3:3)),
 #         yticklabelsvisible = false,
 #     )
 #     ax3 = Axis(
 #         fig[2, 3],
 #         aspect = DataAspect(),
-#         xlabel = L"$x \: \mathrm{(10^3 \: km)}$",
+#         xlabel = W"$x \: \mathrm{(10^3 \: km)}$",
 #         xticks = (-3e6:1e6:3e6, num2latexstring.(-3:3)),
 #         yticklabelsvisible = false,
 #     )
@@ -263,7 +263,7 @@ end
 #     Colorbar(
 #         fig[1, 1],
 #         hm_load,
-#         label = L"Thickness anomaly $\Delta H$ (m)",
+#         label = W"Thickness anomaly $\Delta H$ (m)",
 #         vertical = false,
 #         width = Relative(0.8),
 #     )
@@ -287,7 +287,7 @@ end
 #     Colorbar(
 #         fig[1, 2],
 #         hm_dudt,
-#         label = L"Uplift rate $\dot{u}^V$ (mm/year)",
+#         label = W"Uplift rate $\dot{u}^V$ (mm/year)",
 #         vertical = false,
 #         width = Relative(0.8),
 #     )
@@ -339,7 +339,7 @@ end
 #     Colorbar(
 #         fig[1, 3],
 #         hm_u,
-#         label = L"Viscous displacement $u^V$ (m)",
+#         label = W"Viscous displacement $u^V$ (m)",
 #         vertical = false,
 #         width = Relative(0.8),
 #     )

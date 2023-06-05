@@ -125,8 +125,8 @@ function load_ice7g(;make_anim = false)
     Y .-= ysp
 
     n = 8
-    L = 3000e3
-    xcartesian = range(-L, stop = L, length = 2^n)
+    W = 3000e3
+    xcartesian = range(-W, stop = W, length = 2^n)
     ycartesian = copy(xcartesian)
     Xcartesian, Ycartesian = meshgrid(xcartesian, ycartesian)
     Hcartesian = fill(0f0, size(Xcartesian)..., length(tvec))

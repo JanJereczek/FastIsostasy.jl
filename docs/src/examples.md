@@ -127,8 +127,8 @@ c = PhysicalConstants()
 FastIsostasy.jl relies on simplification of the full problem and might therefore need a calibration step to match the output of a 3D GIA model. By means of an unscented Kalman inversion, one can e.g. infer the appropriate effective upper-mantle viscosity based on the response of a 3D GIA model to a given load. Whereas this is know to be a tedious step, FastIsostasy is developped to ease the procedure by providing a convenience struct `Paraminversion` that can be run by:
 
 ```@example 5
-L = T(3000e3)               # half-length of the square domain (m)
-Omega = ComputationDomain(L, n)
+W = T(3000e3)               # half-length of the square domain (m)
+Omega = ComputationDomain(W, n)
 c = PhysicalConstants()
 
 lb = [88e3, 180e3, 280e3, 400e3]

@@ -11,8 +11,8 @@ use_cuda = false
 case = "scaledviscosity"
 
 T = Float64
-L = T(3000e3)                       # half-length of the square domain (m)
-Omega = ComputationDomain(L, n)     # domain parameters
+W = T(3000e3)                       # half-length of the square domain (m)
+Omega = ComputationDomain(W, n)     # domain parameters
 c = PhysicalConstants()
 if occursin("homogeneous", case)
     channel_viscosity = fill(1e20, Omega.N, Omega.N)
@@ -83,6 +83,6 @@ Colorbar(
     colorrange = visclim,
     vertical = false,
     width = Relative(0.3),
-    label = L"Log$_{10}$-viscosity ($\mathrm{Pa \, s})$",
+    label = W"Log$_{10}$-viscosity ($\mathrm{Pa \, s})$",
     ticks = viscticks,
 )

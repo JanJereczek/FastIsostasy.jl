@@ -34,11 +34,11 @@ function ParamInversion(
     t::Vector,
     u::Vector{Matrix},
     Hice::Vector{Matrix};
-    L = 3000e3,
+    W = 3000e3,
     kwargs...,
 )
     n1, n2 = size(u[1])
-    Omega = ComputationDomain(L, n1)
+    Omega = ComputationDomain(W, n1)
     c = PhysicalConstants()
     p = MultilayerEarth(Omega, c)
     return ParamInversion(Omega, c, p, t, u, Hice; kwargs...)

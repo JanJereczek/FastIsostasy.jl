@@ -5,11 +5,11 @@ using DelimitedFiles
 ################################################
 
 function num2latexstring(x::Real)
-    return L"%$x"
+    return W"%$x"
 end
 
 function string2latexstring(x::String)
-    return L"%$x $\,$"
+    return W"%$x $\,$"
 end
 
 function plot_response(
@@ -27,7 +27,7 @@ function plot_response(
     Colorbar(
         fig[1, 1][2, :],
         hm,
-        label = L"Vertical load $ \mathrm{N \, m^{-2}}$",
+        label = W"Vertical load $ \mathrm{N \, m^{-2}}$",
         vertical = false,
         width = Relative(0.8),
     )
@@ -108,7 +108,7 @@ function slice_test3(
                 axs[i],
                 theta,
                 U[slicey, slicex, k],
-                label = L"$t = %$tyr $ yr",
+                label = W"$t = %$tyr $ yr",
                 color = colors[l],
             )
         end
@@ -152,16 +152,16 @@ function animate_viscous_response(
     fig = Figure(resolution = (1600, 900))
     ax1 = Axis(
         fig[1, 1:3],
-        xlabel = L"Time $t$ (yr)",
-        ylabel = L"Viscous displacement $u^V$ (m)",
+        xlabel = W"Time $t$ (yr)",
+        ylabel = W"Viscous displacement $u^V$ (m)",
         xminorticks = IntervalsBetween(10),
         xminorgridvisible = true,
     )
     ax2 = Axis3(
         fig[1, 5:8],
-        xlabel = L"$x$ (m)",
-        ylabel = L"$y$ (m)",
-        zlabel = L"$u^V$ (m)",
+        xlabel = W"$x$ (m)",
+        ylabel = W"$y$ (m)",
+        zlabel = W"$u^V$ (m)",
     )
     cmap = cgrad(:cool, rev = true)
     clims = u_range
@@ -191,7 +191,7 @@ function animate_viscous_response(
     Colorbar(
         fig[1, 9],
         sf,
-        label = L"Viscous displacement field $u^V$ (m)",
+        label = W"Viscous displacement field $u^V$ (m)",
         height = Relative(0.5),
     )
 

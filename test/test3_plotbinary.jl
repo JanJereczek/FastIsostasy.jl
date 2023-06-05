@@ -22,31 +22,31 @@ function main(
     var_plot = vcat(u_plot, dudt_plot)
     
     labels = [
-        L"Binary rigidity $D$",
-        L"Binary channel viscosity $\eta_\mathrm{1}$",
-        L"Binary rigidity $D$ and channel viscosity $\eta_\mathrm{1}$",
+        W"Binary rigidity $D$",
+        W"Binary channel viscosity $\eta_\mathrm{1}$",
+        W"Binary rigidity $D$ and channel viscosity $\eta_\mathrm{1}$",
         "",
         "",
         "",
     ]
 
     xlabels = [
-        L"Colatitude $\theta$ (°)",
-        L"Colatitude $\theta$ (°)",
-        L"Colatitude $\theta$ (°)",
+        W"Colatitude $\theta$ (°)",
+        W"Colatitude $\theta$ (°)",
+        W"Colatitude $\theta$ (°)",
         # "",
         # "",
         # "",
-        L"Colatitude $\theta$ (deg)",
-        L"Colatitude $\theta$ (deg)",
-        L"Colatitude $\theta$ (deg)",
+        W"Colatitude $\theta$ (deg)",
+        W"Colatitude $\theta$ (deg)",
+        W"Colatitude $\theta$ (deg)",
     ]
 
     ylabels = [
-        L"Total displacement $u$ (m)",
+        W"Total displacement $u$ (m)",
         "",
         "",
-        L"Displacement rate $\dot{u} \: \mathrm{(mm \, yr^{-1}})$",
+        W"Displacement rate $\dot{u} \: \mathrm{(mm \, yr^{-1}})$",
         "",
         "",
     ]

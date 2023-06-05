@@ -10,8 +10,8 @@ function main(
     active_gs::Bool = true,
 )
     T = Float64
-    L = T(3000e3)               # half-length of the square domain (m)
-    Omega = ComputationDomain(L, n, use_cuda = use_cuda)
+    W = T(3000e3)               # half-length of the square domain (m)
+    Omega = ComputationDomain(W, n, use_cuda = use_cuda)
     c = PhysicalConstants()
     p = MultilayerEarth(Omega, c)
 

@@ -4,31 +4,31 @@
 
 """
 
-    years2seconds(t)
+    years2seconds(t::Real)
 
 Convert input time `t` from years to seconds.
 """
-function years2seconds(t::T) where {T<:Real}
+function years2seconds(t::Real)
     return t * seconds_per_year
 end
 
 """
 
-    seconds2years(t)
+    seconds2years(t::Real)
 
 Convert input time `t` from seconds to years.
 """
-function seconds2years(t::T) where {T<:Real}
+function seconds2years(t::Real)
     return t / seconds_per_year
 end
 
 """
 
-    m_per_sec2mm_per_yr(dudt)
+    m_per_sec2mm_per_yr(dudt::Real)
 
-Convert displacement rate `dudt` from 
-""" # $$\mathrm{mm \, s^{-1}}$$ to $$\mathrm{m \, yr^{-1}}$$.
-function m_per_sec2mm_per_yr(dudt::T) where {T<:AbstractFloat}
+Convert displacement rate `dudt` from \$ m \\, s^{-1} \$ to \$ mm \\, \\mathrm{yr}^{-1} \$.
+"""
+function m_per_sec2mm_per_yr(dudt::Real)
     return dudt * 1e3 * seconds_per_year
 end
 
@@ -45,19 +45,9 @@ Generate a vector of constant matrices from a vector of constants.
 function matrify_vectorconstant(x::Vector{T}, N::Int) where {T<:AbstractFloat}
     X = zeros(T, N, N, length(x))
     @inbounds for i in eachindex(x)
-        X[:, :, i] = matrify_constant(x[i], N)
+        X[:, :, i] = fill(x, N, N)
     end
     return X
-end
-
-"""
-
-    matrify_constant(x, N)
-
-Generate a constant matrix from a constant.
-"""
-function matrify_constant(x::T, N::Int) where {T<:AbstractFloat}
-    return fill(x, N, N)
 end
 
 #####################################################
@@ -66,12 +56,11 @@ end
 
 """
 
-    get_r(x, y)
+    get_r(x::T, y::T) where {T<:Real}
 
 Get euclidean distance of point (x, y) to origin.
 """
 get_r(x::T, y::T) where {T<:Real} = sqrt(x^2 + y^2)
-get_r(X::Matrix{T}, Y::Matrix{T}) where {T<:Real} = get_r.(X, Y)
 
 """
 
@@ -86,59 +75,37 @@ end
 
 """
 
-    dist2angulardist()
+    dist2angulardist(r::Real)
 
+Convert Euclidean to angular distance along great circle.
 """
-function dist2angulardist(
-    dist::T,
-) where {T<:Real}
+function dist2angulardist(r::Real)
     r_equator = 6.371e6
-    return 2 * atan( dist / (2 * r_equator) )
+    return 2 * atan( r / (2 * r_equator) )
 end
 
 """
 
-    sphericaldistance()
+    scalefactor(lat::T, lon::T, lat0::T, lon0::T) where {T<:Real}
 
-"""
-function sphericaldistance(
-    lat::T,
-    lon::T;
-    lat0::T = T(-pi / 2),   # default origin is south pole
-    lon0::T = T(0),         # default origin is south pole
-    R::T = T(6.371e6),      # Earth radius
-) where {T<:Real}
-    return R * acos( sin(lat) * sin(lat0) + cos(lat) * cos(lat0) * (lon - lon0) )
-end
-
-"""
-
-    scalefactor(lat, lon, lat0, lon0)
-
-Compute scaling factor of stereographic projection.
+Compute scaling factor of stereographic projection for a given latitude `lat`
+longitude `lon`, reference latitude `lat0` and reference longitude `lon0`.
+Optionally one can provide `lat::AbstractMatrix` and `lon::AbstractMatrix`
+if the scale factor is to be computed for the whole domain.
+Note: angles must be provided in radians!
 Reference: John P. Snyder (1987), p. 157, eq. (21-4).
 """
-function scalefactor(
-    lat::T,
-    lon::T,
-    lat0::T,
-    lon0::T;
-    k0::T = T(1),
-) where {T<:Real}
+function scalefactor(lat::T, lon::T, lat0::T, lon0::T;
+    k0::T = T(1)) where {T<:Real}
     return 2*k0 / (1 + sin(lat0)*sin(lat) + cos(lat0)*cos(lat)*cos(lon-lon0))
 end
 
-# TODO: make angles and units really consistent here.
-function scalefactor(
-    lat::XMatrix,
-    lon::XMatrix,
-    lat0::T,
-    lon0::T;
-    k0::T = T(1),
-) where {T<:Real}
-    K = copy(lat)
+function scalefactor(lat::XMatrix, lon::XMatrix, lat0::T, lon0::T;
+    kwargs... ) where {T<:Real}
+    K = similar(lat)
     @inbounds for idx in CartesianIndices(lat)
-        K[idx] = scalefactor(deg2rad(lat[idx]), deg2rad(lon[idx]), lat0, lon0)
+        K[idx] = scalefactor(lat[idx], lon[idx], lat0, lon0,
+            kwargs...)
     end
     return K
 end
@@ -147,19 +114,17 @@ end
 
     latlon2stereo(lat, lon, lat0, lon0)
 
-Convert latitude-longitude coordinates to stereographically projected (x,y).
+Compute stereographic projection (x,y) for a given latitude `lat`
+longitude `lon`, reference latitude `lat0` and reference longitude `lon0`.
+Optionally one can provide `lat::AbstractMatrix` and `lon::AbstractMatrix`
+if the projection is to be computed for the whole domain.
+Note: angles must be provided in degrees!
 Reference: John P. Snyder (1987), p. 157, eq. (21-2), (21-3), (21-4).
 """
-function latlon2stereo(
-    lat::T,
-    lon::T,
-    lat0::T,                # reference latitude of projection, FIXME: does not work properly with lat0 = -71° for now
-    lon0::T;                # reference longitude of projection
-    R::T = T(6.371e6),      # Earth radius
-    k0::T = T(1.0),         # Scale factor
-) where {T<:Real}
+function latlon2stereo(lat::T, lon::T, lat0::T, lon0::T;
+    R::T = T(6.371e6), kwargs...) where {T<:Real}
     lat, lon, lat0, lon0 = deg2rad.([lat, lon, lat0, lon0])
-    k = scalefactor(lat, lon, lat0, lon0)
+    k = scalefactor(lat, lon, lat0, lon0, kwargs...)
     x = R * k * cos(lat) * sin(lon - lon0)
     y = R * k * (cos(lat0) * sin(lat) - sin(lat0) * cos(lat) * cos(lon-lon0))
     return k, x, y
@@ -170,11 +135,11 @@ function latlon2stereo(
     lon::XMatrix,
     lat0::T,
     lon0::T;
-    k0::T = T(1),
+    kwargs...,
 ) where {T<:Real}
-    K, X, Y = copy(lat), copy(lat), copy(lat)
+    K, X, Y = similar(lat), similar(lat), similar(lat)
     @inbounds for idx in CartesianIndices(lat)
-        K[idx], X[idx], Y[idx] = latlon2stereo(lat[idx], lon[idx], lat0, lon0)
+        K[idx], X[idx], Y[idx] = latlon2stereo(lat[idx], lon[idx], lat0, lon0, kwargs...)
     end
     return K, X, Y
 end
@@ -183,17 +148,17 @@ end
 
     stereo2latlon(x, y, lat0, lon0)
 
+Compute the inverse stereographic projection `(lat, lon)` based on Cartesian coordinates
+`(x,y)` and for a given reference latitude `lat0` and reference longitude `lon0`.
+Optionally one can provide `x::AbstractMatrix` and `y::AbstractMatrix`
+if the projection is to be computed for the whole domain.
+Note: angles must be  para elloprovided in degrees!
+
 Convert stereographic (x,y)-coordinates to latitude-longitude.
 Reference: John P. Snyder (1987), p. 159, eq. (20-14), (20-15), (20-18), (21-15).
 """
-function stereo2latlon(
-    x::T,
-    y::T,
-    lat0::T,          # reference latitude of projection, FIXME: does not work properly with lat0 = -71° for now
-    lon0::T;            # reference longitude of projection
-    R::T = T(6.371e6),      # Earth radius
-    k0::T = T(1.0), 
-) where {T<:Real}
+function stereo2latlon(x::T, y::T, lat0::T, lon0::T;
+    R::T = T(6.371e6), kwargs...) where {T<:Real}
     lat0, lon0 = deg2rad.([lat0, lon0])
     r = get_r(x, y) + 1e-20     # add small tolerance to avoid division by zero
     c = 2 * atan( r/(2*R*k0) )
@@ -224,7 +189,7 @@ end
 Initialize a [`ComputationDomain`](@ref) with length `2*W` and `2^n` grid cells.
 """
 function ComputationDomain(
-    L::T,
+    W::T,
     n::Int;
     use_cuda=false::Bool,
     lat0::T=T(-71.0),
@@ -232,24 +197,25 @@ function ComputationDomain(
 ) where {T<:AbstractFloat}
 
     # Geometry
-    Lx, Ly = L, L
+    Wx, Wy = W, W
     N = 2^n
     N2 = Int(floor(N/2))
-    dx = T(2*Lx) / N
-    dy = T(2*Ly) / N
-    x = collect(-Lx+dx:dx:Lx)
-    y = collect(-Ly+dy:dy:Ly)
+    dx = T(2*Wx) / N
+    dy = T(2*Wy) / N
+    x = collect(-Wx+dx:dx:Wx)
+    y = collect(-Wy+dy:dy:Wy)
     X, Y = meshgrid(x, y)
     R = get_r.(X, Y)
     Theta = dist2angulardist.(R)
     Lat, Lon = stereo2latlon(X, Y, lat0, lon0)
     
     arraykernel = use_cuda ? CuArray : Array
-    K = kernelpromote(scalefactor(Lat, Lon, lat0, lon0), arraykernel)
+    K = kernelpromote(scalefactor(deg2rad.(Lat), deg2rad.(Lon),
+        deg2rad(lat0), deg2rad(lon0)), arraykernel)
     null = fill(T(0.0), N, N)
     
     # Differential operators in Fourier space
-    pseudodiff, harmonic, biharmonic = get_differential_fourier(L, N2)
+    pseudodiff, harmonic, biharmonic = get_differential_fourier(W, N2)
     pseudodiff[1, 1] = mean([pseudodiff[1,2], pseudodiff[2,1]])
     pseudodiff, harmonic, biharmonic = kernelpromote(
             [pseudodiff, harmonic, biharmonic], arraykernel)
@@ -257,7 +223,7 @@ function ComputationDomain(
     # Tests show that it does not lead to errors wrt analytical or benchmark solutions.
 
     return ComputationDomain(
-        Lx, Ly, N, N2,
+        Wx, Wy, N, N2,
         dx, dy, x, y,
         X, Y, R, Theta,
         Lat, Lon, K, null,
@@ -271,12 +237,15 @@ end
 # Math utils
 #####################################################
 
-function gauss_distr(
-    X::XMatrix,
-    Y::XMatrix,
-    mu::Vector{T},
-    sigma::Matrix{T}
-) where {T<:AbstractFloat}
+"""
+
+    gauss_distr(X::XMatrix, Y::XMatrix, mu::Vector{<:Real}, sigma::Matrix{<:Real})
+
+Compute `Z = f(X,Y)` with `f` a Gaussian function parametrized by mean
+`mu` and covariance `sigma`.
+"""
+function gauss_distr(X::XMatrix, Y::XMatrix,
+    mu::Vector{<:Real}, sigma::Matrix{<:Real})
     k = length(mu)
     G = similar(X)
     invsigma = inv(sigma)
@@ -324,19 +293,19 @@ function MultilayerEarth(
     D<:Union{T, XMatrix},
 }
 
-    if layer_boundaries isa Vector
+    if layer_boundaries isa Vector{<:Real}
         layer_boundaries = matrify_vectorconstant(layer_boundaries, Omega.N)
     end
+    if layer_viscosities isa Vector{<:Real}
+        layer_viscosities = matrify_vectorconstant(layer_viscosities, Omega.N)
+    end
+
     litho_thickness = layer_boundaries[:, :, 1]
     litho_rigidity = get_rigidity.(
         litho_thickness,
         litho_youngmodulus,
         litho_poissonratio,
     )
-
-    if layer_viscosities isa Vector
-        layer_viscosities = matrify_vectorconstant(layer_viscosities, Omega.N)
-    end
 
     layers_thickness = diff( layer_boundaries, dims=3 )
     # pseudodiff = kernelpromote(Omega.pseudodiff, Omega.arraykernel)
@@ -345,13 +314,7 @@ function MultilayerEarth(
         layer_viscosities,
         layers_thickness,
     )
-    # effective_viscosity = get_fouriereffective_viscosity(
-    #     Omega,
-    #     layer_viscosities,
-    #     layers_thickness,
-    # )
 
-    # mean_density = get_matrix_mean_density(layers_thickness, layers_density)
     mean_density = fill(mean(layers_density), Omega.N, Omega.N)
 
     litho_rigidity, effective_viscosity, mean_density = kernelpromote(
@@ -375,55 +338,11 @@ end
 
     get_rigidity(t::T, E::T, nu::T) where {T<:AbstractFloat}
 
-Compute rigidity based on thickness `t`, Young modulus `E` and Poisson ration `nu`
+Compute rigidity `D` based on thickness `t`, Young modulus `E` and Poisson ration `nu`.
 """
-function get_rigidity(
-    t::T,
-    E::T,
-    nu::T,
-) where {T<:AbstractFloat}
+function get_rigidity(t::T, E::T, nu::T) where {T<:AbstractFloat}
     return (E * t^3) / (12 * (1 - nu^2))
 end
-
-# function get_matrix_mean_density(
-#     layers_thickness::Array{T, 3},
-#     layers_density::Vector{T},
-# ) where {T<:AbstractFloat}
-#     mean_density = zeros(T, size(layers_thickness)[1:2])
-#     @inbounds for i in axes(layers_thickness, 1), j in axes(layers_thickness, 2)
-#         mean_density[i, j] = get_mean_density(layers_thickness[i, j, :], layers_density)
-#     end
-#     return mean_density
-# end
-
-# function get_mean_density(
-#     layers_thickness::Vector{T},
-#     layers_density::Vector{T},
-# ) where {T<:AbstractFloat}
-#     return sum( (layers_thickness ./ (sum(layers_thickness)))' * layers_density )
-# end
-
-# function matrified_mean_gravity()
-#     fixed_mean_gravity = true
-#     if fixed_mean_gravity
-#         mean_gravity = c.g
-#     else
-#         # Earth acceleration over depth z.
-#         # Use the pole radius because GIA most important at poles.
-#         gr(r) = 4*π/3*c.G*c.rho_core* r - π*c.G*(c.rho_core - c.rho_topastheno) * r^2/c.r_pole
-#         gz(z) = gr(c.r_pole - z)
-#         mean_gravity = get_mean_gravity(layer_boundaries, layers_thickness, gz)
-#     end
-# end
-
-# function get_mean_gravity(
-#     layer_boundaries::Vector{T},
-#     layers_thickness::Vector{T},
-#     gz::Function,
-# ) where {T<:AbstractFloat}
-#     layers_mean_gravity = 0.5 .*(gz.(layer_boundaries[1:end-1]) + gz.(layer_boundaries[2:end]))
-#     return (layers_thickness ./ (sum(layers_thickness)))' * layers_mean_gravity
-# end
 
 """
 
@@ -449,7 +368,7 @@ function get_effective_viscosity(
     @inbounds for i in axes(layer_viscosities, 3)[1:end-1]
         channel_viscosity = layer_viscosities[:, :, end - i]
         channel_thickness = layers_thickness[:, :, end - i + 1]
-        viscosity_ratio = get_viscosity_ratio(channel_viscosity, effective_viscosity)
+        viscosity_ratio = channel_viscosity ./ effective_viscosity
         viscosity_scaling = three_layer_scaling(
             Omega,
             viscosity_ratio,
@@ -460,59 +379,14 @@ function get_effective_viscosity(
     return effective_viscosity
 end
 
-# function get_fouriereffective_viscosity(
-#     Omega::ComputationDomain{T},
-#     layer_viscosities::Array{T, 3},
-#     layers_thickness::Array{T, 3},
-# ) where {T<:AbstractFloat}
-
-#     # Recursion has to start with half space = n-th layer:
-#     effective_viscosity = copy(layer_viscosities[:, :, end])
-#     pfft, pifft = plan_fft(effective_viscosity), plan_ifft(effective_viscosity)
-#     @inbounds for i in axes(layer_viscosities, 3)[1:end-1]
-#         channel_viscosity = layer_viscosities[:, :, end - i]
-#         channel_thickness = layers_thickness[:, :, end - i + 1]
-#         viscosity_ratio = get_viscosity_ratio(channel_viscosity, effective_viscosity)
-#         viscosity_scaling = fourier_layer_scaling(
-#             Omega,
-#             pfft * viscosity_ratio,
-#             channel_thickness,
-#         )
-#         effective_viscosity[:, :] .= real.(pifft * ((pfft * effective_viscosity) .* viscosity_scaling))
-#     end
-#     return effective_viscosity
-# end
-
 """
 
-    get_viscosity_ratio(
-        channel_viscosity::Matrix{T},
-        halfspace_viscosity::Matrix{T},
-    )
+    three_layer_scaling(Omega::ComputationDomain, kappa::T, visc_ratio::T,
+        channel_thickness::T)
 
-Return the viscosity ratio between channel and half-space as specified in
-Bueler (2007) below equation 15.
-
-"""
-function get_viscosity_ratio(
-    channel_viscosity::Matrix{T},
-    halfspace_viscosity::Matrix{T},
-) where {T<:AbstractFloat}
-    return channel_viscosity ./ halfspace_viscosity
-end
-
-"""
-
-    three_layer_scaling(
-        Omega,
-        kappa::T,
-        visc_ratio::T,
-        channel_thickness::T,
-    )
-
-Return the viscosity scaling for three-layer model as given in
-Bueler (2007) below equation 15.
-
+Return the viscosity scaling for a three-layer model and based on a the wave
+number `kappa`, the `visc_ratio` and the `channel_thickness`.
+Reference: Bueler et al. 2007, below equation 15.
 """
 function three_layer_scaling(
     # kappa::Matrix{T},
@@ -523,8 +397,7 @@ function three_layer_scaling(
 
     # kappa is the wavenumber of the harmonic load. (see Cathles 1975, p.43)
     # we assume this is related to the size of the domain!
-    kappa = π / Omega.Lx
-    # kappa = real.(ifft(Omega.pseudodiff))
+    kappa = π / Omega.Wx
 
     C = cosh.(channel_thickness .* kappa)
     S = sinh.(channel_thickness .* kappa)
@@ -539,27 +412,6 @@ function three_layer_scaling(
     
     return (num1 + num2 + num3) ./ (denum1 + denum2 + denum3)
 end
-
-# function fourier_layer_scaling(
-#     Omega::ComputationDomain{T},
-#     visc_ratio_fourier::XMatrix,
-#     channel_thickness::XMatrix,
-# ) where {T<:AbstractFloat}
-#     kappa = Omega.pseudodiff
-#     C = cosh.(channel_thickness .* kappa)
-#     S = sinh.(channel_thickness .* kappa)
-
-#     num1 = 2 .* visc_ratio_fourier .* C .* S
-#     num2 = (1 .- visc_ratio_fourier .^ 2) .* channel_thickness .^ 2 .* kappa .^ 2
-#     num3 = visc_ratio_fourier .^ 2 .* S .^ 2 + C .^ 2
-
-#     denum1 = (visc_ratio_fourier .+ 1 ./ visc_ratio_fourier) .* C .* S
-#     denum2 = (visc_ratio_fourier .- 1 ./ visc_ratio_fourier) .* channel_thickness .* kappa
-#     denum3 = S .^ 2 + C .^ 2
-    
-#     return (num1 + num2 + num3) ./ (denum1 + denum2 + denum3)
-# end
-
 
 """
 
@@ -586,19 +438,6 @@ function loginterp_viscosity(
     log_interp = linear_interpolation(tvec, log_eqviscosity)
     visc_interp(t) = 10 .^ log_interp(t)
     return visc_interp
-end
-
-"""
-
-    hyperbolic_channel_coeffs(channel_thickness, kappa)
-
-Return hyperbolic coefficients for equivalent viscosity computation.
-"""
-function hyperbolic_channel_coeffs(
-    channel_thickness::T,
-    kappa::T,
-) where {T<:AbstractFloat}
-    return cosh(channel_thickness * kappa), sinh(channel_thickness * kappa)
 end
 
 #####################################################
@@ -848,7 +687,7 @@ function copystructs2cpu(
 ) where {T<:AbstractFloat}
 
     n = Int( round( log2(Omega.N) ) )
-    Omega_cpu = ComputationDomain(Omega.Lx, n, use_cuda = false)
+    Omega_cpu = ComputationDomain(Omega.Wx, n, use_cuda = false)
 
     p_cpu = MultilayerEarth(
         Omega_cpu,

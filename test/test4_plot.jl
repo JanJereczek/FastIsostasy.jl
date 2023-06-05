@@ -22,7 +22,7 @@ function main(
         CartesianIndex(2^(n-6) * 36, 2^(n-6) * 36),
     ]
 
-    labels = [L"$\textbf{(%$char)}$" for char in ["a", "b", "c", "d"]]
+    labels = [W"$\textbf{(%$char)}$" for char in ["a", "b", "c", "d"]]
 
     xticks = (-3e6:1e6:3e6, num2latexstring.(-3:3))
     yticks = (-3e6:1e6:3e6, num2latexstring.(-3:3))
@@ -37,7 +37,7 @@ function main(
     yoffset = 2e5
 
     t_plot_hm_yr = [400, 2000, 10000]
-    # labels_hm = [L"$t = %$tyr \: \mathrm{yr}$" for tyr in t_plot_hm_yr]
+    # labels_hm = [W"$t = %$tyr \: \mathrm{yr}$" for tyr in t_plot_hm_yr]
     t_plot_hm = years2seconds.(t_plot_hm_yr)
 
     Xticks = [xticks, xticks, xticks, tticks]
@@ -45,16 +45,16 @@ function main(
     Xticksvisible = [true, true, true, true]
     Yticksvisible = [true, false, false, true]
     xlabels = [
-        L"$x \: (10^3 \, \mathrm{km})$",
-        L"$x \: (10^3 \, \mathrm{km})$",
-        L"$x \: (10^3 \, \mathrm{km})$",
-        L"$t \: (\mathrm{kyr})$",
+        W"$x \: (10^3 \, \mathrm{km})$",
+        W"$x \: (10^3 \, \mathrm{km})$",
+        W"$x \: (10^3 \, \mathrm{km})$",
+        W"$t \: (\mathrm{kyr})$",
     ]
     ylabels = [
-        L"$y \: (10^3 \, \mathrm{km})$",
+        W"$y \: (10^3 \, \mathrm{km})$",
         "",
         "",
-        L"$u \: (\mathrm{m})$",
+        W"$u \: (\mathrm{m})$",
     ]
     Xposition = [:bottom, :bottom, :bottom, :bottom]
     Yposition = [:left, :left, :left, :right]
@@ -105,7 +105,7 @@ function main(
             axs[k],
             Omega.X[points[1]],
             Omega.Y[points[1]] - yoffset;
-            text = L"$\textbf{1}$",
+            text = W"$\textbf{1}$",
             align = (:center, :top),
             fontsize = 20,
             color = k <= 3 ? :white : pcolor,
@@ -114,17 +114,17 @@ function main(
             axs[k],
             Omega.X[points[2]],
             Omega.Y[points[2]] + yoffset;
-            text = L"$\textbf{2}$",
+            text = W"$\textbf{2}$",
             align = (:center, :bottom),
             fontsize = 20,
             color = k <= 3 ? :white : pcolor,
         )
     end
 
-    lines!(axs[ncols], t_out, u1het, label = L"point 1, $\eta(x,y)$")
-    lines!(axs[ncols], t_out, u2het, label = L"point 2, $\eta(x,y)$")
-    lines!(axs[ncols], t_out, u1hom, label = L"point 1, $\eta(x,y) = c$")
-    lines!(axs[ncols], t_out, u2hom, label = L"point 2, $\eta(x,y) = c$")
+    lines!(axs[ncols], t_out, u1het, label = W"point 1, $\eta(x,y)$")
+    lines!(axs[ncols], t_out, u2het, label = W"point 2, $\eta(x,y)$")
+    lines!(axs[ncols], t_out, u1hom, label = W"point 1, $\eta(x,y) = c$")
+    lines!(axs[ncols], t_out, u2hom, label = W"point 2, $\eta(x,y) = c$")
     vlines!(axs[ncols], t_plot_hm, color = :red)
     axislegend(axs[ncols])
     xlims!(axs[ncols], (years2seconds(-0.5e3), years2seconds(10.5e3)))
@@ -135,7 +135,7 @@ function main(
         colorrange = ulim,
         vertical = false,
         width = Relative(0.3),
-        label = L"$u$ (m)",
+        label = W"$u$ (m)",
         ticks = uticks_sparse,
         flipaxis = false,
     )
@@ -176,26 +176,26 @@ main(n)
 # if occursin("homogeneous", case) | occursin("meanviscosity", case)
 #     checkfig = Figure(resolution = (1600, 700), fontsize = 20)
 #     labels = [
-#         L"$z \in [88, 400]$ km",
-#         L"$z \, > \, 400$ km",
-#         L"Equivalent half-space viscosity $\,$",
+#         W"$z \in [88, 400]$ km",
+#         W"$z \, > \, 400$ km",
+#         W"Equivalent half-space viscosity $\,$",
 #     ]
 # elseif occursin("scaledviscosity", case)
 #     checkfig = Figure(resolution = (1600, 550), fontsize = 20)
 #     labels = [
-#         L"$z \in [88, 180]$ km",
-#         L"$z \in ]180, 280]$ km",
-#         L"$z \in ]280, 400]$ km",
-#         L"$z \, > \, 400$ km",
-#         L"Equivalent half-space viscosity $\,$",
+#         W"$z \in [88, 180]$ km",
+#         W"$z \in ]180, 280]$ km",
+#         W"$z \in ]280, 400]$ km",
+#         W"$z \, > \, 400$ km",
+#         W"Equivalent half-space viscosity $\,$",
 #     ]
 # end
 
 # labels = [
-#     L"$z \in [-180, -88]$ km",
-#     L"$z \in ]-280, -180]$ km",
-#     L"$z \in ]-400, -280]$ km",
-#     L"$z \, < \, -400$ km",
-#     L"Equivalent half-space log-viscosity $\,$",
+#     W"$z \in [-180, -88]$ km",
+#     W"$z \in ]-280, -180]$ km",
+#     W"$z \in ]-400, -280]$ km",
+#     W"$z \, < \, -400$ km",
+#     W"Equivalent half-space log-viscosity $\,$",
 
 # ]

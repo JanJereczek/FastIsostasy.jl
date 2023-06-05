@@ -18,8 +18,8 @@ end
 
 function main(; n=5)
     T = Float64
-    L = T(3000e3)               # half-length of the square domain (m)
-    Omega = ComputationDomain(L, n)
+    W = T(3000e3)               # half-length of the square domain (m)
+    Omega = ComputationDomain(W, n)
     c = PhysicalConstants()
 
     lb = [88e3, 180e3, 280e3, 400e3]

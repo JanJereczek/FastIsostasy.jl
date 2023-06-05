@@ -8,8 +8,8 @@ include("external_viscosity_maps.jl")
 function main(n::Int, active_gs::Bool; use_cuda::Bool = false,solver = "ExplicitEuler")
 
     T = Float64
-    L = T(4000e3)               # half-length of the square domain (m)
-    Omega = ComputationDomain(L, n)   # domain parameters
+    W = T(4000e3)               # half-length of the square domain (m)
+    Omega = ComputationDomain(W, n)   # domain parameters
     c = PhysicalConstants()
 
     lb = [88e3, 180e3, 280e3, 400e3]

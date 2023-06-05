@@ -87,15 +87,15 @@ end
 
 # Fourier
 """
-    get_differential_fourier(L, N2)
+    get_differential_fourier(W, N2)
 
 Compute the matrices representing the differential operators in the fourier space.
 """
 function get_differential_fourier(
-    L::T,
+    W::T,
     N2::Int,
 ) where {T<:Real}
-    mu = T(π / L)
+    mu = T(π / W)
     raw_coeffs = mu .* T.( vcat(0:N2, N2-1:-1:1) )
     x_coeffs, y_coeffs = raw_coeffs, raw_coeffs
     X_coeffs, Y_coeffs = meshgrid(x_coeffs, y_coeffs)

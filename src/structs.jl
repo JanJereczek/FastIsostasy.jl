@@ -7,8 +7,8 @@ Return a struct containing all information related to geometry of the domain
 and potentially used parallelism.
 """
 struct ComputationDomain{T<:AbstractFloat}
-    Lx::T                       # Domain length in x (m)
-    Ly::T                       # Domain length in y (m)
+    Wx::T                       # Domain length in x (m)
+    Wy::T                       # Domain length in y (m)
     N::Int                      # Average number of grid points along one dimension
     N2::Int                     # N/2
     dx::T                       # Spatial discretization in x

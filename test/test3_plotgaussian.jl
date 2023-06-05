@@ -25,10 +25,10 @@ function main(
     p_plots = vcat(D_plot, η_plot)
 
     labels = [
-        L"(a) $\,$", # L"Small lithospheric thickness $T$",
-        L"(b) $\,$", # L"Large lithospheric thickness $T$",
-        L"(c) $\,$", # L"Low upper-mantle viscosity $\eta$",
-        L"(d) $\,$", # L"High upper-mantle viscosity $\eta$",
+        W"(a) $\,$", # W"Small lithospheric thickness $T$",
+        W"(b) $\,$", # W"Large lithospheric thickness $T$",
+        W"(c) $\,$", # W"Low upper-mantle viscosity $\eta$",
+        W"(d) $\,$", # W"High upper-mantle viscosity $\eta$",
         "",
         "",
         "",
@@ -40,18 +40,18 @@ function main(
         "",
         "",
         "",
-        L"$x \: (10^3 \, \mathrm{km})$",
-        L"$x \: (10^3 \, \mathrm{km})$",
-        L"$x \: (10^3 \, \mathrm{km})$",
-        L"$x \: (10^3 \, \mathrm{km})$",
+        W"$x \: (10^3 \, \mathrm{km})$",
+        W"$x \: (10^3 \, \mathrm{km})$",
+        W"$x \: (10^3 \, \mathrm{km})$",
+        W"$x \: (10^3 \, \mathrm{km})$",
     ]
 
     ylabels = [
-        L"$y \: (10^3 \, \mathrm{km})$",
+        W"$y \: (10^3 \, \mathrm{km})$",
         "",
         "",
         "",
-        L"$u \: (\mathrm{m})$",
+        W"$u \: (\mathrm{m})$",
         "",
         "",
         "",
@@ -62,7 +62,7 @@ function main(
     uticks = (ulim[1]:50:ulim[2], num2latexstring.(ulim[1]:50:ulim[2]))
 
     logt_plot = collect(0:5)
-    texlabels = [L"$10^{%$t}$ years" for t in logt_plot]
+    texlabels = [W"$10^{%$t}$ years" for t in logt_plot]
     t_plot = years2seconds.(10 .^ logt_plot)
     plotname = "test3/$suffix"
     Omega, c = sol_lo_D["Omega"], sol_lo_D["c"]
@@ -99,7 +99,7 @@ function main(
         (50e3:50e3:250e3, num2latexstring.(50:50:250)),
         (19:23, num2latexstring.(19:23)),
     ]
-    clabels = [L"Lithospheric thickness (km) $\,$", L"Upper-mantle log-viscosity ($\mathrm{Pa \, s}$)"]
+    clabels = [W"Lithospheric thickness (km) $\,$", W"Upper-mantle log-viscosity ($\mathrm{Pa \, s}$)"]
 
     for j in 1:ncases
 
@@ -139,7 +139,7 @@ function main(
                 axs[i],
                 x,
                 varplot[k][slicey, slicex],
-                label = L"$%$tyr $ yr",
+                label = W"$%$tyr $ yr",
                 color = colors[l],
             )
             if i == ncols + 1

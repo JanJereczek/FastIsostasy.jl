@@ -5,8 +5,8 @@ using Test
 
 T = Float64
 n = 6
-L = T(2000e3)               # half-length of the square domain (m)
-Omega = ComputationDomain(L, n)   # domain parameters
+W = T(2000e3)               # half-length of the square domain (m)
+Omega = ComputationDomain(W, n)   # domain parameters
 R = T(1000e3)               # ice disc radius (m)
 H = T(1000)                 # ice disc thickness (m)
 

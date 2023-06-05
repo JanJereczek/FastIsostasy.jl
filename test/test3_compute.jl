@@ -11,8 +11,8 @@ function main(
 )
 
     T = Float64
-    L = T(3000e3)               # half-length of the square domain (m)
-    Omega = ComputationDomain(L, n, use_cuda = use_cuda)
+    W = T(3000e3)               # half-length of the square domain (m)
+    Omega = ComputationDomain(W, n, use_cuda = use_cuda)
     c = PhysicalConstants()
     p = choose_case(case, Omega, c)
 
