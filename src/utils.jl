@@ -448,13 +448,12 @@ end
 
     get_greenintegrand_coeffs(T)
 
-Return the load response coefficients with type `T` and listed in table A3 of
-Farrell (1972).
+Return the load response coefficients with type `T`.
+Reference: Deformation of the Earth by surface Loads, Farell 1972, table A3.
 """
 function get_greenintegrand_coeffs(T::Type)
 
-    # Angles of table A3 of
-    # Deformation of the Earth by surface Loads, Farrell 1972
+    # Angles
     θ = [0.0, 0.0001, 0.001, 0.01, 0.02, 0.03, 0.04, 0.06, 0.08, 0.1,
          0.16,   0.2,   0.25, 0.3,  0.4,  0.5,  0.6,  0.8,  1.0,
          1.2,    1.6,   2.0,  2.5,  3.0,  4.0,  5.0,  6.0,  7.0,
@@ -462,8 +461,7 @@ function get_greenintegrand_coeffs(T::Type)
          50.0,   60.0,  70.0, 80.0, 90.0]
 
 
-    # Column 1 (converted by some factor) of table A3 of
-    # Deformation of the Earth by surface Loads, Farrell 1972
+    # Column 1 (converted by some factor)
     rm = [ 0.0,    0.011,  0.111,  1.112,  2.224,  3.336,  4.448,  6.672,
            8.896,  11.12,  17.79,  22.24,  27.80,  33.36,  44.48,  55.60, 
            66.72,  88.96,  111.2,  133.4,  177.9,  222.4,  278.0,  333.6,
@@ -473,8 +471,7 @@ function get_greenintegrand_coeffs(T::Type)
     # converted to meters
     # GE /(10^12 rm) is vertical displacement in meters (applied load is 1kg)
 
-    # Column 2 of table A3 of
-    # Deformation of the Earth by surface Loads, Farrell 1972
+    # Column 2
     GE = [ -33.6488, -33.64, -33.56, -32.75, -31.86, -30.98, -30.12, -28.44, -26.87, -25.41,
            -21.80, -20.02, -18.36, -17.18, -15.71, -14.91, -14.41, -13.69, -13.01,
            -12.31, -10.95, -9.757, -8.519, -7.533, -6.131, -5.237, -4.660, -4.272,
@@ -485,12 +482,12 @@ end
 
 """
 
-    build_greenintegrand(x, y)
+    build_greenintegrand(distance::Vector{T}, 
+        greenintegrand_coeffs::Vector{T}) where {T<:AbstractFloat}
 
-Compute the load response matrix of the solid Earth based on Green's function
-(c.f. Farell 1972). In the Fourier space, this corresponds to a product which
-is subsequently transformed back into the time domain.
-Use pre-computed integration tools to accelerate computation.
+Compute the integrands of the Green's function resulting from a load at a given
+`distance` and based on provided `greenintegrand_coeffs`.
+Reference: Deformation of the Earth by surface Loads, Farell 1972, table A3.
 """
 function build_greenintegrand(
     distance::Vector{T},
@@ -498,17 +495,22 @@ function build_greenintegrand(
 ) where {T<:AbstractFloat}
 
     greenintegrand_interp = linear_interpolation(distance, greenintegrand_coeffs)
-    compute_greenintegrand_entry_r(r::T) = compute_greenintegrand_entry(
-        r,
-        distance,
-        greenintegrand_coeffs,
-        greenintegrand_interp,
-    )
+    compute_greenintegrand_entry_r(r::T) = get_loadgreen(
+        r, distance, greenintegrand_coeffs, greenintegrand_interp)
     greenintegrand_function(x::T, y::T) = compute_greenintegrand_entry_r( get_r(x, y) )
     return greenintegrand_function
 end
 
-function compute_greenintegrand_entry(
+"""
+
+    get_loadgreen(r::T, rm::Vector{T}, greenintegrand_coeffs::Vector{T},     
+        interp_greenintegrand_::Interpolations.Extrapolation) where {T<:AbstractFloat}
+
+Compute the integrands of the Green's function resulting from a load at a given
+`distance` and based on provided `greenintegrand_coeffs`.
+Reference: Deformation of the Earth by surface Loads, Farell 1972, table A3.
+"""
+function get_loadgreen(
     r::T,
     rm::Vector{T},
     greenintegrand_coeffs::Vector{T},
