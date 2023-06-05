@@ -34,17 +34,6 @@ function update_geoid!(sstruct::SuperStruct{T}) where {T<:AbstractFloat}
     return nothing
 end
 
-"""
-
-    get_loadchange(sstruct::SuperStruct)
-
-Compute the load change compared to the reference configuration.
-
-# Reference
-
-Coulon et al. 2021.
-Difference to Coulon: HERE WE SCALE WITH CORRECTION FACTOR FOR PROJECTION!
-"""
 function get_greenloadchange(sstruct::SuperStruct{T}) where {T<:AbstractFloat}
     return (sstruct.Omega.dx * sstruct.Omega.dy) .* get_fullcolumnchange(sstruct)
 end
@@ -60,6 +49,13 @@ function get_loadcolumnchange(sstruct::SuperStruct{T}) where {T<:AbstractFloat}
         sstruct.c.rho_seawater .* (sstruct.slstate.H_water - sstruct.refslstate.H_water) ) # .* Omega.K
 end
 
+"""
+
+    get_loadchange(sstruct::SuperStruct)
+
+Compute the load change compared to the reference configuration after [Coulon et al. 2021]().
+Difference to Coulon: HERE WE SCALE WITH CORRECTION FACTOR FOR PROJECTION!
+"""
 function get_loadchange(sstruct::SuperStruct{T}) where {T<:AbstractFloat}
     return - sstruct.c.g .* get_loadcolumnchange(sstruct)
 end

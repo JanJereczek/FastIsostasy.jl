@@ -74,7 +74,7 @@ export fastisostasy
 export init_superstruct
 export dudt_isostasy!
 export dudt_isostasy_sparse!
-export apply_bc!
+export corner_bc!
 export ice_load
 
 # estimation.jl

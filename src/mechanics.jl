@@ -126,6 +126,12 @@ function fastisostasy(
     return fastisostasy(t_out, Omega, c, p, t_Hice_snapshots, Hice_snapshots; kwargs...)
 end
 
+"""
+
+    init_superstruct()
+
+Init a `SuperStruct` containing all necessary fields for forward integration in time.
+"""
 function init_superstruct(
     Omega::ComputationDomain{T},
     c::PhysicalConstants{T},
@@ -180,6 +186,12 @@ function init_superstruct(
         refslstate, slstate, interactive_sealevel)
 end
 
+"""
+
+    forward_isostasy()
+
+Forward-integrate the isostatic adjustment.
+"""
 function forward_isostasy(
     dt::T,
     t_out::Vector{T},
@@ -206,7 +218,7 @@ function forward_isostasy(
         else
             for t in t0:dt:t_out[k]
                 forwardstep_isostasy!(dudt, u, sstruct, t)
-                simple_euler!(u, dudt, dt)
+                explicit_euler!(u, dudt, dt)
             end
         end
         
@@ -218,6 +230,12 @@ function forward_isostasy(
     return u_out, dudt_out, u_el_out, geoid_out, sealevel_out
 end
 
+"""
+
+    init_results()
+
+Initialize some `Vector{Matrix}` where results shall be later stored.
+"""
 function init_results(u, t_out)
     # initialize with placeholders
     placeholder = kernelpromote(u, Array)
@@ -229,13 +247,20 @@ function init_results(u, t_out)
     return u_out, dudt_out, u_el_out, geoid_out, sealevel_out
 end
 
+"""
+
+    forwardstep_isostasy!(dudt, u, sstruct, t)
+
+Forward integrate the isostatic adjustment over a single time step by updating the
+displacement rate `dudt`, and the sea-level state contained within `sstruct::SuperStruct`.
+"""
 function forwardstep_isostasy!(
     dudt::XMatrix,
     u::XMatrix,
     sstruct::SuperStruct{T},
     t::T,
 ) where {T<:AbstractFloat}
-    apply_bc!(u, sstruct.Omega.N)
+    corner_bc!(u, sstruct.Omega.N)
     if sstruct.interactive_sealevel &&
         (t / sstruct.slstate.dt >= sstruct.slstate.countupdates)
         update_slstate!(sstruct, u, sstruct.Hice(t))
@@ -246,6 +271,12 @@ function forwardstep_isostasy!(
     return nothing
 end
 
+"""
+
+    dudt_isostasy!()
+
+Update the displacement rate `dudt`.
+"""
 function dudt_isostasy!(
     dudt::XMatrix,
     u::XMatrix,
@@ -277,11 +308,18 @@ function dudt_isostasy!(
         sstruct.Omega.pseudodiff)) ./ (2 .* sstruct.p.effective_viscosity)
     #     dudt[:, :] .= real.(tools.pifft * ((tools.pfft * (rhs ./ (2 .* p.effective_viscosity)) ) ./ Omega.pseudodiff))
 
-    apply_bc!(dudt, sstruct.Omega.N)
+    corner_bc!(dudt, sstruct.Omega.N)
     return nothing
 end
 
-function simple_euler!(
+"""
+
+    explicit_euler!()
+
+Update the state `u` by performing an explicit Euler integration of its derivative `dudt`
+over a time step `dt`.
+"""
+function explicit_euler!(
     u::XMatrix,
     dudt::XMatrix,
     dt::T,
@@ -296,25 +334,25 @@ end
 
 """
 
-    apply_bc(u)
+    corner_bc(u)
 
 Apply boundary condition on Fourier collocation solution.
 Assume that mean deformation at corners of domain is 0.
 Whereas Bueler et al. (2007) take the edges for this computation, we take the corners
 because they represent the far-field better.
 """
-function apply_bc(u::XMatrix, N)
+function corner_bc(u::XMatrix, N)
     u_bc = copy(u)
-    return apply_bc!(u_bc, N)
+    return corner_bc!(u_bc, N)
 end
 
-function apply_bc!(u::XMatrix, N)
+function corner_bc!(u::XMatrix, N)
     CUDA.allowscalar() do
         u .-= (view(u, 1, 1) + view(u, 1, N) + view(u, N, 1) + view(u, N, N)) / 4
     end
 end
 
-# function apply_bc!(u::XMatrix, N) where {T<:AbstractFloat}
+# function corner_bc!(u::XMatrix, N) where {T<:AbstractFloat}
 #     CUDA.allowscalar() do
 #         u .-= sum(view(u, 1, :) + view(u, :, N) + view(u, N, :) + view(u, :, 1)) / (4*N)
 #     end
@@ -325,7 +363,7 @@ end
 #####################################################
 """
 
-    compute_elastic_response(tools, load)
+    compute_elastic_response(Omega, tools, load)
 
 For a computation domain `Omega`, compute the elastic response of the solid Earth
 by convoluting the `load` with the Green's function stored in the pre-computed `tools`

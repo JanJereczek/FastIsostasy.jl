@@ -24,14 +24,17 @@ matrify_constant
 get_r
 meshgrid
 dist2angulardist
+sphericaldistance
 scalefactor
 latlon2stereo
 stereo2latlon
-ComputationDomain
+get_rigidity
+get_effective_viscosity
 get_differential_fourier
-PhysicalConstants
 get_viscosity_ratio
 three_layer_scaling
+loginterp_viscosity
+hyperbolic_channel_coeffs
 get_greenintegrand_coeffs
 build_greenintegrand
 get_elasticgreen
@@ -40,21 +43,22 @@ quadrature1D
 quadrature2D
 get_normalized_lin_transform
 normalized_lin_transform
+kernelpromote
 ```
 
 ## Mechanics
 
 ```@docs
-    precompute_terms
-    fastisostasy
-    forwardstep_isostasy
-    cranknicolson_viscous_response
-    euler_viscous_response
-    apply_bc
-    get_differential_fourier
-    get_cranknicolson_factors
-    plan_twoway_fft
-    compute_elastic_response
+ice_load
+fastisostasy
+init_superstruct
+forward_isostasy
+init_results
+forwardstep_isostasy!
+dudt_isostasy!
+simple_euler!
+apply_bc
+compute_elastic_response
 ```
 
 ## Sea-level
@@ -67,9 +71,9 @@ get_geoidgreen
 update_loadcolumns!
 update_sealevel!
 update_slc!
-update V_af!
+update_V_af!
 update_slc_af!
-update V_pov!
+update_V_pov!
 update_slc_pov!
 update_V_den!
 update_slc_den!

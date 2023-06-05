@@ -76,7 +76,7 @@ This concept will also apply to the upper-mantle viscosity in future versions, a
 
 For about $n > 6$, the previous example can be computed even faster by using GPU parallelism. It could not represent less work from the user's perspective, as it boils down to calling the `ComputationDomain` with an extra keyword argument:
 
-```julia
+```@example 2
 Omega = ComputationDomain(W, n, use_cuda=true)
 ```
 

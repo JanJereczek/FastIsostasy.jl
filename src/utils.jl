@@ -308,18 +308,6 @@ layer_boundaries = [88e3, 400e3]
 # layer_viscosities = [1e19, 1e21]u"Pa*s"      # (Bueler 2007, Ivins 2022, Fig 12 WAIS)
 # layer_boundaries = [88e3, 400e3]u"m"
 
-"""
-
-    MultilayerEarth(
-        Omega::ComputationDomain{T};
-        litho_rigidity<:Union{Vector{T}, Vector{XMatrix}},
-        layers_density::Vector{T},
-        layer_viscosities<:Union{Vector{T}, Vector{XMatrix}},
-        layer_boundaries::Vector{T},
-    ) where {T<:AbstractFloat}
-
-Return struct with solid-Earth parameters for mutliple channel layers and a halfspace.
-"""
 function MultilayerEarth(
     Omega::ComputationDomain{T},
     c::PhysicalConstants{T};
@@ -383,6 +371,12 @@ function MultilayerEarth(
 
 end
 
+"""
+
+    get_rigidity(t::T, E::T, nu::T) where {T<:AbstractFloat}
+
+Compute rigidity based on thickness `t`, Young modulus `E` and Poisson ration `nu`
+"""
 function get_rigidity(
     t::T,
     E::T,
@@ -391,45 +385,45 @@ function get_rigidity(
     return (E * t^3) / (12 * (1 - nu^2))
 end
 
-function get_matrix_mean_density(
-    layers_thickness::Array{T, 3},
-    layers_density::Vector{T},
-) where {T<:AbstractFloat}
-    mean_density = zeros(T, size(layers_thickness)[1:2])
-    @inbounds for i in axes(layers_thickness, 1), j in axes(layers_thickness, 2)
-        mean_density[i, j] = get_mean_density(layers_thickness[i, j, :], layers_density)
-    end
-    return mean_density
-end
+# function get_matrix_mean_density(
+#     layers_thickness::Array{T, 3},
+#     layers_density::Vector{T},
+# ) where {T<:AbstractFloat}
+#     mean_density = zeros(T, size(layers_thickness)[1:2])
+#     @inbounds for i in axes(layers_thickness, 1), j in axes(layers_thickness, 2)
+#         mean_density[i, j] = get_mean_density(layers_thickness[i, j, :], layers_density)
+#     end
+#     return mean_density
+# end
 
-function get_mean_density(
-    layers_thickness::Vector{T},
-    layers_density::Vector{T},
-) where {T<:AbstractFloat}
-    return sum( (layers_thickness ./ (sum(layers_thickness)))' * layers_density )
-end
+# function get_mean_density(
+#     layers_thickness::Vector{T},
+#     layers_density::Vector{T},
+# ) where {T<:AbstractFloat}
+#     return sum( (layers_thickness ./ (sum(layers_thickness)))' * layers_density )
+# end
 
-function matrified_mean_gravity()
-    fixed_mean_gravity = true
-    if fixed_mean_gravity
-        mean_gravity = c.g
-    else
-        # Earth acceleration over depth z.
-        # Use the pole radius because GIA most important at poles.
-        gr(r) = 4*π/3*c.G*c.rho_core* r - π*c.G*(c.rho_core - c.rho_topastheno) * r^2/c.r_pole
-        gz(z) = gr(c.r_pole - z)
-        mean_gravity = get_mean_gravity(layer_boundaries, layers_thickness, gz)
-    end
-end
+# function matrified_mean_gravity()
+#     fixed_mean_gravity = true
+#     if fixed_mean_gravity
+#         mean_gravity = c.g
+#     else
+#         # Earth acceleration over depth z.
+#         # Use the pole radius because GIA most important at poles.
+#         gr(r) = 4*π/3*c.G*c.rho_core* r - π*c.G*(c.rho_core - c.rho_topastheno) * r^2/c.r_pole
+#         gz(z) = gr(c.r_pole - z)
+#         mean_gravity = get_mean_gravity(layer_boundaries, layers_thickness, gz)
+#     end
+# end
 
-function get_mean_gravity(
-    layer_boundaries::Vector{T},
-    layers_thickness::Vector{T},
-    gz::Function,
-) where {T<:AbstractFloat}
-    layers_mean_gravity = 0.5 .*(gz.(layer_boundaries[1:end-1]) + gz.(layer_boundaries[2:end]))
-    return (layers_thickness ./ (sum(layers_thickness)))' * layers_mean_gravity
-end
+# function get_mean_gravity(
+#     layer_boundaries::Vector{T},
+#     layers_thickness::Vector{T},
+#     gz::Function,
+# ) where {T<:AbstractFloat}
+#     layers_mean_gravity = 0.5 .*(gz.(layer_boundaries[1:end-1]) + gz.(layer_boundaries[2:end]))
+#     return (layers_thickness ./ (sum(layers_thickness)))' * layers_mean_gravity
+# end
 
 """
 
@@ -458,7 +452,6 @@ function get_effective_viscosity(
         viscosity_ratio = get_viscosity_ratio(channel_viscosity, effective_viscosity)
         viscosity_scaling = three_layer_scaling(
             Omega,
-            # pseudodiff,
             viscosity_ratio,
             channel_thickness,
         )
@@ -467,28 +460,28 @@ function get_effective_viscosity(
     return effective_viscosity
 end
 
-function get_fouriereffective_viscosity(
-    Omega::ComputationDomain{T},
-    layer_viscosities::Array{T, 3},
-    layers_thickness::Array{T, 3},
-) where {T<:AbstractFloat}
+# function get_fouriereffective_viscosity(
+#     Omega::ComputationDomain{T},
+#     layer_viscosities::Array{T, 3},
+#     layers_thickness::Array{T, 3},
+# ) where {T<:AbstractFloat}
 
-    # Recursion has to start with half space = n-th layer:
-    effective_viscosity = copy(layer_viscosities[:, :, end])
-    pfft, pifft = plan_fft(effective_viscosity), plan_ifft(effective_viscosity)
-    @inbounds for i in axes(layer_viscosities, 3)[1:end-1]
-        channel_viscosity = layer_viscosities[:, :, end - i]
-        channel_thickness = layers_thickness[:, :, end - i + 1]
-        viscosity_ratio = get_viscosity_ratio(channel_viscosity, effective_viscosity)
-        viscosity_scaling = fourier_layer_scaling(
-            Omega,
-            pfft * viscosity_ratio,
-            channel_thickness,
-        )
-        effective_viscosity[:, :] .= real.(pifft * ((pfft * effective_viscosity) .* viscosity_scaling))
-    end
-    return effective_viscosity
-end
+#     # Recursion has to start with half space = n-th layer:
+#     effective_viscosity = copy(layer_viscosities[:, :, end])
+#     pfft, pifft = plan_fft(effective_viscosity), plan_ifft(effective_viscosity)
+#     @inbounds for i in axes(layer_viscosities, 3)[1:end-1]
+#         channel_viscosity = layer_viscosities[:, :, end - i]
+#         channel_thickness = layers_thickness[:, :, end - i + 1]
+#         viscosity_ratio = get_viscosity_ratio(channel_viscosity, effective_viscosity)
+#         viscosity_scaling = fourier_layer_scaling(
+#             Omega,
+#             pfft * viscosity_ratio,
+#             channel_thickness,
+#         )
+#         effective_viscosity[:, :] .= real.(pifft * ((pfft * effective_viscosity) .* viscosity_scaling))
+#     end
+#     return effective_viscosity
+# end
 
 """
 
@@ -547,25 +540,25 @@ function three_layer_scaling(
     return (num1 + num2 + num3) ./ (denum1 + denum2 + denum3)
 end
 
-function fourier_layer_scaling(
-    Omega::ComputationDomain{T},
-    visc_ratio_fourier::XMatrix,
-    channel_thickness::XMatrix,
-) where {T<:AbstractFloat}
-    kappa = Omega.pseudodiff
-    C = cosh.(channel_thickness .* kappa)
-    S = sinh.(channel_thickness .* kappa)
+# function fourier_layer_scaling(
+#     Omega::ComputationDomain{T},
+#     visc_ratio_fourier::XMatrix,
+#     channel_thickness::XMatrix,
+# ) where {T<:AbstractFloat}
+#     kappa = Omega.pseudodiff
+#     C = cosh.(channel_thickness .* kappa)
+#     S = sinh.(channel_thickness .* kappa)
 
-    num1 = 2 .* visc_ratio_fourier .* C .* S
-    num2 = (1 .- visc_ratio_fourier .^ 2) .* channel_thickness .^ 2 .* kappa .^ 2
-    num3 = visc_ratio_fourier .^ 2 .* S .^ 2 + C .^ 2
+#     num1 = 2 .* visc_ratio_fourier .* C .* S
+#     num2 = (1 .- visc_ratio_fourier .^ 2) .* channel_thickness .^ 2 .* kappa .^ 2
+#     num3 = visc_ratio_fourier .^ 2 .* S .^ 2 + C .^ 2
 
-    denum1 = (visc_ratio_fourier .+ 1 ./ visc_ratio_fourier) .* C .* S
-    denum2 = (visc_ratio_fourier .- 1 ./ visc_ratio_fourier) .* channel_thickness .* kappa
-    denum3 = S .^ 2 + C .^ 2
+#     denum1 = (visc_ratio_fourier .+ 1 ./ visc_ratio_fourier) .* C .* S
+#     denum2 = (visc_ratio_fourier .- 1 ./ visc_ratio_fourier) .* channel_thickness .* kappa
+#     denum3 = S .^ 2 + C .^ 2
     
-    return (num1 + num2 + num3) ./ (denum1 + denum2 + denum3)
-end
+#     return (num1 + num2 + num3) ./ (denum1 + denum2 + denum3)
+# end
 
 
 """
@@ -818,6 +811,12 @@ end
 # Kernel utils
 #####################################################
 
+"""
+
+    kernelpromote(X, arraykernel)
+
+Promote X to the kernel (`Array` or `CuArray`) specified by `arraykernel`.
+"""
 function kernelpromote(X::M, arraykernel) where {M<:AbstractArray{T}} where {T<:Real}
     if isa(X, arraykernel)
         return X
