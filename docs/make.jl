@@ -11,7 +11,7 @@ using FastIsostasy
 
 # %% Build docs
 PAGES = [
-    "introduction.md",
+    "index.md",
     "examples.md",
     "APIref.md",
 ]
