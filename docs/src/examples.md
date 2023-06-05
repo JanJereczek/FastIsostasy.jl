@@ -2,7 +2,7 @@
 
 ## Multi-layer Earth
 
-FastIsostasy relies on a (polar) stereographic projection that allows to treat the radially-layered, onion-like structure of the solid Earth as a superposition of horizontal layers. Furthermore, FastIsostasy reduces this 3D problem into a 2D problem by collapsing the depth dimension. This is made possible by computing an effective viscosity (field) and an effective density that lead the 2D problem to be roughly equivalent to the 3D problem. The user is required to provide this 3D information, which wil then by used under the hood to compute the effective parameter values. This tutorial shows such an example.
+FastIsostasy relies on a (polar) stereographic projection that allows to treat the radially-layered, onion-like structure of the solid Earth as a superposition of horizontal layers. Furthermore, FastIsostasy reduces this 3D problem into a 2D problem by collapsing the depth dimension by computing an effective viscosity field. The user is required to provide the 3D information, which will then be used under the hood to compute the effective viscosity. This tutorial shows such an example.
 
 We want to render a situation similar to the one depicted below:
 
@@ -16,30 +16,18 @@ n = 8           # implies an NxN grid with N = 2^n = 256.
 Omega = ComputationDomain(W, n)
 c = PhysicalConstants()
 
-layer_viscosities = []
-layer_boundaries = []
-p = MultilayerEarth()
+lv = [1e19, 1e21]       # (Pa*s)
+lb = [88e3, 400e3]      # (m)
+p = MultilayerEarth(Omega, c, layer_viscosities = lv, layer_boundaries = lb)
 ```
 
-Note that densities are automatically taken care of, as density profiles are internally available to FastIsostasy. The configuration we just described is the default of `MultilayerEarth` and can simply be produced by:
-
-```@example 1
-p = MultilayerEarth(Omega, c)
-```
-
-If you want to find out how to use `p::MultilayerEarth` for GIA computation, please go to [Simple load and geometry](@ref)
+The next section shows how to use the now obtained `p::MultilayerEarth` for actual GIA computation.
 
 ## Simple load and geometry
 
-We now apply a constant load (here a cylinder of ice with radius 1000 km and thickness 1 km) over the domain introduced in [Multi-layer Earth](@ref). To obtain the bedrock displacement over timeand store it at time steps specified by a vector `t_out`, we can use the convenience function [`fastisostasy`](@ref):
+We now apply a constant load, here a cylinder of ice with radius $R = 1000 km$ and thickness $H = 1 km$, over the domain introduced in [Multi-layer Earth](@ref). To obtain the bedrock displacement over time and store it at time steps specified by a vector `t_out`, we can use the convenience function [`fastisostasy`](@ref):
 
-```@example 2
-W = 3000e3      # (m) half-width of the domain
-n = 8           # implies an NxN grid with N = 2^n = 256.
-Omega = ComputationDomain(W, n)
-c = PhysicalConstants()
-p = MultilayerEarth(Omega, c)
-
+```@example 1
 R = 1000e3                  # ice disc radius (m)
 H = 1000.0                  # ice disc thickness (m)
 Hice = uniform_ice_cylinder(Omega, R, H)
@@ -48,7 +36,7 @@ t_out = years2seconds.([0.0, 100.0, 500.0, 1500.0, 5000.0, 10_000.0, 50_000.0])
 results = fastisostasy(t_out, Omega, c, p, Hice)
 ```
 
-Yes, that was it! You can now easily access the elastic and viscous displacement by calling `results.elastic` or `results.viscous`. For the present case, an analytic solution can be computed... Sounds like we could look at the accuracy of our numerical scheme over time by running following plotting commands:
+Yes, that was it! You can now easily access the elastic and viscous displacement by calling `results.elastic` or `results.viscous`. For the present case, the latter can be compared to an analytic solution that is known for this particular case. Let's look at the accuracy of our numerical scheme over time by running following plotting commands:
 
 ```@example 2
 M = Omega.N ÷ 2
@@ -148,8 +136,8 @@ lv = get_wiens_layervisc(Omega)
 p = MultilayerEarth(
     Omega,
     c,
-    layers_begin = lb,
-    layers_viscosity = lv,
+    layer_boundaries = lb,
+    layer_viscosities = lv,
 )
 ground_truth = copy(p.effective_viscosity)
 
