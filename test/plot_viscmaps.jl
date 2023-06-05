@@ -16,7 +16,7 @@ function main(
         CartesianIndex(2^(n-6) * 20, 2^(n-6) * 24),
         CartesianIndex(2^(n-6) * 36, 2^(n-6) * 36),
     ]
-    lv = [p.layers_viscosity[:, :, i] for i in axes(p.layers_viscosity, 3)[1:end-1]]
+    lv = [p.layer_viscosities[:, :, i] for i in axes(p.layer_viscosities, 3)[1:end-1]]
     push!(lv, p.effective_viscosity)
 
     labels = [L"$\textbf{(%$char)}$" for char in ["a", "b", "c", "d"]]

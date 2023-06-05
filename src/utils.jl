@@ -296,8 +296,8 @@ litho_rigidity = 5e24               # (N*m)
 litho_youngmodulus = 6.6e10         # (N/m^2)
 litho_poissonratio = 0.5            # (1)
 layers_density = [3.3e3]            # (kg/m^3)
-layers_viscosity = [1e19, 1e21]     # (Pa*s) (Bueler 2007, Ivins 2022, Fig 12 WAIS)
-layers_begin = [88e3, 400e3]
+layer_viscosities = [1e19, 1e21]     # (Pa*s) (Bueler 2007, Ivins 2022, Fig 12 WAIS)
+layer_boundaries = [88e3, 400e3]
 # 88 km: beginning of asthenosphere (Bueler 2007).
 # 400 km: beginning of homogenous half-space (Ivins 2022, Fig 12).
 
@@ -305,8 +305,8 @@ layers_begin = [88e3, 400e3]
 # litho_youngmodulus = 6.6e10u"N / m^2"
 # litho_poissonratio = 0.5
 # layers_density = [3.3e3]u"kg / m^3"
-# layers_viscosity = [1e19, 1e21]u"Pa*s"      # (Bueler 2007, Ivins 2022, Fig 12 WAIS)
-# layers_begin = [88e3, 400e3]u"m"
+# layer_viscosities = [1e19, 1e21]u"Pa*s"      # (Bueler 2007, Ivins 2022, Fig 12 WAIS)
+# layer_boundaries = [88e3, 400e3]u"m"
 
 """
 
@@ -314,8 +314,8 @@ layers_begin = [88e3, 400e3]
         Omega::ComputationDomain{T};
         litho_rigidity<:Union{Vector{T}, Vector{XMatrix}},
         layers_density::Vector{T},
-        layers_viscosity<:Union{Vector{T}, Vector{XMatrix}},
-        layers_begin::Vector{T},
+        layer_viscosities<:Union{Vector{T}, Vector{XMatrix}},
+        layer_boundaries::Vector{T},
     ) where {T<:AbstractFloat}
 
 Return struct with solid-Earth parameters for mutliple channel layers and a halfspace.
@@ -323,9 +323,9 @@ Return struct with solid-Earth parameters for mutliple channel layers and a half
 function MultilayerEarth(
     Omega::ComputationDomain{T},
     c::PhysicalConstants{T};
-    layers_begin::A = layers_begin,
+    layer_boundaries::A = layer_boundaries,
     layers_density::Vector{T} = layers_density,
-    layers_viscosity::B = layers_viscosity,
+    layer_viscosities::B = layer_viscosities,
     litho_youngmodulus::C = litho_youngmodulus,
     litho_poissonratio::D = litho_poissonratio,
 ) where {
@@ -336,30 +336,30 @@ function MultilayerEarth(
     D<:Union{T, XMatrix},
 }
 
-    if layers_begin isa Vector
-        layers_begin = matrify_vectorconstant(layers_begin, Omega.N)
+    if layer_boundaries isa Vector
+        layer_boundaries = matrify_vectorconstant(layer_boundaries, Omega.N)
     end
-    litho_thickness = layers_begin[:, :, 1]
+    litho_thickness = layer_boundaries[:, :, 1]
     litho_rigidity = get_rigidity.(
         litho_thickness,
         litho_youngmodulus,
         litho_poissonratio,
     )
 
-    if layers_viscosity isa Vector
-        layers_viscosity = matrify_vectorconstant(layers_viscosity, Omega.N)
+    if layer_viscosities isa Vector
+        layer_viscosities = matrify_vectorconstant(layer_viscosities, Omega.N)
     end
 
-    layers_thickness = diff( layers_begin, dims=3 )
+    layers_thickness = diff( layer_boundaries, dims=3 )
     # pseudodiff = kernelpromote(Omega.pseudodiff, Omega.arraykernel)
     effective_viscosity = get_effective_viscosity(
         Omega,
-        layers_viscosity,
+        layer_viscosities,
         layers_thickness,
     )
     # effective_viscosity = get_fouriereffective_viscosity(
     #     Omega,
-    #     layers_viscosity,
+    #     layer_viscosities,
     #     layers_thickness,
     # )
 
@@ -377,8 +377,8 @@ function MultilayerEarth(
         litho_rigidity,
         litho_poissonratio,
         layers_density,
-        layers_viscosity,
-        layers_begin,
+        layer_viscosities,
+        layer_boundaries,
     )
 
 end
@@ -418,23 +418,23 @@ function matrified_mean_gravity()
         # Use the pole radius because GIA most important at poles.
         gr(r) = 4*π/3*c.G*c.rho_core* r - π*c.G*(c.rho_core - c.rho_topastheno) * r^2/c.r_pole
         gz(z) = gr(c.r_pole - z)
-        mean_gravity = get_mean_gravity(layers_begin, layers_thickness, gz)
+        mean_gravity = get_mean_gravity(layer_boundaries, layers_thickness, gz)
     end
 end
 
 function get_mean_gravity(
-    layers_begin::Vector{T},
+    layer_boundaries::Vector{T},
     layers_thickness::Vector{T},
     gz::Function,
 ) where {T<:AbstractFloat}
-    layers_mean_gravity = 0.5 .*(gz.(layers_begin[1:end-1]) + gz.(layers_begin[2:end]))
+    layers_mean_gravity = 0.5 .*(gz.(layer_boundaries[1:end-1]) + gz.(layer_boundaries[2:end]))
     return (layers_thickness ./ (sum(layers_thickness)))' * layers_mean_gravity
 end
 
 """
 
     get_effective_viscosity(
-        layers_viscosity::Vector{XMatrix},
+        layer_viscosities::Vector{XMatrix},
         layers_thickness::Vector{T},
         Omega::ComputationDomain{T},
     ) where {T<:AbstractFloat}
@@ -444,16 +444,16 @@ the formula for a halfspace and a channel from Lingle and Clark (1975).
 """
 function get_effective_viscosity(
     Omega::ComputationDomain{T},
-    layers_viscosity::Array{T, 3},
+    layer_viscosities::Array{T, 3},
     layers_thickness::Array{T, 3},
     # pseudodiff::XMatrix,
 ) where {T<:AbstractFloat}
 
     # Recursion has to start with half space = n-th layer:
-    effective_viscosity = layers_viscosity[:, :, end]
+    effective_viscosity = layer_viscosities[:, :, end]
     # p1, p2 = plan_fft(effective_viscosity), plan_ifft(effective_viscosity)
-    @inbounds for i in axes(layers_viscosity, 3)[1:end-1]
-        channel_viscosity = layers_viscosity[:, :, end - i]
+    @inbounds for i in axes(layer_viscosities, 3)[1:end-1]
+        channel_viscosity = layer_viscosities[:, :, end - i]
         channel_thickness = layers_thickness[:, :, end - i + 1]
         viscosity_ratio = get_viscosity_ratio(channel_viscosity, effective_viscosity)
         viscosity_scaling = three_layer_scaling(
@@ -469,15 +469,15 @@ end
 
 function get_fouriereffective_viscosity(
     Omega::ComputationDomain{T},
-    layers_viscosity::Array{T, 3},
+    layer_viscosities::Array{T, 3},
     layers_thickness::Array{T, 3},
 ) where {T<:AbstractFloat}
 
     # Recursion has to start with half space = n-th layer:
-    effective_viscosity = copy(layers_viscosity[:, :, end])
+    effective_viscosity = copy(layer_viscosities[:, :, end])
     pfft, pifft = plan_fft(effective_viscosity), plan_ifft(effective_viscosity)
-    @inbounds for i in axes(layers_viscosity, 3)[1:end-1]
-        channel_viscosity = layers_viscosity[:, :, end - i]
+    @inbounds for i in axes(layer_viscosities, 3)[1:end-1]
+        channel_viscosity = layer_viscosities[:, :, end - i]
         channel_thickness = layers_thickness[:, :, end - i + 1]
         viscosity_ratio = get_viscosity_ratio(channel_viscosity, effective_viscosity)
         viscosity_scaling = fourier_layer_scaling(
@@ -570,22 +570,22 @@ end
 
 """
 
-    loginterp_viscosity(tvec, layers_viscosity, layers_thickness, pseudodiff)
+    loginterp_viscosity(tvec, layer_viscosities, layers_thickness, pseudodiff)
 
 Compute a log-interpolator of the equivalent viscosity from provided viscosity
-fields `layers_viscosity` at time stamps `tvec`.
+fields `layer_viscosities` at time stamps `tvec`.
 """
 function loginterp_viscosity(
     tvec::AbstractVector{T},
-    layers_viscosity::Array{T, 4},
+    layer_viscosities::Array{T, 4},
     layers_thickness::Array{T, 3},
     pseudodiff::XMatrix,
 ) where {T<:AbstractFloat}
-    n1, n2, n3, nt = size(layers_viscosity)
+    n1, n2, n3, nt = size(layer_viscosities)
     log_eqviscosity = [fill(T(0.0), n1, n2) for k in 1:nt]
 
     [log_eqviscosity[k] .= log10.(get_effective_viscosity(
-        layers_viscosity[:, :, :, k],
+        layer_viscosities[:, :, :, k],
         layers_thickness,
         pseudodiff,
     )) for k in 1:nt]
@@ -854,9 +854,9 @@ function copystructs2cpu(
     p_cpu = MultilayerEarth(
         Omega_cpu,
         c;
-        layers_begin = Array(p.layers_begin),
+        layer_boundaries = Array(p.layer_boundaries),
         layers_density = Array(p.layers_density),
-        layers_viscosity = Array(p.layers_viscosity),
+        layer_viscosities = Array(p.layer_viscosities),
     )
 
     return Omega_cpu, p_cpu

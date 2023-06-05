@@ -21,7 +21,7 @@ if occursin("homogeneous", case)
     p = MultilayerEarth(
         Omega,
         c,
-        layers_viscosity = lv,
+        layer_viscosities = lv,
     )
 elseif occursin("meanviscosity", case)
     log10_eta_channel = interpolate_visc_wiens_on_grid(Omega.X, Omega.Y)
@@ -31,7 +31,7 @@ elseif occursin("meanviscosity", case)
     p = MultilayerEarth(
         Omega,
         c,
-        layers_viscosity = lv,
+        layer_viscosities = lv,
     )
 elseif occursin("scaledviscosity", case)
     lb = [88e3, 180e3, 280e3, 400e3]
@@ -49,12 +49,12 @@ elseif occursin("scaledviscosity", case)
     p = MultilayerEarth(
         Omega,
         c,
-        layers_begin = lb,
-        layers_viscosity = lv,
+        layer_boundaries = lb,
+        layer_viscosities = lv,
     )
 end
 
-lv = [p.layers_viscosity[:, :, i] for i in axes(p.layers_viscosity, 3)[3:end]]
+lv = [p.layer_viscosities[:, :, i] for i in axes(p.layer_viscosities, 3)[3:end]]
 push!(lv, p.effective_viscosity)
 
 fig = Figure(resolution = (2000, 500), fontsize = 20)

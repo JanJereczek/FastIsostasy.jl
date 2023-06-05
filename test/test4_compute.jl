@@ -19,7 +19,7 @@ function main(n::Int, case::String; use_cuda::Bool = true, solver = "ExplicitEul
         p = MultilayerEarth(
             Omega,
             c,
-            layers_viscosity = lv,
+            layer_viscosities = lv,
         )
     elseif occursin("meanviscosity", case)
         log10_eta_channel = interpolate_visc_wiens_on_grid(Omega.X, Omega.Y)
@@ -29,7 +29,7 @@ function main(n::Int, case::String; use_cuda::Bool = true, solver = "ExplicitEul
         p = MultilayerEarth(
             Omega,
             c,
-            layers_viscosity = lv,
+            layer_viscosities = lv,
         )
     elseif occursin("scaledviscosity", case)
         lb = [88e3, 180e3, 280e3, 400e3]
@@ -47,8 +47,8 @@ function main(n::Int, case::String; use_cuda::Bool = true, solver = "ExplicitEul
         p = MultilayerEarth(
             Omega,
             c,
-            layers_begin = lb,
-            layers_viscosity = lv,
+            layer_boundaries = lb,
+            layer_viscosities = lv,
         )
     end
     

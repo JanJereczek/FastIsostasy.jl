@@ -20,7 +20,7 @@ function main(
     results = [sol["results"] for sol in sols]
     u_plot = [res.viscous for res in results]
     D_plot = [sol["p"].litho_thickness for sol in sols[1:2]]
-    η_plot = [log10.(sol["p"].layers_viscosity[:,:,1]) for sol in sols[3:4]]
+    η_plot = [log10.(sol["p"].layer_viscosities[:,:,1]) for sol in sols[3:4]]
     var_plots = u_plot
     p_plots = vcat(D_plot, η_plot)
 

@@ -64,8 +64,8 @@ mutable struct MultilayerEarth{T<:AbstractFloat}
     litho_rigidity::XMatrix
     litho_poissonratio::T
     layers_density::Vector{T}
-    layers_viscosity::Array{T, 3}
-    layers_begin::Array{T, 3}
+    layer_viscosities::Array{T, 3}
+    layer_boundaries::Array{T, 3}
 end
 
 """

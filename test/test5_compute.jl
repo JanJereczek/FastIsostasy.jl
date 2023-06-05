@@ -25,8 +25,8 @@ function main(n::Int, active_gs::Bool; use_cuda::Bool = false,solver = "Explicit
     p = MultilayerEarth(
         Omega,
         c,
-        layers_begin = lb,
-        layers_viscosity = lv,
+        layer_boundaries = lb,
+        layer_viscosities = lv,
     )
 
     kernel = use_cuda ? "gpu" : "cpu"

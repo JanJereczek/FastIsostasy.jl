@@ -18,8 +18,8 @@ function main(
     H = T(1000)                 # ice disc thickness (m)
     c = PhysicalConstants()
     if occursin("2layers", case)
-        layers_viscosity = [1e21, 1e21]
-        p = MultilayerEarth(Omega, c, layers_viscosity = layers_viscosity)
+        layer_viscosities = [1e21, 1e21]
+        p = MultilayerEarth(Omega, c, layer_viscosities = layer_viscosities)
     elseif occursin("3layers", case)
         p = MultilayerEarth(Omega, c)
     end

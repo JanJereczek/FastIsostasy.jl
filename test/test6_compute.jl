@@ -27,8 +27,8 @@ function main(; n=5)
     p = MultilayerEarth(
         Omega,
         c,
-        layers_begin = lb,
-        layers_viscosity = lv,
+        layer_boundaries = lb,
+        layer_viscosities = lv,
     )
     ground_truth = copy(p.effective_viscosity)
 
