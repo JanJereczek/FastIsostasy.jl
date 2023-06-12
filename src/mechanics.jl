@@ -53,7 +53,6 @@ function PrecomputedFastiso(
     if Omega.use_cuda
         Xgpu = CuArray(Omega.X)
         p1, p2 = CUDA.CUFFT.plan_fft(Xgpu), CUDA.CUFFT.plan_ifft(Xgpu)
-        # Dx, Dy, Dxx, Dyy, Dxy, rhog = convert2CuArray([Dx, Dy, Dxx, Dxy, Dyy, rhog])
         Dx, Dy, Dxx, Dyy, Dxy = convert2CuArray([Dx, Dy, Dxx, Dxy, Dyy])
     else
         p1, p2 = plan_fft(Omega.X), plan_ifft(Omega.X)
@@ -102,7 +101,7 @@ function fastisostasy(
 
     u_viscous_0, u_elastic_0 = kernelpromote(
         [u_viscous_0, u_elastic_0], Omega.arraykernel)   # Handle xPU architecture
-    sstruct = init_superstruct(Omega, c, p, t_Hice_snapshots, Hice_snapshots,
+    sstruct = SuperStruct(Omega, c, p, t_Hice_snapshots, Hice_snapshots,
         t_eta_snapshots, eta_snapshots, interactive_sealevel; kwargs...)
     u, dudt, u_elastic, geoid, sealevel = forward_isostasy(
         dt, t_out, u_viscous_0, sstruct, ODEsolver, verbose)
@@ -128,11 +127,11 @@ end
 
 """
 
-    init_superstruct()
+    SuperStruct()
 
 Init a `SuperStruct` containing all necessary fields for forward integration in time.
 """
-function init_superstruct(
+function SuperStruct(
     Omega::ComputationDomain{T},
     c::PhysicalConstants{T},
     p::MultilayerEarth{T},
@@ -161,7 +160,7 @@ function init_superstruct(
     eta_cpu = linear_interpolation(t_eta_snapshots,
         kernelpromote(eta_snapshots, Array) )
 
-    refslstate = RefSealevelState(
+    refgeostate = RefGeoState(
         H_ice_ref, H_water_ref, b_ref,
         copy(sealevel_0),   # z0
         sealevel_0,         # sealevel
@@ -170,7 +169,7 @@ function init_superstruct(
         T(0.0),             # V_den
         T(0.0),             # conservation_term
     )
-    slstate = SealevelState(
+    geostate = GeoState(
         Hice(0.0),                  # ice column
         copy(H_water_ref),          # water column
         copy(b_ref),                # bedrock position
@@ -183,7 +182,7 @@ function init_superstruct(
         0, years2seconds(10.0),     # countupdates, update step
     )
     return SuperStruct(Omega, c, p, tools, Hice, Hice_cpu, eta, eta_cpu,
-        refslstate, slstate, interactive_sealevel)
+        refgeostate, geostate, interactive_sealevel)
 end
 
 """
@@ -224,8 +223,8 @@ function forward_isostasy(
         
         u_out[k] .= copy(kernelpromote(u, Array))
         dudt_out[k] .= copy(kernelpromote(dudt, Array))
-        geoid_out[k] .= copy(kernelpromote(sstruct.slstate.geoid, Array))
-        sealevel_out[k] .= copy(kernelpromote(sstruct.slstate.sealevel, Array))
+        geoid_out[k] .= copy(kernelpromote(sstruct.geostate.geoid, Array))
+        sealevel_out[k] .= copy(kernelpromote(sstruct.geostate.sealevel, Array))
     end
     return u_out, dudt_out, u_el_out, geoid_out, sealevel_out
 end
@@ -262,10 +261,10 @@ function forwardstep_isostasy!(
 ) where {T<:AbstractFloat}
     corner_bc!(u, sstruct.Omega.N)
     if sstruct.interactive_sealevel &&
-        (t / sstruct.slstate.dt >= sstruct.slstate.countupdates)
+        (t / sstruct.geostate.dt >= sstruct.geostate.countupdates)
         update_slstate!(sstruct, u, sstruct.Hice(t))
-        sstruct.slstate.countupdates += 1
-        # println("Updated SealevelState at t=$(seconds2years(t))")
+        sstruct.geostate.countupdates += 1
+        # println("Updated GeoState at t=$(seconds2years(t))")
     end
     dudt_isostasy!(dudt, u, sstruct, t)
     return nothing
@@ -289,12 +288,10 @@ function dudt_isostasy!(
         load = ice_load(sstruct.c, sstruct.Hice(t))
     end
 
-    projection_correction = true
-    if projection_correction
-        load ./= sstruct.Omega.K .^ 2
-    end
-
     rhs = load - sstruct.tools.rhog .* u
+    if sstruct.Omega.projection_correction
+        rhs ./= (sstruct.Omega.K .^ 2)
+    end
 
     if sstruct.tools.negligible_gradD
         rhs += - sstruct.p.litho_rigidity .* real.( sstruct.tools.pifft *

@@ -48,7 +48,7 @@ function main(n::Int, active_gs::Bool; use_cuda::Bool = false,solver = "Explicit
         Omega, p = copystructs2cpu(Omega, c, p)
     end
 
-    case = active_gs ? "slstate" : "isostate"
+    case = active_gs ? "geostate" : "isostate"
     jldsave(
         "data/test5/$(case)_N$(Omega.N).jld2",
         Omega = Omega, c = c, p = p,

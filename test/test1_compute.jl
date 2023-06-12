@@ -33,7 +33,7 @@ function main(
         Omega, p = copystructs2cpu(Omega, c, p)
     end
 
-    gs = active_gs ? "slstate" : "isostate"
+    gs = active_gs ? "geostate" : "isostate"
     filename = "$(solver)_N$(Omega.N)_$(kernel)_$(gs)"
     jldsave(
         "data/test1/$filename.jld2",

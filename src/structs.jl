@@ -22,6 +22,7 @@ struct ComputationDomain{T<:AbstractFloat}
     Lat::XMatrix
     Lon::XMatrix
     K::XMatrix
+    projection_correction::Bool
     null::XMatrix         # a zero matrix of size Nx x Ny
     pseudodiff::XMatrix   # pseudodiff operator
     harmonic::XMatrix     # harmonic operator
@@ -69,11 +70,11 @@ mutable struct MultilayerEarth{T<:AbstractFloat}
 end
 
 """
-    RefSealevelState
+    RefGeoState
 
-Return a struct containing the reference slstate. We define the slstate to be all quantities related to sea-level.
+Return a struct containing the reference geostate. We define the geostate to be all quantities related to sea-level.
 """
-struct RefSealevelState{T<:AbstractFloat}
+struct RefGeoState{T<:AbstractFloat}
     H_ice::XMatrix        # reference height of ice column
     H_water::XMatrix      # reference height of water column
     b::XMatrix            # reference bedrock position
@@ -86,11 +87,11 @@ struct RefSealevelState{T<:AbstractFloat}
 end
 
 """
-    SealevelState
+    GeoState
 
-Return a mutable struct containing the slstate which will be updated over the simulation.
+Return a mutable struct containing the geostate which will be updated over the simulation.
 """
-mutable struct SealevelState{T<:AbstractFloat}
+mutable struct GeoState{T<:AbstractFloat}
     H_ice::XMatrix          # current height of ice column
     H_water::XMatrix        # current height of water column
     b::XMatrix              # vertical bedrock position
@@ -104,7 +105,7 @@ mutable struct SealevelState{T<:AbstractFloat}
     V_den::T                # potential ocean volume associated with density differences
     slc_den::T              # sea-level contribution associated with V_den
     slc::T                  # total sealevel contribution
-    countupdates::Int       # count the updates of the slstate
+    countupdates::Int       # count the updates of the geostate
     dt::T                   # update step
 end
 
@@ -142,8 +143,8 @@ struct SuperStruct{T<:AbstractFloat}
     Hice_cpu::Interpolations.Extrapolation
     eta::Interpolations.Extrapolation
     eta_cpu::Interpolations.Extrapolation
-    refslstate::RefSealevelState{T}
-    slstate::SealevelState{T}
+    refgeostate::RefGeoState{T}
+    geostate::GeoState{T}
     interactive_sealevel::Bool
 end
 

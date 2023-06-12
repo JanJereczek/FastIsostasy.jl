@@ -6,8 +6,8 @@
 ComputationDomain
 PhysicalConstants
 MultilayerEarth
-RefSealevelState
-SealevelState
+RefGeoState
+GeoState
 PrecomputedFastiso
 SuperStruct
 FastisoResults
@@ -18,7 +18,6 @@ FastisoResults
 ```@docs
 ice_load
 fastisostasy
-init_superstruct
 forward_isostasy
 init_results
 forwardstep_isostasy!
