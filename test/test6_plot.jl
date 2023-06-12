@@ -5,7 +5,7 @@ function main(; n=5)
     sol = load("data/test6/n=$n.jld2")
     ground_truth, paraminv = sol["ground_truth"], sol["paraminv"]
 
-    titles = [W"True viscosity field $\,$", W"Estimated viscosity field $\,$"]
+    titles = [L"True viscosity field $\,$", L"Estimated viscosity field $\,$"]
     cmap = cgrad(:jet, rev=true)
     ncols = length(titles)
 

@@ -52,10 +52,10 @@ function slice_spada(
     colors = [:gray80, :gray65, :gray50, :gray35, :gray20, :gray5]
 
     # Just for the legend
-    hlines!(axs[1], [1e10], color = :gray5, label = W"FastIsostasy.jl $\,$")
-    hlines!(axs[1], [1e10], color = :gray5, linestyle = :dash, label = W"(Spada et al. 2011) $\,$")
-    hlines!(axs[1], [1e10], color = :transparent, label = W"_______________ $\,$")
-    hlines!(axs[1], [1e10], color = :transparent, label = W" $\,$")
+    hlines!(axs[1], [1e10], color = :gray5, label = L"FastIsostasy.jl $\,$")
+    hlines!(axs[1], [1e10], color = :gray5, linestyle = :dash, label = L"(Spada et al. 2011) $\,$")
+    hlines!(axs[1], [1e10], color = :transparent, label = L"_______________ $\,$")
+    hlines!(axs[1], [1e10], color = :transparent, label = L" $\,$")
     
     for i in 1:ncases
         U = vars[i]
@@ -83,7 +83,7 @@ function slice_spada(
                 axs[i],
                 theta,
                 U[k][slicey, slicex:end],
-                label = W"$t = %$tyr $ yr",
+                label = L"$t = %$tyr $ yr",
                 color = colors[l],
             )
         end
@@ -141,8 +141,8 @@ function main(
     end
     
     labels = [
-        W"Disc load $\,$",
-        W"Cap load $\,$",
+        L"Disc load $\,$",
+        L"Cap load $\,$",
         "",
         "",
         "",
@@ -154,16 +154,16 @@ function main(
         "",
         "",
         "",
-        W"Colatitude $\theta$ (deg)",
-        W"Colatitude $\theta$ (deg)",
+        L"Colatitude $\theta$ (deg)",
+        L"Colatitude $\theta$ (deg)",
     ]
 
     ylabels = [
-        W"$u$ (m)", # Total displacement 
+        L"$u$ (m)", # Total displacement 
         "",
-        W"$\dot{u} \: \mathrm{(mm \, yr^{-1}})$",   # Displacement rate 
+        L"$\dot{u} \: \mathrm{(mm \, yr^{-1}})$",   # Displacement rate 
         "",
-        W"$N$ (m)", # Geoid perturbation 
+        L"$N$ (m)", # Geoid perturbation 
         "",
     ]
 

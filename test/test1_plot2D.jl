@@ -67,11 +67,11 @@ function main(
         (2,3),
     ]
     labels = [
-        W"Analytical solution for viscous displacement (m) $\,$",
-        W"Vertical displacement of viscous response $u^V$ (m)",
-        W"Vertical displacement of elastic response $u^E$ (m)",
-        W"Numerical minus analytical solution $u^V - u^A$ (m)",
-        W"Total vertical displacement $u^E + u^V$ (m)",
+        L"Analytical solution for viscous displacement (m) $\,$",
+        L"Vertical displacement of viscous response $u^V$ (m)",
+        L"Vertical displacement of elastic response $u^E$ (m)",
+        L"Numerical minus analytical solution $u^V - u^A$ (m)",
+        L"Total vertical displacement $u^E + u^V$ (m)",
     ]
     if make_plot
         response_fig = plot_response(

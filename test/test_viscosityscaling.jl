@@ -83,6 +83,6 @@ Colorbar(
     colorrange = visclim,
     vertical = false,
     width = Relative(0.3),
-    label = W"Log$_{10}$-viscosity ($\mathrm{Pa \, s})$",
+    label = L"Log$_{10}$-viscosity ($\mathrm{Pa \, s})$",
     ticks = viscticks,
 )

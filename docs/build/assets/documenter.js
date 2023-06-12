@@ -195,11 +195,11 @@ $(document).ready(function() {
 $(document).ready(function() {
   e = $("#documenter .docs-autofit");
   function resize() {
-    var W = parseInt(e.css('max-width'), 10);
+    var L = parseInt(e.css('max-width'), 10);
     var L0 = e.width();
-    if(L0 > W) {
+    if(L0 > L) {
       var h0 = parseInt(e.css('font-size'), 10);
-      e.css('font-size', W * h0 / L0);
+      e.css('font-size', L * h0 / L0);
       // TODO: make sure it survives resizes?
     }
   }

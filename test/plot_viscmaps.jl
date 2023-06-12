@@ -19,7 +19,7 @@ function main(
     lv = [p.layer_viscosities[:, :, i] for i in axes(p.layer_viscosities, 3)[1:end-1]]
     push!(lv, p.effective_viscosity)
 
-    labels = [W"$\textbf{(%$char)}$" for char in ["a", "b", "c", "d"]]
+    labels = [L"$\textbf{(%$char)}$" for char in ["a", "b", "c", "d"]]
 
     xticks = (-3e6:1e6:3e6, num2latexstring.(-3:3))
     yticks = (-3e6:1e6:3e6, num2latexstring.(-3:3))
@@ -36,16 +36,16 @@ function main(
     Xticksvisible = [true, true, true, true]
     Yticksvisible = [true, false, false, true]
     xlabels = [
-        W"$x \: (10^3 \, \mathrm{km})$",
-        W"$x \: (10^3 \, \mathrm{km})$",
-        W"$x \: (10^3 \, \mathrm{km})$",
-        W"$x \: (10^3 \, \mathrm{km})$",
+        L"$x \: (10^3 \, \mathrm{km})$",
+        L"$x \: (10^3 \, \mathrm{km})$",
+        L"$x \: (10^3 \, \mathrm{km})$",
+        L"$x \: (10^3 \, \mathrm{km})$",
     ]
     ylabels = [
-        W"$y \: (10^3 \, \mathrm{km})$",
+        L"$y \: (10^3 \, \mathrm{km})$",
         "",
         "",
-        W"$y \: (10^3 \, \mathrm{km})$",
+        L"$y \: (10^3 \, \mathrm{km})$",
     ]
     Xposition = [:bottom, :bottom, :bottom, :bottom]
     Yposition = [:left, :left, :left, :right]
@@ -88,7 +88,7 @@ function main(
             axs[k],
             Omega.X[points[1]],
             Omega.Y[points[1]] - yoffset;
-            text = W"$\textbf{1}$",
+            text = L"$\textbf{1}$",
             align = (:center, :top),
             fontsize = 20,
             color = k <= 3 ? :white : pcolor,
@@ -97,7 +97,7 @@ function main(
             axs[k],
             Omega.X[points[2]],
             Omega.Y[points[2]] + yoffset;
-            text = W"$\textbf{2}$",
+            text = L"$\textbf{2}$",
             align = (:center, :bottom),
             fontsize = 20,
             color = k <= 3 ? :white : pcolor,
@@ -110,7 +110,7 @@ function main(
         colorrange = visclim,
         vertical = false,
         width = Relative(0.3),
-        label = W"Log$_{10}$-viscosity ($\mathrm{Pa \, s})$",
+        label = L"Log$_{10}$-viscosity ($\mathrm{Pa \, s})$",
         ticks = viscticks,
     )
     save("plots/$suffix.png", fig)

@@ -45,7 +45,7 @@ Generate a vector of constant matrices from a vector of constants.
 function matrify_vectorconstant(x::Vector{T}, N::Int) where {T<:AbstractFloat}
     X = zeros(T, N, N, length(x))
     @inbounds for i in eachindex(x)
-        X[:, :, i] = fill(x, N, N)
+        X[:, :, i] = fill(x[i], N, N)
     end
     return X
 end
@@ -80,8 +80,8 @@ end
 Convert Euclidean to angular distance along great circle.
 """
 function dist2angulardist(r::Real)
-    r_equator = 6.371e6
-    return 2 * atan( r / (2 * r_equator) )
+    R = 6.371e6     # radius at equator
+    return 2 * atan( r / (2 * R) )
 end
 
 """
@@ -95,8 +95,7 @@ if the scale factor is to be computed for the whole domain.
 Note: angles must be provided in radians!
 Reference: John P. Snyder (1987), p. 157, eq. (21-4).
 """
-function scalefactor(lat::T, lon::T, lat0::T, lon0::T;
-    k0::T = T(1)) where {T<:Real}
+function scalefactor(lat::T, lon::T, lat0::T, lon0::T; k0::T = T(1)) where {T<:Real}
     return 2*k0 / (1 + sin(lat0)*sin(lat) + cos(lat0)*cos(lat)*cos(lon-lon0))
 end
 
@@ -104,8 +103,7 @@ function scalefactor(lat::XMatrix, lon::XMatrix, lat0::T, lon0::T;
     kwargs... ) where {T<:Real}
     K = similar(lat)
     @inbounds for idx in CartesianIndices(lat)
-        K[idx] = scalefactor(lat[idx], lon[idx], lat0, lon0,
-            kwargs...)
+        K[idx] = scalefactor(lat[idx], lon[idx], lat0, lon0, kwargs...)
     end
     return K
 end
@@ -158,7 +156,7 @@ Convert stereographic (x,y)-coordinates to latitude-longitude.
 Reference: John P. Snyder (1987), p. 159, eq. (20-14), (20-15), (20-18), (21-15).
 """
 function stereo2latlon(x::T, y::T, lat0::T, lon0::T;
-    R::T = T(6.371e6), kwargs...) where {T<:Real}
+    R::T = T(6.371e6), k0::T = T(1)) where {T<:Real}
     lat0, lon0 = deg2rad.([lat0, lon0])
     r = get_r(x, y) + 1e-20     # add small tolerance to avoid division by zero
     c = 2 * atan( r/(2*R*k0) )
@@ -172,8 +170,7 @@ function stereo2latlon(
     y::XMatrix,
     lat0::T,
     lon0::T;
-    R::T = T(6.371e6),      # Earth radius
-    k0::T = T(1.0),
+    kwargs...,
 ) where {T<:Real}
     Lat, Lon = copy(x), copy(x)
     @inbounds for idx in CartesianIndices(x)

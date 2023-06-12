@@ -41,10 +41,10 @@ function main()
         letter = letters[i]
         ax3D = Axis3(
             fig[2, i],
-            title = W"(%$letter) $t = %$tyr$ yr",
-            xlabel = W"$x \: (10^3 \: \mathrm{km})$",
-            ylabel = W"$y \: (10^3 \: \mathrm{km})$",
-            zlabel = W"$u \: (\mathrm{m})$",
+            title = L"(%$letter) $t = %$tyr$ yr",
+            xlabel = L"$x \: (10^3 \: \mathrm{km})$",
+            ylabel = L"$y \: (10^3 \: \mathrm{km})$",
+            zlabel = L"$u \: (\mathrm{m})$",
             titlegap = tgap,
             xticks = (-3e6:1e6:3e6, string.(-3:1:3)),
             yticks = (-3e6:1e6:3e6, string.(-3:1:3)),
@@ -76,7 +76,7 @@ function main()
         fig[1, :],
         colorrange = clim,
         colormap = cmap,
-        label = W"Viscous displacement $u$ (m)$",
+        label = L"Viscous displacement $u$ (m)$",
         vertical = false,
         width = Relative(0.4),
         height = 40,
@@ -90,9 +90,9 @@ function main()
     x, y = diag(Omega.X)[N2:N2+N4], diag(Omega.Y)[N2:N2+N4]
     ax3 = Axis(
         fig[3, 1],
-        title = W"(d) $\,$",
-        xlabel = W"$x \: (10^3 \: \mathrm{km})$ ",
-        ylabel = W"$u$ (m)",
+        title = L"(d) $\,$",
+        xlabel = L"$x \: (10^3 \: \mathrm{km})$ ",
+        ylabel = L"$u$ (m)",
         xticks = (0:0.5e6:2e6, string.(0:0.5:2)),
         titlegap = tgap,
     )
@@ -109,7 +109,7 @@ function main()
                 ax3,
                 x,
                 u_numeric[N2:N2+N4],
-                label = W"numeric $\,$",
+                label = L"numeric $\,$",
                 color = colors[i],
                 linewidth = lwidth,
             )
@@ -117,7 +117,7 @@ function main()
                 ax3,
                 x,
                 u_analytic,
-                label = W"analytic $\,$",
+                label = L"analytic $\,$",
                 linestyle = :dash,
                 color = colors[i],
                 linewidth = lwidth,
@@ -144,7 +144,7 @@ function main()
             ax3,
             x[xoffset[i]],
             u_numeric[N2] + yoffset[i],
-            text = W"$ %$tyr $ yr",
+            text = L"$ %$tyr $ yr",
             align = (:left, :bottom),
             color = colors[i],
             fontsize = ftsize,
@@ -177,30 +177,30 @@ function main()
     end
     ax1 = Axis(
         fig[3,2],
-        title = W"(e) $\,$",
-        xlabel = W"$N = N_{x} = N_{y} $ (1)",
-        ylabel = W"Error (m)$\,$",
+        title = L"(e) $\,$",
+        xlabel = L"$N = N_{x} = N_{y} $ (1)",
+        ylabel = L"Error (m)$\,$",
         xscale = log2,
         yscale = log10,
-        yticks = (10. .^ (-1:1), [W"$10^{%$l}$" for l in -1:1]),
+        yticks = (10. .^ (-1:1), [L"$10^{%$l}$" for l in -1:1]),
         yminorticks = IntervalsBetween(9),
         yminorticksvisible = true,
         yminorgridvisible = true,
         titlegap = tgap,
     )
 
-    scatterlines!(ax1, Nvec, maxerror, label = W"Maximum $\,$", linewidth = lwidth, markersize = msize)
-    scatterlines!(ax1, Nvec, meanerror, label = W"Average $\,$", linewidth = lwidth, markersize = msize)
+    scatterlines!(ax1, Nvec, maxerror, label = L"Maximum $\,$", linewidth = lwidth, markersize = msize)
+    scatterlines!(ax1, Nvec, meanerror, label = L"Average $\,$", linewidth = lwidth, markersize = msize)
     axislegend(ax1, position = :lb, width = 320, linepoints = [Point2f(0, 0.5), Point2f(2, 0.5)], patchlabelgap = 40)
 
     ax2 = Axis(
         fig[3,3],
-        title = W"(f) $\,$",
-        xlabel = W"$N = N_{x} = N_{y} $ (1)",
-        ylabel = W"Run time (s) $\,$",
+        title = L"(f) $\,$",
+        xlabel = L"$N = N_{x} = N_{y} $ (1)",
+        ylabel = L"Run time (s) $\,$",
         xscale = log2,
         yscale = log10,
-        yticks = (10. .^ (0:3), [W"$10^{%$l} $" for l in 0:3]),
+        yticks = (10. .^ (0:3), [L"$10^{%$l} $" for l in 0:3]),
         yminorticks = IntervalsBetween(9),
         yminorticksvisible = true,
         yminorgridvisible = true,
@@ -215,7 +215,7 @@ function main()
             append!(runtime, sol["t_fastiso"])
             append!(delta_x, 2*sol["Omega"].Wx * 1e-3 / N)
         end
-        scatterlines!(ax2, Nvec, runtime, label = W"%$kernel $\,$", linewidth = lwidth, markersize = msize)
+        scatterlines!(ax2, Nvec, runtime, label = L"%$kernel $\,$", linewidth = lwidth, markersize = msize)
     end
     axislegend(ax2, position = :lt, width = 200, linepoints = [Point2f(0, 0.5), Point2f(2, 0.5)], patchlabelgap = 40)
 

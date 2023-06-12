@@ -284,10 +284,16 @@ function dudt_isostasy!(
     t::T,
 ) where {T<:AbstractFloat}
     if sstruct.interactive_sealevel
-        load = ice_load(sstruct.c, sstruct.Hice(t))
-    else
         load = get_loadchange(sstruct)
+    else
+        load = ice_load(sstruct.c, sstruct.Hice(t))
     end
+
+    projection_correction = true
+    if projection_correction
+        load ./= sstruct.Omega.K .^ 2
+    end
+
     rhs = load - sstruct.tools.rhog .* u
 
     if sstruct.tools.negligible_gradD
