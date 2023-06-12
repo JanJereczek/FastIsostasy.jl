@@ -15,7 +15,10 @@ function main(
 )
 
     N = 2^n
-    sol = load("data/test1/$(case)_N$(N)_cpu.jld2")
+    kernel = "cpu"
+    gs = "isostate"
+    filekey = "$(case)_N$(N)_$(kernel)_$gs"
+    sol = load("data/test1/$filekey.jld2")
     R, H, Omega, c, p = sol["R"], sol["H"], sol["Omega"], sol["c"], sol["p"]
     results = sol["results"]
     analytic_support = vcat(1.0e-14, 10 .^ (-10:0.05:0))
@@ -55,8 +58,8 @@ function main(
         )
     end
 
-    save("plots/test1/$(case)_transients_N$N.png", fig)
-    save("plots/test1/$(case)_transients_N$N.pdf", fig)
+    save("plots/test1/$filekey.png", fig)
+    save("plots/test1/$filekey.pdf", fig)
 end
 
 case = "ExplicitEuler"

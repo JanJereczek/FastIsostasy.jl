@@ -24,7 +24,8 @@ function main(
     t_out = years2seconds.([0.0, 100.0, 500.0, 1500.0, 5000.0, 10_000.0, 50_000.0])
 
     t1 = time()
-    results = fastisostasy(t_out, Omega, c, p, Hcylinder, ODEsolver=solver, interactive_geostate=active_gs)
+    results = fastisostasy(t_out, Omega, c, p, Hcylinder, ODEsolver=solver,
+        interactive_geostate=active_gs)
     t_fastiso = time() - t1
     println("Took $t_fastiso seconds!")
     println("-------------------------------------")
@@ -45,9 +46,9 @@ function main(
 end
 
 # ["ExplicitEuler", BS3(), VCABM(), Rosenbrock23(autodiff=false)]
-for use_cuda in [true] # [false, true]
+for use_cuda in [false] # [false, true]
     for active_gs in [false] # [false, true]
-        for n in 4:6 # 3:8
+        for n in 6:6 # 3:8
             main(n, use_cuda = use_cuda, solver = "ExplicitEuler", active_gs = active_gs)
         end
     end

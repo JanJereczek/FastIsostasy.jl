@@ -98,7 +98,7 @@ Base.@kwdef struct PhysicalConstants{T<:AbstractFloat}
     A_ocean::T = 3.625e14                      # Ocean surface (m) as in Goelzer (2020) before Eq. (9)
     g::T = 9.81                                # Mean Earth acceleration at surface (m/s^2)
     G::T = 6.674e-11                           # Gravity constant (m^3 kg^-1 s^-2)
-    seconds_per_year::T = 60^2 * 24 * 365.25   # (s)
+    seconds_per_year::T = SECONDS_PER_YEAR      # (s)
     rho_ice::T = 0.910e3                       # (kg/m^3)
     rho_water::T = 1.023e3                     # (kg/m^3)
     rho_seawater::T = 1.023e3                  # (kg/m^3)

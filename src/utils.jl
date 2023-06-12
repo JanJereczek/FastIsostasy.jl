@@ -2,6 +2,8 @@
 # Unit conversion utils
 #####################################################
 
+global SECONDS_PER_YEAR = 60^2 * 24 * 365.25
+
 """
 
     years2seconds(t::Real)
@@ -9,7 +11,7 @@
 Convert input time `t` from years to seconds.
 """
 function years2seconds(t::Real)
-    return t * seconds_per_year
+    return t * SECONDS_PER_YEAR
 end
 
 """
@@ -19,7 +21,7 @@ end
 Convert input time `t` from seconds to years.
 """
 function seconds2years(t::Real)
-    return t / seconds_per_year
+    return t / SECONDS_PER_YEAR
 end
 
 """
@@ -29,7 +31,7 @@ end
 Convert displacement rate `dudt` from \$ m \\, s^{-1} \$ to \$ mm \\, \\mathrm{yr}^{-1} \$.
 """
 function m_per_sec2mm_per_yr(dudt::Real)
-    return dudt * 1e3 * seconds_per_year
+    return dudt * 1e3 * SECONDS_PER_YEAR
 end
 
 #####################################################

@@ -23,7 +23,6 @@ using Reexport
 # KuttaPRK2p5(dt=), Trapezoid(autodiff = false), PDIRK44(autodiff = false)
 
 include("structs.jl")
-include("parameters.jl")
 include("utils.jl")
 include("derivatives.jl")
 include("geostate.jl")

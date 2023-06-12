@@ -4,7 +4,7 @@
 
 Update the geoid of a `::GeoState` by convoluting the Green's function with the load anom.
 """
-function update_geoid!(sstruct::SuperStruct{T}) where {T<:AbstractFloat}
+function update_geoid!(sstruct::SuperStruct{<:AbstractFloat})
     sstruct.geostate.geoid .= view(
         conv( sstruct.tools.geoidgreen, loadanom_green(sstruct) ),
         sstruct.Omega.N2:2*sstruct.Omega.N-1-sstruct.Omega.N2,
@@ -19,7 +19,7 @@ end
 
 Compute the density-scaled anomaly of the ice column w.r.t. the reference state.
 """
-function columnanom_ice(sstruct::SuperStruct{T}) where {T<:AbstractFloat}
+function columnanom_ice(sstruct::SuperStruct{<:AbstractFloat})
     column = sstruct.c.rho_ice .* (sstruct.geostate.H_ice - sstruct.refgeostate.H_ice)
     return corrected_column(column, sstruct)
 end
@@ -30,7 +30,7 @@ end
 
 Compute the density-scaled anomaly of the (liquid) water column w.r.t. the reference state.
 """
-function columnanom_water(sstruct::SuperStruct{T}) where {T<:AbstractFloat}
+function columnanom_water(sstruct::SuperStruct{<:AbstractFloat})
     column = sstruct.c.rho_seawater .* (sstruct.geostate.H_water -
         sstruct.refgeostate.H_water)
     return corrected_column(column, sstruct)
@@ -66,7 +66,8 @@ Compute the density-scaled anomaly of the all the columns (ice + liquid water + 
 w.r.t. the reference state.
 """
 function columnanom_full(sstruct::SuperStruct{T}) where {T<:AbstractFloat}
-    return columnanom_load(sstruct) - columnanom_mantle(sstruct)
+    # columns are added here, as sign of u is negative
+    return columnanom_load(sstruct) + columnanom_mantle(sstruct)
 end
 
 function loadanom_green(sstruct::SuperStruct{T}) where {T<:AbstractFloat}
@@ -75,7 +76,7 @@ end
 
 function corrected_column(column::Matrix, sstruct::SuperStruct)
     if sstruct.Omega.projection_correction
-        return column .* Omega.K
+        return column .* sstruct.Omega.K
     else
         return column
     end
