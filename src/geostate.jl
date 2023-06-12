@@ -42,7 +42,7 @@ end
 
 Compute the density-scaled anomaly of the mantle column w.r.t. the reference state.
 """
-function columnanom_mantle(sstruct::SuperStruct{T}) where {T<:AbstractFloat}
+function columnanom_mantle(sstruct::SuperStruct{<:AbstractFloat})
     column = sstruct.p.mean_density[1] .* (sstruct.geostate.b - sstruct.refgeostate.b)
     return corrected_column(column, sstruct)
 end
@@ -54,7 +54,7 @@ end
 Compute the density-scaled anomaly of the load (ice + liquid water) column w.r.t.
 the reference state.
 """
-function columnanom_load(sstruct::SuperStruct{T}) where {T<:AbstractFloat}
+function columnanom_load(sstruct::SuperStruct{<:AbstractFloat})
     return columnanom_ice(sstruct) + columnanom_water(sstruct)
 end
 
@@ -65,12 +65,13 @@ end
 Compute the density-scaled anomaly of the all the columns (ice + liquid water + mantle)
 w.r.t. the reference state.
 """
-function columnanom_full(sstruct::SuperStruct{T}) where {T<:AbstractFloat}
-    # columns are added here, as sign of u is negative
+function columnanom_full(sstruct::SuperStruct{<:AbstractFloat})
+    # columnanom_mantle() depends on sign of u, which is negative for depression.
+    # Therefore, we only need to add the terms below.
     return columnanom_load(sstruct) + columnanom_mantle(sstruct)
 end
 
-function loadanom_green(sstruct::SuperStruct{T}) where {T<:AbstractFloat}
+function loadanom_green(sstruct::SuperStruct{<:AbstractFloat})
     return (sstruct.Omega.dx * sstruct.Omega.dy) .* columnanom_full(sstruct)
 end
 
@@ -92,14 +93,17 @@ Return the Green's function used to compute the anoms in geoid.
 
 Coulon et al. 2021.
 """
-function get_geoidgreen(Omega::ComputationDomain, c::PhysicalConstants{T}) where {T<:AbstractFloat}
+function get_geoidgreen(
+    Omega::ComputationDomain{T},
+    c::PhysicalConstants{T},
+) where {T<:AbstractFloat}
     geoidgreen = unbounded_geoidgreen(Omega.R, c)
     max_geoidgreen = unbounded_geoidgreen(norm([Omega.dx, Omega.dy]), c)  # tolerance = resolution
     return min.(geoidgreen, max_geoidgreen)
     # equivalent to: geoidgreen[geoidgreen .> max_geoidgreen] .= max_geoidgreen
 end
 
-function unbounded_geoidgreen(R, c::PhysicalConstants{T}) where {T<:AbstractFloat}
+function unbounded_geoidgreen(R, c::PhysicalConstants{<:AbstractFloat})
     return c.r_pole ./ ( 2 .* c.mE .* sin.( R ./ (2 .* c.r_pole) ) )
 end
 
@@ -109,8 +113,8 @@ end
 
 Update the load columns of a `::GeoState`.
 """
-function update_loadcolumns!(
-    sstruct::SuperStruct{<:AbstractFloat}, u::XMatrix, H_ice::XMatrix)
+function update_loadcolumns!(sstruct::SuperStruct{<:AbstractFloat},
+    u::XMatrix, H_ice::XMatrix)
 
     sstruct.geostate.b .= sstruct.refgeostate.b .+ u
     sstruct.geostate.H_ice .= H_ice
@@ -131,7 +135,7 @@ Update the sea-level `::GeoState` by adding the various contributions.
 
 Coulon et al. (2021), Figure 1.
 """
-function update_sealevel!(sstruct::SuperStruct{T}) where {T<:AbstractFloat}
+function update_sealevel!(sstruct::SuperStruct{<:AbstractFloat})
     update_slc!(sstruct)
     sstruct.geostate.sealevel = sstruct.refgeostate.sealevel .+ 
         sstruct.geostate.geoid .+ sstruct.geostate.slc .+
@@ -150,7 +154,7 @@ and potential ocean volume.
 
 Goelzer et al. (2020), eq. (12).
 """
-function update_slc!(sstruct::SuperStruct{T}) where {T<:AbstractFloat}
+function update_slc!(sstruct::SuperStruct{<:AbstractFloat})
     update_V_af!(sstruct)
     update_V_pov!(sstruct)
     update_V_den!(sstruct)
@@ -173,7 +177,7 @@ Goelzer et al. (2020), eq. (13).
 Note: we do not use eq. (1) as it is only a special case of eq. (13) that does not
 allow a correct representation of external sea-level forcings.
 """
-function update_V_af!(sstruct::SuperStruct{T}) where {T<:AbstractFloat}
+function update_V_af!(sstruct::SuperStruct{<:AbstractFloat})
     sstruct.geostate.V_af = sum( sstruct.geostate.H_ice .+
         min.(sstruct.geostate.b .- sstruct.refgeostate.z0, 0) .*
         (sstruct.c.rho_seawater / sstruct.c.rho_ice) .*
@@ -191,7 +195,7 @@ Update the sea-level contribution of ice above floatation.
 
 Goelzer et al. (2020), eq. (2).
 """
-function update_slc_af!(sstruct::SuperStruct{T}) where {T<:AbstractFloat}
+function update_slc_af!(sstruct::SuperStruct{<:AbstractFloat})
     sstruct.geostate.sle_af = sstruct.geostate.V_af / sstruct.c.A_ocean *
         sstruct.c.rho_ice / sstruct.c.rho_seawater
     sstruct.geostate.slc_af = -( sstruct.geostate.sle_af - sstruct.refgeostate.sle_af )
@@ -227,7 +231,7 @@ Update the sea-level contribution associated with the potential ocean volume.
 
 Goelzer et al. (2020), eq. (9).
 """
-function update_slc_pov!(sstruct::SuperStruct{T}) where {T<:AbstractFloat}
+function update_slc_pov!(sstruct::SuperStruct{<:AbstractFloat})
     current = sstruct.geostate.V_pov / sstruct.c.A_ocean
     reference = sstruct.refgeostate.V_pov / sstruct.c.A_ocean
     sstruct.geostate.slc_pov = -(current - reference)
@@ -244,7 +248,7 @@ Update the ocean volume associated with the density correction.
 
 Goelzer et al. (2020), eq. (10).
 """
-function update_V_den!(sstruct::SuperStruct{T}) where {T<:AbstractFloat}
+function update_V_den!(sstruct::SuperStruct{<:AbstractFloat})
     density_factor = sstruct.c.rho_ice / sstruct.c.rho_water -
         sstruct.c.rho_ice / sstruct.c.rho_seawater
     sstruct.geostate.V_den = sum( sstruct.geostate.H_ice .* density_factor ./
@@ -262,17 +266,9 @@ Update the sea-level contribution associated with the density correction.
 
 Goelzer et al. (2020), eq. (11).
 """
-function update_slc_den!(sstruct::SuperStruct{T}) where {T<:AbstractFloat}
+function update_slc_den!(sstruct::SuperStruct{<:AbstractFloat})
     current = sstruct.geostate.V_den / sstruct.c.A_ocean
     reference = sstruct.refgeostate.V_den / sstruct.c.A_ocean
     sstruct.geostate.slc_den = -( current - reference )
     return nothing
 end
-
-# function RefGeoState(gs::GeoState{T}) where {T<:AbstractFloat}
-#     return RefGeoState(
-#         gs.H_ice, gs.H_water, gs.b,
-#         gs.z0, gs.sealevel, gs.V_af, gs.sle_af,
-#         gs.V_pov, gs.V_den, gs.conservation_term,
-#     )
-# end
