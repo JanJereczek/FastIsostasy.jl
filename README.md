@@ -5,9 +5,12 @@
 This package is mainly addressed to ice sheet modellers looking for a regional model of glacial isostatic adjustment (GIA) that (1) captures the 3D structure of solid-Earth parameters, (2) computes an approximation of the sea-level equation, (3) runs kiloyear simulations on high resolution within minutes (without the need of HPC hardware) and (4) comes with ready-to-use calibration tools. For GIA "purists", this package is likely to miss interesting processes but we belive that the ridiculous run-time of FastIsostasy.jl can help them to perform some fast prototypting of a problem they might then transfer to a more comprehensive model.
 
 The animation below depicts:
- a. The ice-load anomaly with respect to 30 kiloyears before present as reconstructed in [GLAC1D](https://www.physics.mun.ca/~lev/dataAccess.html). Thus essentially simulate the isostatic adjustment induced by the last deglaciation.
- b. The displacement rate of the bedrock resulting from changes in the ice load.
- c. The total displacement obtained by integrating the rate.
+
+a. The ice-load anomaly with respect to 30 kiloyears before present as reconstructed in [GLAC1D](https://www.physics.mun.ca/~lev/dataAccess.html). Thus essentially simulate the isostatic adjustment induced by the last deglaciation.
+
+b. The displacement rate of the bedrock resulting from changes in the ice load.
+
+c. The total displacement obtained by integrating the rate.
 
 ![Deglaciation](docs/src/assets/loaduplift_isostate_N128.gif)
 
