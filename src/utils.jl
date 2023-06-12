@@ -2,6 +2,8 @@
 # Unit conversion utils
 #####################################################
 
+global SECONDS_PER_YEAR = 60^2 * 24 * 365.25
+
 """
 
     years2seconds(t::Real)
@@ -9,7 +11,7 @@
 Convert input time `t` from years to seconds.
 """
 function years2seconds(t::Real)
-    return t * seconds_per_year
+    return t * SECONDS_PER_YEAR
 end
 
 """
@@ -19,7 +21,7 @@ end
 Convert input time `t` from seconds to years.
 """
 function seconds2years(t::Real)
-    return t / seconds_per_year
+    return t / SECONDS_PER_YEAR
 end
 
 """
@@ -29,7 +31,7 @@ end
 Convert displacement rate `dudt` from \$ m \\, s^{-1} \$ to \$ mm \\, \\mathrm{yr}^{-1} \$.
 """
 function m_per_sec2mm_per_yr(dudt::Real)
-    return dudt * 1e3 * seconds_per_year
+    return dudt * 1e3 * SECONDS_PER_YEAR
 end
 
 #####################################################
@@ -179,56 +181,6 @@ function stereo2latlon(
     return Lat, Lon
 end
 
-"""
-
-    ComputationDomain(W, n)
-
-Initialize a [`ComputationDomain`](@ref) with length `2*W` and `2^n` grid cells.
-"""
-function ComputationDomain(
-    W::T,
-    n::Int;
-    use_cuda=false::Bool,
-    lat0::T=T(-71.0),
-    lon0::T=T(0.0),
-) where {T<:AbstractFloat}
-
-    # Geometry
-    Wx, Wy = W, W
-    N = 2^n
-    N2 = Int(floor(N/2))
-    dx = T(2*Wx) / N
-    dy = T(2*Wy) / N
-    x = collect(-Wx+dx:dx:Wx)
-    y = collect(-Wy+dy:dy:Wy)
-    X, Y = meshgrid(x, y)
-    R = get_r.(X, Y)
-    Theta = dist2angulardist.(R)
-    Lat, Lon = stereo2latlon(X, Y, lat0, lon0)
-    
-    arraykernel = use_cuda ? CuArray : Array
-    K = kernelpromote(scalefactor(deg2rad.(Lat), deg2rad.(Lon),
-        deg2rad(lat0), deg2rad(lon0)), arraykernel)
-    null = fill(T(0.0), N, N)
-    
-    # Differential operators in Fourier space
-    pseudodiff, harmonic, biharmonic = get_differential_fourier(W, N2)
-    pseudodiff[1, 1] = mean([pseudodiff[1,2], pseudodiff[2,1]])
-    pseudodiff, harmonic, biharmonic = kernelpromote(
-            [pseudodiff, harmonic, biharmonic], arraykernel)
-    # Avoid division by zero. Tolerance ϵ of the order of the neighboring terms.
-    # Tests show that it does not lead to errors wrt analytical or benchmark solutions.
-
-    return ComputationDomain(
-        Wx, Wy, N, N2,
-        dx, dy, x, y,
-        X, Y, R, Theta,
-        Lat, Lon, K, null,
-        pseudodiff, harmonic, biharmonic,
-        use_cuda, arraykernel,
-    )
-end
-
 
 #####################################################
 # Math utils
@@ -252,83 +204,6 @@ function gauss_distr(X::XMatrix, Y::XMatrix,
             -0.5 * ([X[i,j], Y[i,j]] .- mu)' * invsigma * ([X[i,j], Y[i,j]] .- mu) )
     end
     return G
-end
-
-#####################################################
-# Solid Earth parameters
-#####################################################
-
-litho_rigidity = 5e24               # (N*m)
-litho_youngmodulus = 6.6e10         # (N/m^2)
-litho_poissonratio = 0.5            # (1)
-layers_density = [3.3e3]            # (kg/m^3)
-layer_viscosities = [1e19, 1e21]     # (Pa*s) (Bueler 2007, Ivins 2022, Fig 12 WAIS)
-layer_boundaries = [88e3, 400e3]
-# 88 km: beginning of asthenosphere (Bueler 2007).
-# 400 km: beginning of homogenous half-space (Ivins 2022, Fig 12).
-
-# litho_rigidity = 5e24u"N*m"
-# litho_youngmodulus = 6.6e10u"N / m^2"
-# litho_poissonratio = 0.5
-# layers_density = [3.3e3]u"kg / m^3"
-# layer_viscosities = [1e19, 1e21]u"Pa*s"      # (Bueler 2007, Ivins 2022, Fig 12 WAIS)
-# layer_boundaries = [88e3, 400e3]u"m"
-
-function MultilayerEarth(
-    Omega::ComputationDomain{T},
-    c::PhysicalConstants{T};
-    layer_boundaries::A = layer_boundaries,
-    layers_density::Vector{T} = layers_density,
-    layer_viscosities::B = layer_viscosities,
-    litho_youngmodulus::C = litho_youngmodulus,
-    litho_poissonratio::D = litho_poissonratio,
-) where {
-    T<:AbstractFloat,
-    A<:Union{Vector{T}, Array{T, 3}},
-    B<:Union{Vector{T}, Array{T, 3}},
-    C<:Union{T, XMatrix},
-    D<:Union{T, XMatrix},
-}
-
-    if layer_boundaries isa Vector{<:Real}
-        layer_boundaries = matrify_vectorconstant(layer_boundaries, Omega.N)
-    end
-    if layer_viscosities isa Vector{<:Real}
-        layer_viscosities = matrify_vectorconstant(layer_viscosities, Omega.N)
-    end
-
-    litho_thickness = layer_boundaries[:, :, 1]
-    litho_rigidity = get_rigidity.(
-        litho_thickness,
-        litho_youngmodulus,
-        litho_poissonratio,
-    )
-
-    layers_thickness = diff( layer_boundaries, dims=3 )
-    # pseudodiff = kernelpromote(Omega.pseudodiff, Omega.arraykernel)
-    effective_viscosity = get_effective_viscosity(
-        Omega,
-        layer_viscosities,
-        layers_thickness,
-    )
-
-    mean_density = fill(mean(layers_density), Omega.N, Omega.N)
-
-    litho_rigidity, effective_viscosity, mean_density = kernelpromote(
-        [litho_rigidity, effective_viscosity, mean_density], Omega.arraykernel)
-
-    return MultilayerEarth(
-        c.g,
-        mean(mean_density),
-        effective_viscosity,
-        litho_thickness,
-        litho_rigidity,
-        litho_poissonratio,
-        layers_density,
-        layer_viscosities,
-        layer_boundaries,
-    )
-
 end
 
 """

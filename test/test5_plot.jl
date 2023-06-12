@@ -186,7 +186,7 @@ function main(
     save("$plotname.pdf", fig)
 end
 
-cases = ["isostate", "slstate"]
+cases = ["isostate", "geostate"]
 for case in cases[1:1]
     main(7, case)
 end

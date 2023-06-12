@@ -36,7 +36,7 @@ function main(n::Int, active_gs::Bool; use_cuda::Bool = false,solver = "Explicit
     dH = [deltaH[:, :, k] for k in axes(deltaH, 3)]
     t1 = time()
     results = fastisostasy(t_out, Omega, c, p, t_out, dH,
-        interactive_sealevel = active_gs,
+        interactive_geostate = active_gs,
         ODEsolver=solver,
         dt = years2seconds(0.1),
     )
@@ -48,7 +48,7 @@ function main(n::Int, active_gs::Bool; use_cuda::Bool = false,solver = "Explicit
         Omega, p = copystructs2cpu(Omega, c, p)
     end
 
-    case = active_gs ? "slstate" : "isostate"
+    case = active_gs ? "geostate" : "isostate"
     jldsave(
         "data/test5/$(case)_N$(Omega.N).jld2",
         Omega = Omega, c = c, p = p,

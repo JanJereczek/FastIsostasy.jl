@@ -23,10 +23,9 @@ using Reexport
 # KuttaPRK2p5(dt=), Trapezoid(autodiff = false), PDIRK44(autodiff = false)
 
 include("structs.jl")
-include("parameters.jl")
 include("utils.jl")
 include("derivatives.jl")
-include("sealevel.jl")
+include("geostate.jl")
 include("mechanics.jl")
 include("inversion.jl")
 
@@ -36,7 +35,7 @@ export ComputationDomain
 export PhysicalConstants
 export MultilayerEarth
 export PrecomputedFastiso
-export SealevelState
+export GeoState
 export SuperStruct
 
 # utils.jl
@@ -71,22 +70,21 @@ export meshgrid
 export get_quad_coeffs
 export get_elasticgreen
 export fastisostasy
-export init_superstruct
 export dudt_isostasy!
 export dudt_isostasy_sparse!
 export corner_bc!
-export ice_load
 
 # estimation.jl
 export init_optim, integrated_rmse, ViscOptim, optimize_viscosity, Options
 
-# slstate.jl
-export update_slstate!, update_geoid!, update_loadcolumns!
+# geostate.jl
+export update_geoid!, update_sealevel!, update_loadcolumns!
+export columnanom_ice, columnanom_water, columnanom_mantle
+export columnanom_load, columnanom_full, loadanom_green
 export get_loadchange, get_geoidgreen
-export update_sealevel!, update_slc!
+export update_slc!, update_slc_pov!, update_slc_den!
 export update_V_af!, update_slc_af!
-export update_V_pov!, update_slc_pov!
-export update_V_den!, update_slc_den!
+export update_V_pov!, update_V_den!
 
 # inversion.jl
 export ParamInversion

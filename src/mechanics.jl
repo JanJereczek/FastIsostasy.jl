@@ -1,76 +1,3 @@
-"""
-
-    ice_load(c::PhysicalConstants{T}, H::T)
-
-Compute ice load based on ice thickness.
-"""
-function ice_load(c::PhysicalConstants{T}, H::XMatrix) where {T<:AbstractFloat}
-    return - c.rho_ice .* c.g .* H
-end
-
-#####################################################
-# Precomputation
-#####################################################
-
-"""
-
-    PrecomputedFastiso(dt, Omega, c, p)
-
-Return a `struct` containing pre-computed tools to perform forward-stepping. Takes the
-time step `dt`, the ComputationDomain `Omega`, the solid-Earth parameters `p` and 
-physical constants `c` as input.
-"""
-function PrecomputedFastiso(
-    Omega::ComputationDomain{T},
-    c::PhysicalConstants{T},
-    p::MultilayerEarth{T};
-    quad_precision::Int = 4,
-) where {T<:AbstractFloat}
-
-    # Elastic response variables
-    distance, greenintegrand_coeffs = get_greenintegrand_coeffs(T)
-    greenintegrand_function = build_greenintegrand(distance, greenintegrand_coeffs)
-    quad_support, quad_coeffs = get_quad_coeffs(T, quad_precision)
-    elasticgreen = get_elasticgreen(Omega, greenintegrand_function, quad_support, quad_coeffs)
-
-    # Space-derivatives of rigidity
-    D = kernelpromote(p.litho_rigidity, Array)
-    Dx = mixed_fdx(D, Omega.dx)
-    Dy = mixed_fdy(D, Omega.dy)
-    Dxx = mixed_fdxx(D, Omega.dx)
-    Dyy = mixed_fdyy(D, Omega.dy)
-    Dxy = mixed_fdy( mixed_fdx(D, Omega.dx), Omega.dy )
-
-    omega_zeros = fill(T(0.0), Omega.N, Omega.N)
-    zero_tol = 1e-2
-    negligible_gradD = isapprox(Dx, omega_zeros, atol = zero_tol) &
-                        isapprox(Dy, omega_zeros, atol = zero_tol) &
-                        isapprox(Dxx, omega_zeros, atol = zero_tol) &
-                        isapprox(Dyy, omega_zeros, atol = zero_tol) &
-                        isapprox(Dxy, omega_zeros, atol = zero_tol)
-    
-    # FFT plans depening on CPU vs. GPU usage
-    if Omega.use_cuda
-        Xgpu = CuArray(Omega.X)
-        p1, p2 = CUDA.CUFFT.plan_fft(Xgpu), CUDA.CUFFT.plan_ifft(Xgpu)
-        # Dx, Dy, Dxx, Dyy, Dxy, rhog = convert2CuArray([Dx, Dy, Dxx, Dxy, Dyy, rhog])
-        Dx, Dy, Dxx, Dyy, Dxy = convert2CuArray([Dx, Dy, Dxx, Dxy, Dyy])
-    else
-        p1, p2 = plan_fft(Omega.X), plan_ifft(Omega.X)
-    end
-
-    rhog = p.mean_density .* c.g
-    geoidgreen = get_geoidgreen(Omega, c)
-
-    return PrecomputedFastiso(
-        elasticgreen, fft(elasticgreen),
-        p1, p2,
-        Dx, Dy, Dxx, Dyy, Dxy, negligible_gradD,
-        rhog,
-        kernelpromote(geoidgreen, Omega.arraykernel),
-    )
-end
-
 #####################################################
 # Forward integration
 #####################################################
@@ -95,15 +22,15 @@ function fastisostasy(
     eta_snapshots::Vector{<:XMatrix} = [p.effective_viscosity, p.effective_viscosity],
     u_viscous_0::Matrix{T} = copy(Omega.null),
     u_elastic_0::Matrix{T} = copy(Omega.null),
-    interactive_sealevel::Bool = false,
+    interactive_geostate::Bool = false,
     verbose::Bool = true,
     kwargs...,
 ) where {T<:AbstractFloat}
 
     u_viscous_0, u_elastic_0 = kernelpromote(
         [u_viscous_0, u_elastic_0], Omega.arraykernel)   # Handle xPU architecture
-    sstruct = init_superstruct(Omega, c, p, t_Hice_snapshots, Hice_snapshots,
-        t_eta_snapshots, eta_snapshots, interactive_sealevel; kwargs...)
+    sstruct = SuperStruct(Omega, c, p, t_Hice_snapshots, Hice_snapshots,
+        t_eta_snapshots, eta_snapshots, interactive_geostate; kwargs...)
     u, dudt, u_elastic, geoid, sealevel = forward_isostasy(
         dt, t_out, u_viscous_0, sstruct, ODEsolver, verbose)
 
@@ -124,66 +51,6 @@ function fastisostasy(
     t_Hice_snapshots = [t_out[1], t_out[end]]
     Hice_snapshots = [Hice_snapshot, Hice_snapshot]
     return fastisostasy(t_out, Omega, c, p, t_Hice_snapshots, Hice_snapshots; kwargs...)
-end
-
-"""
-
-    init_superstruct()
-
-Init a `SuperStruct` containing all necessary fields for forward integration in time.
-"""
-function init_superstruct(
-    Omega::ComputationDomain{T},
-    c::PhysicalConstants{T},
-    p::MultilayerEarth{T},
-    t_Hice_snapshots::Vector{T},
-    Hice_snapshots::Vector{Matrix{T}},
-    t_eta_snapshots::Vector{T},
-    eta_snapshots::Vector{<:XMatrix},
-    interactive_sealevel::Bool;
-    geoid_0::Matrix{T} = copy(Omega.null),
-    sealevel_0::Matrix{T} = copy(Omega.null),
-    H_ice_ref::Matrix{T} = copy(Omega.null),
-    H_water_ref::Matrix{T} = copy(Omega.null),
-    b_ref::Matrix{T} = copy(Omega.null),
-) where {T<:AbstractFloat}
-
-    geoid_0, sealevel_0, H_ice_ref, H_water_ref, b_ref = kernelpromote(
-        [geoid_0, sealevel_0, H_ice_ref, H_water_ref, b_ref], Omega.arraykernel)
-
-    tools = PrecomputedFastiso(Omega, c, p)
-    Hice = linear_interpolation( t_Hice_snapshots,
-        kernelpromote(Hice_snapshots, Omega.arraykernel) )
-    Hice_cpu = linear_interpolation( t_Hice_snapshots,
-        kernelpromote(Hice_snapshots, Array) )
-    eta = linear_interpolation(t_eta_snapshots,
-        kernelpromote(eta_snapshots, Omega.arraykernel) )
-    eta_cpu = linear_interpolation(t_eta_snapshots,
-        kernelpromote(eta_snapshots, Array) )
-
-    refslstate = RefSealevelState(
-        H_ice_ref, H_water_ref, b_ref,
-        copy(sealevel_0),   # z0
-        sealevel_0,         # sealevel
-        T(0.0),             # sle_af
-        T(0.0),             # V_pov
-        T(0.0),             # V_den
-        T(0.0),             # conservation_term
-    )
-    slstate = SealevelState(
-        Hice(0.0),                  # ice column
-        copy(H_water_ref),          # water column
-        copy(b_ref),                # bedrock position
-        geoid_0,                    # geoid perturbation
-        copy(sealevel_0),           # reference for external sl-forcing
-        T(0.0), T(0.0), T(0.0),     # V_af terms
-        T(0.0), T(0.0),             # V_pov terms
-        T(0.0), T(0.0),             # V_den terms
-        T(0.0),                     # total sl-contribution & conservation term
-        0, years2seconds(10.0),     # countupdates, update step
-    )
-    return SuperStruct(Omega, c, p, tools, Hice, Hice_cpu, eta, eta_cpu,
-        refslstate, slstate, interactive_sealevel)
 end
 
 """
@@ -224,8 +91,8 @@ function forward_isostasy(
         
         u_out[k] .= copy(kernelpromote(u, Array))
         dudt_out[k] .= copy(kernelpromote(dudt, Array))
-        geoid_out[k] .= copy(kernelpromote(sstruct.slstate.geoid, Array))
-        sealevel_out[k] .= copy(kernelpromote(sstruct.slstate.sealevel, Array))
+        geoid_out[k] .= copy(kernelpromote(sstruct.geostate.geoid, Array))
+        sealevel_out[k] .= copy(kernelpromote(sstruct.geostate.sealevel, Array))
     end
     return u_out, dudt_out, u_el_out, geoid_out, sealevel_out
 end
@@ -261,12 +128,19 @@ function forwardstep_isostasy!(
     t::T,
 ) where {T<:AbstractFloat}
     corner_bc!(u, sstruct.Omega.N)
-    if sstruct.interactive_sealevel &&
-        (t / sstruct.slstate.dt >= sstruct.slstate.countupdates)
-        update_slstate!(sstruct, u, sstruct.Hice(t))
-        sstruct.slstate.countupdates += 1
-        # println("Updated SealevelState at t=$(seconds2years(t))")
+
+    # Only update the geoid and sea level if geostate is interactive.
+    # As integration requires smaller time steps than diagnostics,
+    # only update geostate every sstruct.geostate.dt
+    if sstruct.interactive_geostate &&
+        (t / sstruct.geostate.dt >= sstruct.geostate.countupdates)
+        update_geoid!(sstruct)
+        update_sealevel!(sstruct)
+        sstruct.geostate.countupdates += 1
+        # println("Updated GeoState at t=$(seconds2years(t))")
     end
+
+    update_loadcolumns!(sstruct, u, sstruct.Hice(t))
     dudt_isostasy!(dudt, u, sstruct, t)
     return nothing
 end
@@ -283,18 +157,8 @@ function dudt_isostasy!(
     sstruct::SuperStruct{T},
     t::T,
 ) where {T<:AbstractFloat}
-    if sstruct.interactive_sealevel
-        load = get_loadchange(sstruct)
-    else
-        load = ice_load(sstruct.c, sstruct.Hice(t))
-    end
 
-    projection_correction = true
-    if projection_correction
-        load ./= sstruct.Omega.K .^ 2
-    end
-
-    rhs = load - sstruct.tools.rhog .* u
+    rhs = - sstruct.c.g .* columnanom_full(sstruct)
 
     if sstruct.tools.negligible_gradD
         rhs += - sstruct.p.litho_rigidity .* real.( sstruct.tools.pifft *

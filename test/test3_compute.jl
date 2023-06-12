@@ -34,7 +34,7 @@ function main(
     t1 = time()
     results = fastisostasy(
         t_out, Omega, c, p, Hcylinder,
-        interactive_sealevel=false,
+        interactive_geostate=false,
         ODEsolver=Tsit5())
     t_fastiso = time() - t1
     println("Took $t_fastiso seconds!")
