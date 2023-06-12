@@ -208,8 +208,6 @@ end
 
 Apply boundary condition on Fourier collocation solution.
 Assume that mean deformation at corners of domain is 0.
-Whereas Bueler et al. (2007) take the edges for this computation, we take the corners
-because they represent the far-field better.
 """
 function corner_bc(u::XMatrix, N)
     u_bc = copy(u)
@@ -222,11 +220,24 @@ function corner_bc!(u::XMatrix, N)
     end
 end
 
-# function corner_bc!(u::XMatrix, N) where {T<:AbstractFloat}
-#     CUDA.allowscalar() do
-#         u .-= sum(view(u, 1, :) + view(u, :, N) + view(u, N, :) + view(u, :, 1)) / (4*N)
-#     end
-# end
+"""
+
+    border_bc(u)
+
+Apply boundary condition on Fourier collocation solution.
+Assume that mean deformation at borders of domain is 0.
+Same as Bueler et al. (2007).
+"""
+function border_bc(u::XMatrix, N)
+    u_bc = copy(u)
+    return border_bc!(u_bc, N)
+end
+
+function border_bc!(u::XMatrix, N)
+    CUDA.allowscalar() do
+        u .-= sum(view(u, 1, :) + view(u, :, N) + view(u, N, :) + view(u, :, 1)) / (4*N)
+    end
+end
 
 #####################################################
 # Elastic response
