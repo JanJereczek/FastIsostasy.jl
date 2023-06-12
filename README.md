@@ -6,11 +6,11 @@ This package is mainly addressed to ice sheet modellers looking for a regional m
 
 The animation below depicts:
 
-a. The ice-load anomaly with respect to 30 kiloyears before present as reconstructed in [GLAC1D](https://www.physics.mun.ca/~lev/dataAccess.html). Thus essentially simulate the isostatic adjustment induced by the last deglaciation.
+  *(a)* The ice-load anomaly with respect to 30 kiloyears before present as reconstructed in [GLAC1D](https://www.physics.mun.ca/~lev/dataAccess.html). Thus essentially simulate the isostatic adjustment induced by the last deglaciation.
 
-b. The displacement rate of the bedrock resulting from changes in the ice load.
+  *(b)* The displacement rate of the bedrock resulting from changes in the ice load.
 
-c. The total displacement obtained by integrating the rate.
+  *(c)* The total displacement obtained by integrating the rate.
 
 ![Deglaciation](docs/src/assets/loaduplift_isostate_N128.gif)
 
