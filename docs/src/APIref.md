@@ -16,7 +16,6 @@ FastisoResults
 ## Mechanics
 
 ```@docs
-ice_load
 fastisostasy
 forward_isostasy
 init_results
@@ -30,7 +29,7 @@ compute_elastic_response
 ## Sea-level
 
 ```@docs
-update_slstate!
+update_geostate!
 update_geoid!
 get_loadchange
 get_geoidgreen

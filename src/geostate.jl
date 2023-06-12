@@ -1,71 +1,91 @@
 """
 
-    update_slstate!(sstruct::SuperStruct, u::Matrix, H_ice::Matrix)
-
-Update the `::GeoState` computing the current geoid perturbation, the sea-level changes
-and the load columns for the next time step of the isostasy integration.
-"""
-function update_slstate!(
-    sstruct::SuperStruct{T},
-    u::XMatrix,
-    H_ice::XMatrix,
-) where {T<:AbstractFloat}
-
-    update_geoid!(sstruct)
-    update_sealevel!(sstruct)
-    update_loadcolumns!(sstruct, u, H_ice)
-    return nothing
-end
-
-"""
-
     update_geoid!(sstruct::SuperStruct)
 
-Update the geoid of a `::GeoState` by convoluting the Green's function with the load change.
+Update the geoid of a `::GeoState` by convoluting the Green's function with the load anom.
 """
 function update_geoid!(sstruct::SuperStruct{T}) where {T<:AbstractFloat}
     sstruct.geostate.geoid .= view(
-        conv( sstruct.tools.geoidgreen, get_greenloadchange(sstruct) ),
+        conv( sstruct.tools.geoidgreen, loadanom_green(sstruct) ),
         sstruct.Omega.N2:2*sstruct.Omega.N-1-sstruct.Omega.N2,
         sstruct.Omega.N2:2*sstruct.Omega.N-1-sstruct.Omega.N2,
     )
-    # spada_calibration = 1.0
-    # sstruct.geostate.geoid .-= (spada_calibration * maximum(sstruct.geostate.geoid))
     return nothing
 end
 
-function get_greenloadchange(sstruct::SuperStruct{T}) where {T<:AbstractFloat}
-    return (sstruct.Omega.dx * sstruct.Omega.dy) .* get_fullcolumnchange(sstruct)
-end
+"""
 
-function get_fullcolumnchange(sstruct::SuperStruct{T}) where {T<:AbstractFloat}
-    return get_loadcolumnchange(sstruct) + sstruct.p.mean_density[1] .*
-            (sstruct.geostate.b - sstruct.refgeostate.b) # .* Omega.K
+    columnanom_ice(sstruct)
 
-end
-
-function get_loadcolumnchange(sstruct::SuperStruct{T}) where {T<:AbstractFloat}
-    return (sstruct.c.rho_ice .* (sstruct.geostate.H_ice - sstruct.refgeostate.H_ice) +
-        sstruct.c.rho_seawater .* (sstruct.geostate.H_water - sstruct.refgeostate.H_water) ) # .* Omega.K
+Compute the density-scaled anomaly of the ice column w.r.t. the reference state.
+"""
+function columnanom_ice(sstruct::SuperStruct{T}) where {T<:AbstractFloat}
+    column = sstruct.c.rho_ice .* (sstruct.geostate.H_ice - sstruct.refgeostate.H_ice)
+    return corrected_column(column, sstruct)
 end
 
 """
 
-    get_loadchange(sstruct::SuperStruct)
+    columnanom_water(sstruct)
 
-Compute the load change compared to the reference configuration after [Coulon et al. 2021]().
-Difference to Coulon: HERE WE SCALE WITH CORRECTION FACTOR FOR PROJECTION!
+Compute the density-scaled anomaly of the (liquid) water column w.r.t. the reference state.
 """
-function get_loadchange(sstruct::SuperStruct{T}) where {T<:AbstractFloat}
-    return - sstruct.c.g .* get_loadcolumnchange(sstruct)
+function columnanom_water(sstruct::SuperStruct{T}) where {T<:AbstractFloat}
+    column = sstruct.c.rho_seawater .* (sstruct.geostate.H_water -
+        sstruct.refgeostate.H_water)
+    return corrected_column(column, sstruct)
 end
 
-# TODO: transform results with stereographic utils for test2!
+"""
+
+    columnanom_mantle(sstruct)
+
+Compute the density-scaled anomaly of the mantle column w.r.t. the reference state.
+"""
+function columnanom_mantle(sstruct::SuperStruct{T}) where {T<:AbstractFloat}
+    column = sstruct.p.mean_density[1] .* (sstruct.geostate.b - sstruct.refgeostate.b)
+    return corrected_column(column, sstruct)
+end
+
+"""
+
+    columnanom_load(sstruct)
+
+Compute the density-scaled anomaly of the load (ice + liquid water) column w.r.t.
+the reference state.
+"""
+function columnanom_load(sstruct::SuperStruct{T}) where {T<:AbstractFloat}
+    return columnanom_ice(sstruct) + columnanom_water(sstruct)
+end
+
+"""
+
+    columnanom_full(sstruct)
+
+Compute the density-scaled anomaly of the all the columns (ice + liquid water + mantle)
+w.r.t. the reference state.
+"""
+function columnanom_full(sstruct::SuperStruct{T}) where {T<:AbstractFloat}
+    return columnanom_load(sstruct) - columnanom_mantle(sstruct)
+end
+
+function loadanom_green(sstruct::SuperStruct{T}) where {T<:AbstractFloat}
+    return (sstruct.Omega.dx * sstruct.Omega.dy) .* columnanom_full(sstruct)
+end
+
+function corrected_column(column::Matrix, sstruct::SuperStruct)
+    if sstruct.Omega.projection_correction
+        return column .* Omega.K
+    else
+        return column
+    end
+end
+
 """
 
     get_geoidgreen(sstruct::SuperStruct)
 
-Return the Green's function used to compute the changes in geoid.
+Return the Green's function used to compute the anoms in geoid.
 
 # Reference
 
@@ -89,14 +109,14 @@ end
 Update the load columns of a `::GeoState`.
 """
 function update_loadcolumns!(
-    sstruct::SuperStruct{T},
-    u::XMatrix,
-    H_ice::XMatrix,
-) where {T<:AbstractFloat}
+    sstruct::SuperStruct{<:AbstractFloat}, u::XMatrix, H_ice::XMatrix)
 
     sstruct.geostate.b .= sstruct.refgeostate.b .+ u
     sstruct.geostate.H_ice .= H_ice
-    sstruct.geostate.H_water .= max.(sstruct.geostate.sealevel - (sstruct.geostate.b + H_ice), 0)
+    if sstruct.interactive_geostate
+        sstruct.geostate.H_water .= max.(sstruct.geostate.sealevel -
+            (sstruct.geostate.b + H_ice), 0)
+    end
     return nothing
 end
 

@@ -44,7 +44,7 @@ function main(
 
     sl0 = fill(-Inf, Omega.N, Omega.N)
     t1 = time()
-    results = fastisostasy(t_out, Omega, c, p, H_ice, sealevel_0=sl0, interactive_sealevel=true)
+    results = fastisostasy(t_out, Omega, c, p, H_ice, sealevel_0=sl0, interactive_geostate=true)
     t_fastiso = time() - t1
     println("Took $t_fastiso seconds!")
     println("-------------------------------------")
