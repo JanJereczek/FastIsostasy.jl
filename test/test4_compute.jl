@@ -13,8 +13,8 @@ function main(n::Int, case::String; use_cuda::Bool = true, solver = "ExplicitEul
     Omega = ComputationDomain(W, n)     # domain parameters
     c = PhysicalConstants()
     if occursin("homogeneous", case)
-        channel_viscosity = fill(1e20, Omega.N, Omega.N)
-        halfspace_viscosity = fill(1e21, Omega.N, Omega.N)
+        channel_viscosity = matrify(1e20, Omega.Nx, Omega.Ny)
+        halfspace_viscosity = matrify(1e21, Omega.Nx, Omega.Ny)
         lv = cat(channel_viscosity, halfspace_viscosity, dims=3)
         p = MultilayerEarth(
             Omega,
@@ -24,7 +24,7 @@ function main(n::Int, case::String; use_cuda::Bool = true, solver = "ExplicitEul
     elseif occursin("meanviscosity", case)
         log10_eta_channel = interpolate_visc_wiens_on_grid(Omega.X, Omega.Y)
         channel_viscosity = 10 .^ (log10_eta_channel)
-        halfspace_viscosity = fill(1e21, Omega.N, Omega.N)
+        halfspace_viscosity = matrify(1e21, Omega.Nx, Omega.Ny)
         lv = cat(channel_viscosity, halfspace_viscosity, dims=3)
         p = MultilayerEarth(
             Omega,
@@ -33,7 +33,7 @@ function main(n::Int, case::String; use_cuda::Bool = true, solver = "ExplicitEul
         )
     elseif occursin("scaledviscosity", case)
         lb = [88e3, 180e3, 280e3, 400e3]
-        halfspace_logviscosity = fill(21.0, Omega.N, Omega.N)
+        halfspace_logviscosity = matrify(21.0, Omega.Nx, Omega.Ny)
 
         Eta, Eta_mean, z = load_wiens_2021(Omega.X, Omega.Y)
         eta_interpolators, eta_mean_interpolator = interpolate_viscosity_xy(
@@ -53,7 +53,7 @@ function main(n::Int, case::String; use_cuda::Bool = true, solver = "ExplicitEul
     end
     
     kernel = use_cuda ? "gpu" : "cpu"
-    println("Computing on $kernel and $(Omega.N) x $(Omega.N) grid...")
+    println("Computing on $kernel and $(Omega.Nx) x $(Omega.Ny) grid...")
 
     R = T(2000e3)               # ice disc radius (m)
     H = T(1000)                 # ice disc thickness (m)
@@ -74,7 +74,7 @@ function main(n::Int, case::String; use_cuda::Bool = true, solver = "ExplicitEul
     end
 
     jldsave(
-        "data/test4/discload_nonlocal_$(case)_N$(Omega.N).jld2",
+        "data/test4/discload_nonlocal_$(case)_Nx$(Omega.Nx)_Ny$(Omega.Ny).jld2",
         Omega = Omega, c = c, p = p,
         results = results,
         t_fastiso = t_fastiso,

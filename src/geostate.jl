@@ -5,11 +5,8 @@
 Update the geoid of a `::GeoState` by convoluting the Green's function with the load anom.
 """
 function update_geoid!(sstruct::SuperStruct{<:AbstractFloat})
-    sstruct.geostate.geoid .= view(
-        conv( sstruct.tools.geoidgreen, loadanom_green(sstruct) ),
-        sstruct.Omega.N2:2*sstruct.Omega.N-1-sstruct.Omega.N2,
-        sstruct.Omega.N2:2*sstruct.Omega.N-1-sstruct.Omega.N2,
-    )
+    sstruct.geostate.geoid .= samesize_conv(sstruct.tools.geoidgreen,
+        loadanom_green(sstruct), sstruct.Omega)
     return nothing
 end
 
@@ -109,12 +106,12 @@ end
 
 """
 
-    update_loadcolumns!(sstruct::SuperStruct, u::XMatrix, H_ice::XMatrix)
+    update_loadcolumns!(sstruct::SuperStruct, u::AbstractMatrix{T}, H_ice::AbstractMatrix{T})
 
 Update the load columns of a `::GeoState`.
 """
-function update_loadcolumns!(sstruct::SuperStruct{<:AbstractFloat},
-    u::XMatrix, H_ice::XMatrix)
+function update_loadcolumns!(sstruct::SuperStruct{T}, u::AbstractMatrix{T},
+    H_ice::AbstractMatrix{T}) where {T<:AbstractFloat}
 
     sstruct.geostate.b .= sstruct.refgeostate.b .+ u
     sstruct.geostate.H_ice .= H_ice

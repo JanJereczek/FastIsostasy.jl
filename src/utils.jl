@@ -40,16 +40,42 @@ end
 
 """
 
-    matrify_vectorconstant(x, N)
+    matrify(x, Nx, Ny)
 
 Generate a vector of constant matrices from a vector of constants.
 """
-function matrify_vectorconstant(x::Vector{T}, N::Int) where {T<:AbstractFloat}
-    X = zeros(T, N, N, length(x))
+function matrify(x::Vector{<:Real}, N::Int)
+    return matrify(x, N, N)
+end
+
+function matrify(x::Vector{T}, Nx::Int, Ny::Int) where {T<:Real}
+    X = zeros(T, Ny, Nx, length(x))
     @inbounds for i in eachindex(x)
-        X[:, :, i] = fill(x[i], N, N)
+        X[:, :, i] = matrify(x[i], Nx, Ny)
     end
     return X
+end
+
+matrify(x::Real, Nx::Int, Ny::Int) = fill(x, Ny, Nx)
+
+
+function samesize_conv(X::AbstractMatrix{T}, Y::AbstractMatrix{T},
+    Omega::ComputationDomain) where {T<:AbstractFloat}
+    if iseven(Omega.Ny)
+        i1 = Omega.My
+    else
+        i1 = Omega.My+1
+    end
+    i2 = 2*Omega.Ny-1-Omega.My
+
+    if iseven(Omega.Nx)
+        j1 = Omega.Mx
+    else
+        j1 = Omega.Mx+1
+    end
+    j2 = 2*Omega.Nx-1-Omega.Mx
+
+    return view( conv(X, Y), i1:i2, j1:j2 )
 end
 
 #####################################################
@@ -101,11 +127,11 @@ function scalefactor(lat::T, lon::T, lat0::T, lon0::T; k0::T = T(1)) where {T<:R
     return 2*k0 / (1 + sin(lat0)*sin(lat) + cos(lat0)*cos(lat)*cos(lon-lon0))
 end
 
-function scalefactor(lat::XMatrix, lon::XMatrix, lat0::T, lon0::T;
+function scalefactor(lat::AbstractMatrix{T}, lon::AbstractMatrix{T}, lat0::T, lon0::T;
     kwargs... ) where {T<:Real}
     K = similar(lat)
     @inbounds for idx in CartesianIndices(lat)
-        K[idx] = scalefactor(lat[idx], lon[idx], lat0, lon0, kwargs...)
+        K[idx] = scalefactor(lat[idx], lon[idx], lat0, lon0; kwargs...)
     end
     return K
 end
@@ -124,22 +150,22 @@ Reference: John P. Snyder (1987), p. 157, eq. (21-2), (21-3), (21-4).
 function latlon2stereo(lat::T, lon::T, lat0::T, lon0::T;
     R::T = T(6.371e6), kwargs...) where {T<:Real}
     lat, lon, lat0, lon0 = deg2rad.([lat, lon, lat0, lon0])
-    k = scalefactor(lat, lon, lat0, lon0, kwargs...)
+    k = scalefactor(lat, lon, lat0, lon0; kwargs...)
     x = R * k * cos(lat) * sin(lon - lon0)
     y = R * k * (cos(lat0) * sin(lat) - sin(lat0) * cos(lat) * cos(lon-lon0))
     return k, x, y
 end
 
 function latlon2stereo(
-    lat::XMatrix,
-    lon::XMatrix,
+    lat::AbstractMatrix{T},
+    lon::AbstractMatrix{T},
     lat0::T,
     lon0::T;
     kwargs...,
 ) where {T<:Real}
     K, X, Y = similar(lat), similar(lat), similar(lat)
     @inbounds for idx in CartesianIndices(lat)
-        K[idx], X[idx], Y[idx] = latlon2stereo(lat[idx], lon[idx], lat0, lon0, kwargs...)
+        K[idx], X[idx], Y[idx] = latlon2stereo(lat[idx], lon[idx], lat0, lon0; kwargs...)
     end
     return K, X, Y
 end
@@ -167,16 +193,11 @@ function stereo2latlon(x::T, y::T, lat0::T, lon0::T;
     return rad2deg(lat), rad2deg(lon)
 end
 
-function stereo2latlon(
-    x::XMatrix,
-    y::XMatrix,
-    lat0::T,
-    lon0::T;
-    kwargs...,
-) where {T<:Real}
+function stereo2latlon(x::AbstractMatrix{T}, y::AbstractMatrix{T}, lat0::T, lon0::T;
+    kwargs...) where {T<:Real}
     Lat, Lon = copy(x), copy(x)
     @inbounds for idx in CartesianIndices(x)
-        Lat[idx], Lon[idx] = stereo2latlon(x[idx], y[idx], lat0, lon0)
+        Lat[idx], Lon[idx] = stereo2latlon(x[idx], y[idx], lat0, lon0; kwargs...)
     end
     return Lat, Lon
 end
@@ -188,13 +209,13 @@ end
 
 """
 
-    gauss_distr(X::XMatrix, Y::XMatrix, mu::Vector{<:Real}, sigma::Matrix{<:Real})
+    gauss_distr(X::AbstractMatrix{T}, Y::AbstractMatrix{T}, mu::Vector{<:Real}, sigma::Matrix{<:Real})
 
 Compute `Z = f(X,Y)` with `f` a Gaussian function parametrized by mean
 `mu` and covariance `sigma`.
 """
-function gauss_distr(X::XMatrix, Y::XMatrix,
-    mu::Vector{<:Real}, sigma::Matrix{<:Real})
+function gauss_distr(X::AbstractMatrix{T}, Y::AbstractMatrix{T},
+    mu::Vector{<:Real}, sigma::Matrix{<:Real}) where {T<:AbstractFloat}
     k = length(mu)
     G = similar(X)
     invsigma = inv(sigma)
@@ -219,7 +240,7 @@ end
 """
 
     get_effective_viscosity(
-        layer_viscosities::Vector{XMatrix},
+        layer_viscosities::Vector{AbstractMatrix{T}},
         layers_thickness::Vector{T},
         Omega::ComputationDomain{T},
     ) where {T<:AbstractFloat}
@@ -231,7 +252,7 @@ function get_effective_viscosity(
     Omega::ComputationDomain{T},
     layer_viscosities::Array{T, 3},
     layers_thickness::Array{T, 3},
-    # pseudodiff::XMatrix,
+    # pseudodiff::AbstractMatrix{T},
 ) where {T<:AbstractFloat}
 
     # Recursion has to start with half space = n-th layer:
@@ -296,10 +317,10 @@ function loginterp_viscosity(
     tvec::AbstractVector{T},
     layer_viscosities::Array{T, 4},
     layers_thickness::Array{T, 3},
-    pseudodiff::XMatrix,
+    pseudodiff::AbstractMatrix{T},
 ) where {T<:AbstractFloat}
     n1, n2, n3, nt = size(layer_viscosities)
-    log_eqviscosity = [fill(T(0.0), n1, n2) for k in 1:nt]
+    log_eqviscosity = matrify(zeros(nt), n1, n2)
 
     [log_eqviscosity[k] .= log10.(get_effective_viscosity(
         layer_viscosities[:, :, :, k],
@@ -412,21 +433,20 @@ function get_elasticgreen(
     quad_coeffs::Vector{T},
 ) where {T<:AbstractFloat}
 
-    h = Omega.dx
-    N = Omega.N
+    dx, dy = Omega.dx, Omega.dy
     elasticgreen = similar(Omega.X)
 
-    @inbounds for i = 1:N, j = 1:N
-        p = i - Omega.N2 - 1
-        q = j - Omega.N2 - 1
-        elasticgreen[i, j] = quadrature2D(
+    @inbounds for i = 1:Omega.Nx, j = 1:Omega.Ny
+        p = i - Omega.Mx - 1
+        q = j - Omega.My - 1
+        elasticgreen[j, i] = quadrature2D(
             greenintegrand_function,
             quad_support,
             quad_coeffs,
-            p*h,
-            p*h+h,
-            q*h,
-            q*h+h,
+            p*dx,
+            (p+1)*dx,
+            q*dy,
+            (q+1)*dy,
         )
     end
     return elasticgreen
@@ -560,8 +580,7 @@ function copystructs2cpu(
     p::MultilayerEarth{T},
 ) where {T<:AbstractFloat}
 
-    n = Int( round( log2(Omega.N) ) )
-    Omega_cpu = ComputationDomain(Omega.Wx, n, use_cuda = false)
+    Omega_cpu = ComputationDomain(Omega.Wx, Omega.Wy, Omega.Nx, Omega.Ny, use_cuda = false)
 
     p_cpu = MultilayerEarth(
         Omega_cpu,

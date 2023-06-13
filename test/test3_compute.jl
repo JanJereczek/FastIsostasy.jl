@@ -18,7 +18,7 @@ function main(
     p = choose_case(case, Omega, c)
     
     kernel = use_cuda ? "gpu" : "cpu"
-    println("Computing on $kernel and $(Omega.N) x $(Omega.N) grid...")
+    println("Computing on $kernel and $(Omega.Nx) x $(Omega.Ny) grid...")
 
     R = T(1000e3)               # ice disc radius (m)
     H = T(1000)                 # ice disc thickness (m)
@@ -44,7 +44,7 @@ function main(
         Omega, p = copystructs2cpu(Omega, c, p)
     end
 
-    filename = "$(case)_$(kernel)_N$(Omega.N)_$densekey"
+    filename = "$(case)_$(kernel)_Nx$(Omega.Nx)_Ny$(Omega.Ny)_$densekey"
     jldsave(
         "data/test3/$filename.jld2",
         Omega = Omega, c = c, p = p,

@@ -1,4 +1,9 @@
-XMatrix = Union{Matrix{T}, CuArray{T, 2}} where {T<:Real}
+KernelMatrix = Union{Matrix{T}, CuArray{T, 2}} where {T<:Real}
+# FFTPlan = Union{cFFTWPlan{ComplexF64, -1, false, 2, UnitRange{Int64}},
+#     CUFFT.cCuFFTPlan{ComplexF64, -1, false, 2}}
+# IFFTPlan = Union{
+#     AbstractFFTs.ScaledPlan{ComplexF64, FFTW.cFFTWPlan{ComplexF64, 1, false, 2, UnitRange{Int64}}, Float64},
+#     AbstractFFTs.ScaledPlan{ComplexF64, CUDA.CUFFT.cCuFFTPlan{ComplexF64, 1, false, 2}, Float64}}
 
 #########################################################
 # Computation domain
@@ -16,31 +21,41 @@ Omega = ComputationDomain(W, n)
 struct ComputationDomain{T<:AbstractFloat}
     Wx::T                       # Domain length in x (m)
     Wy::T                       # Domain length in y (m)
-    N::Int                      # Average number of grid points along one dimension
-    N2::Int                     # N/2
+    Nx::Int                     # Number of grid points in x-dimension
+    Ny::Int                     # Number of grid points in y-dimension
+    Mx::Int                     # Nx/2
+    My::Int                     # Ny/2
     dx::T                       # Spatial discretization in x
     dy::T                       # Spatial discretization in y
     x::Vector{T}
     y::Vector{T}
-    X::XMatrix
-    Y::XMatrix
-    R::XMatrix
-    Theta::XMatrix
-    Lat::XMatrix
-    Lon::XMatrix
-    K::XMatrix
+    X::AbstractMatrix{T}
+    Y::AbstractMatrix{T}
+    R::AbstractMatrix{T}
+    Theta::AbstractMatrix{T}
+    Lat::AbstractMatrix{T}
+    Lon::AbstractMatrix{T}
+    K::AbstractMatrix{T}
     projection_correction::Bool
-    null::XMatrix         # a zero matrix of size Nx x Ny
-    pseudodiff::XMatrix   # pseudodiff operator
-    harmonic::XMatrix     # harmonic operator
-    biharmonic::XMatrix   # biharmonic operator
+    null::AbstractMatrix{T}           # a zero matrix of size Nx x Ny
+    pseudodiff::AbstractMatrix{T}     # pseudodiff operator
+    harmonic::AbstractMatrix{T}       # harmonic operator
+    biharmonic::AbstractMatrix{T}     # biharmonic operator
     use_cuda::Bool
-    arraykernel                     # Array or CuArray depending on chosen hardware
+    arraykernel             # Array or CuArray depending on chosen hardware
+end
+
+function ComputationDomain(W::T, n::Int; kwargs...,) where {T<:AbstractFloat}
+    Wx, Wy = W, W
+    Nx, Ny = 2^n, 2^n
+    return ComputationDomain(Wx, Wy, Nx, Ny; kwargs...)
 end
 
 function ComputationDomain(
-    W::T,
-    n::Int;
+    Wx::T,
+    Wy::T,
+    Nx::Int,
+    Ny::Int;
     use_cuda::Bool = false,
     lat0::T = T(-71.0),
     lon0::T = T(0.0),
@@ -48,11 +63,9 @@ function ComputationDomain(
 ) where {T<:AbstractFloat}
 
     # Geometry
-    Wx, Wy = W, W
-    N = 2^n
-    N2 = Int(floor(N/2))
-    dx = T(2*Wx) / N
-    dy = T(2*Wy) / N
+    Mx, My = Nx ÷ 2, Ny ÷ 2
+    dx = 2*Wx / Nx
+    dy = 2*Wy / Ny
     x = collect(-Wx+dx:dx:Wx)
     y = collect(-Wy+dy:dy:Wy)
     X, Y = meshgrid(x, y)
@@ -63,23 +76,19 @@ function ComputationDomain(
     arraykernel = use_cuda ? CuArray : Array
     K = kernelpromote(scalefactor(deg2rad.(Lat), deg2rad.(Lon),
         deg2rad(lat0), deg2rad(lon0)), arraykernel)
-    null = fill(T(0.0), N, N)
+    null = matrify(T(0), Nx, Ny)
     
     # Differential operators in Fourier space
-    pseudodiff, harmonic, biharmonic = get_differential_fourier(W, N2)
+    pseudodiff, harmonic, biharmonic = get_differential_fourier(Wx, Wy, Nx, Ny)
     pseudodiff[1, 1] = mean([pseudodiff[1,2], pseudodiff[2,1]])
     pseudodiff, harmonic, biharmonic = kernelpromote(
             [pseudodiff, harmonic, biharmonic], arraykernel)
     # Avoid division by zero. Tolerance ϵ of the order of the neighboring terms.
     # Tests show that it does not lead to errors wrt analytical or benchmark solutions.
 
-    return ComputationDomain(
-        Wx, Wy, N, N2,
-        dx, dy, x, y,
-        X, Y, R, Theta,
-        Lat, Lon, K, projection_correction, null,
-        pseudodiff, harmonic, biharmonic,
-        use_cuda, arraykernel,
+    return ComputationDomain(Wx, Wy, Nx, Ny, Mx, My, dx, dy, x, y, X, Y,
+        R, Theta, Lat, Lon, K, projection_correction, null,
+        pseudodiff, harmonic, biharmonic, use_cuda, arraykernel,
     )
 end
 
@@ -120,9 +129,9 @@ its parameters.
 mutable struct MultilayerEarth{T<:AbstractFloat}
     mean_gravity::T
     mean_density::T
-    effective_viscosity::XMatrix
-    litho_thickness::XMatrix
-    litho_rigidity::XMatrix
+    effective_viscosity::AbstractMatrix{T}
+    litho_thickness::AbstractMatrix{T}
+    litho_rigidity::AbstractMatrix{T}
     litho_poissonratio::T
     layers_density::Vector{T}
     layer_viscosities::Array{T, 3}
@@ -158,15 +167,15 @@ function MultilayerEarth(
     T<:AbstractFloat,
     A<:Union{Vector{T}, Array{T, 3}},
     B<:Union{Vector{T}, Array{T, 3}},
-    C<:Union{T, XMatrix},
-    D<:Union{T, XMatrix},
+    C<:Union{T, AbstractMatrix{T}},
+    D<:Union{T, AbstractMatrix{T}},
 }
 
     if layer_boundaries isa Vector{<:Real}
-        layer_boundaries = matrify_vectorconstant(layer_boundaries, Omega.N)
+        layer_boundaries = matrify(layer_boundaries, Omega.Nx, Omega.Ny)
     end
     if layer_viscosities isa Vector{<:Real}
-        layer_viscosities = matrify_vectorconstant(layer_viscosities, Omega.N)
+        layer_viscosities = matrify(layer_viscosities, Omega.Nx, Omega.Ny)
     end
 
     litho_thickness = layer_boundaries[:, :, 1]
@@ -184,7 +193,7 @@ function MultilayerEarth(
         layers_thickness,
     )
 
-    mean_density = fill(mean(layers_density), Omega.N, Omega.N)
+    mean_density = matrify(mean(layers_density), Omega.Nx, Omega.Ny)
 
     litho_rigidity, effective_viscosity, mean_density = kernelpromote(
         [litho_rigidity, effective_viscosity, mean_density], Omega.arraykernel)
@@ -209,11 +218,11 @@ end
 Return a struct containing the reference geostate. We define the geostate to be all quantities related to sea-level.
 """
 struct RefGeoState{T<:AbstractFloat}
-    H_ice::XMatrix          # reference height of ice column
-    H_water::XMatrix        # reference height of water column
-    b::XMatrix              # reference bedrock position
-    z0::XMatrix             # reference height to allow external sea-level forcing
-    sealevel::XMatrix       # reference sealevel field
+    H_ice::AbstractMatrix{T}          # reference height of ice column
+    H_water::AbstractMatrix{T}        # reference height of water column
+    b::AbstractMatrix{T}              # reference bedrock position
+    z0::AbstractMatrix{T}             # reference height to allow external sea-level forcing
+    sealevel::AbstractMatrix{T}       # reference sealevel field
     sle_af::T               # reference sl-equivalent of ice volume above floatation
     V_pov::T                # reference potential ocean volume
     V_den::T                # reference potential ocean volume associated with V_den
@@ -226,11 +235,11 @@ end
 Return a mutable struct containing the geostate which will be updated over the simulation.
 """
 mutable struct GeoState{T<:AbstractFloat}
-    H_ice::XMatrix          # current height of ice column
-    H_water::XMatrix        # current height of water column
-    b::XMatrix              # vertical bedrock position
-    geoid::XMatrix          # current geoid displacement
-    sealevel::XMatrix       # current sealevel field
+    H_ice::AbstractMatrix{T}          # current height of ice column
+    H_water::AbstractMatrix{T}        # current height of water column
+    b::AbstractMatrix{T}              # vertical bedrock position
+    geoid::AbstractMatrix{T}          # current geoid displacement
+    sealevel::AbstractMatrix{T}       # current sealevel field
     V_af::T                 # ice volume above floatation
     sle_af::T               # sl-equivalent of ice volume above floatation
     slc_af::T               # sl-contribution of Vice above floatation
@@ -241,6 +250,7 @@ mutable struct GeoState{T<:AbstractFloat}
     slc::T                  # total sealevel contribution
     countupdates::Int       # count the updates of the geostate
     dt::T                   # update step
+    dtloadanom::AbstractMatrix{T}     # load anomaly wrt previous time step
 end
 
 """
@@ -248,32 +258,32 @@ end
     PrecomputedFastiso(Omega::ComputationDomain, c::PhysicalConstants, p::MultilayerEarth)
 
 Return a `struct` containing pre-computed tools to perform forward-stepping of the model, namely:
- - elasticgreen::XMatrix
- - fourier_elasticgreen::XMatrix{Complex{T}}
+ - elasticgreen::AbstractMatrix{T}
+ - fourier_elasticgreen::AbstractMatrix{T}{Complex{T}}
  - pfft::AbstractFFTs.Plan
  - pifft::AbstractFFTs.ScaledPlan
- - Dx::XMatrix
- - Dy::XMatrix
- - Dxx::XMatrix
- - Dyy::XMatrix
- - Dxy::XMatrix
+ - Dx::AbstractMatrix{T}
+ - Dy::AbstractMatrix{T}
+ - Dxx::AbstractMatrix{T}
+ - Dyy::AbstractMatrix{T}
+ - Dxy::AbstractMatrix{T}
  - negligible_gradD::Bool
  - rhog::T
- - geoidgreen::XMatrix
+ - geoidgreen::AbstractMatrix{T}
 """
 struct PrecomputedFastiso{T<:AbstractFloat}
-    elasticgreen::XMatrix
-    fourier_elasticgreen::XMatrix{Complex{T}}
-    pfft::AbstractFFTs.Plan
-    pifft::AbstractFFTs.ScaledPlan
-    Dx::XMatrix
-    Dy::XMatrix
-    Dxx::XMatrix
-    Dyy::XMatrix
-    Dxy::XMatrix
+    elasticgreen::AbstractMatrix{T}
+    fourier_elasticgreen::AbstractMatrix{Complex{T}}
+    pfft::Plan
+    pifft::ScaledPlan
+    Dx::AbstractMatrix{T}
+    Dy::AbstractMatrix{T}
+    Dxx::AbstractMatrix{T}
+    Dyy::AbstractMatrix{T}
+    Dxy::AbstractMatrix{T}
     negligible_gradD::Bool
     rhog::T
-    geoidgreen::XMatrix
+    geoidgreen::AbstractMatrix{T}
 end
 
 
@@ -298,7 +308,7 @@ function PrecomputedFastiso(
     Dyy = mixed_fdyy(D, Omega.dy)
     Dxy = mixed_fdy( mixed_fdx(D, Omega.dx), Omega.dy )
 
-    omega_zeros = fill(T(0.0), Omega.N, Omega.N)
+    omega_zeros = matrify(T(0), Omega.Nx, Omega.Ny)
     zero_tol = 1e-2
     negligible_gradD = isapprox(Dx, omega_zeros, atol = zero_tol) &
                         isapprox(Dy, omega_zeros, atol = zero_tol) &
@@ -364,7 +374,7 @@ function SuperStruct(
     t_Hice_snapshots::Vector{T},
     Hice_snapshots::Vector{Matrix{T}},
     t_eta_snapshots::Vector{T},
-    eta_snapshots::Vector{<:XMatrix},
+    eta_snapshots::Vector{<:AbstractMatrix{T}},
     interactive_geostate::Bool;
     geoid_0::Matrix{T} = copy(Omega.null),
     sealevel_0::Matrix{T} = copy(Omega.null),
@@ -406,6 +416,7 @@ function SuperStruct(
         T(0.0), T(0.0),             # V_den terms
         T(0.0),                     # total sl-contribution & conservation term
         0, years2seconds(10.0),     # countupdates, update step
+        copy(Omega.null),           # dtloadanom
     )
     return SuperStruct(Omega, c, p, tools, Hice, Hice_cpu, eta, eta_cpu,
         refgeostate, geostate, interactive_geostate)

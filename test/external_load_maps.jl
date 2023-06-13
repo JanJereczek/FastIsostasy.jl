@@ -16,7 +16,7 @@ function interpolated_glac1d_snapshots(Omega::ComputationDomain{T}) where {T<:Ab
     xl = range(xl[1], stop = xl[end], length = length(xl))
     yl = range(yl[1], stop = yl[end], length = length(yl))
 
-    H = fill(0.0, Omega.N, Omega.N, length(tvecl))
+    H = matrify(zeros(length(tvecl)), Omega.Nx, Omega.Ny)
     for k in axes(H, 3)
         itp = extrapolate(scale(interpolate(
             Hl[:, :, k],

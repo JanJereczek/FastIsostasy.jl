@@ -13,7 +13,8 @@ function main(
 )
 
     N = 2^n
-    sol = load("data/test5/$(case)_N$(N).jld2")
+    filekey = "$(case)_Nx$(N)_Ny$(N)"
+    sol = load("data/test5/$filekey.jld2")
     results = sol["results"]
     t_out = results.t_out
     t_out_kyr = round.(seconds2years.(t_out) ./ 1e3, digits=1)
@@ -177,7 +178,7 @@ function main(
     )
 
     framerate = 24
-    plotname = "plots/test5/loaduplift_$(case)_N$(N)"
+    plotname = "plots/test5/loaduplift_$filekey"
     record(fig, "$plotname.mp4", eachindex(u), framerate = framerate) do k
             i[] = k
     end
@@ -188,7 +189,7 @@ end
 
 cases = ["isostate", "geostate"]
 for case in cases[1:1]
-    main(7, case)
+    main(6, case)
 end
 
 

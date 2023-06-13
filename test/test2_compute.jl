@@ -28,7 +28,7 @@ function main(
     )
 
     kernel = use_cuda ? "gpu" : "cpu"
-    println("Computing on $kernel and $(Omega.N) x $(Omega.N) grid...")
+    println("Computing on $kernel and $(Omega.Nx) x $(Omega.Ny) grid...")
 
     if occursin("disc", case)
         alpha = T(10)                       # max latitude (°) of uniform ice disc
@@ -42,7 +42,7 @@ function main(
     end
     t_out = years2seconds.([0.0, 1.0, 1e3, 2e3, 5e3, 1e4, 1e5])
 
-    sl0 = fill(-Inf, Omega.N, Omega.N)
+    sl0 = matrify(-Inf, Omega.Nx, Omega.Ny)
     t1 = time()
     results = fastisostasy(t_out, Omega, c, p, H_ice, sealevel_0=sl0, interactive_geostate=true)
     t_fastiso = time() - t1
@@ -53,7 +53,7 @@ function main(
         Omega, p = copystructs2cpu(Omega, c, p)
     end
 
-    filename = "$(case)_N$(Omega.N)_$(kernel)"
+    filename = "$(case)_Nx$(Omega.Nx)_Ny$(Omega.Ny)_$(kernel)"
     jldsave(
         "data/test2/$filename.jld2",
         Omega = Omega, c = c, p = p,

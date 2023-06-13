@@ -52,8 +52,7 @@ update_slc_den!
 years2seconds
 seconds2years
 m_per_sec2mm_per_yr
-matrify_vectorconstant
-matrify_constant
+matrify
 get_r
 meshgrid
 dist2angulardist
