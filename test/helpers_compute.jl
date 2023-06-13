@@ -156,43 +156,6 @@ end
 # Generate binary parameter fields for test 3
 ################################################
 
-function generate_binary_field(
-    Omega::ComputationDomain{T},
-    x_lo::T,
-    x_hi::T,
-) where {T<:AbstractFloat}
-    lo_half = fill(x_lo, Omega.N, Int(Omega.N/2))
-    hi_half = fill(x_hi, Omega.N, Int(Omega.N/2))
-    return cat(lo_half, hi_half, dims=2)
-end
-
-function generate_sigmoid_field(
-    Omega::ComputationDomain{T},
-    x_lo::T,
-    x_hi::T,
-) where {T<:AbstractFloat}
-
-    delta_x = x_hi - x_lo
-    scaled_sigmoid(x) = sigmoid(x, 1e-2)
-    return x_lo .+ delta_x .* scaled_sigmoid.(Omega.X)
-end
-sigmoid(x::Real, c::Real) = 1 / (1 + exp(-c*x))
-
-function generate_window_field(
-    Omega::ComputationDomain{T},
-    x_background::T,
-    x_lo::T,
-    x_hi::T,
-) where {T<:AbstractFloat}
-    N = Omega.N
-    N2 = Int(N/2)
-    N4 = Int(N/4)
-    X = fill(x_background, N, N)
-    X[N4+1:end-N4, N4+1:N2] .= x_lo
-    X[N4+1:end-N4, N2+1:end-N4] .= x_hi
-    return X
-end
-
 function generate_gaussian_field(
     Omega::ComputationDomain{T},
     z_background::T,
@@ -200,7 +163,12 @@ function generate_gaussian_field(
     z_peak::T,
     sigma::AbstractMatrix{T},
 ) where {T<:AbstractFloat}
-    N = Omega.N
+    if Omega.Nx == Omega.Ny
+        N = Omega.Nx
+    else
+        error("Automated generation of Gaussian parameter fields only supported for" *
+            "square domains.")
+    end
     G = gauss_distr( Omega.X, Omega.Y, xy_peak, sigma )
     G = G ./ maximum(G) .* z_peak
     return fill(z_background, N, N) + G

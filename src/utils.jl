@@ -40,23 +40,43 @@ end
 
 """
 
-    matrify_vectorconstant(x, N)
+    matrify(x, Nx, Ny)
 
 Generate a vector of constant matrices from a vector of constants.
 """
-function matrify_vectorconstant(x::Vector{<:Real}, N::Int)
-    return matrify_vectorconstant(x, N, N)
+function matrify(x::Vector{<:Real}, N::Int)
+    return matrify(x, N, N)
 end
 
-function matrify_vectorconstant(x::Vector{T}, Nx::Int, Ny::Int) where {T<:Real}
+function matrify(x::Vector{T}, Nx::Int, Ny::Int) where {T<:Real}
     X = zeros(T, Ny, Nx, length(x))
     @inbounds for i in eachindex(x)
-        X[:, :, i] = matrify_constant(x[i], Nx, Ny)
+        X[:, :, i] = matrify(x[i], Nx, Ny)
     end
     return X
 end
 
-matrify_constant(x::Real, Nx::Int, Ny::Int) = fill(x, Ny, Nx)
+matrify(x::Real, Nx::Int, Ny::Int) = fill(x, Ny, Nx)
+
+
+function samesize_conv(X::AbstractMatrix{T}, Y::AbstractMatrix{T},
+    Omega::ComputationDomain) where {T<:AbstractFloat}
+    if iseven(Omega.Ny)
+        i1 = Omega.My
+    else
+        i1 = Omega.My+1
+    end
+    i2 = 2*Omega.Ny-1-Omega.My
+
+    if iseven(Omega.Nx)
+        j1 = Omega.Mx
+    else
+        j1 = Omega.Mx+1
+    end
+    j2 = 2*Omega.Nx-1-Omega.Mx
+
+    return view( conv(X, Y), i1:i2, j1:j2 )
+end
 
 #####################################################
 # Domain and projection utils
@@ -300,7 +320,7 @@ function loginterp_viscosity(
     pseudodiff::AbstractMatrix{T},
 ) where {T<:AbstractFloat}
     n1, n2, n3, nt = size(layer_viscosities)
-    log_eqviscosity = [fill(T(0.0), n1, n2) for k in 1:nt]
+    log_eqviscosity = matrify(zeros(nt), n1, n2)
 
     [log_eqviscosity[k] .= log10.(get_effective_viscosity(
         layer_viscosities[:, :, :, k],
@@ -571,23 +591,4 @@ function copystructs2cpu(
     )
 
     return Omega_cpu, p_cpu
-end
-
-function samesize_conv(X::AbstractMatrix{T}, Y::AbstractMatrix{T},
-    Omega::ComputationDomain) where {T<:AbstractFloat}
-    if iseven(Omega.Ny)
-        i1 = Omega.My
-    else
-        i1 = Omega.My+1
-    end
-    i2 = 2*Omega.Ny-1-Omega.My
-
-    if iseven(Omega.Nx)
-        j1 = Omega.Mx
-    else
-        j1 = Omega.Mx+1
-    end
-    j2 = 2*Omega.Nx-1-Omega.Mx
-
-    return view( conv(X, Y), i1:i2, j1:j2 )
 end

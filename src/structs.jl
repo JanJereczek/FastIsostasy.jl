@@ -76,7 +76,7 @@ function ComputationDomain(
     arraykernel = use_cuda ? CuArray : Array
     K = kernelpromote(scalefactor(deg2rad.(Lat), deg2rad.(Lon),
         deg2rad(lat0), deg2rad(lon0)), arraykernel)
-    null = matrify_constant(T(0), Nx, Ny)
+    null = matrify(T(0), Nx, Ny)
     
     # Differential operators in Fourier space
     pseudodiff, harmonic, biharmonic = get_differential_fourier(Wx, Wy, Nx, Ny)
@@ -172,10 +172,10 @@ function MultilayerEarth(
 }
 
     if layer_boundaries isa Vector{<:Real}
-        layer_boundaries = matrify_vectorconstant(layer_boundaries, Omega.Nx, Omega.Ny)
+        layer_boundaries = matrify(layer_boundaries, Omega.Nx, Omega.Ny)
     end
     if layer_viscosities isa Vector{<:Real}
-        layer_viscosities = matrify_vectorconstant(layer_viscosities, Omega.Nx, Omega.Ny)
+        layer_viscosities = matrify(layer_viscosities, Omega.Nx, Omega.Ny)
     end
 
     litho_thickness = layer_boundaries[:, :, 1]
@@ -193,7 +193,7 @@ function MultilayerEarth(
         layers_thickness,
     )
 
-    mean_density = matrify_constant(mean(layers_density), Omega.Nx, Omega.Ny)
+    mean_density = matrify(mean(layers_density), Omega.Nx, Omega.Ny)
 
     litho_rigidity, effective_viscosity, mean_density = kernelpromote(
         [litho_rigidity, effective_viscosity, mean_density], Omega.arraykernel)
@@ -308,7 +308,7 @@ function PrecomputedFastiso(
     Dyy = mixed_fdyy(D, Omega.dy)
     Dxy = mixed_fdy( mixed_fdx(D, Omega.dx), Omega.dy )
 
-    omega_zeros = matrify_constant(T(0), Omega.Nx, Omega.Ny)
+    omega_zeros = matrify(T(0), Omega.Nx, Omega.Ny)
     zero_tol = 1e-2
     negligible_gradD = isapprox(Dx, omega_zeros, atol = zero_tol) &
                         isapprox(Dy, omega_zeros, atol = zero_tol) &

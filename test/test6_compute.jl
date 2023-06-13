@@ -4,7 +4,7 @@ include("helpers_compute.jl")
 include("external_viscosity_maps.jl")
 
 function get_wiens_layervisc(Omega)
-    halfspace_logviscosity = fill(21.0, Omega.N, Omega.N)
+    halfspace_logviscosity = matrify(21.0, Omega.Nx, Omega.Ny)
     Eta, Eta_mean, z = load_wiens_2021(Omega.X, Omega.Y)
     eta_interpolators, eta_mean_interpolator = interpolate_viscosity_xy(
         Omega.X, Omega.Y, Eta, Eta_mean)

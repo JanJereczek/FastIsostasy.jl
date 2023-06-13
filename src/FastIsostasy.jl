@@ -42,7 +42,7 @@ export years2seconds, seconds2years, m_per_sec2mm_per_yr
 export meshgrid, dist2angulardist, latlon2stereo, stereo2latlon
 export kernelpromote, convert2Array, copystructs2cpu
 
-export matrify_vectorconstant, matrify_constant
+export matrify, matrify
 export loginterp_viscosity
 export get_rigidity
 export get_r
