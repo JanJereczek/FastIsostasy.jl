@@ -5,11 +5,8 @@
 Update the geoid of a `::GeoState` by convoluting the Green's function with the load anom.
 """
 function update_geoid!(sstruct::SuperStruct{<:AbstractFloat})
-    sstruct.geostate.geoid .= view(
-        conv( sstruct.tools.geoidgreen, loadanom_green(sstruct) ),
-        sstruct.Omega.N2:2*sstruct.Omega.N-1-sstruct.Omega.N2,
-        sstruct.Omega.N2:2*sstruct.Omega.N-1-sstruct.Omega.N2,
-    )
+    sstruct.geostate.geoid .= samesize_conv(sstruct.tools.geoidgreen,
+        loadanom_green(sstruct), sstruct.Omega)
     return nothing
 end
 

@@ -1,14 +1,14 @@
 module FastIsostasy
 
 using LinearAlgebra
+using Statistics: mean
 using Distributions: MvNormal
 using Interpolations: linear_interpolation, Flat
-using FFTW
-using StatsBase
-using FastGaussQuadrature
+using FFTW: fft, plan_fft, plan_ifft
+using AbstractFFTs: Plan, ScaledPlan
+using FastGaussQuadrature: gausslegendre
 using DSP: conv
-using CUDA
-using CUDA: CuArray
+using CUDA: CuArray, CUFFT.plan_fft, CUFFT.plan_ifft, allowscalar
 using OrdinaryDiffEq: ODEProblem, solve, OrdinaryDiffEqAlgorithm
 using EnsembleKalmanProcesses
 using EnsembleKalmanProcesses.Observations
@@ -16,10 +16,10 @@ using EnsembleKalmanProcesses.ParameterDistributions
 
 using Reexport
 @reexport using Interpolations
-@reexport using OrdinaryDiffEq: Euler, BS3, Tsit5, TanYam7, Vern9, VCABM, Rosenbrock23, QNDF, FBDF, ImplicitEuler
+@reexport using OrdinaryDiffEq: Euler, Midpoint, Heun, Ralston, BS3, BS5, RK4, OwrenZen3,
+    OwrenZen4, OwrenZen5, Tsit5, DP5, RKO65, TanYam7, DP8, Feagin10, Feagin12, Feagin14,
+    TsitPap8, Vern6, Vern7, Vern8, Vern9, VCABM, Rosenbrock23, QNDF, FBDF, ImplicitEuler
 
-# Euler, Midpoint, Heun, Ralston, RK4, OwrenZen3, OwrenZen4, OwrenZen5, DP5, RKO65,
-# TanYam7, DP8, Feagin10, Feagin12, Feagin14, TsitPap8,  BS5, Vern6, Vern7, Vern8,
 # KuttaPRK2p5(dt=), Trapezoid(autodiff = false), PDIRK44(autodiff = false)
 
 include("structs.jl")
@@ -39,30 +39,24 @@ export GeoState
 export SuperStruct
 
 # utils.jl
-export years2seconds
-export seconds2years
-export m_per_sec2mm_per_yr
+export years2seconds, seconds2years, m_per_sec2mm_per_yr
+export meshgrid, dist2angulardist, latlon2stereo, stereo2latlon
+export kernelpromote, convert2Array, copystructs2cpu
 
-export meshgrid
-export dist2angulardist
-export latlon2stereo
-export stereo2latlon
-
-export kernelpromote
-export convert2Array
-export copystructs2cpu
-
-export matrify_vectorconstant
+export matrify_vectorconstant, matrify_constant
 export loginterp_viscosity
 export get_rigidity
 export get_r
 export gauss_distr
+
+export samesize_conv
 
 # derivatives.jl
 export mixed_fdx
 export mixed_fdy
 export mixed_fdxx
 export mixed_fdyy
+export get_differential_fourier
 
 # mechanics.jl
 export quadrature1D

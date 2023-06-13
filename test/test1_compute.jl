@@ -16,7 +16,7 @@ function main(
     p = MultilayerEarth(Omega, c)
 
     kernel = use_cuda ? "gpu" : "cpu"
-    println("Computing on $kernel and $(Omega.N) x $(Omega.N) grid...")
+    println("Computing on $kernel and $(Omega.Ny) x $(Omega.Nx) grid...")
 
     R = T(1000e3)               # ice disc radius (m)
     H = T(1000)                 # ice disc thickness (m)
@@ -35,7 +35,7 @@ function main(
     end
 
     gs = active_gs ? "geostate" : "isostate"
-    filename = "$(solver)_N$(Omega.N)_$(kernel)_$(gs)"
+    filename = "$(solver)_Nx$(Omega.Nx)_Ny$(Omega.Ny)_$(kernel)_$(gs)"
     jldsave(
         "data/test1/$filename.jld2",
         Omega = Omega, c = c, p = p,
@@ -49,7 +49,7 @@ end
 for use_cuda in [false] # [false, true]
     for active_gs in [false] # [false, true]
         for n in 6:6 # 3:8
-            main(n, use_cuda = use_cuda, solver = "ExplicitEuler", active_gs = active_gs)
+            main(n, use_cuda = use_cuda, solver = BS3(), active_gs = active_gs)
         end
     end
 end

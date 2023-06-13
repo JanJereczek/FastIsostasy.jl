@@ -93,6 +93,8 @@ function forward_isostasy(
         dudt_out[k] .= copy(kernelpromote(dudt, Array))
         geoid_out[k] .= copy(kernelpromote(sstruct.geostate.geoid, Array))
         sealevel_out[k] .= copy(kernelpromote(sstruct.geostate.sealevel, Array))
+        u_el_out[k] .= samesize_conv(columnanom_load(sstruct),
+            sstruct.tools.elasticgreen, sstruct.Omega)
     end
     return u_out, dudt_out, u_el_out, geoid_out, sealevel_out
 end
@@ -127,7 +129,7 @@ function forwardstep_isostasy!(
     sstruct::SuperStruct{T},
     t::T,
 ) where {T<:AbstractFloat}
-    corner_bc!(u, sstruct.Omega.N)
+    corner_bc!(u, sstruct.Omega.Nx, sstruct.Omega.Ny)
 
     # Only update the geoid and sea level if geostate is interactive.
     # As integration requires smaller time steps than diagnostics,
@@ -140,7 +142,15 @@ function forwardstep_isostasy!(
         # println("Updated GeoState at t=$(seconds2years(t))")
     end
 
+    sstruct.geostate.dtloadanom .= columnanom_load(sstruct)
     update_loadcolumns!(sstruct, u, sstruct.Hice(t))
+
+    coupled_viscoelastic = false
+    if coupled_viscoelastic
+        sstruct.geostate.dtloadanom -= columnanom_load(sstruct)
+        u += samesize_conv(sstruct.geostate.dtloadanom, sstruct.tools.elasticgreen,
+            sstruct.Omega)
+    end
     dudt_isostasy!(dudt, u, sstruct, t)
     return nothing
 end
@@ -178,7 +188,7 @@ function dudt_isostasy!(
         sstruct.Omega.pseudodiff)) ./ (2 .* sstruct.p.effective_viscosity)
     #     dudt[:, :] .= real.(tools.pifft * ((tools.pfft * (rhs ./ (2 .* p.effective_viscosity)) ) ./ Omega.pseudodiff))
 
-    corner_bc!(dudt, sstruct.Omega.N)
+    corner_bc!(dudt, sstruct.Omega.Nx, sstruct.Omega.Ny)
     return nothing
 end
 
@@ -209,14 +219,14 @@ end
 Apply boundary condition on Fourier collocation solution.
 Assume that mean deformation at corners of domain is 0.
 """
-function corner_bc(u::XMatrix, N)
+function corner_bc(u::XMatrix, Nx::Int, Ny::Int)
     u_bc = copy(u)
-    return corner_bc!(u_bc, N)
+    return corner_bc!(u_bc, Nx, Ny)
 end
 
-function corner_bc!(u::XMatrix, N)
-    CUDA.allowscalar() do
-        u .-= (view(u, 1, 1) + view(u, 1, N) + view(u, N, 1) + view(u, N, N)) / 4
+function corner_bc!(u::XMatrix, Nx::Int, Ny::Int)
+    allowscalar() do
+        u .-= ( view(u,1,1) + view(u,1,Nx) + view(u,Ny,1) + view(u,Ny,Nx) ) / 4
     end
 end
 
@@ -228,14 +238,15 @@ Apply boundary condition on Fourier collocation solution.
 Assume that mean deformation at borders of domain is 0.
 Same as Bueler et al. (2007).
 """
-function border_bc(u::XMatrix, N)
+function border_bc(u::XMatrix, Nx::Int, Ny::Int)
     u_bc = copy(u)
-    return border_bc!(u_bc, N)
+    return border_bc!(u_bc, Nx, Ny)
 end
 
-function border_bc!(u::XMatrix, N)
-    CUDA.allowscalar() do
-        u .-= sum(view(u, 1, :) + view(u, :, N) + view(u, N, :) + view(u, :, 1)) / (4*N)
+function border_bc!(u::XMatrix, Nx::Int, Ny::Int)
+    allowscalar() do
+        u .-= sum( view(u,1,:) + view(u,:,Nx) + view(u,Ny,:) + view(u,:,1) ) /
+            (2*Nx + 2*Ny)
     end
 end
 
@@ -251,9 +262,9 @@ by convoluting the `load` with the Green's function stored in the pre-computed `
 (elements obtained from Farell 1972).
 """
 function compute_elastic_response(
-    Omega::ComputationDomain,
-    tools::PrecomputedFastiso,
+    Omega::ComputationDomain{T},
+    tools::PrecomputedFastiso{T},
     load::XMatrix,
-)
-    return conv(load, tools.elasticgreen)[Omega.N2:end-Omega.N2, Omega.N2:end-Omega.N2]
+) where {T<:AbstractFloat}
+    return samesize_conv(load, tools.elasticgreen, Omega)
 end

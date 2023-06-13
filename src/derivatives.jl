@@ -91,13 +91,11 @@ end
 
 Compute the matrices representing the differential operators in the fourier space.
 """
-function get_differential_fourier(
-    W::T,
-    N2::Int,
-) where {T<:Real}
-    mu = T(π / W)
-    raw_coeffs = mu .* T.( vcat(0:N2, N2-1:-1:1) )
-    x_coeffs, y_coeffs = raw_coeffs, raw_coeffs
+function get_differential_fourier(Wx::T, Wy::T, Nx::Int, Ny::Int) where {T<:Real}
+    mu_x = π / Wx
+    mu_y = π / Wy
+    x_coeffs = mu_x .* fftint(Nx)
+    y_coeffs = mu_y .* fftint(Ny)
     X_coeffs, Y_coeffs = meshgrid(x_coeffs, y_coeffs)
     harmonic_coeffs = X_coeffs .^ 2 + Y_coeffs .^ 2
     pseudodiff_coeffs = sqrt.(harmonic_coeffs)
@@ -105,24 +103,11 @@ function get_differential_fourier(
     return pseudodiff_coeffs, harmonic_coeffs, biharmonic_coeffs
 end
 
-function precomp_fourier_dxdy(
-    M::XMatrix,
-    L1::T,
-    L2::T,
-) where {T<:AbstractFloat}
-    n1, n2 = size(M)
-    k1 = 2 * π / L1 .* vcat(0:n1/2-1, 0, -n1/2+1:-1)
-    k2 = 2 * π / L2 .* vcat(0:n2/2-1, 0, -n2/2+1:-1)
-    p1, p2 = plan_fft(k1), plan_fft(k2)
-    ip1, ip2 = plan_ifft(k1), plan_ifft(k2)
-    return k1, k2, p1, p2, ip1, ip2
-end
-
-function fourier_dnx(
-    M::XMatrix,
-    k1::Vector{T},
-    p1::AbstractFFTs.Plan,
-    ip1::AbstractFFTs.ScaledPlan,
-) where {T<:AbstractFloat}
-    return vcat( [real.(ip1 * ( ( im .* k1 ) .^ n .* (p1 * M[i, :]) ))' for i in axes(M,1)]... )
+function fftint(N::Int)
+    N2 = N ÷ 2
+    if iseven(N)
+        return vcat(0:N2, N2-1:-1:1)
+    else
+        return vcat(0:N2, N2:-1:1)
+    end
 end
