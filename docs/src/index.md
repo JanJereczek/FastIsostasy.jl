@@ -2,7 +2,7 @@
 
 ## Getting started
 
-FastIsostasy.jl is work under devlopment and is not a registered julia package so far. To install it, please run:
+FastIsostasy.jl is work under devlopment and is not a registered julia package yet. To install it, please run:
 
 ```julia
 using Pkg
