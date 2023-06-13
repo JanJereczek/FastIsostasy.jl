@@ -30,7 +30,6 @@ include("mechanics.jl")
 include("inversion.jl")
 
 # structs.jl
-export XMatrix
 export ComputationDomain
 export PhysicalConstants
 export MultilayerEarth

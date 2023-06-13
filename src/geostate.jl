@@ -106,12 +106,12 @@ end
 
 """
 
-    update_loadcolumns!(sstruct::SuperStruct, u::XMatrix, H_ice::XMatrix)
+    update_loadcolumns!(sstruct::SuperStruct, u::AbstractMatrix{T}, H_ice::AbstractMatrix{T})
 
 Update the load columns of a `::GeoState`.
 """
-function update_loadcolumns!(sstruct::SuperStruct{<:AbstractFloat},
-    u::XMatrix, H_ice::XMatrix)
+function update_loadcolumns!(sstruct::SuperStruct{T}, u::AbstractMatrix{T},
+    H_ice::AbstractMatrix{T}) where {T<:AbstractFloat}
 
     sstruct.geostate.b .= sstruct.refgeostate.b .+ u
     sstruct.geostate.H_ice .= H_ice

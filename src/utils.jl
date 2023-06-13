@@ -107,7 +107,7 @@ function scalefactor(lat::T, lon::T, lat0::T, lon0::T; k0::T = T(1)) where {T<:R
     return 2*k0 / (1 + sin(lat0)*sin(lat) + cos(lat0)*cos(lat)*cos(lon-lon0))
 end
 
-function scalefactor(lat::XMatrix, lon::XMatrix, lat0::T, lon0::T;
+function scalefactor(lat::AbstractMatrix{T}, lon::AbstractMatrix{T}, lat0::T, lon0::T;
     kwargs... ) where {T<:Real}
     K = similar(lat)
     @inbounds for idx in CartesianIndices(lat)
@@ -137,8 +137,8 @@ function latlon2stereo(lat::T, lon::T, lat0::T, lon0::T;
 end
 
 function latlon2stereo(
-    lat::XMatrix,
-    lon::XMatrix,
+    lat::AbstractMatrix{T},
+    lon::AbstractMatrix{T},
     lat0::T,
     lon0::T;
     kwargs...,
@@ -173,7 +173,7 @@ function stereo2latlon(x::T, y::T, lat0::T, lon0::T;
     return rad2deg(lat), rad2deg(lon)
 end
 
-function stereo2latlon(x::XMatrix, y::XMatrix, lat0::T, lon0::T;
+function stereo2latlon(x::AbstractMatrix{T}, y::AbstractMatrix{T}, lat0::T, lon0::T;
     kwargs...) where {T<:Real}
     Lat, Lon = copy(x), copy(x)
     @inbounds for idx in CartesianIndices(x)
@@ -189,13 +189,13 @@ end
 
 """
 
-    gauss_distr(X::XMatrix, Y::XMatrix, mu::Vector{<:Real}, sigma::Matrix{<:Real})
+    gauss_distr(X::AbstractMatrix{T}, Y::AbstractMatrix{T}, mu::Vector{<:Real}, sigma::Matrix{<:Real})
 
 Compute `Z = f(X,Y)` with `f` a Gaussian function parametrized by mean
 `mu` and covariance `sigma`.
 """
-function gauss_distr(X::XMatrix, Y::XMatrix,
-    mu::Vector{<:Real}, sigma::Matrix{<:Real})
+function gauss_distr(X::AbstractMatrix{T}, Y::AbstractMatrix{T},
+    mu::Vector{<:Real}, sigma::Matrix{<:Real}) where {T<:AbstractFloat}
     k = length(mu)
     G = similar(X)
     invsigma = inv(sigma)
@@ -220,7 +220,7 @@ end
 """
 
     get_effective_viscosity(
-        layer_viscosities::Vector{XMatrix},
+        layer_viscosities::Vector{AbstractMatrix{T}},
         layers_thickness::Vector{T},
         Omega::ComputationDomain{T},
     ) where {T<:AbstractFloat}
@@ -232,7 +232,7 @@ function get_effective_viscosity(
     Omega::ComputationDomain{T},
     layer_viscosities::Array{T, 3},
     layers_thickness::Array{T, 3},
-    # pseudodiff::XMatrix,
+    # pseudodiff::AbstractMatrix{T},
 ) where {T<:AbstractFloat}
 
     # Recursion has to start with half space = n-th layer:
@@ -297,7 +297,7 @@ function loginterp_viscosity(
     tvec::AbstractVector{T},
     layer_viscosities::Array{T, 4},
     layers_thickness::Array{T, 3},
-    pseudodiff::XMatrix,
+    pseudodiff::AbstractMatrix{T},
 ) where {T<:AbstractFloat}
     n1, n2, n3, nt = size(layer_viscosities)
     log_eqviscosity = [fill(T(0.0), n1, n2) for k in 1:nt]
@@ -573,7 +573,8 @@ function copystructs2cpu(
     return Omega_cpu, p_cpu
 end
 
-function samesize_conv(X::XMatrix, Y::XMatrix, Omega::ComputationDomain)
+function samesize_conv(X::AbstractMatrix{T}, Y::AbstractMatrix{T},
+    Omega::ComputationDomain) where {T<:AbstractFloat}
     if iseven(Omega.Ny)
         i1 = Omega.My
     else

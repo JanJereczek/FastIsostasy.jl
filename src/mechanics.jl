@@ -19,7 +19,7 @@ function fastisostasy(
     ODEsolver::Any = "ExplicitEuler",
     dt::T = T(years2seconds(1.0)),
     t_eta_snapshots::Vector{T} = [t_out[1], t_out[end]],
-    eta_snapshots::Vector{<:XMatrix} = [p.effective_viscosity, p.effective_viscosity],
+    eta_snapshots::Vector{<:AbstractMatrix{T}} = [p.effective_viscosity, p.effective_viscosity],
     u_viscous_0::Matrix{T} = copy(Omega.null),
     u_elastic_0::Matrix{T} = copy(Omega.null),
     interactive_geostate::Bool = false,
@@ -62,7 +62,7 @@ Forward-integrate the isostatic adjustment.
 function forward_isostasy(
     dt::T,
     t_out::Vector{T},
-    u::XMatrix,
+    u::AbstractMatrix{T},
     sstruct::SuperStruct{T},
     ODEsolver::Any,
     verbose::Bool,
@@ -129,8 +129,8 @@ Forward integrate the isostatic adjustment over a single time step by updating t
 displacement rate `dudt`, and the sea-level state contained within `sstruct::SuperStruct`.
 """
 function forwardstep_isostasy!(
-    dudt::XMatrix,
-    u::XMatrix,
+    dudt::AbstractMatrix{T},
+    u::AbstractMatrix{T},
     sstruct::SuperStruct{T},
     t::T,
 ) where {T<:AbstractFloat}
@@ -147,15 +147,20 @@ function forwardstep_isostasy!(
         # println("Updated GeoState at t=$(seconds2years(t))")
     end
 
-    sstruct.geostate.dtloadanom .= columnanom_load(sstruct)
+    coupled_viscoelastic = false
+
+    if coupled_viscoelastic
+        sstruct.geostate.dtloadanom .= columnanom_load(sstruct)
+    end
+
     update_loadcolumns!(sstruct, u, sstruct.Hice(t))
 
-    coupled_viscoelastic = false
     if coupled_viscoelastic
         sstruct.geostate.dtloadanom -= columnanom_load(sstruct)
         u += samesize_conv(sstruct.geostate.dtloadanom, sstruct.tools.elasticgreen,
             sstruct.Omega)
     end
+
     dudt_isostasy!(dudt, u, sstruct, t)
     return nothing
 end
@@ -167,8 +172,8 @@ end
 Update the displacement rate `dudt`.
 """
 function dudt_isostasy!(
-    dudt::XMatrix,
-    u::XMatrix,
+    dudt::AbstractMatrix{T},
+    u::AbstractMatrix{T},
     sstruct::SuperStruct{T},
     t::T,
 ) where {T<:AbstractFloat}
@@ -205,8 +210,8 @@ Update the state `u` by performing an explicit Euler integration of its derivati
 over a time step `dt`.
 """
 function explicit_euler!(
-    u::XMatrix,
-    dudt::XMatrix,
+    u::AbstractMatrix{T},
+    dudt::AbstractMatrix{T},
     dt::T,
 ) where {T<:AbstractFloat}
     u .+= dudt .* dt
@@ -224,12 +229,12 @@ end
 Apply boundary condition on Fourier collocation solution.
 Assume that mean deformation at corners of domain is 0.
 """
-function corner_bc(u::XMatrix, Nx::Int, Ny::Int)
+function corner_bc(u::AbstractMatrix{<:AbstractFloat}, Nx::Int, Ny::Int)
     u_bc = copy(u)
     return corner_bc!(u_bc, Nx, Ny)
 end
 
-function corner_bc!(u::XMatrix, Nx::Int, Ny::Int)
+function corner_bc!(u::AbstractMatrix{<:AbstractFloat}, Nx::Int, Ny::Int)
     allowscalar() do
         u .-= ( view(u,1,1) + view(u,1,Nx) + view(u,Ny,1) + view(u,Ny,Nx) ) / 4
     end
@@ -243,12 +248,12 @@ Apply boundary condition on Fourier collocation solution.
 Assume that mean deformation at borders of domain is 0.
 Same as Bueler et al. (2007).
 """
-function border_bc(u::XMatrix, Nx::Int, Ny::Int)
+function border_bc(u::AbstractMatrix{<:AbstractFloat}, Nx::Int, Ny::Int)
     u_bc = copy(u)
     return border_bc!(u_bc, Nx, Ny)
 end
 
-function border_bc!(u::XMatrix, Nx::Int, Ny::Int)
+function border_bc!(u::AbstractMatrix{<:AbstractFloat}, Nx::Int, Ny::Int)
     allowscalar() do
         u .-= sum( view(u,1,:) + view(u,:,Nx) + view(u,Ny,:) + view(u,:,1) ) /
             (2*Nx + 2*Ny)
@@ -269,7 +274,7 @@ by convoluting the `load` with the Green's function stored in the pre-computed `
 function compute_elastic_response(
     Omega::ComputationDomain{T},
     tools::PrecomputedFastiso{T},
-    load::XMatrix,
+    load::AbstractMatrix{T},
 ) where {T<:AbstractFloat}
     return samesize_conv(load, tools.elasticgreen, Omega)
 end
