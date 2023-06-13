@@ -13,7 +13,7 @@ function main(n::Int, active_gs::Bool; use_cuda::Bool = false,solver = "Explicit
     c = PhysicalConstants()
 
     lb = [88e3, 180e3, 280e3, 400e3]
-    halfspace_logviscosity = fill(21.0, Omega.N, Omega.N)
+    halfspace_logviscosity = matrify_constant(21.0, Omega.Nx, Omega.Ny)
     Eta, Eta_mean, z = load_wiens_2021(Omega.X, Omega.Y)
     eta_interpolators, eta_mean_interpolator = interpolate_viscosity_xy(
         Omega.X, Omega.Y, Eta, Eta_mean)
@@ -30,7 +30,7 @@ function main(n::Int, active_gs::Bool; use_cuda::Bool = false,solver = "Explicit
     )
 
     kernel = use_cuda ? "gpu" : "cpu"
-    println("Computing on $kernel and $(Omega.N) x $(Omega.N) grid...")
+    println("Computing on $kernel and $(Omega.Nx) x $(Omega.Ny) grid...")
 
     t_out, deltaH, H = interpolated_glac1d_snapshots(Omega)
     dH = [deltaH[:, :, k] for k in axes(deltaH, 3)]
@@ -50,7 +50,7 @@ function main(n::Int, active_gs::Bool; use_cuda::Bool = false,solver = "Explicit
 
     case = active_gs ? "geostate" : "isostate"
     jldsave(
-        "data/test5/$(case)_N$(Omega.N).jld2",
+        "data/test5/$(case)_Nx$(Omega.Nx)_Ny$(Omega.Ny).jld2",
         Omega = Omega, c = c, p = p,
         results = results,
         t_fastiso = t_fastiso,
@@ -60,5 +60,5 @@ end
 
 cases = [false, true]
 for active_gs in cases[1:1]
-    main(6, active_gs, use_cuda=true, solver="ExplicitEuler")
+    main(6, active_gs, use_cuda=false, solver="ExplicitEuler")
 end

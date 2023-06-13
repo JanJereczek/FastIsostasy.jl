@@ -188,7 +188,7 @@ end
 
 cases = ["isostate", "geostate"]
 for case in cases[1:1]
-    main(7, case)
+    main(6, case)
 end
 
 
