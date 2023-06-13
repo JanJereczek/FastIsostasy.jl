@@ -419,7 +419,7 @@ function get_elasticgreen(
     @inbounds for i = 1:Omega.Nx, j = 1:Omega.Ny
         p = i - Omega.Mx - 1
         q = j - Omega.My - 1
-        elasticgreen[i, j] = quadrature2D(
+        elasticgreen[j, i] = quadrature2D(
             greenintegrand_function,
             quad_support,
             quad_coeffs,
