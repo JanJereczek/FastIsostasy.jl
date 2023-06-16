@@ -22,16 +22,20 @@ init_results
 forwardstep_isostasy!
 dudt_isostasy!
 simple_euler!
-apply_bc
+corner_bc
+border_bc
 compute_elastic_response
 ```
 
 ## Sea-level
 
 ```@docs
-update_geostate!
 update_geoid!
-get_loadchange
+columnanom_ice
+columnanom_water
+columnanom_mantle
+columnanom_load
+columnanom_full
 get_geoidgreen
 update_loadcolumns!
 update_sealevel!
@@ -46,6 +50,11 @@ update_slc_den!
 
 ## Parameter inversion
 
+```@docs
+ParamInversion
+perform
+where_response
+```
 ## Utils
 
 ```@docs

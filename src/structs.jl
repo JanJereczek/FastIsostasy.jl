@@ -9,6 +9,7 @@ KernelMatrix = Union{Matrix{T}, CuArray{T, 2}} where {T<:Real}
 # Computation domain
 #########################################################
 """
+
     ComputationDomain
 
 Return a struct containing all information related to geometry of the domain
@@ -96,6 +97,7 @@ end
 # Physical constants
 #########################################################
 """
+
     PhysicalConstants
 
 Return a struct containing important physical constants.
@@ -121,6 +123,7 @@ end
 # Multi-layer Earth
 #########################################################
 """
+
     MultilayerEarth
 
 Return a struct containing all information related to the radially layered structure of the solid Earth and
@@ -213,6 +216,7 @@ function MultilayerEarth(
 end
 
 """
+
     RefGeoState
 
 Return a struct containing the reference geostate. We define the geostate to be all quantities related to sea-level.
@@ -230,6 +234,7 @@ struct RefGeoState{T<:AbstractFloat}
 end
 
 """
+
     GeoState
 
 Return a mutable struct containing the geostate which will be updated over the simulation.
