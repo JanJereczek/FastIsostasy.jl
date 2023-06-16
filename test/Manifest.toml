@@ -2,7 +2,7 @@
 
 julia_version = "1.9.0"
 manifest_format = "2.0"
-project_hash = "9a8d6957bb9762f66275c048212367dc754af7aa"
+project_hash = "560721a11399ae386f717e1d89771021b3e3cb56"
 
 [[deps.AbstractFFTs]]
 deps = ["LinearAlgebra"]
@@ -74,12 +74,6 @@ git-tree-sha1 = "eb4cb44a499229b3b8426dcfb5dd85333951ff90"
 uuid = "fa961155-64e5-5f13-b03f-caf6b980ea82"
 version = "0.4.2"
 
-[[deps.CFTime]]
-deps = ["Dates", "Printf"]
-git-tree-sha1 = "ed2e76c1c3c43fd9d0cb9248674620b29d71f2d1"
-uuid = "179af706-886a-5703-950a-314cd64e0468"
-version = "0.1.2"
-
 [[deps.CRC32c]]
 uuid = "8bf52ea8-c179-5cab-976a-9e18b702a9bc"
 
@@ -142,12 +136,6 @@ deps = ["ColorTypes", "FixedPointNumbers", "Reexport"]
 git-tree-sha1 = "fc08e5930ee9a4e03f84bfb5211cb54e7769758a"
 uuid = "5ae59095-9a9b-59fe-a467-6f913c188581"
 version = "0.12.10"
-
-[[deps.CommonDataModel]]
-deps = ["CFTime", "DataStructures", "Dates", "Preferences", "Printf"]
-git-tree-sha1 = "60ccfcd76179c96ca21d3b5a5ae04d7b6a7439e7"
-uuid = "1fbeeb36-5f17-413c-809b-666fb144f157"
-version = "0.2.2"
 
 [[deps.Compat]]
 deps = ["UUIDs"]
@@ -395,12 +383,6 @@ version = "0.9.1"
 git-tree-sha1 = "53bb909d1151e57e2484c3d1b53e19552b887fb2"
 uuid = "42e2da0e-8278-4e71-bc24-59509adca0fe"
 version = "1.0.2"
-
-[[deps.HDF5_jll]]
-deps = ["Artifacts", "JLLWrappers", "LibCURL_jll", "Libdl", "OpenSSL_jll", "Pkg", "Zlib_jll"]
-git-tree-sha1 = "4cc2bb72df6ff40b055295fdef6d92955f9dede8"
-uuid = "0234f1f7-429e-5d53-9886-15a909be8d59"
-version = "1.12.2+2"
 
 [[deps.HarfBuzz_jll]]
 deps = ["Artifacts", "Cairo_jll", "Fontconfig_jll", "FreeType2_jll", "Glib_jll", "Graphite2_jll", "JLLWrappers", "Libdl", "Libffi_jll", "Pkg"]
@@ -720,23 +702,11 @@ version = "0.3.4"
 uuid = "14a3606d-f60d-562e-9121-12d972cd8159"
 version = "2022.10.11"
 
-[[deps.NCDatasets]]
-deps = ["CFTime", "CommonDataModel", "DataStructures", "Dates", "NetCDF_jll", "NetworkOptions", "Printf"]
-git-tree-sha1 = "afd015e81e60cfbdba04ef59bcdc80e18bd613cd"
-uuid = "85f8d34a-cbdd-5861-8df4-14fed0d494ab"
-version = "0.12.14"
-
 [[deps.NaNMath]]
 deps = ["OpenLibm_jll"]
 git-tree-sha1 = "0877504529a3e5c3343c6f8b4c0381e57e4387e4"
 uuid = "77ba4419-2d1f-58cd-9bb1-8ffee604a2e3"
 version = "1.0.2"
-
-[[deps.NetCDF_jll]]
-deps = ["Artifacts", "HDF5_jll", "JLLWrappers", "LibCURL_jll", "Libdl", "Pkg", "XML2_jll", "Zlib_jll"]
-git-tree-sha1 = "072f8371f74c3b9e1b26679de7fbf059d45ea221"
-uuid = "7243133f-43d8-5620-bbf4-c2c921802cf3"
-version = "400.902.5+1"
 
 [[deps.Netpbm]]
 deps = ["FileIO", "ImageCore", "ImageMetadata"]
