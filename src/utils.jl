@@ -344,8 +344,9 @@ end
 Return the load response coefficients with type `T`.
 Reference: Deformation of the Earth by surface Loads, Farell 1972, table A3.
 """
-function get_greenintegrand_coeffs(T::Type)
-    data = jldopen("input/elasticgreencoeffs_farrell1972.jld2")
+function get_greenintegrand_coeffs(T::Type;
+    file=joinpath(@__DIR__, "input/elasticgreencoeffs_farrell1972.jld2"))
+    data = jldopen(file)
     # rm is column 1 converted to meters (and some extra factor)
     # GE /(10^12 rm) is vertical displacement in meters (applied load is 1kg)
     # GE corresponds to column 2
