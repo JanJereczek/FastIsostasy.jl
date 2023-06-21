@@ -345,32 +345,11 @@ Return the load response coefficients with type `T`.
 Reference: Deformation of the Earth by surface Loads, Farell 1972, table A3.
 """
 function get_greenintegrand_coeffs(T::Type)
-
-    # Angles
-    θ = [0.0, 0.0001, 0.001, 0.01, 0.02, 0.03, 0.04, 0.06, 0.08, 0.1,
-         0.16,   0.2,   0.25, 0.3,  0.4,  0.5,  0.6,  0.8,  1.0,
-         1.2,    1.6,   2.0,  2.5,  3.0,  4.0,  5.0,  6.0,  7.0,
-         8.0,    9.0,   10.0, 12.0, 16.0, 20.0, 25.0, 30.0, 40.0,
-         50.0,   60.0,  70.0, 80.0, 90.0]
-
-
-    # Column 1 (converted by some factor)
-    rm = [ 0.0,    0.011,  0.111,  1.112,  2.224,  3.336,  4.448,  6.672,
-           8.896,  11.12,  17.79,  22.24,  27.80,  33.36,  44.48,  55.60, 
-           66.72,  88.96,  111.2,  133.4,  177.9,  222.4,  278.0,  333.6,
-           444.8,  556.0,  667.2,  778.4,  889.6,  1001.0, 1112.0, 1334.0,
-           1779.0, 2224.0, 2780.0, 3336.0, 4448.0, 5560.0, 6672.0,
-           7784.0, 8896.0, 10008.0] .* 1e3
-    # converted to meters
+    data = jldopen("input/elasticgreencoeffs_farrell1972.jld2")
+    # rm is column 1 converted to meters (and some extra factor)
     # GE /(10^12 rm) is vertical displacement in meters (applied load is 1kg)
-
-    # Column 2
-    GE = [ -33.6488, -33.64, -33.56, -32.75, -31.86, -30.98, -30.12, -28.44, -26.87, -25.41,
-           -21.80, -20.02, -18.36, -17.18, -15.71, -14.91, -14.41, -13.69, -13.01,
-           -12.31, -10.95, -9.757, -8.519, -7.533, -6.131, -5.237, -4.660, -4.272,
-           -3.999, -3.798, -3.640, -3.392, -2.999, -2.619, -2.103, -1.530, -0.292,
-            0.848,  1.676,  2.083,  2.057,  1.643];
-    return T.(rm), T.(GE)
+    # GE corresponds to column 2
+    return T.(data["rm"]), T.(data["GE"])
 end
 
 """
