@@ -1,7 +1,7 @@
 function choose_case(case::String, Omega::ComputationDomain, c::PhysicalConstants)
 
-    eta = 1e21
-    rho = 4.4e3
+    eta = 1.3e21
+    rho = 4.2e3
     if case == "gaussian_lo_D"
         W = (Omega.Wx + Omega.Wy) / 2
         sigma = diagm([(W/4)^2, (W/4)^2])

@@ -24,7 +24,7 @@ function main(
     H = T(1000)                 # ice disc thickness (m)
     Hcylinder = uniform_ice_cylinder(Omega, R, H)
     if dense_out
-        t_out = years2seconds.(collect(0:500:2000))
+        t_out = years2seconds.( vcat(0:1_000:5_000, 10_000:5_000:50_000) )
         densekey = "dense"
     else
         t_out = years2seconds.([0.0, 1e0, 1e1, 1e2, 1e3, 1e4, 1e5])
@@ -35,7 +35,7 @@ function main(
     results = fastisostasy(
         t_out, Omega, c, p, Hcylinder,
         interactive_geostate=false,
-        ODEsolver=Tsit5())
+        ODEsolver="ExplicitEuler")
     t_fastiso = time() - t1
     println("Took $t_fastiso seconds!")
     println("-------------------------------------")
@@ -54,9 +54,9 @@ function main(
     )
 end
 
-for n in 6:6
-    for case in ["gaussian_lo_D", "gaussian_hi_D", "gaussian_lo_η", "gaussian_hi_η"]
-    # for case in ["gaussian_lo_D", "gaussian_hi_D"]
+for n in 7:7
+    # for case in ["gaussian_lo_D", "gaussian_hi_D", "gaussian_lo_η", "gaussian_hi_η"]
+    for case in ["gaussian_lo_D", "gaussian_hi_D"]
         main(n, case, use_cuda = false, dense_out = true)
     end
 end
