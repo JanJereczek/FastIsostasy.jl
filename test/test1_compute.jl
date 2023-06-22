@@ -54,7 +54,7 @@ end
 for use_cuda in [false] # [false, true]
     for active_gs in [false] # [false, true]
         for n in 6:6 # 3:8
-            main(n, use_cuda = use_cuda, solver = "ExplicitEuler", active_gs = active_gs)
+            main(n, use_cuda = use_cuda, solver = BS3(), active_gs = active_gs)
         end
     end
 end

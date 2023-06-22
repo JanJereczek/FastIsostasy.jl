@@ -3,6 +3,7 @@ module FastIsostasy
 using LinearAlgebra
 using Statistics: mean
 using Distributions: MvNormal
+using JLD2: jldopen
 using Interpolations: linear_interpolation, Flat
 using FFTW: fft, plan_fft, plan_ifft
 using AbstractFFTs: Plan, ScaledPlan
