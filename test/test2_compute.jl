@@ -42,7 +42,7 @@ function main(
     end
     t_out = years2seconds.([0.0, 1.0, 1e3, 2e3, 5e3, 1e4, 1e5])
 
-    sl0 = matrify(-Inf, Omega.Nx, Omega.Ny)
+    sl0 = fill(-Inf, Omega.Nx, Omega.Ny)
     t1 = time()
     results = fastisostasy(t_out, Omega, c, p, H_ice, sealevel_0=sl0, interactive_geostate=true)
     t_fastiso = time() - t1

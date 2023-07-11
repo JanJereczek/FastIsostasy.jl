@@ -4,6 +4,7 @@ using LinearAlgebra
 using Statistics: mean
 using Distributions: MvNormal
 using JLD2: jldopen
+using DelimitedFiles: readdlm
 using Interpolations: linear_interpolation, Flat
 using FFTW: fft, plan_fft, plan_ifft
 using AbstractFFTs: Plan, ScaledPlan
@@ -17,10 +18,10 @@ using EnsembleKalmanProcesses.ParameterDistributions
 
 using Reexport
 @reexport using Interpolations
-@reexport using OrdinaryDiffEq: Euler, Midpoint, Heun, Ralston, BS3, BS5, RK4, OwrenZen3,
-    OwrenZen4, OwrenZen5, Tsit5, DP5, RKO65, TanYam7, DP8, Feagin10, Feagin12, Feagin14,
-    TsitPap8, Vern6, Vern7, Vern8, Vern9, VCABM, Rosenbrock23, QNDF, FBDF, ImplicitEuler
-
+@reexport using OrdinaryDiffEq: Euler, Midpoint, Heun, Ralston, BS3, BS5, RK4,
+    OwrenZen3, OwrenZen4, OwrenZen5, Tsit5, DP5, RKO65, TanYam7, DP8,
+    Feagin10, Feagin12, Feagin14, TsitPap8, Vern6, Vern7, Vern8, Vern9,
+    VCABM, Rosenbrock23, QNDF, FBDF, ImplicitEuler
 # KuttaPRK2p5(dt=), Trapezoid(autodiff = false), PDIRK44(autodiff = false)
 
 include("structs.jl")
@@ -50,6 +51,8 @@ export get_r
 export gauss_distr
 
 export samesize_conv
+
+export load_prem, compute_gravity, RadialEarthModel
 
 # derivatives.jl
 export mixed_fdx

@@ -40,7 +40,7 @@ end
 Compute the density-scaled anomaly of the mantle column w.r.t. the reference state.
 """
 function columnanom_mantle(sstruct::SuperStruct{<:AbstractFloat})
-    column = sstruct.p.mean_density[1] .* (sstruct.geostate.b - sstruct.refgeostate.b)
+    column = sstruct.p.uppermantle_density[1] .* (sstruct.geostate.b - sstruct.refgeostate.b)
     return corrected_column(column, sstruct)
 end
 

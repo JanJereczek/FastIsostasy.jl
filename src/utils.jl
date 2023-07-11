@@ -51,13 +51,10 @@ end
 function matrify(x::Vector{T}, Nx::Int, Ny::Int) where {T<:Real}
     X = zeros(T, Ny, Nx, length(x))
     @inbounds for i in eachindex(x)
-        X[:, :, i] = matrify(x[i], Nx, Ny)
+        X[:, :, i] = fill(x[i], Nx, Ny)
     end
     return X
 end
-
-matrify(x::Real, Nx::Int, Ny::Int) = fill(x, Ny, Nx)
-
 
 function samesize_conv(X::AbstractMatrix{T}, Y::AbstractMatrix{T},
     Omega::ComputationDomain) where {T<:AbstractFloat}
@@ -258,18 +255,23 @@ function get_effective_viscosity(
     # Recursion has to start with half space = n-th layer:
     effective_viscosity = layer_viscosities[:, :, end]
     # p1, p2 = plan_fft(effective_viscosity), plan_ifft(effective_viscosity)
-    @inbounds for i in axes(layer_viscosities, 3)[1:end-1]
-        channel_viscosity = layer_viscosities[:, :, end - i]
-        channel_thickness = layers_thickness[:, :, end - i + 1]
-        viscosity_ratio = channel_viscosity ./ effective_viscosity
-        viscosity_scaling = three_layer_scaling(
-            Omega,
-            viscosity_ratio,
-            channel_thickness,
-        )
-        effective_viscosity .*= viscosity_scaling
+
+    if size(layer_viscosities, 3) > 1
+        @inbounds for i in axes(layer_viscosities, 3)[1:end-1]
+            channel_viscosity = layer_viscosities[:, :, end - i]
+            channel_thickness = layers_thickness[:, :, end - i + 1]
+            viscosity_ratio = channel_viscosity ./ effective_viscosity
+            viscosity_scaling = three_layer_scaling(
+                Omega,
+                viscosity_ratio,
+                channel_thickness,
+            )
+            effective_viscosity .*= viscosity_scaling
+        end
+        return effective_viscosity
+    else
+        return layer_viscosities[:, :, 1]
     end
-    return effective_viscosity
 end
 
 """
@@ -320,7 +322,7 @@ function loginterp_viscosity(
     pseudodiff::AbstractMatrix{T},
 ) where {T<:AbstractFloat}
     n1, n2, n3, nt = size(layer_viscosities)
-    log_eqviscosity = matrify(zeros(nt), n1, n2)
+    log_eqviscosity = fill(zeros(nt), n1, n2)
 
     [log_eqviscosity[k] .= log10.(get_effective_viscosity(
         layer_viscosities[:, :, :, k],
@@ -334,8 +336,29 @@ function loginterp_viscosity(
 end
 
 #####################################################
-# Load response utils
+# Load utils
 #####################################################
+
+"""
+
+    load_prem()
+
+Load Preliminary Reference Earth Model (PREM) from Dzewonski and Anderson (1981).
+"""
+function load_prem()
+    M = readdlm(joinpath(@__DIR__, "input/PREM_1s.csv"), ',')[:, 1:3]
+    M .*= 1e3
+    return RadialEarthModel([M[:, j] for j in axes(M, 2)]...)
+end
+
+function preprocess_prem(prem::RadialEarthModel)
+    ub = 6330e3
+    lb = 5770e3
+    idx = lb .< prem.radius .< ub
+    return mean(prem.density[idx])
+end
+
+scale_visc_to_maxwelltime(eta, nu) = (1+0.5)/(1+nu) .* eta
 
 """
 
@@ -456,7 +479,8 @@ end
 Compute 1D Gauss-Legendre quadrature of `f` between `x1` and `x2`
 based on `n` support points.
 """
-function quadrature1D(f::Function, n::Int, x1::T, x2::T) where {T<:AbstractFloat}
+function quadrature1D(f::Union{Function, Interpolations.Extrapolation},
+    n::Int, x1::T, x2::T) where {T<:AbstractFloat}
     x, w = get_quad_coeffs(T, n)
     m, p = get_normalized_lin_transform(x1, x2)
     sum = 0

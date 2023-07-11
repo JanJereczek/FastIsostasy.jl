@@ -6,6 +6,15 @@ KernelMatrix = Union{Matrix{T}, CuArray{T, 2}} where {T<:Real}
 #     AbstractFFTs.ScaledPlan{ComplexF64, CUDA.CUFFT.cCuFFTPlan{ComplexF64, 1, false, 2}, Float64}}
 
 #########################################################
+# Radial earth model
+#########################################################
+struct RadialEarthModel{T<:AbstractFloat}
+    radius::Vector{T}
+    depth::Vector{T}
+    density::Vector{T}
+end
+
+#########################################################
 # Computation domain
 #########################################################
 """
@@ -77,7 +86,7 @@ function ComputationDomain(
     arraykernel = use_cuda ? CuArray : Array
     K = kernelpromote(scalefactor(deg2rad.(Lat), deg2rad.(Lon),
         deg2rad(lat0), deg2rad(lon0)), arraykernel)
-    null = matrify(T(0), Nx, Ny)
+    null = fill(T(0), Nx, Ny)
     
     # Differential operators in Fourier space
     pseudodiff, harmonic, biharmonic = get_differential_fourier(Wx, Wy, Nx, Ny)
@@ -130,8 +139,9 @@ Return a struct containing all information related to the radially layered struc
 its parameters.
 """
 mutable struct MultilayerEarth{T<:AbstractFloat}
-    mean_gravity::T
-    mean_density::T
+    gravity::T
+    uppermantle_density::T
+    uppermantle_rhog::AbstractMatrix{T}
     effective_viscosity::AbstractMatrix{T}
     litho_thickness::AbstractMatrix{T}
     litho_rigidity::AbstractMatrix{T}
@@ -196,14 +206,15 @@ function MultilayerEarth(
         layers_thickness,
     )
 
-    mean_density = matrify(mean(layers_density), Omega.Nx, Omega.Ny)
-
-    litho_rigidity, effective_viscosity, mean_density = kernelpromote(
-        [litho_rigidity, effective_viscosity, mean_density], Omega.arraykernel)
-
+    uppermantle_gravity = 10.0
+    uppermantle_density = mean(layers_density)
+    uppermantle_rhog = fill(uppermantle_gravity * uppermantle_density, Omega.Nx, Omega.Ny)
+    litho_rigidity, effective_viscosity, uppermantle_rhog = kernelpromote(
+        [litho_rigidity, effective_viscosity, uppermantle_rhog], Omega.arraykernel)
     return MultilayerEarth(
         c.g,
-        mean(mean_density),
+        uppermantle_density,
+        uppermantle_rhog,
         effective_viscosity,
         litho_thickness,
         litho_rigidity,
@@ -313,7 +324,7 @@ function PrecomputedFastiso(
     Dyy = mixed_fdyy(D, Omega.dy)
     Dxy = mixed_fdy( mixed_fdx(D, Omega.dx), Omega.dy )
 
-    omega_zeros = matrify(T(0), Omega.Nx, Omega.Ny)
+    omega_zeros = fill(T(0), Omega.Nx, Omega.Ny)
     zero_tol = 1e-2
     negligible_gradD = isapprox(Dx, omega_zeros, atol = zero_tol) &
                         isapprox(Dy, omega_zeros, atol = zero_tol) &
@@ -330,7 +341,7 @@ function PrecomputedFastiso(
         p1, p2 = plan_fft(Omega.X), plan_ifft(Omega.X)
     end
 
-    rhog = p.mean_density .* c.g
+    rhog = p.uppermantle_density .* c.g
     geoidgreen = get_geoidgreen(Omega, c)
 
     return PrecomputedFastiso(

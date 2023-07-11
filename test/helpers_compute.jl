@@ -90,7 +90,7 @@ function analytic_integrand(
 ) where {T<:AbstractFloat}
 
     # Here we assume that p-fields are constant over Omega
-    beta = mean(p.mean_density) * c.g + mean(p.litho_rigidity) * kappa ^ 4
+    beta = mean(p.uppermantle_density) * c.g + mean(p.litho_rigidity) * kappa ^ 4
     j0 = besselj0(kappa * r)
     j1 = besselj1(kappa * R0)
     eta = mean(p.effective_viscosity)
@@ -104,7 +104,7 @@ function equilibrium_integrand(
     p::MultilayerEarth,
     R0::T,
 ) where {T<:AbstractFloat}
-    beta = mean(p.mean_density) * c.g + mean(p.litho_rigidity) * kappa ^ 4
+    beta = mean(p.uppermantle_density) * c.g + mean(p.litho_rigidity) * kappa ^ 4
     j0 = besselj0(kappa * r)
     j1 = besselj1(kappa * R0)
     # integrand of inverse Hankel transform when t-->infty
@@ -146,7 +146,7 @@ function analytic_radial_integrand(
     x, y = Omega.X[i, j], Omega.Y[i, j]
     r = get_r(x, y)
 
-    beta = mean(p.mean_density) * c.g + mean(p.litho_rigidity) * kappa ^ 4
+    beta = mean(p.uppermantle_density) * c.g + mean(p.litho_rigidity) * kappa ^ 4
     j0 = besselj0(kappa * r)
     j1 = besselj1(kappa * R0)
     return (exp(-beta*t/(2*mean(p.effective_viscosity)*kappa))-1) * j0 * j1 / beta

@@ -63,18 +63,20 @@ xlabels = [
     L"Position along great circle (m) $\,$",
     L"Position along great circle (m) $\,$",
 ]
+
 ylabels = [
     L"Vertical displacement (m) $\,$",
-    "",
+    L"$u_\mathrm{Seakon} - u_\mathrm{FastIso}$ (m)",
 ]
-yticklabelsvisible = [true, false]
-labels = [ L"t = %$t yr $\,$" for t in vcat( 0:1000:5000, 10000:5000:50000) ]
 
-fig = Figure()
+yticklabelsvisible = [true, false]
+labels = [ L"t = %$t yr $\,$" for t in vcat(0:1000:5000, 10000:5000:50000) ]
+
+fig = Figure(resolution = (1600, 1400), fontsize = 30)
 axs = [Axis(
     fig[i, j],
     xlabel = xlabels[j],
-    ylabel = ylabels[j],
+    ylabel = ylabels[i],
     yticklabelsvisible = yticklabelsvisible[j],
 ) for j in eachindex(u_3DGIA), i in 1:2]
 for j in eachindex(u_3DGIA)
@@ -96,8 +98,9 @@ axs[1].xlabelvisible = false
 axs[2].xlabelvisible = false
 axs[1].title = L"Thin lithosphere $\,$"
 axs[2].title = L"Thick lithosphere $\,$"
-ylims!(axs[3], (-15, 25))
-ylims!(axs[4], (-15, 25))
+
+ylims!(axs[3], (-20, 20))
+ylims!(axs[4], (-20, 20))
 
 fig
 figfile = "plots/test3/fastiso3Dgia_elastic=$(include_elastic)_N=$(N)"
