@@ -55,7 +55,7 @@ function main(
 end
 
 for n in 7:7
-    # for case in ["gaussian_lo_D", "gaussian_hi_D", "gaussian_lo_η", "gaussian_hi_η"]
+    # ["gaussian_lo_D", "gaussian_hi_D", , "gaussian_no_D", "gaussian_lo_η", "gaussian_hi_η"]
     for case in ["gaussian_lo_D", "gaussian_hi_D"]
         main(n, case, use_cuda = false, dense_out = true)
     end
