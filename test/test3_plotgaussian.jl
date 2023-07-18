@@ -10,7 +10,8 @@ function main(
 )
 
     N = 2^n
-    suffix = "$(kernel)_N$N"
+    kernel = "cpu"
+    suffix = "$(kernel)_Nx$(N)_Ny$(N)_dense"
     sol_lo_D = load("data/test3/gaussian_lo_D_$suffix.jld2")
     sol_hi_D = load("data/test3/gaussian_hi_D_$suffix.jld2")
     sol_lo_η = load("data/test3/gaussian_lo_η_$suffix.jld2")
@@ -93,7 +94,7 @@ function main(
     # cmaps = [cgrad(:RdBu, rev=true), cgrad(:RdBu, rev=true),
     #    cgrad(:PuOr, rev=true), cgrad(:PuOr, rev=true)]
 
-    clims = [(50e3, 250e3), (50e3, 250e3), (19, 23), (19, 23)]
+    clims = [(50e3, 250e3), (50e3, 250e3), (20, 22), (20, 22)]
     lins = Lines[]
     cticks = [
         (50e3:50e3:250e3, num2latexstring.(50:50:250)),
@@ -155,6 +156,6 @@ function main(
 
 end
 
-for n in 6:6
+for n in 7:7
     main(n, kernel = "cpu")
 end

@@ -8,10 +8,14 @@ KernelMatrix = Union{Matrix{T}, CuArray{T, 2}} where {T<:Real}
 #########################################################
 # Radial earth model
 #########################################################
-struct RadialEarthModel{T<:AbstractFloat}
+struct ReferenceEarthModel{T<:AbstractFloat}
     radius::Vector{T}
     depth::Vector{T}
     density::Vector{T}
+    Vpv::Vector{T}
+    Vph::Vector{T}
+    Vsv::Vector{T}
+    Vsh::Vector{T}
 end
 
 #########################################################
@@ -29,14 +33,14 @@ Omega = ComputationDomain(W, n)
 ```
 """
 struct ComputationDomain{T<:AbstractFloat}
-    Wx::T                       # Domain length in x (m)
-    Wy::T                       # Domain length in y (m)
-    Nx::Int                     # Number of grid points in x-dimension
-    Ny::Int                     # Number of grid points in y-dimension
-    Mx::Int                     # Nx/2
-    My::Int                     # Ny/2
-    dx::T                       # Spatial discretization in x
-    dy::T                       # Spatial discretization in y
+    Wx::T                           # Domain length in x (m)
+    Wy::T                           # Domain length in y (m)
+    Nx::Int                         # Number of grid points in x-dimension
+    Ny::Int                         # Number of grid points in y-dimension
+    Mx::Int                         # Nx/2
+    My::Int                         # Ny/2
+    dx::T                           # Spatial discretization in x
+    dy::T                           # Spatial discretization in y
     x::Vector{T}
     y::Vector{T}
     X::AbstractMatrix{T}
@@ -47,15 +51,20 @@ struct ComputationDomain{T<:AbstractFloat}
     Lon::AbstractMatrix{T}
     K::AbstractMatrix{T}
     projection_correction::Bool
-    null::AbstractMatrix{T}           # a zero matrix of size Nx x Ny
-    pseudodiff::AbstractMatrix{T}     # pseudodiff operator
-    harmonic::AbstractMatrix{T}       # harmonic operator
-    biharmonic::AbstractMatrix{T}     # biharmonic operator
+    null::AbstractMatrix{T}         # a zero matrix of size Nx x Ny
+    pseudodiff::AbstractMatrix{T}   # pseudodiff operator
+    harmonic::AbstractMatrix{T}     # harmonic operator
+    biharmonic::AbstractMatrix{T}   # biharmonic operator
     use_cuda::Bool
-    arraykernel             # Array or CuArray depending on chosen hardware
+    arraykernel                     # Array or CuArray depending on chosen hardware
+    BC::String                      # Boundary conditions
+    extension::Function             # Function to extend domain if needed for BCs
+    fdxx::Function                  # FDM for 2nd order derivative in x
+    fdyy::Function                  # FDM for 2nd order derivative in y
+    fdxy::Function                  # # FDM for 2nd order derivative in x, y
 end
 
-function ComputationDomain(W::T, n::Int; kwargs...,) where {T<:AbstractFloat}
+function ComputationDomain(W::T, n::Int; kwargs...) where {T<:AbstractFloat}
     Wx, Wy = W, W
     Nx, Ny = 2^n, 2^n
     return ComputationDomain(Wx, Wy, Nx, Ny; kwargs...)
@@ -66,6 +75,7 @@ function ComputationDomain(
     Wy::T,
     Nx::Int,
     Ny::Int;
+    BC::String = "corner_bc",
     use_cuda::Bool = false,
     lat0::T = T(-71.0),
     lon0::T = T(0.0),
@@ -96,10 +106,26 @@ function ComputationDomain(
     # Avoid division by zero. Tolerance ϵ of the order of the neighboring terms.
     # Tests show that it does not lead to errors wrt analytical or benchmark solutions.
 
+    extension(M) = M
+    # if BC == "zeropad"
+    #     extension(M) = zeropad_extension(M, Nx, Ny)
+    # elseif BC == "periodic"
+    #     extension(M) = periodic_extension(M, Nx, Ny)
+    # end
+
+    fdxx(M) = mixed_fdxx(M, dx)
+    fdyy(M) = mixed_fdyy(M, dy)
+    fdxy(M) = mixed_fdxy(M, dx, dy)
+    # if BC in ["zeropad", "periodic"]
+    #     fdxx(M) = central_fdxx(M, dx)
+    #     fdyy(M) = central_fdyy(M, dy)
+    #     fdxy(M) = central_fdxy(M, dx, dy)
+    # end
+
     return ComputationDomain(Wx, Wy, Nx, Ny, Mx, My, dx, dy, x, y, X, Y,
         R, Theta, Lat, Lon, K, projection_correction, null,
         pseudodiff, harmonic, biharmonic, use_cuda, arraykernel,
-    )
+        BC, extension, fdxx, fdyy, fdxy)
 end
 
 #########################################################
@@ -146,7 +172,8 @@ mutable struct MultilayerEarth{T<:AbstractFloat}
     litho_thickness::AbstractMatrix{T}
     litho_rigidity::AbstractMatrix{T}
     litho_poissonratio::T
-    layers_density::Vector{T}
+    mantle_poissonratio::T
+    layer_densities::Vector{T}
     layer_viscosities::Array{T, 3}
     layer_boundaries::Array{T, 3}
 end
@@ -154,9 +181,10 @@ end
 
 litho_rigidity = 5e24               # (N*m)
 litho_youngmodulus = 6.6e10         # (N/m^2)
-litho_poissonratio = 0.5            # (1)
-layers_density = [3.3e3]            # (kg/m^3)
-layer_viscosities = [1e19, 1e21]     # (Pa*s) (Bueler 2007, Ivins 2022, Fig 12 WAIS)
+litho_poissonratio = 0.28           # (1)
+mantle_poissonratio = 0.28          # (1)
+layer_densities = [3.3e3]           # (kg/m^3)
+layer_viscosities = [1e19, 1e21]    # (Pa*s) (Bueler 2007, Ivins 2022, Fig 12 WAIS)
 layer_boundaries = [88e3, 400e3]
 # 88 km: beginning of asthenosphere (Bueler 2007).
 # 400 km: beginning of homogenous half-space (Ivins 2022, Fig 12).
@@ -164,7 +192,7 @@ layer_boundaries = [88e3, 400e3]
 # litho_rigidity = 5e24u"N*m"
 # litho_youngmodulus = 6.6e10u"N / m^2"
 # litho_poissonratio = 0.5
-# layers_density = [3.3e3]u"kg / m^3"
+# layer_densities = [3.3e3]u"kg / m^3"
 # layer_viscosities = [1e19, 1e21]u"Pa*s"      # (Bueler 2007, Ivins 2022, Fig 12 WAIS)
 # layer_boundaries = [88e3, 400e3]u"m"
 
@@ -172,16 +200,15 @@ function MultilayerEarth(
     Omega::ComputationDomain{T},
     c::PhysicalConstants{T};
     layer_boundaries::A = layer_boundaries,
-    layers_density::Vector{T} = layers_density,
+    layer_densities::Vector{T} = layer_densities,
     layer_viscosities::B = layer_viscosities,
-    litho_youngmodulus::C = litho_youngmodulus,
-    litho_poissonratio::D = litho_poissonratio,
+    litho_youngmodulus::T = litho_youngmodulus,
+    litho_poissonratio::T = litho_poissonratio,
+    mantle_poissonratio::T = mantle_poissonratio,
 ) where {
     T<:AbstractFloat,
     A<:Union{Vector{T}, Array{T, 3}},
     B<:Union{Vector{T}, Array{T, 3}},
-    C<:Union{T, AbstractMatrix{T}},
-    D<:Union{T, AbstractMatrix{T}},
 }
 
     if layer_boundaries isa Vector{<:Real}
@@ -201,13 +228,10 @@ function MultilayerEarth(
     layers_thickness = diff( layer_boundaries, dims=3 )
     # pseudodiff = kernelpromote(Omega.pseudodiff, Omega.arraykernel)
     effective_viscosity = get_effective_viscosity(
-        Omega,
-        layer_viscosities,
-        layers_thickness,
-    )
+        Omega, layer_viscosities, layers_thickness, mantle_poissonratio)
 
     uppermantle_gravity = 10.0
-    uppermantle_density = mean(layers_density)
+    uppermantle_density = mean(layer_densities)
     uppermantle_rhog = fill(uppermantle_gravity * uppermantle_density, Omega.Nx, Omega.Ny)
     litho_rigidity, effective_viscosity, uppermantle_rhog = kernelpromote(
         [litho_rigidity, effective_viscosity, uppermantle_rhog], Omega.arraykernel)
@@ -219,7 +243,8 @@ function MultilayerEarth(
         litho_thickness,
         litho_rigidity,
         litho_poissonratio,
-        layers_density,
+        mantle_poissonratio,
+        layer_densities,
         layer_viscosities,
         layer_boundaries,
     )

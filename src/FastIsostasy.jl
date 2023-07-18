@@ -6,7 +6,7 @@ using Distributions: MvNormal
 using JLD2: jldopen
 using DelimitedFiles: readdlm
 using Interpolations: linear_interpolation, Flat
-using FFTW: fft, plan_fft, plan_ifft
+using FFTW: fft, ifft, plan_fft, plan_ifft
 using AbstractFFTs: Plan, ScaledPlan
 using FastGaussQuadrature: gausslegendre
 using DSP: conv
@@ -52,7 +52,7 @@ export gauss_distr
 
 export samesize_conv
 
-export load_prem, compute_gravity, RadialEarthModel
+export load_prem, compute_gravity, ReferenceEarthModel, maxwelltime_scaling!, compute_shearmodulus
 
 # derivatives.jl
 export mixed_fdx

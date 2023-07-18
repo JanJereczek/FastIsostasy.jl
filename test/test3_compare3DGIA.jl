@@ -4,6 +4,8 @@ using CairoMakie
 using JLD2, DelimitedFiles
 include("helpers_plot.jl")
 
+n = 8
+heterogeneous = "upper-mantle"
 global include_elastic = true
 
 function load_results(dir::String, idx)
@@ -27,36 +29,47 @@ function load_results(dir::String, idx)
     return u_3DGIA
 end
 
-phi = -180:0.1:180
-R = 6.371e6
-r = R .* deg2rad.(phi)
-idx = -3e6 .< r .< 3e6
-r_plot = r[idx]
-
-u_3DGIA = [load_results("data/Latychev/rt_E0L1V1_comma", idx),
-    load_results("data/Latychev/rt_E0L2V1_comma", idx)]
-
-n = 7
-N = 2^n
-kernel = "cpu"
-suffix = "$(kernel)_Nx$(N)_Ny$(N)_dense"
-
-function get_denseoutput_fastiso(suffix)
-    sol_lo_D = load("data/test3/gaussian_lo_D_$suffix.jld2")
-    sol_hi_D = load("data/test3/gaussian_hi_D_$suffix.jld2")
-    sols = [sol_lo_D, sol_hi_D]
+function get_denseoutput_fastiso(fastiso_files)
+    sols = [load("data/test3/$file") for file in fastiso_files]
     results = [sol["results"] for sol in sols]
     if include_elastic
         u_plot = [res.viscous + res.elastic for res in results]
     else
         u_plot = [res.viscous for res in results]
     end
-    return u_plot, sol_lo_D["Omega"]
+    return u_plot, sols[1]["Omega"]
 
 end
-u_fastiso, Omega = get_denseoutput_fastiso(suffix)
+
+phi = -180:0.1:180
+R = 6.371e6
+r = R .* deg2rad.(phi)
+idx = -1 .< r .< 3e6
+r_plot = r[idx]
+
+N = 2^n
+kernel = "cpu"
+suffix = "$(kernel)_Nx$(N)_Ny$(N)_dense"
+
+if heterogeneous == "lithosphere"
+    seakon_files = ["rt_E0L1V1_comma", "rt_E0L2V1_comma"]
+    fastiso_files = ["gaussian_lo_D_$suffix.jld2", "gaussian_hi_D_$suffix.jld2"]
+    elims = (-20, 20)
+    title1 = L"Gaussian thinning lithosphere $\,$"
+    title2 = L"Gaussian thickening lithosphere $\,$"
+elseif heterogeneous == "upper-mantle"
+    seakon_files = ["E0L3V2", "E0L3V3"]
+    fastiso_files = ["gaussian_lo_η_$suffix.jld2", "gaussian_hi_η_$suffix.jld2"]
+    elims = (-35, 35)
+    title1 = L"Gaussian decrease of viscosity $\,$"
+    title2 = L"Gaussian increase of viscosity $\,$"
+end
+
+u_fastiso, Omega = get_denseoutput_fastiso(fastiso_files)
+u_3DGIA = [load_results("data/Latychev/$file", idx) for file in seakon_files]
+
 n1, n2 = size(u_fastiso[1][1])
-slicey, slicex = Int(n1/2), 1:n2
+slicey, slicex = n1÷2, n2÷2:n2
 x = Omega.X[slicey, slicex]
 
 xlabels = [
@@ -70,9 +83,12 @@ ylabels = [
 ]
 
 yticklabelsvisible = [true, false]
-labels = [ L"t = %$t yr $\,$" for t in vcat(0:1000:5000, 10000:5000:50000) ]
+labels = [ L"t = %$t kyr $\,$" for t in vcat(0:1:5, 10:5:50) ]
+cmap = cgrad(:jet, length(labels), categorical = true)
+# cvec = [:cornflowerblue, :royalblue, :mediumpurple, :rebeccapurple, :gray10]
+# cmap = cgrad(cvec, length(labels), categorical = true)
 
-fig = Figure(resolution = (1600, 1400), fontsize = 30)
+fig = Figure(resolution = (3200, 2000), fontsize = 60)
 axs = [Axis(
     fig[i, j],
     xlabel = xlabels[j],
@@ -81,28 +97,51 @@ axs = [Axis(
 ) for j in eachindex(u_3DGIA), i in 1:2]
 for j in eachindex(u_3DGIA)
     for i in eachindex(u_fastiso[j])
-        itp = linear_interpolation(r_plot, u_3DGIA[j][:, i], extrapolation_bc = Flat())
-        lines!(axs[j], r_plot, u_3DGIA[j][:, i], color = Cycled(i), label = labels[i])
-        lines!(axs[j], x, u_fastiso[j][i][slicey, slicex],
-            linestyle = :dash, color = Cycled(i))
-        
-        lines!(axs[j+2], x, itp.(x) - u_fastiso[j][i][slicey, slicex],
-            color = Cycled(i), label = labels[i])
+        if i == 7 && heterogeneous == "upper-mantle"
+            nothing
+        else
+            itp = linear_interpolation(r_plot, u_3DGIA[j][:, i], extrapolation_bc = Flat())
+            lines!(axs[j], r_plot, u_3DGIA[j][:, i], color = cmap[i],
+                label = labels[i], linewidth = 5)
+            lines!(axs[j], x, u_fastiso[j][i][slicey, slicex],
+                linestyle = :dash, color = cmap[i], linewidth = 5)
+            
+            lines!(axs[j+2], x, itp.(x) - u_fastiso[j][i][slicey, slicex],
+                color = cmap[i], label = labels[i], linewidth = 5)
+        end
     end
 end
 Legend(fig[:,3], axs[1])
+
+latexify(x) = ( x, [L"%$xi $\,$" for xi in x] )
+etks = latexify(-50:5:50)
+utks = latexify(-300:50:50)
+rtks = latexify(-3e6:1e6:3e6)
+
+axs[1].title = title1
+axs[2].title = title2
 
 axs[1].xticklabelsvisible = false
 axs[2].xticklabelsvisible = false
 axs[1].xlabelvisible = false
 axs[2].xlabelvisible = false
-axs[1].title = L"Thin lithosphere $\,$"
-axs[2].title = L"Thick lithosphere $\,$"
+axs[3].xticks = rtks
+axs[4].xticks = rtks
 
-ylims!(axs[3], (-20, 20))
-ylims!(axs[4], (-20, 20))
+axs[2].yticklabelsvisible = false
+axs[4].yticklabelsvisible = false
+axs[2].ylabelvisible = false
+axs[4].ylabelvisible = false
+axs[1].yticks = utks
+axs[3].yticks = etks
 
-fig
-figfile = "plots/test3/fastiso3Dgia_elastic=$(include_elastic)_N=$(N)"
+ylims!(axs[1], (-300, 50))
+ylims!(axs[2], (-300, 50))
+ylims!(axs[3], elims)
+ylims!(axs[4], elims)
+rowgap!(fig.layout, 80)
+
+figfile = "plots/test3/fastiso3Dgia_heterogeneous=$(heterogeneous)_N=$(N)"
 save("$figfile.png", fig)
 save("$figfile.pdf", fig)
+figfile

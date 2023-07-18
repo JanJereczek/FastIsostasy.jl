@@ -1,10 +1,24 @@
+xperiodic_extension(M, n) = cat( view(M, :, n:n), view(M, :, 1:2), dims=2 )
+yperiodic_extension(M, n) = cat( view(M, n:n, :), view(M, 1:2, :), dims=1 )
 
-# FDM in x, 1st order
+#######################################################
+# 1st order derivative
+#######################################################
+
+############################ x ########################
+# FDM in x, 1st order derivative, 2nd order convergence
 function central_fdx(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
     n2 = size(M, 2)
     return (view(M, :, 3:n2) - view(M, :, 1:n2-2)) ./ (2*h)
 end
 
+function periodic_fdx(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
+    n2 = size(M, 2)
+    bcM = xperiodic_extension(M, n2)
+    return cat( central_fdx(bcM, h), central_fdx(M, h), central_fdx(bcM, h), dims=2 )
+end
+
+# FDM in x, 1st order derivative, 1st order convergence
 function forward_fdx(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
     return (view(M, :, 2) - view(M, :, 1)) ./ h
 end
@@ -14,16 +28,24 @@ function backward_fdx(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
     return (view(M, :, n2) - view(M, :, n2-1)) ./ h
 end
 
-# FDM in y, 1st order
 function mixed_fdx(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
-    return cat( forward_fdx(M,h), central_fdx(M,h), backward_fdx(M,h), dims=2 )
+    return cat( forward_fdx(M, h), central_fdx(M, h), backward_fdx(M, h), dims=2 )
 end
 
+############################ y ########################
+# FDM in y, 1st order derivative, 2nd order convergence
 function central_fdy(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
     n1 = size(M, 1)
     return (view(M, 3:n1, :) - view(M, 1:n1-2, :)) ./ (2*h)
 end
 
+function periodic_fdy(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
+    n1 = size(M, 1)
+    bcM = yperiodic_extension(M, n1)
+    return cat( central_fdy(bcM, h), central_fdy(M, h), central_fdy(bcM, h), dims=1 )
+end
+
+# FDM in y, 1st order derivative, 1st order convergence
 function forward_fdy(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
     return (view(M, 2, :) - view(M, 1, :)) ./ h
 end
@@ -37,12 +59,23 @@ function mixed_fdy(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
     return cat( forward_fdy(M,h)', central_fdy(M,h), backward_fdy(M,h)', dims=1 )
 end
 
-# FDM in x, 2nd order
+#######################################################
+# 2nd order derivative
+#######################################################
+
+# FDM in x, 2nd order derivative, 2nd order convergence
 function central_fdxx(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
     n2 = size(M, 2)
     return (view(M, :, 3:n2) - 2 .* view(M, :, 2:n2-1) + view(M, :, 1:n2-2)) ./ h^2
 end
 
+function periodic_fdxx(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
+    n2 = size(M, 2)
+    bcM = xperiodic_extension(M, n2)
+    return cat( central_fdxx(bcM, h), central_fdxx(M, h), central_fdxx(bcM, h), dims=2 )
+end
+
+# FDM in x, 2nd order derivative, 1st order convergence
 function forward_fdxx(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
     return (view(M, :, 3) - 2 .* view(M, :, 2) + view(M, :, 1)) ./ h^2
 end
@@ -62,6 +95,12 @@ function central_fdyy(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
     return (view(M, 3:n1, :) - 2 .* view(M, 2:n1-1, :) + view(M, 1:n1-2, :)) ./ h^2
 end
 
+function periodic_fdyy(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
+    n1 = size(M, 1)
+    bcM = yperiodic_extension(M, n1)
+    return cat( central_fdyy(bcM, h), central_fdyy(M, h), central_fdyy(bcM, h), dims=1 )
+end
+
 function forward_fdyy(M::AbstractMatrix{T}, h::T) where {T<:AbstractFloat}
     return (view(M, 3, :) - 2 .* view(M, 2, :) + view(M, 1, :)) ./ h^2
 end
@@ -79,6 +118,14 @@ function mixed_fdxy(M::AbstractMatrix{T}, hx::T, hy::T) where {T<:AbstractFloat}
     return mixed_fdy(mixed_fdx(M, hx), hy)
 end
 
+function central_fdxy(M::AbstractMatrix{T}, hx::T, hy::T) where {T<:AbstractFloat}
+    return central_fdy(central_fdx(M, hx), hy)
+end
+
+function periodic_fdxy(M::AbstractMatrix{T}, hx::T, hy::T) where {T<:AbstractFloat}
+    return periodic_fdy(periodic_fdx(M, hx), hy)
+end
+
 function gauss_distr(x::T, mu::Vector{T}, sigma::Matrix{T}) where {T<:AbstractFloat}
     k = length(mu)
     return (2 * π)^(k/2) * det(sigma) * exp( -0.5 * (x .- mu)' * inv(sigma) * (x .- mu) )
@@ -91,6 +138,8 @@ end
 
 Compute the matrices representing the differential operators in the fourier space.
 """
+get_differential_fourier(Omega) = get_differential_fourier(Omega.Wx, Omega.Wy, Omega.Nx, Omega.Ny)
+
 function get_differential_fourier(Wx::T, Wy::T, Nx::Int, Ny::Int) where {T<:Real}
     mu_x = π / Wx
     mu_y = π / Wy

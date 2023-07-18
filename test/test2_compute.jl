@@ -21,7 +21,7 @@ function main(
         Omega,
         c,
         layer_boundaries = lb,
-        layers_density = [3.438e3, 3.871e3],
+        layer_densities = [3.438e3, 3.871e3],
         layer_viscosities = [1e21, 1e21, 2e21],
         litho_youngmodulus = E,
         litho_poissonratio = nu,

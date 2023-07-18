@@ -134,7 +134,12 @@ function forwardstep_isostasy!(
     sstruct::SuperStruct{T},
     t::T,
 ) where {T<:AbstractFloat}
-    corner_bc!(u, sstruct.Omega.Nx, sstruct.Omega.Ny)
+
+    if sstruct.Omega.BC == "zero_meancorner"
+        corner_bc!(u, sstruct.Omega.Nx, sstruct.Omega.Ny)
+    elseif sstruct.Omega.BC == "zero_meanedge"
+        edge_bc!(u, sstruct.Omega.Nx, sstruct.Omega.Ny)
+    end
 
     # Only update the geoid and sea level if geostate is interactive.
     # As integration requires smaller time steps than diagnostics,
@@ -178,29 +183,53 @@ function dudt_isostasy!(
     t::T,
 ) where {T<:AbstractFloat}
 
+    Omega = sstruct.Omega
     rhs = - sstruct.c.g .* columnanom_full(sstruct)
 
     if sstruct.tools.negligible_gradD
-        rhs += - sstruct.p.litho_rigidity .* real.( sstruct.tools.pifft *
-            ( sstruct.Omega.biharmonic .* (sstruct.tools.pfft * u) ) )
+        if Omega.BC in ["zeropad", "periodic"]
+            u_extended = Omega.extension(u)
+            pseudodiff_coeffs, harmonic_coeffs, biharmonic_coeffs = get_differential_fourier(
+                Omega.Wx+2*Omega.dx, Omega.Wy+2*Omega.dy, Omega.Nx+2, Omega.Ny+2)
+            biharmonic_u = biharmonic_coeffs .* fft(u_extended)
+            biharmonic_u = biharmonic_u[2:end-1, 2:end-1]
+            u = u_extended
+        else
+            biharmonic_u = Omega.biharmonic .* (sstruct.tools.pfft * u)
+        end
+        rhs += - sstruct.p.litho_rigidity .* real.( sstruct.tools.pifft * biharmonic_u )
     else
-        dudxx = mixed_fdxx(u, sstruct.Omega.dx)
-        dudyy = mixed_fdyy(u, sstruct.Omega.dy)
+
+        dudxx, dudyy = Omega.fdxx(u), Omega.fdyy(u)
         Mxx = -sstruct.p.litho_rigidity .* (dudxx + sstruct.p.litho_poissonratio .* dudyy)
         Myy = -sstruct.p.litho_rigidity .* (dudyy + sstruct.p.litho_poissonratio .* dudxx)
-        Mxy = -sstruct.p.litho_rigidity .* (1 - sstruct.p.litho_poissonratio) .*
-            mixed_fdxy(u, sstruct.Omega.dx, sstruct.Omega.dy)
-        rhs += mixed_fdxx(Mxx, sstruct.Omega.dx) + mixed_fdyy(Myy, sstruct.Omega.dy) +
-            2 .* mixed_fdxy(Mxy, sstruct.Omega.dx, sstruct.Omega.dy)
+        Mxy = -sstruct.p.litho_rigidity .* (1 - sstruct.p.litho_poissonratio) .* Omega.fdxy(u)
+        rhs += Omega.fdxx(Mxx) + Omega.fdyy(Myy) + 2 .* Omega.fdxy(Mxy)
+        
+        # dudxx = mixed_fdxx(u, Omega.dx)
+        # dudyy = mixed_fdyy(u, Omega.dy)
+        # Mxx = -sstruct.p.litho_rigidity .* (dudxx + sstruct.p.litho_poissonratio .* dudyy)
+        # Myy = -sstruct.p.litho_rigidity .* (dudyy + sstruct.p.litho_poissonratio .* dudxx)
+        # Mxy = -sstruct.p.litho_rigidity .* (1 - sstruct.p.litho_poissonratio) .*
+        #     mixed_fdxy(u, Omega.dx, Omega.dy)
+        # rhs += mixed_fdxx(Mxx, Omega.dx) + mixed_fdyy(Myy, Omega.dy) +
+        #     2 .* mixed_fdxy(Mxy, Omega.dx, Omega.dy)
     end
 
-    dudt[:, :] .= real.(sstruct.tools.pifft * ((sstruct.tools.pfft * rhs) ./
-        sstruct.Omega.pseudodiff)) ./ (2 .* sstruct.p.effective_viscosity)
-    #     dudt[:, :] .= real.(tools.pifft * ((tools.pfft * (rhs ./ (2 .* p.effective_viscosity)) ) ./ Omega.pseudodiff))
+    if Omega.BC in ["zeropad", "periodic"]
+        dudt[:, :] .= real.(sstruct.tools.pifft * ((sstruct.tools.pfft * (rhs ./ 
+            (2 .* sstruct.p.effective_viscosity)) ) ./ pseudodiff_coeffs[2:end-1, 2:end-1]))
+    else
+        # dudt[:, :] .= real.(sstruct.tools.pifft * ((sstruct.tools.pfft * rhs) ./
+        #     Omega.pseudodiff)) ./ (2 .* sstruct.p.effective_viscosity)
+        dudt[:, :] .= real.(sstruct.tools.pifft * ((sstruct.tools.pfft * (rhs ./ 
+            (2 .* sstruct.p.effective_viscosity)) ) ./ Omega.pseudodiff))
+    end
 
-    corner_bc!(dudt, sstruct.Omega.Nx, sstruct.Omega.Ny)
     return nothing
 end
+
+
 
 """
 
@@ -242,18 +271,18 @@ end
 
 """
 
-    border_bc(u)
+    edge_bc(u)
 
 Apply boundary condition on Fourier collocation solution.
 Assume that mean deformation at borders of domain is 0.
 Same as Bueler et al. (2007).
 """
-function border_bc(u::AbstractMatrix{<:AbstractFloat}, Nx::Int, Ny::Int)
+function edge_bc(u::AbstractMatrix{<:AbstractFloat}, Nx::Int, Ny::Int)
     u_bc = copy(u)
-    return border_bc!(u_bc, Nx, Ny)
+    return edge_bc!(u_bc, Nx, Ny)
 end
 
-function border_bc!(u::AbstractMatrix{<:AbstractFloat}, Nx::Int, Ny::Int)
+function edge_bc!(u::AbstractMatrix{<:AbstractFloat}, Nx::Int, Ny::Int)
     allowscalar() do
         u .-= sum( view(u,1,:) + view(u,:,Nx) + view(u,Ny,:) + view(u,:,1) ) /
             (2*Nx + 2*Ny)

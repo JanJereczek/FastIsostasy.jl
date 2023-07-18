@@ -30,7 +30,7 @@ end
 phi = -180:0.1:180
 R = 6.371e6
 r = R .* deg2rad.(phi)
-idx = -3e6 .< r .< 3e6
+idx = -1 .< r .< 3e6
 r_plot = r[idx]
 
 u_3DGIA = [load_results("data/Latychev/rt_E0L1V1_comma", idx),
@@ -56,7 +56,7 @@ function get_denseoutput_fastiso(suffix)
 end
 u_fastiso, Omega = get_denseoutput_fastiso(suffix)
 n1, n2 = size(u_fastiso[1][1])
-slicey, slicex = Int(n1/2), 1:n2
+slicey, slicex = n1÷2, n2÷2:n2
 x = Omega.X[slicey, slicex]
 
 xlabels = [

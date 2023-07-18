@@ -249,6 +249,7 @@ function get_effective_viscosity(
     Omega::ComputationDomain{T},
     layer_viscosities::Array{T, 3},
     layers_thickness::Array{T, 3},
+    mantle_poissonratio::T,
     # pseudodiff::AbstractMatrix{T},
 ) where {T<:AbstractFloat}
 
@@ -256,6 +257,8 @@ function get_effective_viscosity(
     effective_viscosity = layer_viscosities[:, :, end]
     # p1, p2 = plan_fft(effective_viscosity), plan_ifft(effective_viscosity)
 
+    incompressible_poissonratio = 0.5
+    compressibility_scaling = (1 + incompressible_poissonratio) / (1 + mantle_poissonratio)
     if size(layer_viscosities, 3) > 1
         @inbounds for i in axes(layer_viscosities, 3)[1:end-1]
             channel_viscosity = layer_viscosities[:, :, end - i]
@@ -268,10 +271,12 @@ function get_effective_viscosity(
             )
             effective_viscosity .*= viscosity_scaling
         end
-        return effective_viscosity
+        effective_compressible_viscosity = effective_viscosity .* compressibility_scaling
     else
-        return layer_viscosities[:, :, 1]
+        effective_compressible_viscosity = layer_viscosities[:, :, 1] .* viscosity_scaling
     end
+    seakon_calibration = exp.(log10.(1e21 ./ effective_compressible_viscosity))
+    return effective_compressible_viscosity .* seakon_calibration
 end
 
 """
@@ -284,7 +289,6 @@ number `kappa`, the `visc_ratio` and the `channel_thickness`.
 Reference: Bueler et al. 2007, below equation 15.
 """
 function three_layer_scaling(
-    # kappa::Matrix{T},
     Omega::ComputationDomain{T},
     visc_ratio::Matrix{T},
     channel_thickness::Matrix{T},
@@ -308,6 +312,29 @@ function three_layer_scaling(
     return (num1 + num2 + num3) ./ (denum1 + denum2 + denum3)
 end
 
+# function three_layer_scaling(
+#     # kappa::Matrix{T},
+#     Omega::ComputationDomain{T},
+#     visc_ratio::Matrix{T},
+#     channel_thickness::Matrix{T},
+# ) where {T<:AbstractFloat}
+
+#     ft_T = fft(channel_thickness)
+#     ft_visc_ratio = fft(visc_ratio)
+#     C = cosh.(ft_T .* Omega.pseudodiff)
+#     S = sinh.(ft_T .* Omega.pseudodiff)
+
+#     num1 = 2 .* ft_visc_ratio .* C .* S
+#     num2 = (1 .- ft_visc_ratio .^ 2) .* ft_T .^ 2 .* Omega.pseudodiff .^ 2
+#     num3 = ft_visc_ratio .^ 2 .* S .^ 2 + C .^ 2
+
+#     denum1 = (ft_visc_ratio .+ 1 ./ ft_visc_ratio) .* C .* S
+#     denum2 = (ft_visc_ratio .- 1 ./ ft_visc_ratio) .* ft_T .* Omega.pseudodiff
+#     denum3 = S .^ 2 + C .^ 2
+    
+#     return real.(ifft( (num1 + num2 + num3) ./ (denum1 + denum2 + denum3) ))
+# end
+
 """
 
     loginterp_viscosity(tvec, layer_viscosities, layers_thickness, pseudodiff)
@@ -320,6 +347,7 @@ function loginterp_viscosity(
     layer_viscosities::Array{T, 4},
     layers_thickness::Array{T, 3},
     pseudodiff::AbstractMatrix{T},
+    mantle_poissonratio::T,
 ) where {T<:AbstractFloat}
     n1, n2, n3, nt = size(layer_viscosities)
     log_eqviscosity = fill(zeros(nt), n1, n2)
@@ -328,6 +356,7 @@ function loginterp_viscosity(
         layer_viscosities[:, :, :, k],
         layers_thickness,
         pseudodiff,
+        mantle_poissonratio::T,
     )) for k in 1:nt]
 
     log_interp = linear_interpolation(tvec, log_eqviscosity)
@@ -346,19 +375,39 @@ end
 Load Preliminary Reference Earth Model (PREM) from Dzewonski and Anderson (1981).
 """
 function load_prem()
-    M = readdlm(joinpath(@__DIR__, "input/PREM_1s.csv"), ',')[:, 1:3]
+    # radius, depth, density, Vpv, Vph, Vsv, Vsh, eta, Q-mu, Q-kappa
+    M = readdlm(joinpath(@__DIR__, "input/PREM_1s.csv"), ',')[:, 1:7]
     M .*= 1e3
-    return RadialEarthModel([M[:, j] for j in axes(M, 2)]...)
+    return ReferenceEarthModel([M[:, j] for j in axes(M, 2)]...)
 end
 
-function preprocess_prem(prem::RadialEarthModel)
-    ub = 6330e3
-    lb = 5770e3
-    idx = lb .< prem.radius .< ub
-    return mean(prem.density[idx])
+# function preprocess_prem(prem::ReferenceEarthModel)
+#     ub = 6330e3
+#     lb = 5770e3
+#     idx = lb .< prem.radius .< ub
+#     return mean(prem.density[idx])
+# end
+
+function compute_shearmodulus(m::ReferenceEarthModel)
+    return m.density .* (m.Vsv + m.Vsh) ./ 2
 end
 
-scale_visc_to_maxwelltime(eta, nu) = (1+0.5)/(1+nu) .* eta
+function maxwelltime_scaling(layer_viscosities, layer_shearmoduli)
+    return layer_shearmoduli[end] ./ layer_shearmoduli .* layer_viscosities
+end
+
+function maxwelltime_scaling!(layer_viscosities, layer_boundaries, m::ReferenceEarthModel)
+    mu = compute_shearmodulus(m)
+    layer_meandepths = (layer_boundaries[:, :, 1:end-1] + layer_boundaries[:, :, 2:end]) ./ 2
+    layer_meandepths = cat(layer_meandepths, layer_boundaries[:, :, end], dims = 3)
+    mu_itp = linear_interpolation(m.depth, mu)
+    layer_meanshearmoduli = layer_viscosities ./ 1e21 .* mu_itp.(layer_meandepths)
+    layer_viscosities .*= layer_meanshearmoduli[:, :, end] ./ layer_meanshearmoduli
+end
+
+function equilazation_layer()
+
+end
 
 """
 
@@ -590,9 +639,27 @@ function copystructs2cpu(
         Omega_cpu,
         c;
         layer_boundaries = Array(p.layer_boundaries),
-        layers_density = Array(p.layers_density),
+        layer_densities = Array(p.layer_densities),
         layer_viscosities = Array(p.layer_viscosities),
     )
 
     return Omega_cpu, p_cpu
+end
+
+#####################################################
+# BC utils
+#####################################################
+function periodic_extension(M::Matrix{T}, Nx::Int, Ny::Int) where {T<:AbstractFloat}
+    M_periodic = zeropad_extension(M, Nx, Ny)
+    M_periodic[1, 2:end-1] .= M[end, :]
+    M_periodic[end, 2:end-1] .= M[1, :]
+    M_periodic[2:end-1, 1] .= M[:, end]
+    M_periodic[2:end-1, end] .= M[:, 1]
+    return M_periodic
+end
+
+function zeropad_extension(M::Matrix{T}, Nx::Int, Ny::Int) where {T<:AbstractFloat}
+    M_zeropadded = fill(T(0), Nx+2, Ny+2)
+    M_zeropadded[2:end-1, 2:end-1] .= M
+    return M_zeropadded
 end

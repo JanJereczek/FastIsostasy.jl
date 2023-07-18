@@ -23,7 +23,7 @@ forwardstep_isostasy!
 dudt_isostasy!
 simple_euler!
 corner_bc
-border_bc
+edge_bc
 compute_elastic_response
 ```
 
