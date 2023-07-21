@@ -5,7 +5,7 @@ using JLD2, DelimitedFiles
 include("helpers_plot.jl")
 
 n = 6
-heterogeneous = "lithosphere"
+heterogeneous = "none"
 global include_elastic = true
 
 function load_results(dir::String, idx)
@@ -54,15 +54,21 @@ suffix = "$(kernel)_Nx$(N)_Ny$(N)_dense"
 if heterogeneous == "lithosphere"
     seakon_files = ["rt_E0L1V1_comma", "rt_E0L2V1_comma"]
     fastiso_files = ["gaussian_lo_D_$suffix.jld2", "gaussian_hi_D_$suffix.jld2"]
-    elims = (-20, 20)
+    elims = (-30, 30)
     title1 = L"Gaussian thinning lithosphere $\,$"
     title2 = L"Gaussian thickening lithosphere $\,$"
 elseif heterogeneous == "upper-mantle"
     seakon_files = ["E0L3V2", "E0L3V3"]
     fastiso_files = ["gaussian_lo_η_$suffix.jld2", "gaussian_hi_η_$suffix.jld2"]
-    elims = (-35, 35)
+    elims = (-30, 30)
     title1 = L"Gaussian decrease of viscosity $\,$"
     title2 = L"Gaussian increase of viscosity $\,$"
+elseif heterogeneous == "none"
+    seakon_files = ["E0L4V4", "E0L4V4"]
+    fastiso_files = ["ref_$suffix.jld2", "no_litho_$suffix.jld2"]
+    elims = (-30, 30)
+    title1 = L"Homogeneous PREM configuration $\,$"
+    title2 = L"No-lithosphere configuration $\,$"
 end
 
 u_fastiso, Omega = get_denseoutput_fastiso(fastiso_files)
@@ -97,18 +103,14 @@ axs = [Axis(
 ) for j in eachindex(u_3DGIA), i in 1:2]
 for j in eachindex(u_3DGIA)
     for i in eachindex(u_fastiso[j])
-        if i == 7 && heterogeneous == "upper-mantle"
-            nothing
-        else
-            itp = linear_interpolation(r_plot, u_3DGIA[j][:, i], extrapolation_bc = Flat())
-            lines!(axs[j], r_plot, u_3DGIA[j][:, i], color = cmap[i],
-                label = labels[i], linewidth = 5)
-            lines!(axs[j], x, u_fastiso[j][i][slicey, slicex],
-                linestyle = :dash, color = cmap[i], linewidth = 5)
-            
-            lines!(axs[j+2], x, itp.(x) - u_fastiso[j][i][slicey, slicex],
-                color = cmap[i], label = labels[i], linewidth = 5)
-        end
+        itp = linear_interpolation(r_plot, u_3DGIA[j][:, i], extrapolation_bc = Flat())
+        lines!(axs[j], r_plot, u_3DGIA[j][:, i], color = cmap[i],
+            label = labels[i], linewidth = 5)
+        lines!(axs[j], x, u_fastiso[j][i][slicey, slicex],
+            linestyle = :dash, color = cmap[i], linewidth = 5)
+        
+        lines!(axs[j+2], x, itp.(x) - u_fastiso[j][i][slicey, slicex],
+            color = cmap[i], label = labels[i], linewidth = 5)
     end
 end
 Legend(fig[:,3], axs[1])

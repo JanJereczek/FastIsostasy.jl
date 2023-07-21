@@ -34,7 +34,7 @@ function choose_case(case::String, Omega::ComputationDomain, c::PhysicalConstant
         lb = cat(lb1, lb2, dims=3)
         p = MultilayerEarth(Omega, c, layer_boundaries = lb, layer_viscosities = [eta, eta],
             layer_densities = [rho])
-    elseif case == "gaussian_no_D"
+    elseif case == "no_litho"
         lb = fill(0.001e3, Omega.Nx, Omega.Ny, 1)
         lv = [eta]
         p = MultilayerEarth(Omega, c, layer_boundaries = lb, layer_viscosities = lv,
