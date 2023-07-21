@@ -77,7 +77,7 @@ export init_optim, integrated_rmse, ViscOptim, optimize_viscosity, Options
 # geostate.jl
 export update_geoid!, update_sealevel!, update_loadcolumns!
 export columnanom_ice, columnanom_water, columnanom_mantle
-export columnanom_load, columnanom_full, loadanom_green
+export columnanom_load, columnanom_full, totalmass_anom
 export get_loadchange, get_geoidgreen
 export update_slc!, update_slc_pov!, update_slc_den!
 export update_V_af!, update_slc_af!

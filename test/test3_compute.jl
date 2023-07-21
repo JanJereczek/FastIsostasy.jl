@@ -35,7 +35,7 @@ function main(
     results = fastisostasy(
         t_out, Omega, c, p, Hcylinder,
         interactive_geostate = false, dt = years2seconds(0.2),
-        ODEsolver = "ExplicitEuler")
+        ODEsolver = BS3())
     t_fastiso = time() - t1
     println("Took $t_fastiso seconds!")
     println("-------------------------------------")
@@ -54,9 +54,9 @@ function main(
     )
 end
 
-for n in 8:8
+for n in 6:6
     # ["gaussian_lo_D", "gaussian_hi_D", "gaussian_no_D", "gaussian_lo_η", "gaussian_hi_η"]
-    for case in ["gaussian_lo_η"]
+    for case in ["gaussian_lo_D", "gaussian_hi_D", "gaussian_no_D", "gaussian_lo_η", "gaussian_hi_η"]
         main(n, case, use_cuda = false, dense_out = true)
     end
 end

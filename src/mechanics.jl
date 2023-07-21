@@ -20,22 +20,21 @@ function fastisostasy(
     dt::T = T(years2seconds(1.0)),
     t_eta_snapshots::Vector{T} = [t_out[1], t_out[end]],
     eta_snapshots::Vector{<:AbstractMatrix{T}} = [p.effective_viscosity, p.effective_viscosity],
-    u_viscous_0::Matrix{T} = copy(Omega.null),
-    u_elastic_0::Matrix{T} = copy(Omega.null),
+    u_0::Matrix{T} = copy(Omega.null),
+    ue_0::Matrix{T} = copy(Omega.null),
     interactive_geostate::Bool = false,
     verbose::Bool = true,
     kwargs...,
 ) where {T<:AbstractFloat}
 
-    u_viscous_0, u_elastic_0 = kernelpromote(
-        [u_viscous_0, u_elastic_0], Omega.arraykernel)   # Handle xPU architecture
+    u_0, ue_0 = kernelpromote([u_0, ue_0], Omega.arraykernel)   # Handle xPU architecture
     sstruct = SuperStruct(Omega, c, p, t_Hice_snapshots, Hice_snapshots,
         t_eta_snapshots, eta_snapshots, interactive_geostate; kwargs...)
-    u, dudt, u_elastic, geoid, sealevel = forward_isostasy(
-        dt, t_out, u_viscous_0, sstruct, ODEsolver, verbose)
+    u, dudt, ue, geoid, sealevel = forward_isostasy(
+        dt, t_out, u_0, sstruct, ODEsolver, verbose)
 
     return FastisoResults(
-        t_out, sstruct.tools, u, dudt, u_elastic,
+        t_out, sstruct.tools, u, dudt, ue,
         geoid, sealevel, sstruct.Hice, sstruct.eta,
     )
 end
@@ -69,7 +68,7 @@ function forward_isostasy(
 ) where {T<:AbstractFloat}
 
     dudt = copy(u)
-    u_out, dudt_out, u_el_out, geoid_out, sealevel_out = init_results(u, t_out)
+    u_out, dudt_out, ue_out, geoid_out, sealevel_out = init_results(u, t_out)
 
     @inbounds for k in eachindex(t_out)[1:end]
         t0 = k == 1 ? T(0.0) : t_out[k-1]
@@ -94,14 +93,14 @@ function forward_isostasy(
             end
         end
         
+        # Convert outputs back to CPU for postprocessing
         u_out[k] .= copy(kernelpromote(u, Array))
         dudt_out[k] .= copy(kernelpromote(dudt, Array))
         geoid_out[k] .= copy(kernelpromote(sstruct.geostate.geoid, Array))
         sealevel_out[k] .= copy(kernelpromote(sstruct.geostate.sealevel, Array))
-        u_el_out[k] .= samesize_conv(columnanom_load(sstruct),
-            sstruct.tools.elasticgreen, sstruct.Omega)
+        ue_out[k] .= copy(kernelpromote(sstruct.geostate.ue, Array))
     end
-    return u_out, dudt_out, u_el_out, geoid_out, sealevel_out
+    return u_out, dudt_out, ue_out, geoid_out, sealevel_out
 end
 
 """
@@ -115,10 +114,10 @@ function init_results(u, t_out)
     placeholder = kernelpromote(u, Array)
     u_out = [copy(placeholder) for time in t_out]
     dudt_out = [copy(placeholder) for time in t_out]
-    u_el_out = [copy(placeholder) for time in t_out]
+    ue_out = [copy(placeholder) for time in t_out]
     geoid_out = [copy(placeholder) for time in t_out]
     sealevel_out = [copy(placeholder) for time in t_out]
-    return u_out, dudt_out, u_el_out, geoid_out, sealevel_out
+    return u_out, dudt_out, ue_out, geoid_out, sealevel_out
 end
 
 """
@@ -140,7 +139,9 @@ function forwardstep_isostasy!(
     elseif sstruct.Omega.BC == "zero_meanedge"
         edge_bc!(u, sstruct.Omega.Nx, sstruct.Omega.Ny)
     end
+    update_bedrock!(sstruct, u)
 
+    update_loadcolumns!(sstruct, sstruct.Hice(t))
     # Only update the geoid and sea level if geostate is interactive.
     # As integration requires smaller time steps than diagnostics,
     # only update geostate every sstruct.geostate.dt
@@ -152,20 +153,7 @@ function forwardstep_isostasy!(
         # println("Updated GeoState at t=$(seconds2years(t))")
     end
 
-    coupled_viscoelastic = false
-
-    if coupled_viscoelastic
-        sstruct.geostate.dtloadanom .= columnanom_load(sstruct)
-    end
-
-    update_loadcolumns!(sstruct, u, sstruct.Hice(t))
-
-    if coupled_viscoelastic
-        sstruct.geostate.dtloadanom -= columnanom_load(sstruct)
-        u += samesize_conv(sstruct.geostate.dtloadanom, sstruct.tools.elasticgreen,
-            sstruct.Omega)
-    end
-
+    update_elasticresponse!(sstruct)
     dudt_isostasy!(dudt, u, sstruct, t)
     return nothing
 end
@@ -174,7 +162,7 @@ end
 
     dudt_isostasy!()
 
-Update the displacement rate `dudt`.
+Update the displacement rate `dudt` of the viscous response.
 """
 function dudt_isostasy!(
     dudt::AbstractMatrix{T},
@@ -187,49 +175,23 @@ function dudt_isostasy!(
     rhs = - sstruct.c.g .* columnanom_full(sstruct)
 
     if sstruct.tools.negligible_gradD
-        if Omega.BC in ["zeropad", "periodic"]
-            u_extended = Omega.extension(u)
-            pseudodiff_coeffs, harmonic_coeffs, biharmonic_coeffs = get_differential_fourier(
-                Omega.Wx+2*Omega.dx, Omega.Wy+2*Omega.dy, Omega.Nx+2, Omega.Ny+2)
-            biharmonic_u = biharmonic_coeffs .* fft(u_extended)
-            biharmonic_u = biharmonic_u[2:end-1, 2:end-1]
-            u = u_extended
-        else
-            biharmonic_u = Omega.biharmonic .* (sstruct.tools.pfft * u)
-        end
+        biharmonic_u = Omega.biharmonic .* (sstruct.tools.pfft * u)
         rhs += - sstruct.p.litho_rigidity .* real.( sstruct.tools.pifft * biharmonic_u )
     else
-
         dudxx, dudyy = Omega.fdxx(u), Omega.fdyy(u)
         Mxx = -sstruct.p.litho_rigidity .* (dudxx + sstruct.p.litho_poissonratio .* dudyy)
         Myy = -sstruct.p.litho_rigidity .* (dudyy + sstruct.p.litho_poissonratio .* dudxx)
         Mxy = -sstruct.p.litho_rigidity .* (1 - sstruct.p.litho_poissonratio) .* Omega.fdxy(u)
         rhs += Omega.fdxx(Mxx) + Omega.fdyy(Myy) + 2 .* Omega.fdxy(Mxy)
-        
-        # dudxx = mixed_fdxx(u, Omega.dx)
-        # dudyy = mixed_fdyy(u, Omega.dy)
-        # Mxx = -sstruct.p.litho_rigidity .* (dudxx + sstruct.p.litho_poissonratio .* dudyy)
-        # Myy = -sstruct.p.litho_rigidity .* (dudyy + sstruct.p.litho_poissonratio .* dudxx)
-        # Mxy = -sstruct.p.litho_rigidity .* (1 - sstruct.p.litho_poissonratio) .*
-        #     mixed_fdxy(u, Omega.dx, Omega.dy)
-        # rhs += mixed_fdxx(Mxx, Omega.dx) + mixed_fdyy(Myy, Omega.dy) +
-        #     2 .* mixed_fdxy(Mxy, Omega.dx, Omega.dy)
     end
 
-    if Omega.BC in ["zeropad", "periodic"]
-        dudt[:, :] .= real.(sstruct.tools.pifft * ((sstruct.tools.pfft * (rhs ./ 
-            (2 .* sstruct.p.effective_viscosity)) ) ./ pseudodiff_coeffs[2:end-1, 2:end-1]))
-    else
-        # dudt[:, :] .= real.(sstruct.tools.pifft * ((sstruct.tools.pfft * rhs) ./
-        #     Omega.pseudodiff)) ./ (2 .* sstruct.p.effective_viscosity)
-        dudt[:, :] .= real.(sstruct.tools.pifft * ((sstruct.tools.pfft * (rhs ./ 
-            (2 .* sstruct.p.effective_viscosity)) ) ./ Omega.pseudodiff))
-    end
+    # dudt[:, :] .= real.(sstruct.tools.pifft * ((sstruct.tools.pfft * rhs) ./
+    #     Omega.pseudodiff)) ./ (2 .* sstruct.p.effective_viscosity)
+    dudt[:, :] .= real.(sstruct.tools.pifft * ((sstruct.tools.pfft * (rhs ./ 
+        (2 .* sstruct.p.effective_viscosity)) ) ./ Omega.pseudodiff))
 
     return nothing
 end
-
-
 
 """
 
@@ -292,18 +254,30 @@ end
 #####################################################
 # Elastic response
 #####################################################
+# """
+
+#     compute_elastic_response(Omega, tools, load)
+
+# For a computation domain `Omega`, compute the elastic response of the solid Earth
+# by convoluting the `load` with the Green's function stored in the pre-computed `tools`
+# (elements obtained from Farell 1972).
+# """
+# function compute_elastic_response(
+#     Omega::ComputationDomain{T},
+#     tools::PrecomputedFastiso{T},
+#     load::AbstractMatrix{T},
+# ) where {T<:AbstractFloat}
+#     return samesize_conv(load, tools.elasticgreen, Omega)
+# end
+
 """
 
-    compute_elastic_response(Omega, tools, load)
+    update_elasticresponse!(sstruct::SuperStruct)
 
-For a computation domain `Omega`, compute the elastic response of the solid Earth
-by convoluting the `load` with the Green's function stored in the pre-computed `tools`
-(elements obtained from Farell 1972).
+Update the elastic response by convoluting the Green's function with the load anom.
 """
-function compute_elastic_response(
-    Omega::ComputationDomain{T},
-    tools::PrecomputedFastiso{T},
-    load::AbstractMatrix{T},
-) where {T<:AbstractFloat}
-    return samesize_conv(load, tools.elasticgreen, Omega)
+function update_elasticresponse!(sstruct::SuperStruct{<:AbstractFloat})
+    sstruct.geostate.ue .= samesize_conv(sstruct.tools.elasticgreen,
+        loadanom_elasticgreen(sstruct), sstruct.Omega)
+    return nothing
 end

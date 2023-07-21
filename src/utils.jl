@@ -38,6 +38,9 @@ end
 # Array utils
 #####################################################
 
+Base.fill(x::Real, Omega::ComputationDomain) = fill(x, Omega.Nx, Omega.Ny)
+Base.fill(x::Real, sstruct::SuperStruct) = fill(x, sstruct.Omega.Nx, sstruct.Omega.Ny)
+
 """
 
     matrify(x, Nx, Ny)
@@ -203,6 +206,11 @@ end
 #####################################################
 # Math utils
 #####################################################
+
+function gauss_distr(x::T, mu::Vector{T}, sigma::Matrix{T}) where {T<:AbstractFloat}
+    k = length(mu)
+    return (2 * π)^(k/2) * det(sigma) * exp( -0.5 * (x .- mu)' * inv(sigma) * (x .- mu) )
+end
 
 """
 

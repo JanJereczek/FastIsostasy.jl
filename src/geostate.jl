@@ -2,11 +2,11 @@
 
     update_geoid!(sstruct::SuperStruct)
 
-Update the geoid of a `::GeoState` by convoluting the Green's function with the load anom.
+Update the geoid by convoluting the Green's function with the load anom.
 """
 function update_geoid!(sstruct::SuperStruct{<:AbstractFloat})
     sstruct.geostate.geoid .= samesize_conv(sstruct.tools.geoidgreen,
-        loadanom_green(sstruct), sstruct.Omega)
+        totalmass_anom(sstruct), sstruct.Omega)
     return nothing
 end
 
@@ -17,8 +17,7 @@ end
 Compute the density-scaled anomaly of the ice column w.r.t. the reference state.
 """
 function columnanom_ice(sstruct::SuperStruct{<:AbstractFloat})
-    column = sstruct.c.rho_ice .* (sstruct.geostate.H_ice - sstruct.refgeostate.H_ice)
-    return corrected_column(column, sstruct)
+    return sstruct.c.rho_ice .* (sstruct.geostate.H_ice - sstruct.refgeostate.H_ice)
 end
 
 """
@@ -28,9 +27,7 @@ end
 Compute the density-scaled anomaly of the (liquid) water column w.r.t. the reference state.
 """
 function columnanom_water(sstruct::SuperStruct{<:AbstractFloat})
-    column = sstruct.c.rho_seawater .* (sstruct.geostate.H_water -
-        sstruct.refgeostate.H_water)
-    return corrected_column(column, sstruct)
+    return sstruct.c.rho_seawater .* (sstruct.geostate.H_water - sstruct.refgeostate.H_water)
 end
 
 """
@@ -40,8 +37,17 @@ end
 Compute the density-scaled anomaly of the mantle column w.r.t. the reference state.
 """
 function columnanom_mantle(sstruct::SuperStruct{<:AbstractFloat})
-    column = sstruct.p.uppermantle_density[1] .* (sstruct.geostate.b - sstruct.refgeostate.b)
-    return corrected_column(column, sstruct)
+    return sstruct.c.rho_uppermantle .* (sstruct.geostate.u - sstruct.refgeostate.u)
+end
+
+"""
+
+    columnanom_litho(sstruct)
+
+Compute the density-scaled anomaly of the lithosphere column w.r.t. the reference state.
+"""
+function columnanom_litho(sstruct::SuperStruct{<:AbstractFloat})
+    return sstruct.c.rho_litho .* (sstruct.geostate.ue - sstruct.refgeostate.ue)
 end
 
 """
@@ -52,7 +58,7 @@ Compute the density-scaled anomaly of the load (ice + liquid water) column w.r.t
 the reference state.
 """
 function columnanom_load(sstruct::SuperStruct{<:AbstractFloat})
-    return columnanom_ice(sstruct) + columnanom_water(sstruct)
+    return columnanom_ice(sstruct) + columnanom_water(sstruct) # + columnanom_sediment(sstruct)
 end
 
 """
@@ -61,20 +67,28 @@ end
 
 Compute the density-scaled anomaly of the all the columns (ice + liquid water + mantle)
 w.r.t. the reference state.
+
+Correction of the surface distortion is not needed here since rho * A * z / A = rho * z.
 """
 function columnanom_full(sstruct::SuperStruct{<:AbstractFloat})
     # columnanom_mantle() depends on sign of u, which is negative for depression.
     # Therefore, we only need to add the terms below.
-    return columnanom_load(sstruct) + columnanom_mantle(sstruct)
+    return columnanom_load(sstruct) + columnanom_mantle(sstruct) +
+        columnanom_litho(sstruct)
 end
 
-function loadanom_green(sstruct::SuperStruct{<:AbstractFloat})
-    return (sstruct.Omega.dx * sstruct.Omega.dy) .* columnanom_full(sstruct)
+function loadanom_elasticgreen(sstruct::SuperStruct{<:AbstractFloat})
+    return correct_surfacedisctortion(columnanom_load(sstruct), sstruct)
 end
 
-function corrected_column(column::Matrix, sstruct::SuperStruct)
+function overburdenmass_anom(sstruct::SuperStruct{<:AbstractFloat})
+    surface = (sstruct.Omega.dx * sstruct.Omega.dy)
+    return correct_surfacedisctortion(surface .* columnanom_load(sstruct), sstruct)
+end
+
+function correct_surfacedisctortion(column::Matrix, sstruct::SuperStruct)
     if sstruct.Omega.projection_correction
-        return column .* sstruct.Omega.K
+        return column .* sstruct.Omega.K .^ 2
     else
         return column
     end
@@ -110,15 +124,21 @@ end
 
 Update the load columns of a `::GeoState`.
 """
-function update_loadcolumns!(sstruct::SuperStruct{T}, u::AbstractMatrix{T},
+function update_loadcolumns!(sstruct::SuperStruct{T},
     H_ice::AbstractMatrix{T}) where {T<:AbstractFloat}
 
-    sstruct.geostate.b .= sstruct.refgeostate.b .+ u
     sstruct.geostate.H_ice .= H_ice
     if sstruct.interactive_geostate
         sstruct.geostate.H_water .= max.(sstruct.geostate.sealevel -
             (sstruct.geostate.b + H_ice), 0)
     end
+    # update sediment thickness
+    return nothing
+end
+
+function update_bedrock!(sstruct::SuperStruct{T}, u::AbstractMatrix{T}) where {T<:AbstractFloat}
+    sstruct.geostate.u .= u
+    sstruct.geostate.b .= sstruct.refgeostate.b .+ sstruct.geostate.ue .+ u
     return nothing
 end
 
@@ -126,7 +146,7 @@ end
 
     update_sealevel!(sstruct::SuperStruct)
 
-Update the sea-level `::GeoState` by adding the various contributions.
+Update the sea-level by adding the various contributions.
 
 # Reference
 

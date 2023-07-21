@@ -4,8 +4,8 @@ using CairoMakie
 using JLD2, DelimitedFiles
 include("helpers_plot.jl")
 
-n = 8
-heterogeneous = "upper-mantle"
+n = 6
+heterogeneous = "lithosphere"
 global include_elastic = true
 
 function load_results(dir::String, idx)

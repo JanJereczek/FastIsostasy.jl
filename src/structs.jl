@@ -89,15 +89,19 @@ function ComputationDomain(
     x = collect(-Wx+dx:dx:Wx)
     y = collect(-Wy+dy:dy:Wy)
     X, Y = meshgrid(x, y)
+    null = fill(T(0), Nx, Ny)
     R = get_r.(X, Y)
     Theta = dist2angulardist.(R)
     Lat, Lon = stereo2latlon(X, Y, lat0, lon0)
-    
+
     arraykernel = use_cuda ? CuArray : Array
-    K = kernelpromote(scalefactor(deg2rad.(Lat), deg2rad.(Lon),
-        deg2rad(lat0), deg2rad(lon0)), arraykernel)
-    null = fill(T(0), Nx, Ny)
-    
+    if projection_correction
+        K = kernelpromote(scalefactor(deg2rad.(Lat), deg2rad.(Lon),
+            deg2rad(lat0), deg2rad(lon0)), arraykernel)
+    else
+        K = fill(1, Nx, Ny)
+    end
+
     # Differential operators in Fourier space
     pseudodiff, harmonic, biharmonic = get_differential_fourier(Wx, Wy, Nx, Ny)
     pseudodiff[1, 1] = mean([pseudodiff[1,2], pseudodiff[2,1]])
@@ -107,20 +111,9 @@ function ComputationDomain(
     # Tests show that it does not lead to errors wrt analytical or benchmark solutions.
 
     extension(M) = M
-    # if BC == "zeropad"
-    #     extension(M) = zeropad_extension(M, Nx, Ny)
-    # elseif BC == "periodic"
-    #     extension(M) = periodic_extension(M, Nx, Ny)
-    # end
-
-    fdxx(M) = mixed_fdxx(M, dx)
-    fdyy(M) = mixed_fdyy(M, dy)
-    fdxy(M) = mixed_fdxy(M, dx, dy)
-    # if BC in ["zeropad", "periodic"]
-    #     fdxx(M) = central_fdxx(M, dx)
-    #     fdyy(M) = central_fdyy(M, dy)
-    #     fdxy(M) = central_fdxy(M, dx, dy)
-    # end
+    fdxx(M) = mixed_fdxx(M, K .* dx)
+    fdyy(M) = mixed_fdyy(M, K .* dy)
+    fdxy(M) = mixed_fdxy(M, K .* dx, K .* dy)
 
     return ComputationDomain(Wx, Wy, Nx, Ny, Mx, My, dx, dy, x, y, X, Y,
         R, Theta, Lat, Lon, K, projection_correction, null,
@@ -138,21 +131,19 @@ end
 Return a struct containing important physical constants.
 """
 Base.@kwdef struct PhysicalConstants{T<:AbstractFloat}
-    mE::T = 5.972e24                           # Earth's mass (kg)
-    r_equator::T = 6.371e6                     # Earth radius at equator (m)
-    r_pole::T = 6.357e6                        # Earth radius at pole (m)
-    A_ocean::T = 3.625e14                      # Ocean surface (m) as in Goelzer (2020) before Eq. (9)
-    g::T = 9.81                                # Mean Earth acceleration at surface (m/s^2)
-    G::T = 6.674e-11                           # Gravity constant (m^3 kg^-1 s^-2)
-    seconds_per_year::T = SECONDS_PER_YEAR      # (s)
-    rho_ice::T = 0.910e3                       # (kg/m^3)
-    rho_water::T = 1.023e3                     # (kg/m^3)
-    rho_seawater::T = 1.023e3                  # (kg/m^3)
-    rho_core::T = 13.1e3                       # Density of Earth's core (kg m^-3)
-    rho_topastheno::T = 3.3e3                  # Mean density of solid-Earth surface (kg m^-3)
-    rho_litho::T = 3.0e3                       # Mean density of solid-Earth surface (kg m^-3)
+    mE::T = 5.972e24                        # Earth's mass (kg)
+    r_equator::T = 6.371e6                  # Earth radius at equator (m)
+    r_pole::T = 6.357e6                     # Earth radius at pole (m)
+    A_ocean::T = 3.625e14                   # Ocean surface (m) as in Goelzer (2020) before Eq. (9)
+    g::T = 9.8                              # Mean Earth acceleration at surface (m/s^2)
+    G::T = 6.674e-11                        # Gravity constant (m^3 kg^-1 s^-2)
+    seconds_per_year::T = SECONDS_PER_YEAR  # (s)
+    rho_ice::T = 0.910e3                    # (kg/m^3)
+    rho_water::T = 1.023e3                  # (kg/m^3)
+    rho_seawater::T = 1.023e3               # (kg/m^3)
+    rho_uppermantle::T = 3.7e3              # Mean density of topmost upper mantle (kg m^-3)
+    rho_litho::T = 2.6e3                    # Mean density of lithosphere (kg m^-3)
 end
-# Note: rho_0 and rho_1 are chosen such that g(pole) ≈ 9.81
 
 #########################################################
 # Multi-layer Earth
@@ -232,7 +223,7 @@ function MultilayerEarth(
 
     uppermantle_gravity = 10.0
     uppermantle_density = mean(layer_densities)
-    uppermantle_rhog = fill(uppermantle_gravity * uppermantle_density, Omega.Nx, Omega.Ny)
+    uppermantle_rhog = fill(uppermantle_gravity * uppermantle_density, Omega)
     litho_rigidity, effective_viscosity, uppermantle_rhog = kernelpromote(
         [litho_rigidity, effective_viscosity, uppermantle_rhog], Omega.arraykernel)
     return MultilayerEarth(
@@ -258,6 +249,8 @@ end
 Return a struct containing the reference geostate. We define the geostate to be all quantities related to sea-level.
 """
 struct RefGeoState{T<:AbstractFloat}
+    u::AbstractMatrix{T}            # viscous displacement
+    ue::AbstractMatrix{T}           # elastic displacement
     H_ice::AbstractMatrix{T}          # reference height of ice column
     H_water::AbstractMatrix{T}        # reference height of water column
     b::AbstractMatrix{T}              # reference bedrock position
@@ -276,6 +269,8 @@ end
 Return a mutable struct containing the geostate which will be updated over the simulation.
 """
 mutable struct GeoState{T<:AbstractFloat}
+    u::AbstractMatrix{T}           # viscous displacement
+    ue::AbstractMatrix{T}           # elastic displacement
     H_ice::AbstractMatrix{T}          # current height of ice column
     H_water::AbstractMatrix{T}        # current height of water column
     b::AbstractMatrix{T}              # vertical bedrock position
@@ -314,17 +309,10 @@ Return a `struct` containing pre-computed tools to perform forward-stepping of t
 """
 struct PrecomputedFastiso{T<:AbstractFloat}
     elasticgreen::AbstractMatrix{T}
-    fourier_elasticgreen::AbstractMatrix{Complex{T}}
+    geoidgreen::AbstractMatrix{T}
     pfft::Plan
     pifft::ScaledPlan
-    Dx::AbstractMatrix{T}
-    Dy::AbstractMatrix{T}
-    Dxx::AbstractMatrix{T}
-    Dyy::AbstractMatrix{T}
-    Dxy::AbstractMatrix{T}
     negligible_gradD::Bool
-    rhog::T
-    geoidgreen::AbstractMatrix{T}
 end
 
 
@@ -340,41 +328,27 @@ function PrecomputedFastiso(
     greenintegrand_function = build_greenintegrand(distance, greenintegrand_coeffs)
     quad_support, quad_coeffs = get_quad_coeffs(T, quad_precision)
     elasticgreen = get_elasticgreen(Omega, greenintegrand_function, quad_support, quad_coeffs)
+    geoidgreen = get_geoidgreen(Omega, c)
 
-    # Space-derivatives of rigidity
-    D = kernelpromote(p.litho_rigidity, Array)
-    Dx = mixed_fdx(D, Omega.dx)
-    Dy = mixed_fdy(D, Omega.dy)
-    Dxx = mixed_fdxx(D, Omega.dx)
-    Dyy = mixed_fdyy(D, Omega.dy)
-    Dxy = mixed_fdy( mixed_fdx(D, Omega.dx), Omega.dy )
+    # Check if thickness constant upto 1km tolerance
+    mean_litho_rigidity = fill(mean(p.litho_rigidity), Omega)
+    negligible_gradD = isapprox(p.litho_rigidity, mean_litho_rigidity, atol = 1e3)
 
-    omega_zeros = fill(T(0), Omega.Nx, Omega.Ny)
-    zero_tol = 1e-2
-    negligible_gradD = isapprox(Dx, omega_zeros, atol = zero_tol) &
-                        isapprox(Dy, omega_zeros, atol = zero_tol) &
-                        isapprox(Dxx, omega_zeros, atol = zero_tol) &
-                        isapprox(Dyy, omega_zeros, atol = zero_tol) &
-                        isapprox(Dxy, omega_zeros, atol = zero_tol)
-    
     # FFT plans depening on CPU vs. GPU usage
     if Omega.use_cuda
         Xgpu = CuArray(Omega.X)
         p1, p2 = CUDA.CUFFT.plan_fft(Xgpu), CUDA.CUFFT.plan_ifft(Xgpu)
-        Dx, Dy, Dxx, Dyy, Dxy = convert2CuArray([Dx, Dy, Dxx, Dxy, Dyy])
+        # Dx, Dy, Dxx, Dyy, Dxy = convert2CuArray([Dx, Dy, Dxx, Dxy, Dyy])
     else
         p1, p2 = plan_fft(Omega.X), plan_ifft(Omega.X)
     end
 
-    rhog = p.uppermantle_density .* c.g
-    geoidgreen = get_geoidgreen(Omega, c)
+    # rhog = p.uppermantle_density .* c.g
 
     return PrecomputedFastiso(
-        elasticgreen, fft(elasticgreen),
-        p1, p2,
-        Dx, Dy, Dxx, Dyy, Dxy, negligible_gradD,
-        rhog,
+        kernelpromote(elasticgreen, Omega.arraykernel),
         kernelpromote(geoidgreen, Omega.arraykernel),
+        p1, p2, negligible_gradD,
     )
 end
 
@@ -438,6 +412,7 @@ function SuperStruct(
         kernelpromote(eta_snapshots, Array) )
 
     refgeostate = RefGeoState(
+        copy(Omega.null), copy(Omega.null), # viscous and elastic displacement
         H_ice_ref, H_water_ref, b_ref,
         copy(sealevel_0),   # z0
         sealevel_0,         # sealevel
@@ -447,6 +422,7 @@ function SuperStruct(
         T(0.0),             # conservation_term
     )
     geostate = GeoState(
+        copy(Omega.null), copy(Omega.null), # viscous and elastic displacement
         Hice(0.0),                  # ice column
         copy(H_water_ref),          # water column
         copy(b_ref),                # bedrock position
@@ -487,4 +463,3 @@ struct FastisoResults{T<:AbstractFloat}
     Hice::Interpolations.Extrapolation
     eta::Interpolations.Extrapolation
 end
-
