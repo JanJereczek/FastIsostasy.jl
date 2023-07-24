@@ -57,7 +57,7 @@ struct ComputationDomain{T<:AbstractFloat}
     biharmonic::AbstractMatrix{T}   # biharmonic operator
     use_cuda::Bool
     arraykernel                     # Array or CuArray depending on chosen hardware
-    BC::String                      # Boundary conditions
+    bc!::Function                   # Boundary conditions
     extension::Function             # Function to extend domain if needed for BCs
     fdxx::Function                  # FDM for 2nd order derivative in x
     fdyy::Function                  # FDM for 2nd order derivative in y
@@ -75,7 +75,7 @@ function ComputationDomain(
     Wy::T,
     Nx::Int,
     Ny::Int;
-    BC::String = "corner_bc",
+    bc!::Function = corner_bc!,
     use_cuda::Bool = false,
     lat0::T = T(-71.0),
     lon0::T = T(0.0),
@@ -118,7 +118,7 @@ function ComputationDomain(
     return ComputationDomain(Wx, Wy, Nx, Ny, Mx, My, dx, dy, x, y, X, Y,
         R, Theta, Lat, Lon, K, projection_correction, null,
         pseudodiff, harmonic, biharmonic, use_cuda, arraykernel,
-        BC, extension, fdxx, fdyy, fdxy)
+        bc!, extension, fdxx, fdyy, fdxy)
 end
 
 #########################################################

@@ -134,14 +134,13 @@ function forwardstep_isostasy!(
     t::T,
 ) where {T<:AbstractFloat}
 
-    if sstruct.Omega.BC == "zero_meancorner"
-        corner_bc!(u, sstruct.Omega.Nx, sstruct.Omega.Ny)
-    elseif sstruct.Omega.BC == "zero_meanedge"
-        edge_bc!(u, sstruct.Omega.Nx, sstruct.Omega.Ny)
-    end
+    # Order really matters here!
+    sstruct.Omega.bc!(u, sstruct.Omega.Nx, sstruct.Omega.Ny)
     update_bedrock!(sstruct, u)
 
     update_loadcolumns!(sstruct, sstruct.Hice(t))
+    update_elasticresponse!(sstruct)
+
     # Only update the geoid and sea level if geostate is interactive.
     # As integration requires smaller time steps than diagnostics,
     # only update geostate every sstruct.geostate.dt
@@ -153,7 +152,6 @@ function forwardstep_isostasy!(
         # println("Updated GeoState at t=$(seconds2years(t))")
     end
 
-    update_elasticresponse!(sstruct)
     dudt_isostasy!(dudt, u, sstruct, t)
     return nothing
 end
@@ -229,6 +227,7 @@ function corner_bc!(u::AbstractMatrix{<:AbstractFloat}, Nx::Int, Ny::Int)
     allowscalar() do
         u .-= ( view(u,1,1) + view(u,1,Nx) + view(u,Ny,1) + view(u,Ny,Nx) ) / 4
     end
+    return u
 end
 
 """
@@ -249,35 +248,35 @@ function edge_bc!(u::AbstractMatrix{<:AbstractFloat}, Nx::Int, Ny::Int)
         u .-= sum( view(u,1,:) + view(u,:,Nx) + view(u,Ny,:) + view(u,:,1) ) /
             (2*Nx + 2*Ny)
     end
+    return u
+end
+
+no_bc!(u::AbstractMatrix{<:AbstractFloat}, Nx::Int, Ny::Int) = nothing
+no_bc(u::AbstractMatrix{<:AbstractFloat}, Nx::Int, Ny::Int) = u
+
+function no_mean_bc!(u::AbstractMatrix{<:AbstractFloat}, Nx::Int, Ny::Int)
+    u .= u .- mean(u)
+    return u
+end
+
+function no_mean_bc(u::AbstractMatrix{<:AbstractFloat}, Nx::Int, Ny::Int)
+    u_bc = copy(u)
+    return no_mean_bc!(u_bc, Nx, Ny)
 end
 
 #####################################################
 # Elastic response
 #####################################################
-# """
-
-#     compute_elastic_response(Omega, tools, load)
-
-# For a computation domain `Omega`, compute the elastic response of the solid Earth
-# by convoluting the `load` with the Green's function stored in the pre-computed `tools`
-# (elements obtained from Farell 1972).
-# """
-# function compute_elastic_response(
-#     Omega::ComputationDomain{T},
-#     tools::PrecomputedFastiso{T},
-#     load::AbstractMatrix{T},
-# ) where {T<:AbstractFloat}
-#     return samesize_conv(load, tools.elasticgreen, Omega)
-# end
-
 """
 
     update_elasticresponse!(sstruct::SuperStruct)
 
 Update the elastic response by convoluting the Green's function with the load anom.
+To use coefficients differing from (Farell 1972), see [PrecomputedFastiso](@ref).
 """
 function update_elasticresponse!(sstruct::SuperStruct{<:AbstractFloat})
+    rgh = correct_surfacedisctortion(columnanom_load(sstruct), sstruct)
     sstruct.geostate.ue .= samesize_conv(sstruct.tools.elasticgreen,
-        loadanom_elasticgreen(sstruct), sstruct.Omega)
+        rgh, sstruct.Omega, no_bc)
     return nothing
 end

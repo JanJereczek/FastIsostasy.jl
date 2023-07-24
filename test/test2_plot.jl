@@ -28,11 +28,19 @@ function slice_spada(
     labels,
     xlabels,
     ylabels,
+    case,
 ) where {T<:AbstractFloat}
 
     ncases = length(vars)
     data = get_spada()
     keys = ["u_disc", "u_cap", "dudt_disc", "dudt_cap", "n_disc", "n_cap"]
+
+    if case == "viscous"
+        for k in eachindex(data["u_disc"])
+            data["u_disc"][k][:, 2] .-= data["u_disc"][1][:, 2]
+            data["u_cap"][k][:, 2] .-= data["u_cap"][1][:, 2]
+        end
+    end
 
     fig = Figure(resolution=(1600, 1200), fontsize = 35)
     nrows, ncols = 3, 2
@@ -114,7 +122,7 @@ function main(
 )
 
     N = 2^n
-    suffix = "N$(N)_$(kernel)"
+    suffix = "Nx$(N)_Ny$(N)_$(kernel)"
     sol_disc = load("data/test2/disc_$suffix.jld2")
     sol_cap = load("data/test2/cap_$suffix.jld2")
     res_disc = sol_disc["results"]
@@ -173,6 +181,7 @@ function main(
         res_disc.t_out, t_plot,
         plotvars,
         labels, xlabels, ylabels,
+        case,
     )
     plotname = "test2/$(case)_$suffix"
     save("plots/$plotname.png", response_fig)
@@ -180,7 +189,7 @@ function main(
 end
 
 cases = ["viscoelastic", "viscous"]
-for case in cases[2:2]
+for case in cases
     for n in 6:6
         main(case, n, kernel = "cpu")
     end

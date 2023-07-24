@@ -14,7 +14,7 @@ function main(
     Omega = ComputationDomain(W, n, use_cuda = use_cuda)
     c = PhysicalConstants(rho_ice = 0.931e3)
     G = 0.50605e11              # shear modulus (Pa)
-    nu = 0.5
+    nu = 0.28
     E = G * 2 * (1 + nu)
     lb = c.r_equator .- [6301e3, 5951e3, 5701e3]
     p = MultilayerEarth(
@@ -44,7 +44,8 @@ function main(
 
     sl0 = fill(-Inf, Omega.Nx, Omega.Ny)
     t1 = time()
-    results = fastisostasy(t_out, Omega, c, p, H_ice, sealevel_0=sl0, interactive_geostate=true)
+    results = fastisostasy(t_out, Omega, c, p, H_ice, sealevel_0 = sl0,
+        ODEsolver = "ExplicitEuler", interactive_geostate = true)
     t_fastiso = time() - t1
     println("Took $t_fastiso seconds!")
     println("-------------------------------------")
