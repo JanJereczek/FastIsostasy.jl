@@ -4,7 +4,7 @@ using CairoMakie
 using JLD2, DelimitedFiles
 include("helpers_plot.jl")
 
-n = 6
+n = 7
 heterogeneous = "none"
 global include_elastic = true
 
@@ -66,7 +66,7 @@ elseif heterogeneous == "upper-mantle"
 elseif heterogeneous == "none"
     seakon_files = ["E0L4V4", "E0L4V4"]
     fastiso_files = ["ref_$suffix.jld2", "no_litho_$suffix.jld2"]
-    elims = (-30, 30)
+    elims = (-20, 45)
     title1 = L"Homogeneous PREM configuration $\,$"
     title2 = L"No-lithosphere configuration $\,$"
 end

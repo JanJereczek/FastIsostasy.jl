@@ -32,7 +32,7 @@ function choose_case(case::String, Omega::ComputationDomain, c::PhysicalConstant
         p = MultilayerEarth(Omega, c, layer_boundaries = lb, layer_viscosities = lv)
     elseif case == "ref"
         lb1 = fill(100e3, Omega.Nx, Omega.Ny)
-        lb2 = fill(700e3, Omega.Nx, Omega.Ny)
+        lb2 = fill(670e3, Omega.Nx, Omega.Ny)
         lv1 = fill(0.5e21, Omega.Nx, Omega.Ny)
         lv2 = fill(5e21, Omega.Nx, Omega.Ny)
         lb = cat(lb1, lb2, dims=3)
