@@ -6,7 +6,7 @@ Update the geoid by convoluting the Green's function with the load anom.
 """
 function update_geoid!(sstruct::SuperStruct{<:AbstractFloat})
     sstruct.geostate.geoid .= samesize_conv(sstruct.tools.geoidgreen,
-        totalmass_anom(sstruct), sstruct.Omega)
+        mass_anom(sstruct), sstruct.Omega, no_mean_bc)
     return nothing
 end
 
@@ -77,13 +77,9 @@ function columnanom_full(sstruct::SuperStruct{<:AbstractFloat})
         columnanom_litho(sstruct)
 end
 
-function loadanom_elasticgreen(sstruct::SuperStruct{<:AbstractFloat})
-    return correct_surfacedisctortion(columnanom_load(sstruct), sstruct)
-end
-
-function overburdenmass_anom(sstruct::SuperStruct{<:AbstractFloat})
+function mass_anom(sstruct::SuperStruct{<:AbstractFloat})
     surface = (sstruct.Omega.dx * sstruct.Omega.dy)
-    return correct_surfacedisctortion(surface .* columnanom_load(sstruct), sstruct)
+    return correct_surfacedisctortion(surface .* columnanom_full(sstruct), sstruct)
 end
 
 function correct_surfacedisctortion(column::Matrix, sstruct::SuperStruct)

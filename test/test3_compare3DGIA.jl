@@ -4,7 +4,7 @@ using CairoMakie
 using JLD2, DelimitedFiles
 include("helpers_plot.jl")
 
-n = 7
+n = 6
 heterogeneous = "none"
 global include_elastic = true
 

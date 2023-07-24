@@ -114,7 +114,7 @@ function main(
 )
 
     N = 2^n
-    suffix = "N$(N)_$(kernel)"
+    suffix = "Nx$(N)_Ny$(N)_$(kernel)"
     sol_disc = load("data/test2/disc_$suffix.jld2")
     sol_cap = load("data/test2/cap_$suffix.jld2")
     res_disc = sol_disc["results"]
@@ -180,7 +180,7 @@ function main(
 end
 
 cases = ["viscoelastic", "viscous"]
-for case in cases[2:2]
+for case in cases
     for n in 6:6
         main(case, n, kernel = "cpu")
     end

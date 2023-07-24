@@ -60,7 +60,7 @@ function matrify(x::Vector{T}, Nx::Int, Ny::Int) where {T<:Real}
 end
 
 function samesize_conv(X::AbstractMatrix{T}, Y::AbstractMatrix{T},
-    Omega::ComputationDomain) where {T<:AbstractFloat}
+    Omega::ComputationDomain, bc::Function) where {T<:AbstractFloat}
     if iseven(Omega.Ny)
         i1 = Omega.My
     else
@@ -75,7 +75,8 @@ function samesize_conv(X::AbstractMatrix{T}, Y::AbstractMatrix{T},
     end
     j2 = 2*Omega.Nx-1-Omega.Mx
 
-    return view( conv(X, Y), i1:i2, j1:j2 )
+    convo = bc(conv(X, Y), 2*Omega.Nx-1, 2*Omega.Ny-1)
+    return view(convo, i1:i2, j1:j2 )
 end
 
 #####################################################
@@ -258,15 +259,13 @@ function get_effective_viscosity(
     layer_viscosities::Array{T, 3},
     layers_thickness::Array{T, 3},
     mantle_poissonratio::T,
-    # pseudodiff::AbstractMatrix{T},
 ) where {T<:AbstractFloat}
-
-    # Recursion has to start with half space = n-th layer:
-    effective_viscosity = layer_viscosities[:, :, end]
-    # p1, p2 = plan_fft(effective_viscosity), plan_ifft(effective_viscosity)
 
     incompressible_poissonratio = 0.5
     compressibility_scaling = (1 + incompressible_poissonratio) / (1 + mantle_poissonratio)
+
+    # Recursion has to start with half space = n-th layer:
+    effective_viscosity = layer_viscosities[:, :, end]
     if size(layer_viscosities, 3) > 1
         @inbounds for i in axes(layer_viscosities, 3)[1:end-1]
             channel_viscosity = layer_viscosities[:, :, end - i]
@@ -279,10 +278,8 @@ function get_effective_viscosity(
             )
             effective_viscosity .*= viscosity_scaling
         end
-        effective_compressible_viscosity = effective_viscosity .* compressibility_scaling
-    else
-        effective_compressible_viscosity = layer_viscosities[:, :, 1] .* compressibility_scaling
     end
+    effective_compressible_viscosity = effective_viscosity .* compressibility_scaling
     return seakon_calibration(effective_compressible_viscosity)
     # return effective_compressible_viscosity
 end
@@ -322,27 +319,61 @@ function three_layer_scaling(
     return (num1 + num2 + num3) ./ (denum1 + denum2 + denum3)
 end
 
-# function three_layer_scaling(
-#     # kappa::Matrix{T},
+# function get_effective_viscosity2(
+#     Omega::ComputationDomain{T},
+#     layer_viscosities::Array{T, 3},
+#     layers_thickness::Array{T, 3},
+#     mantle_poissonratio::T,
+# ) where {T<:AbstractFloat}
+
+#     incompressible_poissonratio = 0.5
+#     compressibility_scaling = (1 + incompressible_poissonratio) / (1 + mantle_poissonratio)
+
+#     effective_viscosity = layer_viscosities[:, :, end]
+#     if size(layer_viscosities, 3) > 1
+#         for i in axes(layer_viscosities, 3)[1:end-1]
+#             channel_viscosity = layer_viscosities[:, :, end - i]
+#             channel_thickness = layers_thickness[:, :, end - i + 1]
+#             viscosity_ratio = channel_viscosity ./ effective_viscosity
+#             update_effective_viscosity!(effective_viscosity, Omega, viscosity_ratio,
+#                 channel_thickness)
+#         end
+#     end
+#     return effective_viscosity .* compressibility_scaling
+# end
+
+# function update_effective_viscosity!(
+#     effective_viscosity,
+#     Omega,
+#     viscosity_ratio,
+#     channel_thickness,
+# )
+#     effective_viscosity .= real.( ifft( fft(effective_viscosity) .*
+#         # fft(three_layer_scaling(Omega, viscosity_ratio, channel_thickness)) ))
+#         fourier_three_layer_scaling(Omega, viscosity_ratio, channel_thickness) ))
+#     return effective_viscosity
+# end
+
+# function fourier_three_layer_scaling(
 #     Omega::ComputationDomain{T},
 #     visc_ratio::Matrix{T},
 #     channel_thickness::Matrix{T},
 # ) where {T<:AbstractFloat}
 
-#     ft_T = fft(channel_thickness)
-#     ft_visc_ratio = fft(visc_ratio)
-#     C = cosh.(ft_T .* Omega.pseudodiff)
-#     S = sinh.(ft_T .* Omega.pseudodiff)
+#     Tc = mean(channel_thickness)
+#     ft_visc_ratio = fft(visc_ratio) .+ 1e-10
+#     C = cosh.(Tc .* Omega.pseudodiff)
+#     S = sinh.(Tc .* Omega.pseudodiff)
 
 #     num1 = 2 .* ft_visc_ratio .* C .* S
-#     num2 = (1 .- ft_visc_ratio .^ 2) .* ft_T .^ 2 .* Omega.pseudodiff .^ 2
+#     num2 = (1 .- ft_visc_ratio .^ 2) .* Tc .^ 2 .* Omega.pseudodiff .^ 2
 #     num3 = ft_visc_ratio .^ 2 .* S .^ 2 + C .^ 2
 
 #     denum1 = (ft_visc_ratio .+ 1 ./ ft_visc_ratio) .* C .* S
-#     denum2 = (ft_visc_ratio .- 1 ./ ft_visc_ratio) .* ft_T .* Omega.pseudodiff
+#     denum2 = (ft_visc_ratio .- 1 ./ ft_visc_ratio) .* Tc .* Omega.pseudodiff
 #     denum3 = S .^ 2 + C .^ 2
     
-#     return real.(ifft( (num1 + num2 + num3) ./ (denum1 + denum2 + denum3) ))
+#     return (num1 + num2 + num3) ./ (denum1 + denum2 + denum3)
 # end
 
 """
