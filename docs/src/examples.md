@@ -8,7 +8,7 @@ We want to render a situation similar to the one depicted below:
 
 ![Schematic representation of the three-layer set-up.](assets/sketch_3layer_model_dark.png)
 
-Initializing a [`MultilayerEarth`](@ref) with parameters corresponding to this situation automatically computes the conversion from a 3D to a 2D problem. This can be simply executed by running:
+Initializing a [`LateralVariability`](@ref) with parameters corresponding to this situation automatically computes the conversion from a 3D to a 2D problem. This can be simply executed by running:
 
 ```@example 1
 W = 3000e3      # (m) half-width of the domain
@@ -18,10 +18,10 @@ c = PhysicalConstants()
 
 lv = [1e19, 1e21]       # (Pa*s)
 lb = [88e3, 400e3]      # (m)
-p = MultilayerEarth(Omega, c, layer_viscosities = lv, layer_boundaries = lb)
+p = LateralVariability(Omega, layer_viscosities = lv, layer_boundaries = lb)
 ```
 
-The next section shows how to use the now obtained `p::MultilayerEarth` for actual GIA computation.
+The next section shows how to use the now obtained `p::LateralVariability` for actual GIA computation.
 
 ## Simple load and geometry
 
@@ -94,7 +94,7 @@ W = 3000e3      # (m) half-width of the domain
 n = 8           # implies an NxN grid with N = 2^n = 256.
 Omega = ComputationDomain(W, n)
 c = PhysicalConstants()
-p = MultilayerEarth(Omega, c)
+p = LateralVariability(Omega)
 
 R = 1000e3                  # ice disc radius (m)
 H = 1000.0                  # ice disc thickness (m)
@@ -133,9 +133,8 @@ c = PhysicalConstants()
 
 lb = [88e3, 180e3, 280e3, 400e3]
 lv = get_wiens_layervisc(Omega)
-p = MultilayerEarth(
+p = LateralVariability(
     Omega,
-    c,
     layer_boundaries = lb,
     layer_viscosities = lv,
 )

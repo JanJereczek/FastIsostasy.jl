@@ -24,12 +24,7 @@ function main(; n=5)
 
     lb = [88e3, 180e3, 280e3, 400e3]
     lv = get_wiens_layervisc(Omega)
-    p = MultilayerEarth(
-        Omega,
-        c,
-        layer_boundaries = lb,
-        layer_viscosities = lv,
-    )
+    p = LateralVariability(Omega, layer_boundaries = lb, layer_viscosities = lv)
     ground_truth = copy(p.effective_viscosity)
 
     R = T(2000e3)               # ice disc radius (m)

@@ -12,18 +12,19 @@ function main(
     T = Float64
     W = T(3000e3)               # half-length of the square domain (m)
     Omega = ComputationDomain(W, n, use_cuda = use_cuda)
-    c = PhysicalConstants(rho_ice = 0.931e3)
+    c = PhysicalConstants(rho_ice = 0.931e3, rho_litho = 3.3e3, rho_mantle = 3.3e3)
+    #         layer_densities = [3.438e3, 3.871e3],
+
     G = 0.50605e11              # shear modulus (Pa)
     nu = 0.28
     E = G * 2 * (1 + nu)
     lb = c.r_equator .- [6301e3, 5951e3, 5701e3]
-    p = MultilayerEarth(
+    p = LateralVariability(
         Omega,
-        c,
         layer_boundaries = lb,
-        layer_densities = [3.438e3, 3.871e3],
         layer_viscosities = [1e21, 1e21, 2e21],
         litho_youngmodulus = E,
+        litho_poissonratio = nu,
         litho_poissonratio = nu,
     )
 

@@ -5,7 +5,7 @@
 ```@docs
 ComputationDomain
 PhysicalConstants
-MultilayerEarth
+LateralVariability
 RefGeoState
 GeoState
 PrecomputedFastiso

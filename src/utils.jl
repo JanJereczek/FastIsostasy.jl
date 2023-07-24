@@ -671,14 +671,13 @@ end
 function copystructs2cpu(
     Omega::ComputationDomain{T},
     c::PhysicalConstants{T},
-    p::MultilayerEarth{T},
+    p::LateralVariability{T},
 ) where {T<:AbstractFloat}
 
     Omega_cpu = ComputationDomain(Omega.Wx, Omega.Wy, Omega.Nx, Omega.Ny, use_cuda = false)
 
-    p_cpu = MultilayerEarth(
-        Omega_cpu,
-        c;
+    p_cpu = LateralVariability(
+        Omega_cpu;
         layer_boundaries = Array(p.layer_boundaries),
         layer_densities = Array(p.layer_densities),
         layer_viscosities = Array(p.layer_viscosities),

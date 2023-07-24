@@ -34,7 +34,7 @@ include("inversion.jl")
 # structs.jl
 export ComputationDomain
 export PhysicalConstants
-export MultilayerEarth
+export LateralVariability
 export PrecomputedFastiso
 export GeoState
 export SuperStruct

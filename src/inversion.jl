@@ -11,7 +11,7 @@ Kalman inversion will be available in future.
 struct ParamInversion
     Omega::ComputationDomain
     c::PhysicalConstants
-    p::MultilayerEarth
+    p::LateralVariability
     t::Vector
     y::Vector
     Hice::Vector{Matrix}
@@ -40,14 +40,14 @@ function ParamInversion(
     n1, n2 = size(u[1])
     Omega = ComputationDomain(W, n1)
     c = PhysicalConstants()
-    p = MultilayerEarth(Omega, c)
+    p = LateralVariability(Omega)
     return ParamInversion(Omega, c, p, t, u, Hice; kwargs...)
 end
 
 function ParamInversion(
     Omega::ComputationDomain,
     c::PhysicalConstants,
-    p::MultilayerEarth,
+    p::LateralVariability,
     t::Vector,
     U::Vector{Matrix{T}},
     Hice::Vector{Matrix{T}};

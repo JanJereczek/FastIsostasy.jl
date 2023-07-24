@@ -16,21 +16,13 @@ function main(n::Int, case::String; use_cuda::Bool = true, solver = "ExplicitEul
         channel_viscosity = fill(1e20, Omega.Nx, Omega.Ny)
         halfspace_viscosity = fill(1e21, Omega.Nx, Omega.Ny)
         lv = cat(channel_viscosity, halfspace_viscosity, dims=3)
-        p = MultilayerEarth(
-            Omega,
-            c,
-            layer_viscosities = lv,
-        )
+        p = LateralVariability(Omega, layer_viscosities = lv)
     elseif occursin("meanviscosity", case)
         log10_eta_channel = interpolate_visc_wiens_on_grid(Omega.X, Omega.Y)
         channel_viscosity = 10 .^ (log10_eta_channel)
         halfspace_viscosity = fill(1e21, Omega.Nx, Omega.Ny)
         lv = cat(channel_viscosity, halfspace_viscosity, dims=3)
-        p = MultilayerEarth(
-            Omega,
-            c,
-            layer_viscosities = lv,
-        )
+        p = LateralVariability(Omega, layer_viscosities = lv)
     elseif occursin("scaledviscosity", case)
         lb = [88e3, 180e3, 280e3, 400e3]
         halfspace_logviscosity = fill(21.0, Omega.Nx, Omega.Ny)
@@ -44,12 +36,7 @@ function main(n::Int, case::String; use_cuda::Bool = true, solver = "ExplicitEul
             halfspace_logviscosity,
             dims=3,
         )
-        p = MultilayerEarth(
-            Omega,
-            c,
-            layer_boundaries = lb,
-            layer_viscosities = lv,
-        )
+        p = LateralVariability(Omega, layer_boundaries = lb, layer_viscosities = lv)
     end
     
     kernel = use_cuda ? "gpu" : "cpu"

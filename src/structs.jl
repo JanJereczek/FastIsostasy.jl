@@ -150,25 +150,20 @@ end
 #########################################################
 """
 
-    MultilayerEarth
+    LateralVariability
 
 Return a struct containing all information related to the radially layered structure of the solid Earth and
 its parameters.
 """
-mutable struct MultilayerEarth{T<:AbstractFloat}
-    gravity::T
-    uppermantle_density::T
-    uppermantle_rhog::AbstractMatrix{T}
+mutable struct LateralVariability{T<:AbstractFloat}
     effective_viscosity::AbstractMatrix{T}
     litho_thickness::AbstractMatrix{T}
     litho_rigidity::AbstractMatrix{T}
     litho_poissonratio::T
     mantle_poissonratio::T
-    layer_densities::Vector{T}
     layer_viscosities::Array{T, 3}
     layer_boundaries::Array{T, 3}
 end
-
 
 litho_rigidity = 5e24               # (N*m)
 litho_youngmodulus = 6.6e10         # (N/m^2)
@@ -187,11 +182,9 @@ layer_boundaries = [88e3, 400e3]
 # layer_viscosities = [1e19, 1e21]u"Pa*s"      # (Bueler 2007, Ivins 2022, Fig 12 WAIS)
 # layer_boundaries = [88e3, 400e3]u"m"
 
-function MultilayerEarth(
-    Omega::ComputationDomain{T},
-    c::PhysicalConstants{T};
+function LateralVariability(
+    Omega::ComputationDomain{T};
     layer_boundaries::A = layer_boundaries,
-    layer_densities::Vector{T} = layer_densities,
     layer_viscosities::B = layer_viscosities,
     litho_youngmodulus::T = litho_youngmodulus,
     litho_poissonratio::T = litho_poissonratio,
@@ -210,34 +203,19 @@ function MultilayerEarth(
     end
 
     litho_thickness = layer_boundaries[:, :, 1]
-    litho_rigidity = get_rigidity.(
-        litho_thickness,
-        litho_youngmodulus,
-        litho_poissonratio,
-    )
+    litho_rigidity = get_rigidity.(litho_thickness,
+        litho_youngmodulus, litho_poissonratio)
 
     layers_thickness = diff( layer_boundaries, dims=3 )
-    # pseudodiff = kernelpromote(Omega.pseudodiff, Omega.arraykernel)
     effective_viscosity = get_effective_viscosity(
         Omega, layer_viscosities, layers_thickness, mantle_poissonratio)
 
-    uppermantle_gravity = 10.0
-    uppermantle_density = mean(layer_densities)
-    uppermantle_rhog = fill(uppermantle_gravity * uppermantle_density, Omega)
-    litho_rigidity, effective_viscosity, uppermantle_rhog = kernelpromote(
-        [litho_rigidity, effective_viscosity, uppermantle_rhog], Omega.arraykernel)
-    return MultilayerEarth(
-        c.g,
-        uppermantle_density,
-        uppermantle_rhog,
+    litho_rigidity, effective_viscosity = kernelpromote(
+        [litho_rigidity, effective_viscosity], Omega.arraykernel)
+    return LateralVariability(
         effective_viscosity,
-        litho_thickness,
-        litho_rigidity,
-        litho_poissonratio,
-        mantle_poissonratio,
-        layer_densities,
-        layer_viscosities,
-        layer_boundaries,
+        litho_thickness, litho_rigidity, litho_poissonratio,
+        mantle_poissonratio, layer_viscosities, layer_boundaries,
     )
 
 end
@@ -291,7 +269,7 @@ end
 
 """
 
-    PrecomputedFastiso(Omega::ComputationDomain, c::PhysicalConstants, p::MultilayerEarth)
+    PrecomputedFastiso(Omega::ComputationDomain, c::PhysicalConstants, p::LateralVariability)
 
 Return a `struct` containing pre-computed tools to perform forward-stepping of the model, namely:
  - elasticgreen::AbstractMatrix{T}
@@ -319,7 +297,7 @@ end
 function PrecomputedFastiso(
     Omega::ComputationDomain{T},
     c::PhysicalConstants{T},
-    p::MultilayerEarth{T};
+    p::LateralVariability{T};
     quad_precision::Int = 4,
 ) where {T<:AbstractFloat}
 
@@ -358,7 +336,7 @@ end
 Return a struct containing all the other structs needed for the forward integration of the model:
  - Omega::ComputationDomain{T}
  - c::PhysicalConstants{T}
- - p::MultilayerEarth{T}
+ - p::LateralVariability{T}
  - tools::PrecomputedFastiso{T}
  - Hice::Interpolations.Extrapolation
  - Hice_cpu::Interpolations.Extrapolation
@@ -371,7 +349,7 @@ Return a struct containing all the other structs needed for the forward integrat
 struct SuperStruct{T<:AbstractFloat}
     Omega::ComputationDomain{T}
     c::PhysicalConstants{T}
-    p::MultilayerEarth{T}
+    p::LateralVariability{T}
     tools::PrecomputedFastiso{T}
     Hice::Interpolations.Extrapolation
     Hice_cpu::Interpolations.Extrapolation
@@ -385,7 +363,7 @@ end
 function SuperStruct(
     Omega::ComputationDomain{T},
     c::PhysicalConstants{T},
-    p::MultilayerEarth{T},
+    p::LateralVariability{T},
     t_Hice_snapshots::Vector{T},
     Hice_snapshots::Vector{Matrix{T}},
     t_eta_snapshots::Vector{T},
@@ -441,7 +419,7 @@ end
 
 """
 
-    FastisoResults(Omega::ComputationDomain, c::PhysicalConstants, p::MultilayerEarth)
+    FastisoResults(Omega::ComputationDomain, c::PhysicalConstants, p::LateralVariability)
 
 Return a `struct` containing the results of forward integration:
  - `t_out` the time output vector
