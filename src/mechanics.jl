@@ -134,6 +134,7 @@ function forwardstep_isostasy!(
     t::T,
 ) where {T<:AbstractFloat}
 
+    # Order really matters here!
     sstruct.Omega.bc!(u, sstruct.Omega.Nx, sstruct.Omega.Ny)
     update_bedrock!(sstruct, u)
 

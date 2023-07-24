@@ -45,7 +45,7 @@ function main(
     sl0 = fill(-Inf, Omega.Nx, Omega.Ny)
     t1 = time()
     results = fastisostasy(t_out, Omega, c, p, H_ice, sealevel_0 = sl0,
-        ODEsolver = BS3(), interactive_geostate = true)
+        ODEsolver = "ExplicitEuler", interactive_geostate = true)
     t_fastiso = time() - t1
     println("Took $t_fastiso seconds!")
     println("-------------------------------------")
