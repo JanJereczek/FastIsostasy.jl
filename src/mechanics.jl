@@ -138,6 +138,8 @@ function forwardstep_isostasy!(
     update_bedrock!(sstruct, u)
 
     update_loadcolumns!(sstruct, sstruct.Hice(t))
+    update_elasticresponse!(sstruct)
+
     # Only update the geoid and sea level if geostate is interactive.
     # As integration requires smaller time steps than diagnostics,
     # only update geostate every sstruct.geostate.dt
@@ -149,7 +151,6 @@ function forwardstep_isostasy!(
         # println("Updated GeoState at t=$(seconds2years(t))")
     end
 
-    update_elasticresponse!(sstruct)
     dudt_isostasy!(dudt, u, sstruct, t)
     return nothing
 end
