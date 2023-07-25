@@ -90,7 +90,7 @@ function analytic_integrand(
 ) where {T<:AbstractFloat}
 
     # Here we assume that p-fields are constant over Omega
-    beta = mean(p.uppermantle_density) * c.g + mean(p.litho_rigidity) * kappa ^ 4
+    beta = c.rho_uppermantle * c.g + mean(p.litho_rigidity) * kappa ^ 4
     j0 = besselj0(kappa * r)
     j1 = besselj1(kappa * R0)
     eta = mean(p.effective_viscosity)
@@ -104,7 +104,7 @@ function equilibrium_integrand(
     p::LateralVariability,
     R0::T,
 ) where {T<:AbstractFloat}
-    beta = mean(p.uppermantle_density) * c.g + mean(p.litho_rigidity) * kappa ^ 4
+    beta = c.rho_uppermantle * c.g + mean(p.litho_rigidity) * kappa ^ 4
     j0 = besselj0(kappa * r)
     j1 = besselj1(kappa * R0)
     # integrand of inverse Hankel transform when t-->infty
@@ -146,7 +146,7 @@ function analytic_radial_integrand(
     x, y = Omega.X[i, j], Omega.Y[i, j]
     r = get_r(x, y)
 
-    beta = mean(p.uppermantle_density) * c.g + mean(p.litho_rigidity) * kappa ^ 4
+    beta = c.rho_uppermantle * c.g + mean(p.litho_rigidity) * kappa ^ 4
     j0 = besselj0(kappa * r)
     j1 = besselj1(kappa * R0)
     return (exp(-beta*t/(2*mean(p.effective_viscosity)*kappa))-1) * j0 * j1 / beta
@@ -172,4 +172,34 @@ function generate_gaussian_field(
     G = gauss_distr( Omega.X, Omega.Y, xy_peak, sigma )
     G = G ./ maximum(G) .* z_peak
     return fill(z_background, N, N) + G
+end
+
+function slice_along_x(Omega::ComputationDomain)
+    Nx, Ny = Omega.Nx, Omega.Ny
+    return Nx÷2:Nx, Ny÷2
+end
+
+function interpolate_spada_benchmark(c, data)
+    idx = sortperm(data[:, 1])
+    theta = data[:, 1][idx]
+    z = data[:, 2][idx]
+    x = deg2rad.(theta) .* c.r_equator
+    itp = linear_interpolation(x, z, extrapolation_bc = Flat())
+    return itp
+end
+
+function get_spada()
+    prefix ="data/test2/Spada/"
+    cases = ["u_cap", "u_disc", "dudt_cap", "dudt_disc", "n_cap", "n_disc"]
+    snapshots = ["0", "1", "2", "5", "10", "inf"]
+    data = Dict{String, Vector{Matrix{Float64}}}()
+    for case in cases
+        tmp = Matrix{Float64}[]
+        for snapshot in snapshots
+            fname = string(prefix, case, "_", snapshot, ".csv")
+            append!(tmp, [readdlm(fname, ',', Float64)])
+        end
+        data[case] = tmp
+    end
+    return data
 end

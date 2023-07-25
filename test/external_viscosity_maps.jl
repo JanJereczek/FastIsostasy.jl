@@ -29,7 +29,7 @@ function get_closest_eta(x::T, y::T, M::Matrix{T}) where {T<:AbstractFloat}
 end
 
 function load_wiens_2021(X, Y)
-    """
+    #=
     Columns:
         1. x coordinate (km)
         2. y coordinate (km)
@@ -38,7 +38,7 @@ function load_wiens_2021(X, Y)
         5. radius (km)
         6. longitude (deg)
         7. latitude (deg)
-    """
+    =#
     eta_100km = readdlm("data/visc_field/ANT_20_vis_100.txt")
     eta_200km = readdlm("data/visc_field/ANT_20_vis_200.txt")
     eta_300km = readdlm("data/visc_field/ANT_20_vis_300.txt")

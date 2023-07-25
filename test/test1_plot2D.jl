@@ -90,13 +90,13 @@ function main(
     end
 end
 
-"""
+#=
 Application cases:
     - "cn2layers"
     - "cn3layers"
     - "euler2layers"
     - "euler3layers"
-"""
+=#
 case = "ExplicitEuler"
 for n in 5:8
     main(n, case, make_anim = false)
