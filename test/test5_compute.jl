@@ -40,7 +40,7 @@ function main(n::Int, active_gs::Bool; use_cuda::Bool = false,solver = "Explicit
     println("-------------------------------------")
 
     if use_cuda
-        Omega, p = copystructs2cpu(Omega, c, p)
+        Omega, p = copystructs2cpu(Omega, p)
     end
 
     case = active_gs ? "geostate" : "isostate"

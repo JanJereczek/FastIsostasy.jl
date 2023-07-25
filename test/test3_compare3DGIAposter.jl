@@ -33,8 +33,8 @@ r = R .* deg2rad.(phi)
 idx = -1 .< r .< 3e6
 r_plot = r[idx]
 
-u_3DGIA = [load_results("data/Latychev/rt_E0L1V1_comma", idx),
-    load_results("data/Latychev/rt_E0L2V1_comma", idx)]
+u_3DGIA = [load_results("data/Latychev/E0L1V1", idx),
+    load_results("data/Latychev/E0L2V1", idx)]
 
 n = 7
 N = 2^n
@@ -56,8 +56,8 @@ function get_denseoutput_fastiso(suffix)
 end
 u_fastiso, Omega = get_denseoutput_fastiso(suffix)
 n1, n2 = size(u_fastiso[1][1])
-slicey, slicex = n1÷2, n2÷2:n2
-x = Omega.X[slicey, slicex]
+slicex, slicey = n1÷2:n1, n2÷2
+x = Omega.X[slicex, slicey]
 
 xlabels = [
     L"Position along great circle (m) $\,$",
@@ -83,7 +83,7 @@ cmap = cgrad(:jet, 11, categorical = true)
 for j in eachindex(u_3DGIA)
     for (i, k) in zip(eachindex(u_fastiso[j])[idx], eachindex(idx))
         itp = linear_interpolation(r_plot, u_3DGIA[j][:, i], extrapolation_bc = Flat())
-        lines!(axs[j], x, itp.(x) - u_fastiso[j][i][slicey, slicex],
+        lines!(axs[j], x, itp.(x) - u_fastiso[j][i][slicex, slicey],
             color = cmap[k], label = labels[i])
     end
 end

@@ -97,8 +97,8 @@ function slice_test3(
     for i in 1:ncases
         U = Uvec[i]
         n1, n2, nt = size(U)
-        slicey, slicex = Int(n1/2), 1:n2
-        theta = rad2deg.( Omega.X[slicey, slicex] ./ c.r_equator)
+        slicex, slicey = n1÷2:n1, n2÷2
+        theta = rad2deg.( Omega.X[slicex, slicey] ./ c.r_equator)
 
         for l in eachindex(t_plot)
             t = t_plot[l]
@@ -107,7 +107,7 @@ function slice_test3(
             lines!(
                 axs[i],
                 theta,
-                U[slicey, slicex, k],
+                U[slicex, slicey, k],
                 label = L"$t = %$tyr $ yr",
                 color = colors[l],
             )

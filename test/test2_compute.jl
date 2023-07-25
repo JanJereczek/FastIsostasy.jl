@@ -51,7 +51,7 @@ function main(
     println("-------------------------------------")
 
     if use_cuda
-        Omega, p = copystructs2cpu(Omega, c, p)
+        Omega, p = copystructs2cpu(Omega, p)
     end
 
     filename = "$(case)_Nx$(Omega.Nx)_Ny$(Omega.Ny)_$(kernel)"

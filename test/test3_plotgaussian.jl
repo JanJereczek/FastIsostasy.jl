@@ -130,8 +130,8 @@ function main(
         varplot = var_plots[j]
         nt = length(varplot)
         n1, n2 = size(varplot[1])
-        slicey, slicex = Int(n1/2), 1:n2
-        x = Omega.X[slicey, slicex]
+        slicex, slicey = 1:n1, n2÷2
+        x = Omega.X[slicex, slicey]
         for l in eachindex(t_plot)
             t = t_plot[l]
             k = argmin( (t_out .- t) .^ 2 )
@@ -139,7 +139,7 @@ function main(
             lin = lines!(
                 axs[i],
                 x,
-                varplot[k][slicey, slicex],
+                varplot[k][slicex, slicey],
                 label = L"$%$tyr $ yr",
                 color = colors[l],
             )

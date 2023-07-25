@@ -26,8 +26,8 @@ function get_denseoutput_fastiso(suffix)
 end
 u_fastiso, Omega = get_denseoutput_fastiso(suffix)
 n1, n2 = size(u_fastiso[1][1])
-slicey, slicex = Int(n1/2), 1:n2
-x = Omega.X[slicey, slicex]
+slicex, slicey = n1÷2:n1, n2÷2
+x = Omega.X[slicex, slicey]
 
 fig = Figure()
 ax = Axis(
@@ -37,7 +37,7 @@ ax = Axis(
 )
 labels = [L"Thinning lithosphere $\,$", L"Thickening lithosphere $\,$", L"No lithosphere $\,$"]
 for i in eachindex(u_fastiso)
-    lines!(ax, x, u_fastiso[i][end][slicey, slicex], label = labels[i])
+    lines!(ax, x, u_fastiso[i][end][slicex, slicey], label = labels[i])
 end
 
 Legend(fig[:,2], ax)

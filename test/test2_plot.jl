@@ -2,23 +2,8 @@ push!(LOAD_PATH, "../")
 using FastIsostasy
 using CairoMakie
 using JLD2
+include("helpers_compute.jl")
 include("helpers_plot.jl")
-
-function get_spada()
-    prefix ="data/test2/Spada/"
-    cases = ["u_cap", "u_disc", "dudt_cap", "dudt_disc", "n_cap", "n_disc"]
-    snapshots = ["0", "1", "2", "5", "10", "inf"]
-    data = Dict{String, Vector{Matrix{Float64}}}()
-    for case in cases
-        tmp = Matrix{Float64}[]
-        for snapshot in snapshots
-            fname = string(prefix, case, "_", snapshot, ".csv")
-            append!(tmp, [readdlm(fname, ',', Float64)])
-        end
-        data[case] = tmp
-    end
-    return data
-end
 
 function slice_spada(
     Omega::ComputationDomain,
@@ -69,8 +54,8 @@ function slice_spada(
         U = vars[i]
         nt = length(U)
         n1, n2 = size(U[1])
-        slicey, slicex = Int(round(n1/2)), Int(round(n2/2))
-        theta = rad2deg.( Omega.Theta[slicey, slicex:end] )
+        slicex, slicey = n1÷2:n1, n2÷2
+        theta = rad2deg.( Omega.Theta[slicex, slicey] )
 
         bm_data = data[keys[i]]
         for k in eachindex(bm_data)
@@ -90,7 +75,7 @@ function slice_spada(
             lines!(
                 axs[i],
                 theta,
-                U[k][slicey, slicex:end],
+                U[k][slicex, slicey],
                 label = L"$t = %$tyr $ yr",
                 color = colors[l],
             )

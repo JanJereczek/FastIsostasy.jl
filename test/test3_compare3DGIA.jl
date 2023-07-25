@@ -49,7 +49,7 @@ function mainplot(n, heterogeneous)
     suffix = "$(kernel)_Nx$(N)_Ny$(N)_dense"
 
     if heterogeneous == "lithosphere"
-        seakon_files = ["rt_E0L1V1_comma", "rt_E0L2V1_comma"]
+        seakon_files = ["E0L1V1", "E0L2V1"]
         fastiso_files = ["gaussian_lo_D_$suffix.jld2", "gaussian_hi_D_$suffix.jld2"]
         elims = (-30, 30)
         title1 = L"Gaussian thinning lithosphere $\,$"
@@ -72,8 +72,8 @@ function mainplot(n, heterogeneous)
     u_3DGIA = [load_results("data/Latychev/$file", idx) for file in seakon_files]
 
     n1, n2 = size(u_fastiso[1][1])
-    slicey, slicex = n1÷2, n2÷2:n2
-    x = Omega.X[slicey, slicex]
+    slicex, slicey = n1÷2:n1, n2÷2
+    x = Omega.X[slicex, slicey]
 
     xlabels = [
         L"Position along great circle (m) $\,$",
@@ -88,8 +88,6 @@ function mainplot(n, heterogeneous)
     yticklabelsvisible = [true, false]
     labels = [ L"t = %$t kyr $\,$" for t in vcat(0:1:5, 10:5:50) ]
     cmap = cgrad(:jet, length(labels), categorical = true)
-    # cvec = [:cornflowerblue, :royalblue, :mediumpurple, :rebeccapurple, :gray10]
-    # cmap = cgrad(cvec, length(labels), categorical = true)
 
     fig = Figure(resolution = (3200, 2000), fontsize = 60)
     axs = [Axis(
@@ -103,10 +101,10 @@ function mainplot(n, heterogeneous)
             itp = linear_interpolation(r_plot, u_3DGIA[j][:, i], extrapolation_bc = Flat())
             lines!(axs[j], r_plot, u_3DGIA[j][:, i], color = cmap[i],
                 label = labels[i], linewidth = 5)
-            lines!(axs[j], x, u_fastiso[j][i][slicey, slicex],
+            lines!(axs[j], x, u_fastiso[j][i][slicex, slicey],
                 linestyle = :dash, color = cmap[i], linewidth = 5)
             
-            lines!(axs[j+2], x, itp.(x) - u_fastiso[j][i][slicey, slicex],
+            lines!(axs[j+2], x, itp.(x) - u_fastiso[j][i][slicex, slicey],
                 color = cmap[i], label = labels[i], linewidth = 5)
         end
     end

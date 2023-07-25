@@ -57,7 +57,7 @@ function main(n::Int, case::String; use_cuda::Bool = true, solver = "ExplicitEul
     println("-------------------------------------")
 
     if use_cuda
-        Omega, p = copystructs2cpu(Omega, c, p)
+        Omega, p = copystructs2cpu(Omega, p)
     end
 
     jldsave(
