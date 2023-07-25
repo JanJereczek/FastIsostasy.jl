@@ -13,7 +13,7 @@ function fastisostasy(
     t_out::Vector{T},
     Omega::ComputationDomain{T},
     c::PhysicalConstants{T},
-    p::MultilayerEarth{T},
+    p::LateralVariability{T},
     t_Hice_snapshots::Vector{T},
     Hice_snapshots::Vector{Matrix{T}};
     ODEsolver::Any = "ExplicitEuler",
@@ -43,7 +43,7 @@ function fastisostasy(
     t_out::Vector{T},
     Omega::ComputationDomain{T},
     c::PhysicalConstants{T},
-    p::MultilayerEarth{T},
+    p::LateralVariability{T},
     Hice_snapshot::Matrix{T};
     kwargs...,
 ) where {T<:AbstractFloat}

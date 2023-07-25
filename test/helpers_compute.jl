@@ -52,7 +52,7 @@ function analytic_solution(
     r::T,
     t::T,
     c::PhysicalConstants,
-    p::MultilayerEarth,
+    p::LateralVariability,
     H0::T,
     R0::T,
     domains::Vector{T};
@@ -85,7 +85,7 @@ function analytic_integrand(
     r::T,
     t::T,
     c::PhysicalConstants,
-    p::MultilayerEarth,
+    p::LateralVariability,
     R0::T,
 ) where {T<:AbstractFloat}
 
@@ -101,7 +101,7 @@ function equilibrium_integrand(
     kappa::T,
     r::T,
     c::PhysicalConstants,
-    p::MultilayerEarth,
+    p::LateralVariability,
     R0::T,
 ) where {T<:AbstractFloat}
     beta = mean(p.uppermantle_density) * c.g + mean(p.litho_rigidity) * kappa ^ 4
@@ -121,7 +121,7 @@ function analytic_radial_solution(
     j::Int,
     t::T,
     c::PhysicalConstants,
-    p::MultilayerEarth,
+    p::LateralVariability,
     H0::T,
     R0::T,
     domains::Vector{T};
@@ -139,7 +139,7 @@ function analytic_radial_integrand(
     kappa::T,
     t::T,
     c::PhysicalConstants,
-    p::MultilayerEarth,
+    p::LateralVariability,
     R0::T,
 ) where {T<:AbstractFloat}
 
