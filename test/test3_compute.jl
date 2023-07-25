@@ -56,7 +56,7 @@ end
 
 for n in 6:6
     # ["gaussian_lo_D", "gaussian_hi_D", "no_litho", "ref", "gaussian_lo_η", "gaussian_hi_η"]
-    for case in ["ref"]
+    for case in ["gaussian_lo_D", "gaussian_hi_D", "no_litho", "ref", "gaussian_lo_η", "gaussian_hi_η"]
         main(n, case, use_cuda = false, dense_out = true)
     end
 end
