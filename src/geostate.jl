@@ -1,5 +1,4 @@
 """
-
     update_geoid!(sstruct::SuperStruct)
 
 Update the geoid by convoluting the Green's function with the load anom.
@@ -11,7 +10,6 @@ function update_geoid!(sstruct::SuperStruct{<:AbstractFloat})
 end
 
 """
-
     columnanom_ice(sstruct)
 
 Compute the density-scaled anomaly of the ice column w.r.t. the reference state.
@@ -21,7 +19,6 @@ function columnanom_ice(sstruct::SuperStruct{<:AbstractFloat})
 end
 
 """
-
     columnanom_water(sstruct)
 
 Compute the density-scaled anomaly of the (liquid) water column w.r.t. the reference state.
@@ -31,7 +28,6 @@ function columnanom_water(sstruct::SuperStruct{<:AbstractFloat})
 end
 
 """
-
     columnanom_mantle(sstruct)
 
 Compute the density-scaled anomaly of the mantle column w.r.t. the reference state.
@@ -41,7 +37,6 @@ function columnanom_mantle(sstruct::SuperStruct{<:AbstractFloat})
 end
 
 """
-
     columnanom_litho(sstruct)
 
 Compute the density-scaled anomaly of the lithosphere column w.r.t. the reference state.
@@ -51,7 +46,6 @@ function columnanom_litho(sstruct::SuperStruct{<:AbstractFloat})
 end
 
 """
-
     columnanom_load(sstruct)
 
 Compute the density-scaled anomaly of the load (ice + liquid water) column w.r.t.
@@ -62,7 +56,6 @@ function columnanom_load(sstruct::SuperStruct{<:AbstractFloat})
 end
 
 """
-
     columnanom_full(sstruct)
 
 Compute the density-scaled anomaly of the all the columns (ice + liquid water + mantle)
@@ -91,7 +84,6 @@ function correct_surfacedisctortion(column::Matrix, sstruct::SuperStruct)
 end
 
 """
-
     get_geoidgreen(sstruct::SuperStruct)
 
 Return the Green's function used to compute the anoms in geoid.
@@ -115,7 +107,6 @@ function unbounded_geoidgreen(R, c::PhysicalConstants{<:AbstractFloat})
 end
 
 """
-
     update_loadcolumns!(sstruct::SuperStruct, u::AbstractMatrix{T}, H_ice::AbstractMatrix{T})
 
 Update the load columns of a `::GeoState`.
@@ -139,7 +130,6 @@ function update_bedrock!(sstruct::SuperStruct{T}, u::AbstractMatrix{T}) where {T
 end
 
 """
-
     update_sealevel!(sstruct::SuperStruct)
 
 Update the sea-level by adding the various contributions.
@@ -157,7 +147,6 @@ function update_sealevel!(sstruct::SuperStruct{<:AbstractFloat})
 end
 
 """
-
     update_slc!(sstruct::SuperStruct)
 
 Update the sea-level contribution of melting above floatation, density correction
@@ -179,7 +168,6 @@ function update_slc!(sstruct::SuperStruct{<:AbstractFloat})
 end
 
 """
-
     update_V_af!(sstruct::SuperStruct)
 
 Update the ice volume above floatation.
@@ -199,7 +187,6 @@ function update_V_af!(sstruct::SuperStruct{<:AbstractFloat})
 end
 
 """
-
     update_slc_af!(sstruct::SuperStruct)
 
 Update the sea-level contribution of ice above floatation.
@@ -216,7 +203,6 @@ function update_slc_af!(sstruct::SuperStruct{<:AbstractFloat})
 end
 
 """
-
     update_V_pov!(sstruct::SuperStruct)
 
 Update the potential ocean volume.
@@ -235,7 +221,6 @@ function update_V_pov!(sstruct::SuperStruct{T}) where {T<:AbstractFloat}
 end
 
 """
-
     update_slc_pov!(sstruct::SuperStruct)
 
 Update the sea-level contribution associated with the potential ocean volume.
@@ -252,7 +237,6 @@ function update_slc_pov!(sstruct::SuperStruct{<:AbstractFloat})
 end
 
 """
-
     update_V_den!(sstruct::SuperStruct)
 
 Update the ocean volume associated with the density correction.
@@ -270,7 +254,6 @@ function update_V_den!(sstruct::SuperStruct{<:AbstractFloat})
 end
 
 """
-
     update_slc_den!(sstruct::SuperStruct)
 
 Update the sea-level contribution associated with the density correction.

@@ -3,7 +3,6 @@
 #####################################################
 
 """
-
     fastisostasy()
 
 Main function.
@@ -15,13 +14,13 @@ function fastisostasy(
     c::PhysicalConstants{T},
     p::LateralVariability{T},
     t_Hice_snapshots::Vector{T},
-    Hice_snapshots::Vector{Matrix{T}};
+    Hice_snapshots::Vector{<:AbstractMatrix{T}};
     ODEsolver::Any = "ExplicitEuler",
     dt::T = T(years2seconds(1.0)),
     t_eta_snapshots::Vector{T} = [t_out[1], t_out[end]],
     eta_snapshots::Vector{<:AbstractMatrix{T}} = [p.effective_viscosity, p.effective_viscosity],
-    u_0::Matrix{T} = copy(Omega.null),
-    ue_0::Matrix{T} = copy(Omega.null),
+    u_0::AbstractMatrix{T} = copy(Omega.null),
+    ue_0::AbstractMatrix{T} = copy(Omega.null),
     interactive_geostate::Bool = false,
     verbose::Bool = true,
     kwargs...,
@@ -44,7 +43,7 @@ function fastisostasy(
     Omega::ComputationDomain{T},
     c::PhysicalConstants{T},
     p::LateralVariability{T},
-    Hice_snapshot::Matrix{T};
+    Hice_snapshot::AbstractMatrix{T};
     kwargs...,
 ) where {T<:AbstractFloat}
     t_Hice_snapshots = [t_out[1], t_out[end]]
@@ -53,7 +52,6 @@ function fastisostasy(
 end
 
 """
-
     forward_isostasy()
 
 Forward-integrate the isostatic adjustment.
@@ -85,7 +83,11 @@ function forward_isostasy(
             end
 
             u .= sol(t_out[k], Val{0})
-            dudt .= sol(t_out[k], Val{1})
+            if k == 1
+                dudt_isostasy!(dudt, u, sstruct, t_out[k])
+            else
+                dudt .= sol(t_out[k], Val{1})
+            end
         else
             for t in t0:dt:t_out[k]
                 forwardstep_isostasy!(dudt, u, sstruct, t)
@@ -104,7 +106,6 @@ function forward_isostasy(
 end
 
 """
-
     init_results()
 
 Initialize some `Vector{Matrix}` where results shall be later stored.
@@ -121,7 +122,6 @@ function init_results(u, t_out)
 end
 
 """
-
     forwardstep_isostasy!(dudt, u, sstruct, t)
 
 Forward integrate the isostatic adjustment over a single time step by updating the
@@ -157,7 +157,6 @@ function forwardstep_isostasy!(
 end
 
 """
-
     dudt_isostasy!()
 
 Update the displacement rate `dudt` of the viscous response.
@@ -192,7 +191,6 @@ function dudt_isostasy!(
 end
 
 """
-
     explicit_euler!()
 
 Update the state `u` by performing an explicit Euler integration of its derivative `dudt`
@@ -212,7 +210,6 @@ end
 #####################################################
 
 """
-
     corner_bc(u)
 
 Apply boundary condition on Fourier collocation solution.
@@ -225,13 +222,12 @@ end
 
 function corner_bc!(u::AbstractMatrix{<:AbstractFloat}, Nx::Int, Ny::Int)
     allowscalar() do
-        u .-= ( view(u,1,1) + view(u,1,Nx) + view(u,Ny,1) + view(u,Ny,Nx) ) / 4
+        u .-= ( view(u,1,1) + view(u,Nx,1) + view(u,1,Ny) + view(u,Nx,Ny) ) / 4
     end
     return u
 end
 
 """
-
     edge_bc(u)
 
 Apply boundary condition on Fourier collocation solution.
@@ -245,7 +241,7 @@ end
 
 function edge_bc!(u::AbstractMatrix{<:AbstractFloat}, Nx::Int, Ny::Int)
     allowscalar() do
-        u .-= sum( view(u,1,:) + view(u,:,Nx) + view(u,Ny,:) + view(u,:,1) ) /
+        u .-= sum( view(u,1,:) + view(u,Nx,:) + view(u,:,Ny) + view(u,:,1) ) /
             (2*Nx + 2*Ny)
     end
     return u
@@ -268,7 +264,6 @@ end
 # Elastic response
 #####################################################
 """
-
     update_elasticresponse!(sstruct::SuperStruct)
 
 Update the elastic response by convoluting the Green's function with the load anom.

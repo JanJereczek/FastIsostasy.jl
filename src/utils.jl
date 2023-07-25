@@ -5,7 +5,6 @@
 global SECONDS_PER_YEAR = 60^2 * 24 * 365.25
 
 """
-
     years2seconds(t::Real)
 
 Convert input time `t` from years to seconds.
@@ -15,7 +14,6 @@ function years2seconds(t::Real)
 end
 
 """
-
     seconds2years(t::Real)
 
 Convert input time `t` from seconds to years.
@@ -25,7 +23,6 @@ function seconds2years(t::Real)
 end
 
 """
-
     m_per_sec2mm_per_yr(dudt::Real)
 
 Convert displacement rate `dudt` from \$ m \\, s^{-1} \$ to \$ mm \\, \\mathrm{yr}^{-1} \$.
@@ -42,7 +39,6 @@ Base.fill(x::Real, Omega::ComputationDomain) = fill(x, Omega.Nx, Omega.Ny)
 Base.fill(x::Real, sstruct::SuperStruct) = fill(x, sstruct.Omega.Nx, sstruct.Omega.Ny)
 
 """
-
     matrify(x, Nx, Ny)
 
 Generate a vector of constant matrices from a vector of constants.
@@ -52,7 +48,7 @@ function matrify(x::Vector{<:Real}, N::Int)
 end
 
 function matrify(x::Vector{T}, Nx::Int, Ny::Int) where {T<:Real}
-    X = zeros(T, Ny, Nx, length(x))
+    X = zeros(T, Nx, Ny, length(x))
     @inbounds for i in eachindex(x)
         X[:, :, i] = fill(x[i], Nx, Ny)
     end
@@ -61,22 +57,22 @@ end
 
 function samesize_conv(X::AbstractMatrix{T}, Y::AbstractMatrix{T},
     Omega::ComputationDomain, bc::Function) where {T<:AbstractFloat}
-    if iseven(Omega.Ny)
-        i1 = Omega.My
-    else
-        i1 = Omega.My+1
-    end
-    i2 = 2*Omega.Ny-1-Omega.My
-
     if iseven(Omega.Nx)
-        j1 = Omega.Mx
+        i1 = Omega.Mx
     else
-        j1 = Omega.Mx+1
+        i1 = Omega.Mx+1
     end
-    j2 = 2*Omega.Nx-1-Omega.Mx
+    i2 = 2*Omega.Nx-1-Omega.Mx
+
+    if iseven(Omega.Ny)
+        j1 = Omega.My
+    else
+        j1 = Omega.My+1
+    end
+    j2 = 2*Omega.Ny-1-Omega.My
 
     convo = bc(conv(X, Y), 2*Omega.Nx-1, 2*Omega.Ny-1)
-    return view(convo, i1:i2, j1:j2 )
+    return view(convo, i1:i2, j1:j2)
 end
 
 #####################################################
@@ -84,7 +80,6 @@ end
 #####################################################
 
 """
-
     get_r(x::T, y::T) where {T<:Real}
 
 Get euclidean distance of point (x, y) to origin.
@@ -92,18 +87,16 @@ Get euclidean distance of point (x, y) to origin.
 get_r(x::T, y::T) where {T<:Real} = sqrt(x^2 + y^2)
 
 """
-
     meshgrid(x, y)
 
 Return a 2D meshgrid spanned by `x, y`.
 """
 function meshgrid(x::AbstractVector{T}, y::AbstractVector{T}) where {T<:AbstractFloat}
     one_x, one_y = ones(T, length(x)), ones(T, length(y))
-    return one_y * x', Matrix((one_x * y')')
+    return x * one_y', one_x * y'
 end
 
 """
-
     dist2angulardist(r::Real)
 
 Convert Euclidean to angular distance along great circle.
@@ -114,7 +107,6 @@ function dist2angulardist(r::Real)
 end
 
 """
-
     scalefactor(lat::T, lon::T, lat0::T, lon0::T) where {T<:Real}
 
 Compute scaling factor of stereographic projection for a given latitude `lat`
@@ -138,7 +130,6 @@ function scalefactor(lat::AbstractMatrix{T}, lon::AbstractMatrix{T}, lat0::T, lo
 end
 
 """
-
     latlon2stereo(lat, lon, lat0, lon0)
 
 Compute stereographic projection (x,y) for a given latitude `lat`
@@ -172,7 +163,6 @@ function latlon2stereo(
 end
 
 """
-
     stereo2latlon(x, y, lat0, lon0)
 
 Compute the inverse stereographic projection `(lat, lon)` based on Cartesian coordinates
@@ -214,8 +204,8 @@ function gauss_distr(x::T, mu::Vector{T}, sigma::Matrix{T}) where {T<:AbstractFl
 end
 
 """
-
-    gauss_distr(X::AbstractMatrix{T}, Y::AbstractMatrix{T}, mu::Vector{<:Real}, sigma::Matrix{<:Real})
+    gauss_distr(X::AbstractMatrix{T}, Y::AbstractMatrix{T},
+        mu::Vector{<:Real}, sigma::Matrix{<:Real})
 
 Compute `Z = f(X,Y)` with `f` a Gaussian function parametrized by mean
 `mu` and covariance `sigma`.
@@ -234,7 +224,6 @@ function gauss_distr(X::AbstractMatrix{T}, Y::AbstractMatrix{T},
 end
 
 """
-
     get_rigidity(t::T, E::T, nu::T) where {T<:AbstractFloat}
 
 Compute rigidity `D` based on thickness `t`, Young modulus `E` and Poisson ration `nu`.
@@ -244,7 +233,6 @@ function get_rigidity(t::T, E::T, nu::T) where {T<:AbstractFloat}
 end
 
 """
-
     get_effective_viscosity(
         layer_viscosities::Vector{AbstractMatrix{T}},
         layers_thickness::Vector{T},
@@ -287,7 +275,6 @@ end
 seakon_calibration(eta) = exp.(log10.(1e21 ./ eta)) .* eta
 
 """
-
     three_layer_scaling(Omega::ComputationDomain, kappa::T, visc_ratio::T,
         channel_thickness::T)
 
@@ -303,7 +290,7 @@ function three_layer_scaling(
 
     # kappa is the wavenumber of the harmonic load. (see Cathles 1975, p.43)
     # we assume this is related to the size of the domain!
-    kappa = π / Omega.Wx
+    kappa = π / mean([Omega.Wx, Omega.Wy])
 
     C = cosh.(channel_thickness .* kappa)
     S = sinh.(channel_thickness .* kappa)
@@ -377,7 +364,6 @@ end
 # end
 
 """
-
     loginterp_viscosity(tvec, layer_viscosities, layers_thickness, pseudodiff)
 
 Compute a log-interpolator of the equivalent viscosity from provided viscosity
@@ -410,7 +396,6 @@ end
 #####################################################
 
 """
-
     load_prem()
 
 Load Preliminary Reference Earth Model (PREM) from Dzewonski and Anderson (1981).
@@ -451,7 +436,6 @@ function equilazation_layer()
 end
 
 """
-
     get_greenintegrand_coeffs(T)
 
 Return the load response coefficients with type `T`.
@@ -467,7 +451,6 @@ function get_greenintegrand_coeffs(T::Type;
 end
 
 """
-
     build_greenintegrand(distance::Vector{T}, 
         greenintegrand_coeffs::Vector{T}) where {T<:AbstractFloat}
 
@@ -488,7 +471,6 @@ function build_greenintegrand(
 end
 
 """
-
     get_loadgreen(r::T, rm::Vector{T}, greenintegrand_coeffs::Vector{T},     
         interp_greenintegrand_::Interpolations.Extrapolation) where {T<:AbstractFloat}
 
@@ -513,7 +495,6 @@ function get_loadgreen(
 end
 
 """
-
     get_elasticgreen(Omega, quad_support, quad_coeffs)
 
 Integrate load response over field by using 2D quadrature with specified
@@ -550,20 +531,18 @@ end
 #####################################################
 
 """
-
     get_quad_coeffs(T, n)
 
 Return support points and associated coefficients with specified Type
 for Gauss-Legendre quadrature.
 """
 function get_quad_coeffs(T::Type, n::Int)
-    x, w = gausslegendre( n )
+    x, w = gausslegendre(n)
     return T.(x), T.(w)
 end
 
 
 """
-
     quadrature1D(f, n, x1, x2)
 
 Compute 1D Gauss-Legendre quadrature of `f` between `x1` and `x2`
@@ -581,7 +560,6 @@ function quadrature1D(f::Union{Function, Interpolations.Extrapolation},
 end
 
 """
-
     quadrature2D(f, x, w, x1, x2, y1, y2)
 
 Return the integration of `f` over [`x1, x2`] x [`y1, y2`] with `x, w` some pre-computed
@@ -591,10 +569,8 @@ function quadrature2D(
     f::Function,
     x::Vector{T},
     w::Vector{T},
-    x1::T,
-    x2::T,
-    y1::T,
-    y2::T,
+    x1::T, x2::T,
+    y1::T, y2::T,
 ) where {T<:AbstractFloat}
 
     n = length(x)
@@ -611,7 +587,6 @@ function quadrature2D(
 end
 
 """
-
     get_normalized_lin_transform(x1, x2)
 
 Return parameters of linear function mapping `x1, x2` onto `-1, 1`.
@@ -624,7 +599,6 @@ function get_normalized_lin_transform(x1::T, x2::T) where {T<:AbstractFloat}
 end
 
 """
-
     normalized_lin_transform(y, m, p)
 
 Apply normalized linear transformation with slope `m` and bias `p` on `y`.
@@ -633,13 +607,11 @@ function normalized_lin_transform(y::T, m::T, p::T) where {T<:AbstractFloat}
     return (y-p)/m
 end
 
-
 #####################################################
 # Kernel utils
 #####################################################
 
 """
-
     kernelpromote(X, arraykernel)
 
 Promote X to the kernel (`Array` or `CuArray`) specified by `arraykernel`.
@@ -670,7 +642,6 @@ end
 
 function copystructs2cpu(
     Omega::ComputationDomain{T},
-    c::PhysicalConstants{T},
     p::LateralVariability{T},
 ) where {T<:AbstractFloat}
 

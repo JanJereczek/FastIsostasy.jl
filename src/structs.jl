@@ -22,7 +22,6 @@ end
 # Computation domain
 #########################################################
 """
-
     ComputationDomain
 
 Return a struct containing all information related to geometry of the domain
@@ -125,7 +124,6 @@ end
 # Physical constants
 #########################################################
 """
-
     PhysicalConstants
 
 Return a struct containing important physical constants.
@@ -149,7 +147,6 @@ end
 # Multi-layer Earth
 #########################################################
 """
-
     LateralVariability
 
 Return a struct containing all information related to the radially layered structure of the solid Earth and
@@ -221,7 +218,6 @@ function LateralVariability(
 end
 
 """
-
     RefGeoState
 
 Return a struct containing the reference geostate. We define the geostate to be all quantities related to sea-level.
@@ -241,7 +237,6 @@ struct RefGeoState{T<:AbstractFloat}
 end
 
 """
-
     GeoState
 
 Return a mutable struct containing the geostate which will be updated over the simulation.
@@ -268,7 +263,6 @@ mutable struct GeoState{T<:AbstractFloat}
 end
 
 """
-
     PrecomputedFastiso(Omega::ComputationDomain, c::PhysicalConstants, p::LateralVariability)
 
 Return a `struct` containing pre-computed tools to perform forward-stepping of the model, namely:
@@ -365,7 +359,7 @@ function SuperStruct(
     c::PhysicalConstants{T},
     p::LateralVariability{T},
     t_Hice_snapshots::Vector{T},
-    Hice_snapshots::Vector{Matrix{T}},
+    Hice_snapshots::Vector{<:AbstractMatrix{T}},
     t_eta_snapshots::Vector{T},
     eta_snapshots::Vector{<:AbstractMatrix{T}},
     interactive_geostate::Bool;
@@ -418,7 +412,6 @@ function SuperStruct(
 end
 
 """
-
     FastisoResults(Omega::ComputationDomain, c::PhysicalConstants, p::LateralVariability)
 
 Return a `struct` containing the results of forward integration:
