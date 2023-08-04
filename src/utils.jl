@@ -650,7 +650,6 @@ function copystructs2cpu(
     p_cpu = LateralVariability(
         Omega_cpu;
         layer_boundaries = Array(p.layer_boundaries),
-        layer_densities = Array(p.layer_densities),
         layer_viscosities = Array(p.layer_viscosities),
     )
 
