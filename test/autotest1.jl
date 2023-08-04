@@ -1,8 +1,11 @@
+# The philosophy of the automated tests is that they run relatively fast.
+# They aim to detect large errors, not to test the highest level of accuracy.
+# Therefore, we use a standard resolution of n = 6, Nx = Ny = 64, dx = dy ≈ 100km.
 function standard_config(; n::Int = 6)
     T = Float64
     W = T(3000e3)
     Omega = ComputationDomain(W, n)
-    return Omega
+    return T, Omega
 end
 
 function check_xy_ij()
@@ -31,7 +34,7 @@ end
 
 function benchmark1()
     # Generating numerical results
-    Omega = standard_config()
+    T, Omega = standard_config()
     c = PhysicalConstants()
     p = LateralVariability(Omega)
 
@@ -47,11 +50,12 @@ function benchmark1()
     # Comparing to analytical results
     slicex, slicey = slice_along_x(Omega)
     analytic_support = vcat(1.0e-14, 10 .^ (-10:0.05:-3), 1.0)
+
     for k in eachindex(t_out)
         t = t_out[k]
         analytic_solution_r(r) = analytic_solution(r, t, c, p, H, R, analytic_support)
         u_analytic = analytic_solution_r.( get_r.(
-            Omega.X[slicex, slicey], Omega.Y[slicex, slicey] .^ 2 ) )
+            Omega.X[slicex, slicey], Omega.Y[slicex, slicey] ) )
         @test mean(abs.(results.viscous[k][slicex, slicey] .- u_analytic)) < 15
         @test maximum(abs.(results.viscous[k][slicex, slicey] .- u_analytic)) < 30
     end
@@ -59,7 +63,7 @@ end
 
 function benchmark2()
     # Generating numerical results
-    Omega = standard_config()
+    T, Omega = standard_config()
     c = PhysicalConstants(rho_ice = 0.931e3)
     G, nu = 0.50605e11, 0.28        # shear modulus (Pa) and Poisson ratio of lithsphere
     E = G * 2 * (1 + nu)
@@ -103,7 +107,7 @@ function benchmark2()
 end
 
 function benchmark3()
-    Omega = standard_config()
+    T, Omega = standard_config()
     c = PhysicalConstants()
     R = T(1000e3)               # ice disc radius (m)
     H = T(1000)                 # ice disc thickness (m)
