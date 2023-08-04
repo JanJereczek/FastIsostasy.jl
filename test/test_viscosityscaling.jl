@@ -3,8 +3,8 @@ using FastIsostasy
 using JLD2
 using CairoMakie
 using Interpolations
-include("external_viscosity_maps.jl")
-include("helpers_plot.jl")
+include("helpers/viscmaps.jl")
+include("helpers/plot.jl")
 
 n = 6
 use_cuda = false
