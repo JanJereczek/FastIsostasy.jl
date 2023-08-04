@@ -4,17 +4,19 @@ using CairoMakie
 using JLD2, DelimitedFiles
 include("helpers_plot.jl")
 
-function load_results(dir::String, idx)
+function load_results(dir::String, x_lb::Real, x_ub::Real)
     files = readdir(dir)
-    nr = size( readdlm(joinpath(dir, files[1]), ','), 1 )
-    u = zeros(nr, length(files))
+    
+    x_full = readdlm(joinpath(dir, files[1]), ',')[:, 1]
+    idx = x_lb .< x_full .< x_ub
+    x = x_full[idx]
+
+    u = zeros(length(x), length(files))
     for i in eachindex(files)
         file = files[i]
-        println( file, typeof( readdlm(joinpath(dir, file), ',')[:, 1] ) )
-        u[:, i] = readdlm(joinpath(dir, file), ',')[:, 2]
+        # println( file, typeof( readdlm(joinpath(dir, file), ',')[:, 1] ) )
+        u[:, i] = readdlm(joinpath(dir, file), ',')[idx, 2]
     end
-
-    u_plot = u[idx, :]
 
     if include_elastic
         u_3DGIA = u_plot
@@ -22,7 +24,7 @@ function load_results(dir::String, idx)
         u_3DGIA = u_plot .- u_plot[:, 1]
     end
 
-    return u_3DGIA
+    return x, u_3DGIA
 end
 
 function get_denseoutput_fastiso(fastiso_files)
@@ -38,12 +40,6 @@ function get_denseoutput_fastiso(fastiso_files)
 end
 
 function mainplot(n, heterogeneous)
-    phi = -180:0.1:180
-    R = 6.371e6
-    r = R .* deg2rad.(phi)
-    idx = -1 .< r .< 3e6
-    r_plot = r[idx]
-
     N = 2^n
     kernel = "cpu"
     suffix = "$(kernel)_Nx$(N)_Ny$(N)_dense"
