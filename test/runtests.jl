@@ -10,6 +10,6 @@ include("helpers_compute.jl")
 @testset "FastIsostasy.jl" begin
     check_xy_ij()
     check_stereographic()
-    # benchmark1()
+    benchmark1()
     benchmark2()
 end

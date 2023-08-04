@@ -55,7 +55,7 @@ end
 function benchmark1()
     # Generating numerical results
     T, Omega = standard_config()
-    c = PhysicalConstants()
+    c = PhysicalConstants(rho_litho = 0.0)
     p = LateralVariability(Omega)
 
     R = T(1000e3)               # ice disc radius (m)
@@ -70,15 +70,17 @@ function benchmark1()
     # Comparing to analytical results
     slicex, slicey = slice_along_x(Omega)
     analytic_support = vcat(1.0e-14, 10 .^ (-10:0.05:-3), 1.0)
-
+    fig, axs = comparison_figure(1)
+    x, y = Omega.X[slicex, slicey], Omega.Y[slicex, slicey]
     for k in eachindex(t_out)
         t = t_out[k]
         analytic_solution_r(r) = analytic_solution(r, t, c, p, H, R, analytic_support)
-        u_analytic = analytic_solution_r.( get_r.(
-            Omega.X[slicex, slicey], Omega.Y[slicex, slicey] ) )
-        @test mean(abs.(results.viscous[k][slicex, slicey] .- u_analytic)) < 15
-        @test maximum(abs.(results.viscous[k][slicex, slicey] .- u_analytic)) < 30
+        u_analytic = analytic_solution_r.( get_r.(x, y) )
+        @test mean(abs.(results.viscous[k][slicex, slicey] .- u_analytic)) < 5
+        @test maximum(abs.(results.viscous[k][slicex, slicey] .- u_analytic)) < 12
+        update_compfig!(axs, [results.viscous[k][slicex, slicey]], [u_analytic])
     end
+    save("testplots/benchmark1/plot.png", fig)
 end
 
 function benchmark2()

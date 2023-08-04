@@ -137,7 +137,7 @@ Base.@kwdef struct PhysicalConstants{T<:AbstractFloat}
     G::T = 6.674e-11                        # Gravity constant (m^3 kg^-1 s^-2)
     seconds_per_year::T = SECONDS_PER_YEAR  # (s)
     rho_ice::T = 0.910e3                    # (kg/m^3)
-    rho_water::T = 1.023e3                  # (kg/m^3)
+    rho_water::T = 1e3                      # (kg/m^3)
     rho_seawater::T = 1.023e3               # (kg/m^3)
     rho_uppermantle::T = 3.7e3              # Mean density of topmost upper mantle (kg m^-3)
     rho_litho::T = 2.6e3                    # Mean density of lithosphere (kg m^-3)
