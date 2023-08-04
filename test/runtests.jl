@@ -16,9 +16,6 @@ include("../publication_v1.0/test3/test3_cases.jl")
     benchmark3()
 end
 
-# The philosophy of the automated tests is that they run relatively fast.
-# They aim to detect large errors, not to test the highest level of accuracy.
-# Therefore, we use a standard resolution of n = 6, Nx = Ny = 64, dx = dy ≈ 100km.
 function standard_config(; n::Int = 6)
     T = Float64
     W = T(3000e3)
@@ -45,8 +42,6 @@ function update_compfig!(axs::Vector{Axis}, fi::Vector, bm::Vector)
         lines!(axs[i], fi[i], color = clr, linestyle = :dash)
     end
 end
-
-
 
 function check_xy_ij()
     x, y = 1.0:10, 1.0:5
