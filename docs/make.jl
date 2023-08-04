@@ -32,18 +32,9 @@ makedocs(
     authors = "Jan Swierczek-Jereczek",
     pages = PAGES,
     doctest = CI,
-    draft = true,
+    draft = false,
 )
-# TODO write script making video of double well for large logo.
 
 deploydocs(;
     repo="github.com/JanJereczek/FastIsostasy.jl",
 )
-
-# if CI
-#     deploydocs(
-#         repo = "github.com/JuliaDynamics/Attractors.jl.git",
-#         target = "build",
-#         push_preview = true
-#     )
-# end
