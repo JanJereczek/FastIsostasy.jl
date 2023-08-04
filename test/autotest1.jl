@@ -8,6 +8,26 @@ function standard_config(; n::Int = 6)
     return T, Omega
 end
 
+function comparison_figure(n)
+    fig = Figure()
+    axs = [Axis(fig[i, 1]) for i in 1:n]
+    return fig, axs
+end
+
+function update_compfig!(axs::Vector{Axis}, fi::Vector, bm::Vector)
+    if length(axs) == length(fi) == length(bm)
+        nothing
+    else
+        error("Vectors don't have matching length.")
+    end
+
+    clr = RGBf(rand(3)...)
+    for i in eachindex(axs)
+        lines!(axs[i], bm[i], color = clr)
+        lines!(axs[i], fi[i], color = clr, linestyle = :dash)
+    end
+end
+
 function check_xy_ij()
     x, y = 1.0:10, 1.0:5
     X, Y = meshgrid(collect(x), collect(y))
@@ -89,20 +109,37 @@ function benchmark2()
             H_ice = stereo_ice_cap(Omega, alpha, Hmax)
         end
         results = fastisostasy(t_out, Omega, c, p, H_ice, sealevel_0 = sl0,
-            ODEsolver = BS3(), interactive_geostate = true, verbose = true)
+            ODEsolver = BS3(), interactive_geostate = true, verbose = false)
         
         # Compare to 1D GIA models benchmark
         data = get_spada()
+        fig, axs = comparison_figure(3)
+        u_itp_0 = interpolate_spada_benchmark(c, data["u_$case"][1])
+
         for k in eachindex(t_out)
             u_itp = interpolate_spada_benchmark(c, data["u_$case"][k])
             dudt_itp = interpolate_spada_benchmark(c, data["dudt_$case"][k])
             n_itp = interpolate_spada_benchmark(c, data["n_$case"][k])
 
-            m_u = mean(abs.(results.viscous[k][slicex, slicey] .- u_itp.(x)))
-            m_dudt = mean(abs.(results.displacement_rate[k][slicex, slicey] .- dudt_itp.(x)))
-            m_n = mean(abs.(results.geoid[k][slicex, slicey] .- n_itp.(x)))
-            println("$m_u,  $m_dudt, $m_n")
+            u_bm = u_itp.(x) .- u_itp_0.(x)
+            dudt_bm = dudt_itp.(x)
+            n_bm = n_itp.(x)
+
+            u_fi = results.viscous[k][slicex, slicey]
+            dudt_fi = m_per_sec2mm_per_yr.(results.displacement_rate[k][slicex, slicey])
+            n_fi = results.geoid[k][slicex, slicey]
+
+            update_compfig!(axs, [u_fi, dudt_fi, n_fi], [u_bm, dudt_bm, n_bm])
+            m_u = mean(abs.(u_fi .- u_bm))
+            m_dudt = mean(abs.(dudt_fi .- dudt_bm))
+            m_n = mean(abs.(n_fi .- n_bm))
+
+            @test m_u < 20
+            @test m_dudt < 3
+            @test m_n < 3
+            # println("$m_u,  $m_dudt, $m_n")
         end
+        save("testplots/benchmark2/$case.png", fig)
     end
 end
 
