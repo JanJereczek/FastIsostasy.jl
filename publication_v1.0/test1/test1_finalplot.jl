@@ -4,8 +4,8 @@ using CairoMakie
 using SpecialFunctions
 using JLD2
 using LinearAlgebra
-include("helpers_compute.jl")
-include("helpers_plot.jl")
+include("../test/helpers/compute.jl")
+include("../test/helpers/plot.jl")
 
 function main()
 
@@ -14,7 +14,7 @@ function main()
     N2 = Int(N/2)
     N4 = Int(N/4)
     hash = "$(case)_N$(N)_gpu_isostate"
-    sol = load("data/test1/$hash.jld2")
+    sol = load("../data/test1/$hash.jld2")
     Omega, c, p, H, R = sol["Omega"], sol["c"], sol["p"], sol["H"], sol["R"]
     results = sol["results"]
 
@@ -160,7 +160,7 @@ function main()
 
     for N in Nvec
         hash = "$(case)_N$(N)_gpu_isostate"
-        sol = load("data/test1/$hash.jld2")
+        sol = load("../data/test1/$hash.jld2")
 
         islice, jslice = Int(round(N/2)), Int(round(N/2))
         Omega, c, p, H, R = sol["Omega"], sol["c"], sol["p"], sol["H"], sol["R"]
@@ -211,7 +211,7 @@ function main()
         delta_x = Float64[]
         for N in Nvec
             hash = "$(case)_N$(N)_$(kernel)_isostate"
-            sol = load("data/test1/$hash.jld2")
+            sol = load("../data/test1/$hash.jld2")
             append!(runtime, sol["t_fastiso"])
             append!(delta_x, 2*sol["Omega"].Wx * 1e-3 / N)
         end

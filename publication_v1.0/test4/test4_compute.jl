@@ -3,8 +3,8 @@ using FastIsostasy
 using JLD2
 using CairoMakie
 using Interpolations
-include("helpers_compute.jl")
-include("external_viscosity_maps.jl")
+include("../test/helpers/compute.jl")
+include("../test/helpers/viscmaps.jl")
 
 function main(n::Int, case::String; use_cuda::Bool = true, solver = "ExplicitEuler")
 
@@ -61,7 +61,7 @@ function main(n::Int, case::String; use_cuda::Bool = true, solver = "ExplicitEul
     end
 
     jldsave(
-        "data/test4/discload_nonlocal_$(case)_Nx$(Omega.Nx)_Ny$(Omega.Ny).jld2",
+        "../data/test4/discload_nonlocal_$(case)_Nx$(Omega.Nx)_Ny$(Omega.Ny).jld2",
         Omega = Omega, c = c, p = p,
         results = results,
         t_fastiso = t_fastiso,

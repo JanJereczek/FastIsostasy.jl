@@ -5,8 +5,8 @@ using Test
 using SpecialFunctions
 using JLD2
 using Interpolations
-include("helpers_compute.jl")
-include("helpers_plot.jl")
+include("../test/helpers/compute.jl")
+include("../test/helpers/plot.jl")
 
 function main(
     n::Int,             # 2^n cells on domain (1)
@@ -20,7 +20,7 @@ function main(
     timespan = years2seconds.([0.0, 5e4])       # (yr) -> (s)
     dt_out = years2seconds(100.0)               # (yr) -> (s), time step for saving output
     t_vec = timespan[1]:dt_out:timespan[2]      # (s)
-    sol = load("data/test1/$(case)_N$(N)_cpu.jld2")
+    sol = load("../data/test1/$(case)_N$(N)_cpu.jld2")
     R, H, Omega, c, p = sol["R"], sol["H"], sol["Omega"], sol["c"], sol["p"]
     results = sol["results"]
     u3D_elastic, u3D_viscous = results.elastic, results.viscous
@@ -41,12 +41,12 @@ function main(
             extrapolation_bc = NaN,
         )
         jldsave(
-            "data/test1_analyticalinterpolator_N$N.jld2",
+            "../data/test1_analyticalinterpolator_N$N.jld2",
             u_analytic_interp = u_analytic_interp,
         )
     else
         u_analytic_interp = load(
-            "data/test1/analytical_solution_interpolator_N=$(Omega.N).jld2",
+            "../data/test1/analytical_solution_interpolator_N=$(Omega.N).jld2",
             "u_analytic_interp",
         )
     end

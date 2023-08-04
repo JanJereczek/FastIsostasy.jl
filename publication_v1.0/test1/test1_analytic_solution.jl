@@ -4,7 +4,7 @@ using Test
 using SpecialFunctions
 using JLD2
 using Interpolations
-include("helpers_compute.jl")
+include("../test/helpers/compute.jl")
 
 function main(
     n::Int,                     # 2^n x 2^n cells on domain, (1)

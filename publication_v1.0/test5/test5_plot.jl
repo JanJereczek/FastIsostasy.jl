@@ -3,9 +3,9 @@ using FastIsostasy
 using JLD2
 using CairoMakie
 using LaTeXStrings
-include("helpers_plot.jl")
-include("external_load_maps.jl")
-include("external_viscosity_maps.jl")
+include("../test/helpers/plot.jl")
+include("../test/helpers/loadmaps.jl")
+include("../test/helpers/viscmaps.jl")
 
 function main(
     n::Int,             # 2^n cells on domain (1)
@@ -14,7 +14,7 @@ function main(
 
     N = 2^n
     filekey = "$(case)_Nx$(N)_Ny$(N)"
-    sol = load("data/test5/$filekey.jld2")
+    sol = load("../data/test5/$filekey.jld2")
     results = sol["results"]
     t_out = results.t_out
     t_out_kyr = round.(seconds2years.(t_out) ./ 1e3, digits=1)

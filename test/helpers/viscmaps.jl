@@ -39,9 +39,9 @@ function load_wiens_2021(X, Y)
         6. longitude (deg)
         7. latitude (deg)
     =#
-    eta_100km = readdlm("data/visc_field/ANT_20_vis_100.txt")
-    eta_200km = readdlm("data/visc_field/ANT_20_vis_200.txt")
-    eta_300km = readdlm("data/visc_field/ANT_20_vis_300.txt")
+    eta_100km = readdlm("../data/visc_field/ANT_20_vis_100.txt")
+    eta_200km = readdlm("../data/visc_field/ANT_20_vis_200.txt")
+    eta_300km = readdlm("../data/visc_field/ANT_20_vis_300.txt")
     z = range( 100e3, stop = 300e3, step = 100e3 )
     nz = length(z)
 
@@ -71,7 +71,7 @@ function interpolate_viscosity_xy(X, Y, Eta, Eta_mean)
         extrapolation_bc = Flat(),
     )
     jldsave(
-        "data/wiens_viscosity_map.jld2",
+        "../data/wiens_viscosity_map.jld2",
         eta = Eta,
         eta_mean = Eta_mean[:, :, 1],
         eta_interpolators = eta_interpolators,
@@ -143,7 +143,7 @@ end
 
 function interpolate_visc_wiens_on_grid(X, Y)
     eta_mean_interpolator = load(
-        "data/visc_field/doug_viscosity_map.jld2",
+        "../data/visc_field/doug_viscosity_map.jld2",
         "eta_mean_interpolator",
     )
     return eta_mean_interpolator.(X, Y)

@@ -2,7 +2,7 @@ push!(LOAD_PATH, "../")
 using FastIsostasy
 using CairoMakie
 using JLD2
-include("helpers_plot.jl")
+include("helpers/plot.jl")
 
 function main(
     n::Int;
@@ -10,7 +10,7 @@ function main(
 )
     N = 2^n
     suffix = "viscmap_N$N"
-    sol_het = load("data/test4/discload_wiens_scaledviscosity_N$N.jld2")
+    sol_het = load("../data/test4/discload_wiens_scaledviscosity_N$N.jld2")
     Omega, p = sol_het["Omega"], sol_het["p"]
     points = [
         CartesianIndex(2^(n-6) * 20, 2^(n-6) * 24),

@@ -2,7 +2,7 @@ push!(LOAD_PATH, "../")
 using FastIsostasy
 using CairoMakie
 using JLD2
-include("helpers_plot.jl")
+include("../test/helpers/plot.jl")
 
 function main(
     n::Int;             # 2^n cells on domain (1)
@@ -12,10 +12,10 @@ function main(
     N = 2^n
     kernel = "cpu"
     suffix = "$(kernel)_Nx$(N)_Ny$(N)_dense"
-    sol_lo_D = load("data/test3/gaussian_lo_D_$suffix.jld2")
-    sol_hi_D = load("data/test3/gaussian_hi_D_$suffix.jld2")
-    sol_lo_η = load("data/test3/gaussian_lo_η_$suffix.jld2")
-    sol_hi_η = load("data/test3/gaussian_hi_η_$suffix.jld2")
+    sol_lo_D = load("../data/test3/gaussian_lo_D_$suffix.jld2")
+    sol_hi_D = load("../data/test3/gaussian_hi_D_$suffix.jld2")
+    sol_lo_η = load("../data/test3/gaussian_lo_η_$suffix.jld2")
+    sol_hi_η = load("../data/test3/gaussian_hi_η_$suffix.jld2")
 
     sols = [sol_lo_D, sol_hi_D, sol_lo_η, sol_hi_η]
     results = [sol["results"] for sol in sols]

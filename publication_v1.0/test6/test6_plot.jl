@@ -2,7 +2,7 @@ push!(LOAD_PATH, "../")
 using FastIsostasy, JLD2, CairoMakie
 
 function main(; n=5)
-    sol = load("data/test6/n=$n.jld2")
+    sol = load("../data/test6/n=$n.jld2")
     ground_truth, paraminv = sol["ground_truth"], sol["paraminv"]
 
     titles = [L"True viscosity field $\,$", L"Estimated viscosity field $\,$"]

@@ -1,18 +1,17 @@
 push!(LOAD_PATH, "../")
 using FastIsostasy
 using JLD2
-include("helpers_compute.jl")
+include("../test/helpers/compute.jl")
 
 function main(
-    Nx::Int,
-    Ny::Int;
+    n::Int;                     # 2^n x 2^n cells on domain, (1)
     use_cuda::Bool = false,
     solver::Any = "ExplicitEuler",
     active_gs::Bool = true,
 )
     T = Float64
     W = T(3000e3)               # half-length of the square domain (m)
-    Omega = ComputationDomain(W, W, Nx, Ny, use_cuda = use_cuda)
+    Omega = ComputationDomain(W, n, use_cuda = use_cuda)
     c = PhysicalConstants()
     p = LateralVariability(Omega)
 
@@ -36,9 +35,15 @@ function main(
     end
 
     gs = active_gs ? "geostate" : "isostate"
-    filename = "$(solver)_Nx$(Omega.Nx)_Ny$(Omega.Ny)_$(kernel)_$(gs)"
+    if solver == BS3()
+        solvername = "BS3"
+    elseif solver == "ExplicitEuler"
+        solvername = "ExplicitEuler"
+    end
+
+    filename = "$(solvername)_Nx$(Omega.Nx)_Ny$(Omega.Ny)_$(kernel)_$(gs)"
     jldsave(
-        "data/test1/$filename.jld2",
+        "../data/test1/$filename.jld2",
         Omega = Omega, c = c, p = p,
         results = results,
         t_fastiso = t_fastiso,
@@ -46,5 +51,30 @@ function main(
     )
 end
 
-main(63, 64, use_cuda = false, solver = "ExplicitEuler", active_gs = false)
+for use_cuda in [false] # [false, true]
+    for active_gs in [false] # [false, true]
+        for n in 8:8 # 3:8
+            main(n, use_cuda = use_cuda, solver = BS3(), active_gs = active_gs)
+        end
+    end
+end
 
+#=
+Slight speed up if using powers of 2:
+
+This file:
+main(n, use_cuda = false, solver = BS3(), active_gs = false)
+Took 0.6100420951843262 seconds!
+
+main(n, use_cuda = false, solver = "ExplicitEuler", active_gs = false)
+Took 14.107969999313354 seconds!
+
+------------------------------------
+
+test1_rectangle.jl:
+main(63, 64, use_cuda = false, solver = BS3(), active_gs = false)
+Took 0.6303250789642334 seconds!
+
+main(63, 64, use_cuda = false, solver = "ExplicitEuler", active_gs = false)
+Took 14.486158847808838 seconds!
+=#

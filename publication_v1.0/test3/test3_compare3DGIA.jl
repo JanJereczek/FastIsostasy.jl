@@ -2,9 +2,9 @@ push!(LOAD_PATH, "../")
 using FastIsostasy
 using CairoMakie
 using JLD2, DelimitedFiles
-include("helpers_plot.jl")
+include("../test/helpers/plot.jl")
 
-function load_results(dir::String, x_lb::Real, x_ub::Real)
+function load_latychev(dir::String, x_lb::Real, x_ub::Real)
     files = readdir(dir)
     
     x_full = readdlm(joinpath(dir, files[1]), ',')[:, 1]
@@ -28,7 +28,7 @@ function load_results(dir::String, x_lb::Real, x_ub::Real)
 end
 
 function get_denseoutput_fastiso(fastiso_files)
-    sols = [load("data/test3/$file") for file in fastiso_files]
+    sols = [load("../data/test3/$file") for file in fastiso_files]
     results = [sol["results"] for sol in sols]
     if include_elastic
         u_plot = [res.viscous + res.elastic for res in results]
@@ -65,7 +65,7 @@ function mainplot(n, heterogeneous)
     end
 
     u_fastiso, Omega = get_denseoutput_fastiso(fastiso_files)
-    u_3DGIA = [load_results("data/Latychev/$file", idx) for file in seakon_files]
+    u_3DGIA = [load_latychev("../data/Latychev/$file", idx) for file in seakon_files]
 
     n1, n2 = size(u_fastiso[1][1])
     slicex, slicey = n1÷2:n1, n2÷2

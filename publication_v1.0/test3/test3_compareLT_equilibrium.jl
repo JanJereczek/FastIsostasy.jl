@@ -2,7 +2,7 @@ push!(LOAD_PATH, "../")
 using FastIsostasy
 using CairoMakie
 using JLD2, DelimitedFiles
-include("helpers_plot.jl")
+include("../test/helpers/plot.jl")
 
 global include_elastic = true
 
@@ -12,9 +12,9 @@ kernel = "cpu"
 suffix = "$(kernel)_Nx$(N)_Ny$(N)_dense"
 
 function get_denseoutput_fastiso(suffix)
-    sol_lo_D = load("data/test3/gaussian_lo_D_$suffix.jld2")
-    sol_hi_D = load("data/test3/gaussian_hi_D_$suffix.jld2")
-    sol_no_D = load("data/test3/no_litho_$suffix.jld2")
+    sol_lo_D = load("../data/test3/gaussian_lo_D_$suffix.jld2")
+    sol_hi_D = load("../data/test3/gaussian_hi_D_$suffix.jld2")
+    sol_no_D = load("../data/test3/no_litho_$suffix.jld2")
     results = [sol["results"] for sol in [sol_lo_D, sol_hi_D, sol_no_D]]
     if include_elastic
         u_plot = [res.viscous + res.elastic for res in results]

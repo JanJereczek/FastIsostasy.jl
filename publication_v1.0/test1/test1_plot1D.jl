@@ -5,8 +5,8 @@ using Test
 using SpecialFunctions
 using JLD2
 using Interpolations
-include("helpers_plot.jl")
-include("helpers_compute.jl")
+include("../test/helpers/plot.jl")
+include("../test/helpers/compute.jl")
 
 function main(
     n::Int,             # 2^n cells on domain (1)
@@ -18,7 +18,7 @@ function main(
     kernel = "cpu"
     gs = "isostate"
     filekey = "$(case)_N$(N)_$(kernel)_$gs"
-    sol = load("data/test1/$filekey.jld2")
+    sol = load("../data/test1/$filekey.jld2")
     R, H, Omega, c, p = sol["R"], sol["H"], sol["Omega"], sol["c"], sol["p"]
     results = sol["results"]
     analytic_support = vcat(1.0e-14, 10 .^ (-10:0.05:0))

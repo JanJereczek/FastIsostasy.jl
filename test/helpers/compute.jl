@@ -1,5 +1,52 @@
-using LinearAlgebra
+#####################################################
+# Data loaders
+#####################################################
+function interpolate_spada_benchmark(c, data)
+    idx = sortperm(data[:, 1])
+    theta = data[:, 1][idx]
+    z = data[:, 2][idx]
+    x = deg2rad.(theta) .* c.r_equator
+    itp = linear_interpolation(x, z, extrapolation_bc = Flat())
+    return itp
+end
 
+function load_spada()
+    prefix ="../data/test2/Spada/"
+    cases = ["u_cap", "u_disc", "dudt_cap", "dudt_disc", "n_cap", "n_disc"]
+    snapshots = ["0", "1", "2", "5", "10", "inf"]
+    data = Dict{String, Vector{Matrix{Float64}}}()
+    for case in cases
+        tmp = Matrix{Float64}[]
+        for snapshot in snapshots
+            fname = string(prefix, case, "_", snapshot, ".csv")
+            append!(tmp, [readdlm(fname, ',', Float64)])
+        end
+        data[case] = tmp
+    end
+    return data
+end
+
+function load_latychev(dir::String, x_lb::Real, x_ub::Real)
+    files = readdir(dir)
+    
+    x_full = readdlm(joinpath(dir, files[1]), ',')[:, 1]
+    idx = x_lb .< x_full .< x_ub
+    x = x_full[idx]
+
+    u = zeros(length(x), length(files))
+    for i in eachindex(files)
+        file = files[i]
+        # println( file, typeof( readdlm(joinpath(dir, file), ',')[:, 1] ) )
+        u[:, i] = readdlm(joinpath(dir, file), ',')[idx, 2]
+    end
+    u .-= u[:, 1]
+
+    return x, u
+end
+
+#####################################################
+# Idealised load cases
+#####################################################
 function mask_disc(X::AbstractMatrix{T}, Y::AbstractMatrix{T}, R::T) where {T<:AbstractFloat}
     return mask_disc(sqrt.(X.^2 + Y.^2), R)
 end
@@ -45,6 +92,7 @@ function stereo_ice_cap(
     M = Omega.Theta .< alpha
     return H .* sqrt.( M .* (cos.(Omega.Theta) .- cos(alpha)) ./ (1 - cos(alpha)) )
 end
+
 ################################################
 # Analytic solution for constant viscosity
 ################################################
@@ -112,47 +160,6 @@ function equilibrium_integrand(
 end
 
 ################################################
-# Analytic solution for radially dependent viscosity
-################################################
-
-function analytic_radial_solution(
-    Omega::ComputationDomain,
-    i::Int,
-    j::Int,
-    t::T,
-    c::PhysicalConstants,
-    p::LateralVariability,
-    H0::T,
-    R0::T,
-    domains::Vector{T};
-    n_quad_support=5::Int,
-) where {T<:AbstractFloat}
-    scaling = c.rho_ice * c.g * H0 * R0
-    radial_integrand(kappa) = analytic_radial_integrand(Omega, i, j, kappa, t, c, p, R0)
-    return scaling .* looped_quadrature1D( radial_integrand, domains, n_quad_support )
-end
-
-function analytic_radial_integrand(
-    Omega::ComputationDomain,
-    i::Int,
-    j::Int,
-    kappa::T,
-    t::T,
-    c::PhysicalConstants,
-    p::LateralVariability,
-    R0::T,
-) where {T<:AbstractFloat}
-
-    x, y = Omega.X[i, j], Omega.Y[i, j]
-    r = get_r(x, y)
-
-    beta = c.rho_uppermantle * c.g + mean(p.litho_rigidity) * kappa ^ 4
-    j0 = besselj0(kappa * r)
-    j1 = besselj1(kappa * R0)
-    return (exp(-beta*t/(2*mean(p.effective_viscosity)*kappa))-1) * j0 * j1 / beta
-end
-
-################################################
 # Generate binary parameter fields for test 3
 ################################################
 
@@ -177,29 +184,4 @@ end
 function slice_along_x(Omega::ComputationDomain)
     Nx, Ny = Omega.Nx, Omega.Ny
     return Nx÷2:Nx, Ny÷2
-end
-
-function interpolate_spada_benchmark(c, data)
-    idx = sortperm(data[:, 1])
-    theta = data[:, 1][idx]
-    z = data[:, 2][idx]
-    x = deg2rad.(theta) .* c.r_equator
-    itp = linear_interpolation(x, z, extrapolation_bc = Flat())
-    return itp
-end
-
-function get_spada()
-    prefix ="data/test2/Spada/"
-    cases = ["u_cap", "u_disc", "dudt_cap", "dudt_disc", "n_cap", "n_disc"]
-    snapshots = ["0", "1", "2", "5", "10", "inf"]
-    data = Dict{String, Vector{Matrix{Float64}}}()
-    for case in cases
-        tmp = Matrix{Float64}[]
-        for snapshot in snapshots
-            fname = string(prefix, case, "_", snapshot, ".csv")
-            append!(tmp, [readdlm(fname, ',', Float64)])
-        end
-        data[case] = tmp
-    end
-    return data
 end

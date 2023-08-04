@@ -2,7 +2,7 @@ push!(LOAD_PATH, "../")
 using FastIsostasy
 using CairoMakie
 using JLD2
-include("helpers_plot.jl")
+include("../test/helpers/plot.jl")
 
 function main(
     n::Int;
@@ -11,8 +11,8 @@ function main(
     N = 2^n
     suffix = "N$N"
     case = "nonlocal"
-    sol_hom = load("data/test4/discload_$(case)_homogeneous_viscosity_$suffix.jld2")
-    sol_het = load("data/test4/discload_$(case)_wiens_scaledviscosity_$suffix.jld2")
+    sol_hom = load("../data/test4/discload_$(case)_homogeneous_viscosity_$suffix.jld2")
+    sol_het = load("../data/test4/discload_$(case)_wiens_scaledviscosity_$suffix.jld2")
     res_hom = sol_hom["results"]
     res_het = sol_het["results"]
     t_out = res_het.t_out

@@ -2,7 +2,7 @@ push!(LOAD_PATH, "../")
 using FastIsostasy
 using CairoMakie
 using JLD2
-include("helpers_plot.jl")
+include("../test/helpers/plot.jl")
 
 function main(
     n::Int;             # 2^n cells on domain (1)
@@ -12,9 +12,9 @@ function main(
 
     N = 2^n
     suffix = "$(kernel)_N$N"
-    sol_D = load("data/test3/binaryD_$suffix.jld2")
-    sol_η = load("data/test3/binaryη_$suffix.jld2")
-    sol_Dη = load("data/test3/binaryDη_$suffix.jld2")
+    sol_D = load("../data/test3/binaryD_$suffix.jld2")
+    sol_η = load("../data/test3/binaryη_$suffix.jld2")
+    sol_Dη = load("../data/test3/binaryDη_$suffix.jld2")
 
     u_plot = [sol["u3D_viscous"] for sol in [sol_D, sol_η, sol_Dη]]
     dudt_plot = [m_per_sec2mm_per_yr.(sol["dudt3D_viscous"]) for 

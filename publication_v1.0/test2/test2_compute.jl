@@ -1,7 +1,7 @@
 push!(LOAD_PATH, "../")
 using FastIsostasy
 using JLD2
-include("helpers_compute.jl")
+include("../test/helpers/compute.jl")
 
 function main(
     n::Int,             # 2^n cells on domain (1)
@@ -56,7 +56,7 @@ function main(
 
     filename = "$(case)_Nx$(Omega.Nx)_Ny$(Omega.Ny)_$(kernel)"
     jldsave(
-        "data/test2/$filename.jld2",
+        "../data/test2/$filename.jld2",
         Omega = Omega, c = c, p = p,
         results = results,
         t_fastiso = t_fastiso,

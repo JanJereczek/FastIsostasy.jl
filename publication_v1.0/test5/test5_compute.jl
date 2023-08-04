@@ -1,9 +1,9 @@
 push!(LOAD_PATH, "../")
 using FastIsostasy
 using JLD2
-include("helpers_compute.jl")
-include("external_load_maps.jl")
-include("external_viscosity_maps.jl")
+include("../test/helpers/compute.jl")
+include("../test/helpers/loadmaps.jl")
+include("../test/helpers/viscmaps.jl")
 
 function main(n::Int, active_gs::Bool; use_cuda::Bool = false,solver = "ExplicitEuler")
 
@@ -45,7 +45,7 @@ function main(n::Int, active_gs::Bool; use_cuda::Bool = false,solver = "Explicit
 
     case = active_gs ? "geostate" : "isostate"
     jldsave(
-        "data/test5/$(case)_Nx$(Omega.Nx)_Ny$(Omega.Ny).jld2",
+        "../data/test5/$(case)_Nx$(Omega.Nx)_Ny$(Omega.Ny).jld2",
         Omega = Omega, c = c, p = p,
         results = results,
         t_fastiso = t_fastiso,

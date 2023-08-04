@@ -2,11 +2,11 @@ push!(LOAD_PATH, "../")
 using FastIsostasy
 using CairoMakie
 using JLD2, DelimitedFiles
-include("helpers_plot.jl")
+include("../test/helpers/plot.jl")
 
 global include_elastic = true
 
-function load_results(dir::String, idx)
+function load_latychev(dir::String, idx)
     files = readdir(dir)
     nr = size( readdlm(joinpath(dir, files[1]), ','), 1 )
     u = zeros(nr, length(files))
@@ -33,8 +33,8 @@ r = R .* deg2rad.(phi)
 idx = -1 .< r .< 3e6
 r_plot = r[idx]
 
-u_3DGIA = [load_results("data/Latychev/E0L1V1", idx),
-    load_results("data/Latychev/E0L2V1", idx)]
+u_3DGIA = [load_latychev("../data/Latychev/E0L1V1", idx),
+    load_latychev("../data/Latychev/E0L2V1", idx)]
 
 n = 7
 N = 2^n
@@ -42,8 +42,8 @@ kernel = "cpu"
 suffix = "$(kernel)_Nx$(N)_Ny$(N)_dense"
 
 function get_denseoutput_fastiso(suffix)
-    sol_lo_D = load("data/test3/gaussian_lo_D_$suffix.jld2")
-    sol_hi_D = load("data/test3/gaussian_hi_D_$suffix.jld2")
+    sol_lo_D = load("../data/test3/gaussian_lo_D_$suffix.jld2")
+    sol_hi_D = load("../data/test3/gaussian_hi_D_$suffix.jld2")
     sols = [sol_lo_D, sol_hi_D]
     results = [sol["results"] for sol in sols]
     if include_elastic

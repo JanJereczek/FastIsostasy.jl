@@ -1,7 +1,7 @@
 push!(LOAD_PATH, "../")
 using FastIsostasy, JLD2
-include("helpers_compute.jl")
-include("external_viscosity_maps.jl")
+include("../test/helpers/compute.jl")
+include("../test/helpers/viscmaps.jl")
 
 function get_wiens_layervisc(Omega)
     halfspace_logviscosity = fill(21.0, Omega.Nx, Omega.Ny)
@@ -46,7 +46,7 @@ function main(; n=5)
     logeta, Gx, e_mean, e_sort = extract_inversion(priors, ukiobj, paraminv)
 
     jldsave(
-        "data/test6/n=$n.jld2",
+        "../data/test6/n=$n.jld2",
         Omega = Omega, ground_truth = ground_truth, paraminv = paraminv,
         priors = priors, ukiobj = ukiobj,
         logeta = logeta, Gx = Gx, e_mean = e_mean, e_sort = e_sort,

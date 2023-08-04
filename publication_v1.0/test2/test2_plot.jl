@@ -2,8 +2,8 @@ push!(LOAD_PATH, "../")
 using FastIsostasy
 using CairoMakie
 using JLD2
-include("helpers_compute.jl")
-include("helpers_plot.jl")
+include("../test/helpers/compute.jl")
+include("../test/helpers/plot.jl")
 
 function slice_spada(
     Omega::ComputationDomain,
@@ -17,7 +17,7 @@ function slice_spada(
 ) where {T<:AbstractFloat}
 
     ncases = length(vars)
-    data = get_spada()
+    data = load_spada()
     keys = ["u_disc", "u_cap", "dudt_disc", "dudt_cap", "n_disc", "n_cap"]
 
     if case == "viscous"
@@ -108,8 +108,8 @@ function main(
 
     N = 2^n
     suffix = "Nx$(N)_Ny$(N)_$(kernel)"
-    sol_disc = load("data/test2/disc_$suffix.jld2")
-    sol_cap = load("data/test2/cap_$suffix.jld2")
+    sol_disc = load("../data/test2/disc_$suffix.jld2")
+    sol_cap = load("../data/test2/cap_$suffix.jld2")
     res_disc = sol_disc["results"]
     res_cap = sol_cap["results"]
 

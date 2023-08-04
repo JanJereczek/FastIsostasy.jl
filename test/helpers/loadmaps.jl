@@ -9,7 +9,7 @@ using CairoMakie
 #####################################################
 
 function interpolated_glac1d_snapshots(Omega::ComputationDomain{T}) where {T<:AbstractFloat}
-    xl, yl, Hl, tvecl = load_glac1d("data/GLAC1D/output/ANT-16KM_GLAC1D-nn4041ANT-30kto0k.nc") # load_full_glac1d()
+    xl, yl, Hl, tvecl = load_glac1d("../data/GLAC1D/output/ANT-16KM_GLAC1D-nn4041ANT-30kto0k.nc") # load_full_glac1d()
     tvecl = years2seconds.(tvecl .* 1e3)    # (kyr) --> (s)
     xl .*= 1e3                              # (km) --> (m)
     yl .*= 1e3                              # (km) --> (m)
@@ -31,8 +31,8 @@ function interpolated_glac1d_snapshots(Omega::ComputationDomain{T}) where {T<:Ab
 end
 
 function load_full_glac1d()
-    x1, y1, H1, tvec1 = load_glac1d("data/GLAC1D/output/ANT-16KM_GLAC1D-nn4041ANT-120kto30k.nc")
-    x2, y2, H2, tvec2 = load_glac1d("data/GLAC1D/output/ANT-16KM_GLAC1D-nn4041ANT-30kto0k.nc")
+    x1, y1, H1, tvec1 = load_glac1d("../data/GLAC1D/output/ANT-16KM_GLAC1D-nn4041ANT-120kto30k.nc")
+    x2, y2, H2, tvec2 = load_glac1d("../data/GLAC1D/output/ANT-16KM_GLAC1D-nn4041ANT-30kto0k.nc")
     println(sum(x1 .!= x2))
     println(sum(y1 .!= y2))
     H = cat(H1, H2, dims=3)
@@ -86,7 +86,7 @@ function stereographic_projection(
 end
 
 function load_ice7g(;make_anim = false)
-    prefix = "data/test4/ICE-7G/I7G_NA.VM7_1deg."
+    prefix = "../data/test4/ICE-7G/I7G_NA.VM7_1deg."
     suffix = ".nc"
     tvec = collect(21:-0.5:0)
     H = fill(0f0, 360, 180, length(tvec))
@@ -136,7 +136,7 @@ function load_ice7g(;make_anim = false)
     end
 
     jldsave(
-        "data/test4/ice7g.jld2",
+        "../data/test4/ice7g.jld2",
         tvec = tvec,
         lat = lat,
         lon = lon,

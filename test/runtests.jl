@@ -4,8 +4,9 @@ using Test
 using SpecialFunctions
 using JLD2, DelimitedFiles
 using Interpolations
-include("helpers_compute.jl")
-include("test3_cases.jl")
+using LinearAlgebra
+include("helpers/compute.jl")
+include("../publication_v1.0/test3/test3_cases.jl")
 
 @testset "FastIsostasy.jl" begin
     check_xy_ij()
@@ -14,7 +15,6 @@ include("test3_cases.jl")
     benchmark2()
     benchmark3()
 end
-
 
 # The philosophy of the automated tests is that they run relatively fast.
 # They aim to detect large errors, not to test the highest level of accuracy.
@@ -47,23 +47,6 @@ function update_compfig!(axs::Vector{Axis}, fi::Vector, bm::Vector)
 end
 
 
-function load_results(dir::String, x_lb::Real, x_ub::Real)
-    files = readdir(dir)
-    
-    x_full = readdlm(joinpath(dir, files[1]), ',')[:, 1]
-    idx = x_lb .< x_full .< x_ub
-    x = x_full[idx]
-
-    u = zeros(length(x), length(files))
-    for i in eachindex(files)
-        file = files[i]
-        # println( file, typeof( readdlm(joinpath(dir, file), ',')[:, 1] ) )
-        u[:, i] = readdlm(joinpath(dir, file), ',')[idx, 2]
-    end
-    u .-= u[:, 1]
-
-    return x, u
-end
 
 function check_xy_ij()
     x, y = 1.0:10, 1.0:5
@@ -134,7 +117,7 @@ function benchmark2()
     sl0 = fill(-Inf, Omega.Nx, Omega.Ny)
     slicex, slicey = slice_along_x(Omega)
     x = Omega.X[slicex, slicey]
-    data = get_spada()
+    data = load_spada()
 
     for case in ["disc", "cap"]
         # Generate FastIsostasy results
@@ -198,7 +181,7 @@ function benchmark3()
         fig, axs = comparison_figure(1)
         case = cases[m]
         file = seakon_files[m]
-        x_sk, u_sk = load_results("data/Latychev/$file", -1.0, 3e3)
+        x_sk, u_sk = load_latychev("../data/Latychev/$file", -1.0, 3e3)
         x_sk .*= 1e3
 
         p = choose_case(case, Omega, c)
