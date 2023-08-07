@@ -673,3 +673,42 @@ function zeropad_extension(M::Matrix{T}, Nx::Int, Ny::Int) where {T<:AbstractFlo
     M_zeropadded[2:end-1, 2:end-1] .= M
     return M_zeropadded
 end
+
+#####################################################
+# Example utils
+#####################################################
+function mask_disc(X::AbstractMatrix{T}, Y::AbstractMatrix{T}, R::T) where {T<:AbstractFloat}
+    return mask_disc(sqrt.(X.^2 + Y.^2), R)
+end
+
+function mask_disc(r::AbstractMatrix{T}, R::T) where {T<:AbstractFloat}
+    return T.(r .< R)
+end
+
+function uniform_ice_cylinder(
+    Omega::ComputationDomain,
+    R::T,
+    H::T,
+) where {T<:AbstractFloat}
+    M = mask_disc(Omega.X, Omega.Y, R)
+    return M .* H
+end
+
+function stereo_ice_cylinder(
+    Omega::ComputationDomain,
+    R::T,
+    H::T,
+) where {T<:AbstractFloat}
+    M = mask_disc(Omega.R, R)
+    return M .* H
+end
+
+function stereo_ice_cap(
+    Omega::ComputationDomain,
+    alpha_deg::T,
+    H::T,
+) where {T<:AbstractFloat}
+    alpha = deg2rad(alpha_deg)
+    M = Omega.Theta .< alpha
+    return H .* sqrt.( M .* (cos.(Omega.Theta) .- cos(alpha)) ./ (1 - cos(alpha)) )
+end

@@ -51,8 +51,8 @@ export get_r
 export gauss_distr
 
 export samesize_conv
-
 export load_prem, compute_gravity, ReferenceEarthModel, maxwelltime_scaling!, compute_shearmodulus
+export uniform_ice_cylinder, stereo_ice_cylinder, stereo_ice_cap
 
 # derivatives.jl
 export mixed_fdx

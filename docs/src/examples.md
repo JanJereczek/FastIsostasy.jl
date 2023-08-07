@@ -10,9 +10,11 @@ We want to render a situation similar to the one depicted below:
 
 Initializing a [`LateralVariability`](@ref) with parameters corresponding to this situation automatically computes the conversion from a 3D to a 2D problem. This can be simply executed by running:
 
-```@example 1
+```@example MAIN
+using FastIsostasy
+
 W = 3000e3      # (m) half-width of the domain
-n = 8           # implies an NxN grid with N = 2^n = 256.
+n = 6           # implies an NxN grid with N = 2^n = 64.
 Omega = ComputationDomain(W, n)
 c = PhysicalConstants()
 
@@ -27,16 +29,21 @@ The next section shows how to use the now obtained `p::LateralVariability` for a
 
 We now apply a constant load, here a cylinder of ice with radius $R = 1000 km$ and thickness $H = 1 km$, over the domain introduced in [Multi-layer Earth](@ref). To obtain the bedrock displacement over time and store it at time steps specified by a vector `t_out`, we can use the convenience function [`fastisostasy`](@ref):
 
-```@example 1
+```@example MAIN
+using CairoMakie
+
 R = 1000e3                  # ice disc radius (m)
 H = 1000.0                  # ice disc thickness (m)
 Hice = uniform_ice_cylinder(Omega, R, H)
 t_out = years2seconds.([0.0, 100.0, 500.0, 1500.0, 5000.0, 10_000.0, 50_000.0])
 
-results = fastisostasy(t_out, Omega, c, p, Hice)
+results = fastisostasy(t_out, Omega, c, p, Hice, ODEsolver = BS3())
+fig, ax, srf = surface(Omega.X, Omega.Y, results.elastic[end] + results.viscous[end],
+    axis=(type=Axis3,), colormap = :cool)
+fig
 ```
 
-Yes, that was it! You can now easily access the elastic and viscous displacement by calling `results.elastic` or `results.viscous`. For the present case, the latter can be compared to an analytic solution that is known for this particular case. Let's look at the accuracy of our numerical scheme over time by running following plotting commands:
+And here goes the total displacement at the end of the simulation! You can now easily access the elastic and viscous displacement by calling `results.elastic` or `results.viscous`. For the present case, the latter can be compared to an analytic solution that is known for this particular case. Let's look at the accuracy of our numerical scheme over time by running following plotting commands:
 
 ```@example 2
 M = Omega.N ÷ 2
@@ -76,7 +83,7 @@ This concept will also apply to the upper-mantle viscosity in future versions, a
 
 For about $n > 6$, the previous example can be computed even faster by using GPU parallelism. It could not represent less work from the user's perspective, as it boils down to calling the `ComputationDomain` with an extra keyword argument:
 
-```@example 2
+```@example MAIN
 Omega = ComputationDomain(W, n, use_cuda=true)
 ```
 
@@ -87,21 +94,20 @@ That's it, nothing more! One could suggest you lay back but your computation mig
 
 ## Simple load and geometry - DIY
 
-Nonetheless, as any high-level convenience function, [`fastisostasy`](@ref) has limitations. An ice-sheet modeller typically wants to embed FastIsostasy within a time-stepping loop. This can be easily done by getting familiar with some intermediate-level functions:
+Nonetheless, as any high-level convenience function, [`fastisostasy`](@ref) has limitations. An ice-sheet modeller typically wants to embed FastIsostasy within a time-stepping loop. This can be easily done by getting familiar with some intermediate-level functions. We here illustrate this by letting an ice cap grow over time. This growth is unphysical for the sake of keeping the example simple. 
 
-```@example 3
+```@example MAIN
 W = 3000e3      # (m) half-width of the domain
-n = 8           # implies an NxN grid with N = 2^n = 256.
+n = 6           # implies an NxN grid with N = 2^n = 64.
 Omega = ComputationDomain(W, n)
 c = PhysicalConstants()
 p = LateralVariability(Omega)
 
 R = 1000e3                  # ice disc radius (m)
 H = 1000.0                  # ice disc thickness (m)
-Hice = uniform_ice_cylinder(Omega, R, H)
-t_out = years2seconds.([0.0, 100.0, 500.0, 1500.0, 5000.0, 10_000.0, 50_000.0])
 
-results = fastisostasy(t_out, Omega, c, p, Hice)
+# for t in 0.0:1.0
+# results = fastisostasy(t_out, Omega, c, p, Hice)
 ```
 
 ## GIA following Antarctic deglaciation
