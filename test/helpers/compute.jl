@@ -47,32 +47,6 @@ end
 #####################################################
 # Idealised load cases
 #####################################################
-function mask_disc(X::AbstractMatrix{T}, Y::AbstractMatrix{T}, R::T) where {T<:AbstractFloat}
-    return mask_disc(sqrt.(X.^2 + Y.^2), R)
-end
-
-function mask_disc(r::AbstractMatrix{T}, R::T) where {T<:AbstractFloat}
-    return T.(r .< R)
-end
-
-function uniform_ice_cylinder(
-    Omega::ComputationDomain,
-    R::T,
-    H::T,
-) where {T<:AbstractFloat}
-    M = mask_disc(Omega.X, Omega.Y, R)
-    return M .* H
-end
-
-function stereo_ice_cylinder(
-    Omega::ComputationDomain,
-    R::T,
-    H::T,
-) where {T<:AbstractFloat}
-    M = mask_disc(Omega.R, R)
-    return M .* H
-end
-
 function generate_uniform_disc_load(
     Omega::ComputationDomain,
     c::PhysicalConstants,
@@ -81,16 +55,6 @@ function generate_uniform_disc_load(
 ) where {T<:AbstractFloat}
     M = mask_disc(Omega.X, Omega.Y, R)
     return - M .* (c.rho_ice * c.g * H)
-end
-
-function stereo_ice_cap(
-    Omega::ComputationDomain,
-    alpha_deg::T,
-    H::T,
-) where {T<:AbstractFloat}
-    alpha = deg2rad(alpha_deg)
-    M = Omega.Theta .< alpha
-    return H .* sqrt.( M .* (cos.(Omega.Theta) .- cos(alpha)) ./ (1 - cos(alpha)) )
 end
 
 ################################################
