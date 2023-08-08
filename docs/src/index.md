@@ -17,8 +17,7 @@ This package is mainly addressed to ice sheet modellers looking for a regional m
 
 ## How to read the docs?
 
-If you already know about GIA, skip to [Overview of GIA for ice-sheet simulation](@ref). If you are already familiar with the complexity range of GIA models, skip to [Why FastIsostasy?](@ref). If you want to have a more thorough but still very accessbile introduction to GIA, we highly recommend reading [Whitehouse et al. 2018](https://esurf.copernicus.org/articles/6/401/2018/). If you want to get started right away, feel free to directly go to the [Examples](@ref). If you face any problem using the code or want to know more about the functionalities of the package, visit the [API reference](@ref). If you face a problem you cannot solve, please open a [GitHub issue]() with a minimal and reproduceable example.
-
+If you already know about GIA, skip to [Overview of GIA for ice-sheet simulation](@ref). If you are already familiar with the complexity range of GIA models, skip to [Why FastIsostasy?](@ref). If you want to have a more thorough but still very accessbile introduction to GIA, we highly recommend reading [^Whitehouse2019]. If you want to get started right away, feel free to directly go to the [Examples](@ref). If you face any problem using the code or want to know more about the functionalities of the package, visit the [API reference](@ref). If you face a problem you cannot solve, please open a [GitHub issue]() with a minimal and reproduceable example.
 
 ## What is glacial isostatic adjustment?
 
@@ -66,12 +65,29 @@ FastIsostasy.jl largely relies on following packages:
 - [DSP.jl](https://github.com/JuliaDSP/DSP.jl)
 - [KalmanEnsembleProcesses.jl](https://github.com/CliMA/EnsembleKalmanProcesses.jl)
 
-## References
+[^Whitehouse2019]:
+    Pippa Whitehouse et al. (2019): [Solid Earth change and the evolution of the Antarctic Ice Sheet](https://esurf.copernicus.org/articles/6/401/2018/)
 
-1. [Whitehouse et al. 2018](https://esurf.copernicus.org/articles/6/401/2018/)
-3. [Wiens et al. 2021](https://www.lyellcollection.org/doi/full/10.1144/M56-2020-18)
-4. [Ivins et al. 2023](https://www.lyellcollection.org/doi/full/10.1144/M56-2020-19).
-1. [Gomez et al. 2018](https://journals.ametsoc.org/view/journals/clim/31/10/jcli-d-17-0352.1.xml?tab_body=pdf)
-5. [Van Calcar et al. 2023](https://egusphere.copernicus.org/preprints/2022/egusphere-2022-1328/)
-6. [Bueler et al. 2007](https://www.cambridge.org/core/journals/annals-of-glaciology/article/fast-computation-of-a-viscoelastic-deformable-earth-model-for-icesheet-simulations/C878DBDD01271F6EB7874C9C4125196C)
-7. [Coulon et al. 2021](https://agupubs.onlinelibrary.wiley.com/doi/full/10.1029/2020JF006003)
+[^Wiens2021]:
+    Douglas Wiens et al. (2021): [The seismic structure of the Antarctic upper mantle](https://esurf.copernicus.org/articles/6/401/2018/)
+
+[^Ivins2023]:
+    Erik Ivins et al. (2023): [Antarctic upper mantle rheology](https://www.lyellcollection.org/doi/full/10.1144/M56-2020-19)
+
+[^Gomez2018]:
+    Natalya Gomez et al. (2018): [A Coupled Ice Sheet–Sea Level Model Incorporating 3D Earth Structure: Variations in Antarctica during the Last Deglacial Retreat](https://journals.ametsoc.org/view/journals/clim/31/10/jcli-d-17-0352.1.xml?tab_body=pdf)
+
+[^VanCalcar2023]:
+    Caroline van Calcar et al. (2023): [Simulation of a fully coupled 3D GIA - ice-sheet model for the Antarctic Ice Sheet over a glacial cycle](https://egusphere.copernicus.org/preprints/2022/egusphere-2022-1328/)
+
+[^Bueler2007]:
+    Ed Bueler et al. (2007): [Fast computation of a viscoelastic deformable Earth model for ice-sheet simulations](https://www.cambridge.org/core/journals/annals-of-glaciology/article/fast-computation-of-a-viscoelastic-deformable-earth-model-for-icesheet-simulations/C878DBDD01271F6EB7874C9C4125196C)
+
+[^Coulon2021]:
+    Violaine Coulon et al. (2021): [Contrasting Response of West and East Antarctic Ice Sheets to Glacial Isostatic Adjustment](https://agupubs.onlinelibrary.wiley.com/doi/full/10.1029/2020JF006003)
+
+[^Goelzer2020]:
+    Heiko Goelzer et al. (2020): [Brief communication: On calculating the sea-level contribution in marine ice-sheet models](https://tc.copernicus.org/articles/14/833/2020/)
+
+[^Snyder1987]:
+    John Snyder (1987): [Map projections -- A working manual](https://pubs.er.usgs.gov/publication/pp1395)

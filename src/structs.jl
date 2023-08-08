@@ -31,7 +31,7 @@ and potentially used parallelism. To initialize one with `2*W` and `2^n` grid ce
 Omega = ComputationDomain(W, n)
 ```
 """
-struct ComputationDomain{T<:AbstractFloat}
+struct ComputationDomain{T<:AbstractFloat, M<:AbstractMatrix{T}}
     Wx::T                           # Domain length in x (m)
     Wy::T                           # Domain length in y (m)
     Nx::Int                         # Number of grid points in x-dimension
@@ -42,18 +42,18 @@ struct ComputationDomain{T<:AbstractFloat}
     dy::T                           # Spatial discretization in y
     x::Vector{T}
     y::Vector{T}
-    X::AbstractMatrix{T}
-    Y::AbstractMatrix{T}
-    R::AbstractMatrix{T}
-    Theta::AbstractMatrix{T}
-    Lat::AbstractMatrix{T}
-    Lon::AbstractMatrix{T}
-    K::AbstractMatrix{T}
+    X::M
+    Y::M
+    R::M
+    Theta::M
+    Lat::M
+    Lon::M
+    K::M
     projection_correction::Bool
-    null::AbstractMatrix{T}         # a zero matrix of size Nx x Ny
-    pseudodiff::AbstractMatrix{T}   # pseudodiff operator
-    harmonic::AbstractMatrix{T}     # harmonic operator
-    biharmonic::AbstractMatrix{T}   # biharmonic operator
+    null::M         # a zero matrix of size Nx x Ny
+    pseudodiff::M   # pseudodiff operator
+    harmonic::M     # harmonic operator
+    biharmonic::M   # biharmonic operator
     use_cuda::Bool
     arraykernel                     # Array or CuArray depending on chosen hardware
     bc!::Function                   # Boundary conditions
@@ -95,19 +95,19 @@ function ComputationDomain(
 
     arraykernel = use_cuda ? CuArray : Array
     if projection_correction
-        K = kernelpromote(scalefactor(deg2rad.(Lat), deg2rad.(Lon),
-            deg2rad(lat0), deg2rad(lon0)), arraykernel)
+        K = scalefactor(deg2rad.(Lat), deg2rad.(Lon), deg2rad(lat0), deg2rad(lon0))
     else
-        K = fill(1, Nx, Ny)
+        K = kernelpromote(fill(1, Nx, Ny), arraykernel)
     end
 
     # Differential operators in Fourier space
     pseudodiff, harmonic, biharmonic = get_differential_fourier(Wx, Wy, Nx, Ny)
     pseudodiff[1, 1] = mean([pseudodiff[1,2], pseudodiff[2,1]])
-    pseudodiff, harmonic, biharmonic = kernelpromote(
-            [pseudodiff, harmonic, biharmonic], arraykernel)
     # Avoid division by zero. Tolerance ϵ of the order of the neighboring terms.
     # Tests show that it does not lead to errors wrt analytical or benchmark solutions.
+
+    X, Y, null, R, Theta, Lat, Lon, K, pseudodiff, harmonic, biharmonic = kernelpromote(
+        [X, Y, null, R, Theta, Lat, Lon, K, pseudodiff, harmonic, biharmonic], arraykernel)
 
     extension(M) = M
     fdxx(M) = mixed_fdxx(M, K .* dx)
@@ -152,10 +152,10 @@ end
 Return a struct containing all information related to the radially layered structure of the solid Earth and
 its parameters.
 """
-mutable struct LateralVariability{T<:AbstractFloat}
-    effective_viscosity::AbstractMatrix{T}
-    litho_thickness::AbstractMatrix{T}
-    litho_rigidity::AbstractMatrix{T}
+mutable struct LateralVariability{T<:AbstractFloat, M<:AbstractMatrix{T}}
+    effective_viscosity::M
+    litho_thickness::M
+    litho_rigidity::M
     litho_poissonratio::T
     mantle_poissonratio::T
     layer_viscosities::Array{T, 3}
@@ -180,14 +180,14 @@ layer_boundaries = [88e3, 400e3]
 # layer_boundaries = [88e3, 400e3]u"m"
 
 function LateralVariability(
-    Omega::ComputationDomain{T};
+    Omega::ComputationDomain{T, M};
     layer_boundaries::A = layer_boundaries,
     layer_viscosities::B = layer_viscosities,
     litho_youngmodulus::T = litho_youngmodulus,
     litho_poissonratio::T = litho_poissonratio,
     mantle_poissonratio::T = mantle_poissonratio,
 ) where {
-    T<:AbstractFloat,
+    T<:AbstractFloat, M<:AbstractMatrix{T},
     A<:Union{Vector{T}, Array{T, 3}},
     B<:Union{Vector{T}, Array{T, 3}},
 }
@@ -200,15 +200,14 @@ function LateralVariability(
     end
 
     litho_thickness = layer_boundaries[:, :, 1]
-    litho_rigidity = get_rigidity.(litho_thickness,
-        litho_youngmodulus, litho_poissonratio)
+    litho_rigidity = get_rigidity.(litho_thickness, litho_youngmodulus, litho_poissonratio)
 
-    layers_thickness = diff( layer_boundaries, dims=3 )
+    layers_thickness = diff(layer_boundaries, dims=3)
     effective_viscosity = get_effective_viscosity(
         Omega, layer_viscosities, layers_thickness, mantle_poissonratio)
 
-    litho_rigidity, effective_viscosity = kernelpromote(
-        [litho_rigidity, effective_viscosity], Omega.arraykernel)
+    litho_thickness, litho_rigidity, effective_viscosity = kernelpromote(
+        [litho_thickness, litho_rigidity, effective_viscosity], Omega.arraykernel)
     return LateralVariability(
         effective_viscosity,
         litho_thickness, litho_rigidity, litho_poissonratio,
@@ -222,14 +221,14 @@ end
 
 Return a struct containing the reference geostate. We define the geostate to be all quantities related to sea-level.
 """
-struct RefGeoState{T<:AbstractFloat}
-    u::AbstractMatrix{T}            # viscous displacement
-    ue::AbstractMatrix{T}           # elastic displacement
-    H_ice::AbstractMatrix{T}          # reference height of ice column
-    H_water::AbstractMatrix{T}        # reference height of water column
-    b::AbstractMatrix{T}              # reference bedrock position
-    z0::AbstractMatrix{T}             # reference height to allow external sea-level forcing
-    sealevel::AbstractMatrix{T}       # reference sealevel field
+struct RefGeoState{T<:AbstractFloat, M<:AbstractMatrix{T}}
+    u::M                    # viscous displacement
+    ue::M                   # elastic displacement
+    H_ice::M                # reference height of ice column
+    H_water::M              # reference height of water column
+    b::M                    # reference bedrock position
+    z0::M                   # reference height to allow external sea-level forcing
+    sealevel::M             # reference sealevel field
     sle_af::T               # reference sl-equivalent of ice volume above floatation
     V_pov::T                # reference potential ocean volume
     V_den::T                # reference potential ocean volume associated with V_den
@@ -241,14 +240,14 @@ end
 
 Return a mutable struct containing the geostate which will be updated over the simulation.
 """
-mutable struct GeoState{T<:AbstractFloat}
-    u::AbstractMatrix{T}           # viscous displacement
-    ue::AbstractMatrix{T}           # elastic displacement
-    H_ice::AbstractMatrix{T}          # current height of ice column
-    H_water::AbstractMatrix{T}        # current height of water column
-    b::AbstractMatrix{T}              # vertical bedrock position
-    geoid::AbstractMatrix{T}          # current geoid displacement
-    sealevel::AbstractMatrix{T}       # current sealevel field
+mutable struct GeoState{T<:AbstractFloat, M<:AbstractMatrix{T}}
+    u::M                    # viscous displacement
+    ue::M                   # elastic displacement
+    H_ice::M                # current height of ice column
+    H_water::M              # current height of water column
+    b::M                    # vertical bedrock position
+    geoid::M                # current geoid displacement
+    sealevel::M             # current sealevel field
     V_af::T                 # ice volume above floatation
     sle_af::T               # sl-equivalent of ice volume above floatation
     slc_af::T               # sl-contribution of Vice above floatation
@@ -259,7 +258,7 @@ mutable struct GeoState{T<:AbstractFloat}
     slc::T                  # total sealevel contribution
     countupdates::Int       # count the updates of the geostate
     dt::T                   # update step
-    dtloadanom::AbstractMatrix{T}     # load anomaly wrt previous time step
+    dtloadanom::M           # load anomaly wrt previous time step
 end
 
 """
@@ -279,21 +278,22 @@ Return a `struct` containing pre-computed tools to perform forward-stepping of t
  - rhog::T
  - geoidgreen::AbstractMatrix{T}
 """
-struct PrecomputedFastiso{T<:AbstractFloat}
-    elasticgreen::AbstractMatrix{T}
-    geoidgreen::AbstractMatrix{T}
-    pfft::Plan
-    pifft::ScaledPlan
+struct PrecomputedFastiso{T<:AbstractFloat, M<:AbstractMatrix{T},
+    P1<:AbstractFFTs.Plan{Complex{T}}, P2<:AbstractFFTs.Plan{Complex{T}}}
+    elasticgreen::M
+    geoidgreen::M
+    pfft::P1
+    pifft::AbstractFFTs.ScaledPlan{Complex{T}, P2, T}
     negligible_gradD::Bool
 end
 
 
 function PrecomputedFastiso(
-    Omega::ComputationDomain{T},
+    Omega::ComputationDomain{T, M},
     c::PhysicalConstants{T},
-    p::LateralVariability{T};
+    p::LateralVariability{T, M};
     quad_precision::Int = 4,
-) where {T<:AbstractFloat}
+) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
 
     # Elastic response variables
     distance, greenintegrand_coeffs = get_greenintegrand_coeffs(T)
@@ -304,12 +304,13 @@ function PrecomputedFastiso(
 
     # Check if thickness constant upto 1km tolerance
     mean_litho_rigidity = fill(mean(p.litho_rigidity), Omega)
-    negligible_gradD = isapprox(p.litho_rigidity, mean_litho_rigidity, atol = 1e3)
+    negligible_gradD = isapprox(p.litho_rigidity,
+        Omega.arraykernel(mean_litho_rigidity), atol = 1e3)
 
     # FFT plans depening on CPU vs. GPU usage
     if Omega.use_cuda
         Xgpu = CuArray(Omega.X)
-        p1, p2 = CUDA.CUFFT.plan_fft(Xgpu), CUDA.CUFFT.plan_ifft(Xgpu)
+        p1, p2 = CUFFT.plan_fft(Xgpu), CUFFT.plan_ifft(Xgpu)
         # Dx, Dy, Dxx, Dyy, Dxy = convert2CuArray([Dx, Dy, Dxx, Dxy, Dyy])
     else
         p1, p2 = plan_fft(Omega.X), plan_ifft(Omega.X)
@@ -328,76 +329,71 @@ end
     SuperStruct()
 
 Return a struct containing all the other structs needed for the forward integration of the model:
- - Omega::ComputationDomain{T}
+ - Omega::ComputationDomain{T, M}
  - c::PhysicalConstants{T}
- - p::LateralVariability{T}
- - tools::PrecomputedFastiso{T}
+ - p::LateralVariability{T, M}
+ - tools::PrecomputedFastiso{T, M}
  - Hice::Interpolations.Extrapolation
- - Hice_cpu::Interpolations.Extrapolation
  - eta::Interpolations.Extrapolation
- - eta_cpu::Interpolations.Extrapolation
- - refgeostate::RefGeoState{T}
- - geostate::GeoState{T}
+ - refgeostate::RefGeoState{T, M}
+ - geostate::GeoState{T, M}
  - interactive_geostate::Bool
 """
-struct SuperStruct{T<:AbstractFloat}
-    Omega::ComputationDomain{T}
+struct SuperStruct{T<:AbstractFloat, M<:AbstractMatrix{T}}
+    Omega::ComputationDomain{T, M}
     c::PhysicalConstants{T}
-    p::LateralVariability{T}
-    tools::PrecomputedFastiso{T}
-    Hice::Interpolations.Extrapolation
-    Hice_cpu::Interpolations.Extrapolation
+    p::LateralVariability{T, M}
+    tools::PrecomputedFastiso{T, M}
+    Hice::Interpolations.Extrapolation{M, 1, Interpolations.GriddedInterpolation{M, 1, Vector{M},
+        Gridded{Linear{Throw{OnGrid}}}, Tuple{Vector{T}}}, Gridded{Linear{Throw{OnGrid}}}}
     eta::Interpolations.Extrapolation
-    eta_cpu::Interpolations.Extrapolation
-    refgeostate::RefGeoState{T}
-    geostate::GeoState{T}
+    refgeostate::RefGeoState{T, M}
+    geostate::GeoState{T, M}
     interactive_geostate::Bool
 end
 
+null(Omega::ComputationDomain) = copy(Omega.arraykernel(Omega.null))
+
 function SuperStruct(
-    Omega::ComputationDomain{T},
+    Omega::ComputationDomain{T, M},
     c::PhysicalConstants{T},
-    p::LateralVariability{T},
+    p::LateralVariability{T, M},
     t_Hice_snapshots::Vector{T},
     Hice_snapshots::Vector{<:AbstractMatrix{T}},
     t_eta_snapshots::Vector{T},
     eta_snapshots::Vector{<:AbstractMatrix{T}},
     interactive_geostate::Bool;
-    geoid_0::Matrix{T} = copy(Omega.null),
-    sealevel_0::Matrix{T} = copy(Omega.null),
-    H_ice_ref::Matrix{T} = copy(Omega.null),
-    H_water_ref::Matrix{T} = copy(Omega.null),
-    b_ref::Matrix{T} = copy(Omega.null),
-) where {T<:AbstractFloat}
-
-    geoid_0, sealevel_0, H_ice_ref, H_water_ref, b_ref = kernelpromote(
-        [geoid_0, sealevel_0, H_ice_ref, H_water_ref, b_ref], Omega.arraykernel)
+    u_0::M = null(Omega),
+    ue_0::M = null(Omega),
+    geoid_0::M = null(Omega),
+    z_0::M = null(Omega),
+    sealevel_0::M = null(Omega),
+    H_ice_0::M = null(Omega),
+    H_water_0::M = null(Omega),
+    b_0::M = null(Omega),
+) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
 
     tools = PrecomputedFastiso(Omega, c, p)
     Hice = linear_interpolation( t_Hice_snapshots,
         kernelpromote(Hice_snapshots, Omega.arraykernel) )
-    Hice_cpu = linear_interpolation( t_Hice_snapshots,
-        kernelpromote(Hice_snapshots, Array) )
     eta = linear_interpolation(t_eta_snapshots,
         kernelpromote(eta_snapshots, Omega.arraykernel) )
-    eta_cpu = linear_interpolation(t_eta_snapshots,
-        kernelpromote(eta_snapshots, Array) )
 
     refgeostate = RefGeoState(
-        copy(Omega.null), copy(Omega.null), # viscous and elastic displacement
-        H_ice_ref, H_water_ref, b_ref,
-        copy(sealevel_0),   # z0
-        sealevel_0,         # sealevel
-        T(0.0),             # sle_af
-        T(0.0),             # V_pov
-        T(0.0),             # V_den
-        T(0.0),             # conservation_term
+        u_0, ue_0,                  # viscous and elastic displacement
+        H_ice_0, H_water_0, b_0,    # ice & liquid water column
+        z_0,                 # z0
+        sealevel_0,                 # sealevel
+        T(0.0),                     # sle_af
+        T(0.0),                     # V_pov
+        T(0.0),                     # V_den
+        T(0.0),                     # conservation_term
     )
     geostate = GeoState(
-        copy(Omega.null), copy(Omega.null), # viscous and elastic displacement
+        copy(u_0), copy(ue_0),      # viscous and elastic displacement
         Hice(0.0),                  # ice column
-        copy(H_water_ref),          # water column
-        copy(b_ref),                # bedrock position
+        copy(H_water_0),            # water column
+        copy(b_0),                  # bedrock position
         geoid_0,                    # geoid perturbation
         copy(sealevel_0),           # reference for external sl-forcing
         T(0.0), T(0.0), T(0.0),     # V_af terms
@@ -405,9 +401,9 @@ function SuperStruct(
         T(0.0), T(0.0),             # V_den terms
         T(0.0),                     # total sl-contribution & conservation term
         0, years2seconds(10.0),     # countupdates, update step
-        copy(Omega.null),           # dtloadanom
+        null(Omega),                # dtloadanom
     )
-    return SuperStruct(Omega, c, p, tools, Hice, Hice_cpu, eta, eta_cpu,
+    return SuperStruct(Omega, c, p, tools, Hice, eta,
         refgeostate, geostate, interactive_geostate)
 end
 
@@ -423,14 +419,15 @@ Return a `struct` containing the results of forward integration:
  - `Hice` an interpolator of the ice thickness over time
  - `eta` an interpolator of the upper-mantle viscosity over time
 """
-struct FastisoResults{T<:AbstractFloat}
+struct FastisoResults{T<:AbstractFloat, M<:AbstractMatrix{T}}
     t_out::Vector{T}
-    tools::PrecomputedFastiso{T}
+    tools::PrecomputedFastiso{T, M}
     viscous::Vector{Matrix{T}}
     displacement_rate::Vector{Matrix{T}}
     elastic::Vector{Matrix{T}}
     geoid::Vector{Matrix{T}}
     sealevel::Vector{Matrix{T}}
-    Hice::Interpolations.Extrapolation
+    Hice::Interpolations.Extrapolation{M, 1, Interpolations.GriddedInterpolation{M, 1, Vector{M},
+        Gridded{Linear{Throw{OnGrid}}}, Tuple{Vector{T}}}, Gridded{Linear{Throw{OnGrid}}}}
     eta::Interpolations.Extrapolation
 end

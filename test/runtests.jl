@@ -1,10 +1,9 @@
 push!(LOAD_PATH, "../")
 using FastIsostasy
-using Test
-using SpecialFunctions
+using Test, CairoMakie
+using SpecialFunctions, Interpolations, LinearAlgebra
 using JLD2, DelimitedFiles
-using Interpolations
-using LinearAlgebra
+
 include("helpers/compute.jl")
 include("../publication_v1.0/test3/test3_cases.jl")
 include("test_benchmarks.jl")

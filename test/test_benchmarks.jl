@@ -54,7 +54,7 @@ function benchmark1()
         @test maximum(abs.(results.viscous[k][slicex, slicey] .- u_analytic)) < 12
         update_compfig!(axs, [results.viscous[k][slicex, slicey]], [u_analytic])
     end
-    save("testplots/benchmark1/plot.png", fig)
+    save("plots/benchmark1/plot.png", fig)
 end
 
 function benchmark2()
@@ -112,7 +112,7 @@ function benchmark2()
             @test mean(abs.(n_fi .- n_bm)) < 3
             # println("$m_u,  $m_dudt, $m_n")
         end
-        save("testplots/benchmark2/$case.png", fig)
+        save("plots/benchmark2/$case.png", fig)
     end
 end
 
@@ -149,7 +149,7 @@ function benchmark3()
             @test mean(abs.(u_fi .- u_bm)) .< mean_tol[m]
             @test maximum(abs.(u_fi .- u_bm)) .< max_tol[m]
         end
-        save("testplots/benchmark3/$case.png", fig)
+        save("plots/benchmark3/$case.png", fig)
     end
 end
 

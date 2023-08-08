@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>- · FastIsostasy.jl</title><script data-outdated-warner src="assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.045/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.13.24/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="assets/documenter.js"></script><script src="siteinfo.js"></script><script src="../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="assets/themeswap.js"></script><link href="https://fonts.googleapis.com/css?family=Montserrat|Source+Code+Pro&amp;display=swap" rel="stylesheet" type="text/css"/></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="index.html">FastIsostasy.jl</a></span></div><form class="docs-search" action="search.html"><input class="docs-search-query" id="documenter-search-query" name="q" type="text" placeholder="Search docs"/></form><ul class="docs-menu"><li><a class="tocitem" href="index.html">Introduction</a></li><li><a class="tocitem" href="examples.html">Examples</a></li><li><a class="tocitem" href="APIref.html">API reference</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><nav class="breadcrumb"><ul class="is-hidden-mobile"><li class="is-active"><a href="examples_wip.html">-</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href="examples_wip.html">-</a></li></ul></nav><div class="docs-right"><a class="docs-edit-link" href="https://github.com/JanJereczek/FastIsostasy.jl/blob/main/docs/src/examples_wip.md" title="Edit on GitHub"><span class="docs-icon fab"></span><span class="docs-label is-hidden-touch">Edit on GitHub</span></a><a class="docs-settings-button fas fa-cog" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-sidebar-button fa fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a></div></header><article class="content" id="documenter-page"><h2 id="Simple-load-and-geometry-DIY"><a class="docs-heading-anchor" href="#Simple-load-and-geometry-DIY">Simple load and geometry - DIY</a><a id="Simple-load-and-geometry-DIY-1"></a><a class="docs-heading-anchor-permalink" href="#Simple-load-and-geometry-DIY" title="Permalink"></a></h2><p>Nonetheless, as any high-level convenience function, <a href="APIref.html#FastIsostasy.fastisostasy"><code>fastisostasy</code></a> has limitations. An ice-sheet modeller typically wants to embed FastIsostasy within a time-stepping loop. This can be easily done by getting familiar with some intermediate-level functions. We here illustrate this by letting an ice cap grow over time. This growth is unphysical for the sake of keeping the example simple. </p><pre><code class="language- hljs">W = 3000e3
+n = 6
+Omega = ComputationDomain(W, n)
+c = PhysicalConstants()
+p = LateralVariability(Omega)
+
+R = 1000e3                  # ice disc radius (m)
+H = 1000.0                  # ice disc thickness (m)
+
+u_0, ue_0 = copy(Omega.null), copy(Omega.null)
+sstruct = SuperStruct(Omega, c, p, t_Hice_snapshots, Hice_snapshots,
+    t_eta_snapshots, eta_snapshots, interactive_geostate; kwargs...)
+u = copy(u_0)
+
+for t in 0.0:10.0:100.0
+    # sstruct.Hice = 
+    u, dudt, ue, geoid, sealevel = forward_isostasy(dt, t_out, u, sstruct, BS3(), false)
+    println(&quot;t = $t,    u_max = $(maximum(u)),    dudt_max = $(maximum(dudt))&quot;)
+end</code></pre><h2 id="GIA-following-Antarctic-deglaciation"><a class="docs-heading-anchor" href="#GIA-following-Antarctic-deglaciation">GIA following Antarctic deglaciation</a><a id="GIA-following-Antarctic-deglaciation-1"></a><a class="docs-heading-anchor-permalink" href="#GIA-following-Antarctic-deglaciation" title="Permalink"></a></h2><p>We now want to provide a tough example that presents:</p><ul><li>a heterogeneous lithosphere thickness</li><li>a heterogeneous upper-mantle viscosity</li><li>various viscous channels</li><li>a more elaborate load that evolves over time</li><li>changes in the sea-level</li></ul><p>For this we run a deglaciation of Antarctica, based on the ice thickness estimated in <a href=".">GLAC1D</a>.</p><pre><code class="language- hljs">W = 3000e3      # (m) half-width of the domain
+n = 7           # implies an NxN grid with N = 2^n = 128.
+Omega = ComputationDomain(W, n)
+c = PhysicalConstants()</code></pre><h2 id="Inversion-of-solid-Earth-parameters"><a class="docs-heading-anchor" href="#Inversion-of-solid-Earth-parameters">Inversion of solid-Earth parameters</a><a id="Inversion-of-solid-Earth-parameters-1"></a><a class="docs-heading-anchor-permalink" href="#Inversion-of-solid-Earth-parameters" title="Permalink"></a></h2><p>FastIsostasy.jl relies on simplification of the full problem and might therefore need a calibration step to match the output of a 3D GIA model. By means of an unscented Kalman inversion, one can e.g. infer the appropriate effective upper-mantle viscosity based on the response of a 3D GIA model to a given load. Whereas this is know to be a tedious step, FastIsostasy is developped to ease the procedure by providing a convenience struct <code>Paraminversion</code> that can be run by:</p><pre><code class="language- hljs">W = 3000e3                  # half-length of the square domain (m)
+Omega = ComputationDomain(W, n)
+c = PhysicalConstants()
+
+lb = [88e3, 180e3, 280e3, 400e3]
+lv = get_wiens_layervisc(Omega)
+p = LateralVariability(
+    Omega,
+    layer_boundaries = lb,
+    layer_viscosities = lv,
+)
+ground_truth = copy(p.effective_viscosity)
+
+R = T(2000e3)               # ice disc radius (m)
+H = T(1000)                 # ice disc thickness (m)
+Hcylinder = uniform_ice_cylinder(Omega, R, H)
+t_out = years2seconds.(0.0:1_000.0:2_000.0)
+
+t1 = time()
+results = fastisostasy(t_out, Omega, c, p, Hcylinder, ODEsolver=BS3(), interactive_geostate=false)
+t_fastiso = time() - t1
+println(&quot;Took $t_fastiso seconds!&quot;)
+println(&quot;-------------------------------------&quot;)
+
+tinv = t_out[2:end]
+Hice = [Hcylinder for t in tinv]
+Y = results.viscous[2:end]
+paraminv = ParamInversion(Omega, c, p, tinv, Y, Hice)
+priors, ukiobj = perform(paraminv)
+logeta, Gx, e_mean, e_sort = extract_inversion(priors, ukiobj, paraminv)</code></pre></article><nav class="docs-footer"><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 0.27.25 on <span class="colophon-date" title="Monday 7 August 2023 17:40">Monday 7 August 2023</span>. Using Julia version 1.9.2.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>

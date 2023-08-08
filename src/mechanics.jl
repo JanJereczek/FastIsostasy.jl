@@ -10,27 +10,37 @@ List of all available solvers [here](https://docs.sciml.ai/DiffEqDocs/stable/sol
 """
 function fastisostasy(
     t_out::Vector{T},
-    Omega::ComputationDomain{T},
+    Omega::ComputationDomain{T, M},
     c::PhysicalConstants{T},
-    p::LateralVariability{T},
+    p::LateralVariability{T, M},
+    Hice_snapshot::AbstractMatrix{T};
+    kwargs...,
+) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
+    t_Hice_snapshots = [t_out[1], t_out[end]]
+    Hice_snapshots = [Hice_snapshot, Hice_snapshot]
+    return fastisostasy(t_out, Omega, c, p, t_Hice_snapshots, Hice_snapshots; kwargs...)
+end
+
+function fastisostasy(
+    t_out::Vector{T},
+    Omega::ComputationDomain{T, M},
+    c::PhysicalConstants{T},
+    p::LateralVariability{T, M},
     t_Hice_snapshots::Vector{T},
     Hice_snapshots::Vector{<:AbstractMatrix{T}};
-    ODEsolver::Any = "ExplicitEuler",
     dt::T = T(years2seconds(1.0)),
+    ODEsolver::Any = "ExplicitEuler",
     t_eta_snapshots::Vector{T} = [t_out[1], t_out[end]],
     eta_snapshots::Vector{<:AbstractMatrix{T}} = [p.effective_viscosity, p.effective_viscosity],
-    u_0::AbstractMatrix{T} = copy(Omega.null),
-    ue_0::AbstractMatrix{T} = copy(Omega.null),
     interactive_geostate::Bool = false,
     verbose::Bool = true,
     kwargs...,
-) where {T<:AbstractFloat}
+) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
 
-    u_0, ue_0 = kernelpromote([u_0, ue_0], Omega.arraykernel)   # Handle xPU architecture
     sstruct = SuperStruct(Omega, c, p, t_Hice_snapshots, Hice_snapshots,
         t_eta_snapshots, eta_snapshots, interactive_geostate; kwargs...)
-    u, dudt, ue, geoid, sealevel = forward_isostasy(
-        dt, t_out, u_0, sstruct, ODEsolver, verbose)
+    u, dudt, ue, geoid, sealevel = forward_isostasy(dt, ODEsolver, t_out, sstruct,
+        verbose; kwargs...)
 
     return FastisoResults(
         t_out, sstruct.tools, u, dudt, ue,
@@ -38,33 +48,15 @@ function fastisostasy(
     )
 end
 
-function fastisostasy(
-    t_out::Vector{T},
-    Omega::ComputationDomain{T},
-    c::PhysicalConstants{T},
-    p::LateralVariability{T},
-    Hice_snapshot::AbstractMatrix{T};
-    kwargs...,
-) where {T<:AbstractFloat}
-    t_Hice_snapshots = [t_out[1], t_out[end]]
-    Hice_snapshots = [Hice_snapshot, Hice_snapshot]
-    return fastisostasy(t_out, Omega, c, p, t_Hice_snapshots, Hice_snapshots; kwargs...)
-end
-
 """
     forward_isostasy()
 
 Forward-integrate the isostatic adjustment.
 """
-function forward_isostasy(
-    dt::T,
-    t_out::Vector{T},
-    u::AbstractMatrix{T},
-    sstruct::SuperStruct{T},
-    ODEsolver::Any,
-    verbose::Bool,
-) where {T<:AbstractFloat}
+function forward_isostasy(dt::T, ODEsolver::Any, t_out::Vector{T}, sstruct::SuperStruct{T, M},
+    verbose::Bool; kwargs...) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
 
+    u = copy(sstruct.geostate.u)
     dudt = copy(u)
     u_out, dudt_out, ue_out, geoid_out, sealevel_out = init_results(u, t_out)
 
@@ -79,7 +71,7 @@ function forward_isostasy(
             if ODEsolver == Euler()
                 sol = solve(prob, ODEsolver, reltol=1e-3, dt = dt)
             else
-                sol = solve(prob, ODEsolver, reltol=1e-3) #, dtmin = years2seconds(0.1))
+                sol = solve(prob, ODEsolver, reltol=1e-3)
             end
 
             u .= sol(t_out[k], Val{0})
@@ -96,11 +88,11 @@ function forward_isostasy(
         end
         
         # Convert outputs back to CPU for postprocessing
-        u_out[k] .= copy(kernelpromote(u, Array))
-        dudt_out[k] .= copy(kernelpromote(dudt, Array))
-        geoid_out[k] .= copy(kernelpromote(sstruct.geostate.geoid, Array))
-        sealevel_out[k] .= copy(kernelpromote(sstruct.geostate.sealevel, Array))
-        ue_out[k] .= copy(kernelpromote(sstruct.geostate.ue, Array))
+        u_out[k] .= copy(Array(u))
+        dudt_out[k] .= copy(Array(dudt))
+        geoid_out[k] .= copy(Array(sstruct.geostate.geoid))
+        sealevel_out[k] .= copy(Array(sstruct.geostate.sealevel))
+        ue_out[k] .= copy(Array(sstruct.geostate.ue))
     end
     return u_out, dudt_out, ue_out, geoid_out, sealevel_out
 end
@@ -108,11 +100,11 @@ end
 """
     init_results()
 
-Initialize some `Vector{Matrix}` where results shall be later stored.
+Initialize some `Vector{<:AbstractMatrix}` where results shall be later stored.
 """
-function init_results(u, t_out)
+function init_results(u::AbstractMatrix, t_out::Vector)
     # initialize with placeholders
-    placeholder = kernelpromote(u, Array)
+    placeholder = Array(u)
     u_out = [copy(placeholder) for time in t_out]
     dudt_out = [copy(placeholder) for time in t_out]
     ue_out = [copy(placeholder) for time in t_out]
@@ -127,12 +119,8 @@ end
 Forward integrate the isostatic adjustment over a single time step by updating the
 displacement rate `dudt`, and the sea-level state contained within `sstruct::SuperStruct`.
 """
-function forwardstep_isostasy!(
-    dudt::AbstractMatrix{T},
-    u::AbstractMatrix{T},
-    sstruct::SuperStruct{T},
-    t::T,
-) where {T<:AbstractFloat}
+function forwardstep_isostasy!(dudt::M, u::M, sstruct::SuperStruct{T, M}, t::T,
+    ) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
 
     # Order really matters here!
     sstruct.Omega.bc!(u, sstruct.Omega.Nx, sstruct.Omega.Ny)
@@ -164,9 +152,9 @@ Update the displacement rate `dudt` of the viscous response.
 function dudt_isostasy!(
     dudt::AbstractMatrix{T},
     u::AbstractMatrix{T},
-    sstruct::SuperStruct{T},
+    sstruct::SuperStruct{T, M},
     t::T,
-) where {T<:AbstractFloat}
+) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
 
     Omega = sstruct.Omega
     rhs = - sstruct.c.g .* columnanom_full(sstruct)
@@ -196,11 +184,8 @@ end
 Update the state `u` by performing an explicit Euler integration of its derivative `dudt`
 over a time step `dt`.
 """
-function explicit_euler!(
-    u::AbstractMatrix{T},
-    dudt::AbstractMatrix{T},
-    dt::T,
-) where {T<:AbstractFloat}
+function explicit_euler!(u::M, dudt::M, dt::T,
+    ) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
     u .+= dudt .* dt
     return nothing
 end
@@ -269,7 +254,8 @@ end
 Update the elastic response by convoluting the Green's function with the load anom.
 To use coefficients differing from (Farell 1972), see [PrecomputedFastiso](@ref).
 """
-function update_elasticresponse!(sstruct::SuperStruct{<:AbstractFloat})
+function update_elasticresponse!(sstruct::SuperStruct{T, M}
+    ) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
     rgh = correct_surfacedisctortion(columnanom_load(sstruct), sstruct)
     sstruct.geostate.ue .= samesize_conv(sstruct.tools.elasticgreen,
         rgh, sstruct.Omega, no_bc)

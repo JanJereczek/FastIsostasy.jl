@@ -35,8 +35,8 @@ end
 # Array utils
 #####################################################
 
-Base.fill(x::Real, Omega::ComputationDomain) = fill(x, Omega.Nx, Omega.Ny)
-Base.fill(x::Real, sstruct::SuperStruct) = fill(x, sstruct.Omega.Nx, sstruct.Omega.Ny)
+Base.fill(x::Real, sstruct::SuperStruct) = fill(x, sstruct.Omega)
+Base.fill(x::Real, Omega::ComputationDomain) = Omega.arraykernel(fill(x, Omega.Nx, Omega.Ny))
 
 """
     matrify(x, Nx, Ny)
@@ -55,8 +55,8 @@ function matrify(x::Vector{T}, Nx::Int, Ny::Int) where {T<:Real}
     return X
 end
 
-function samesize_conv(X::AbstractMatrix{T}, Y::AbstractMatrix{T},
-    Omega::ComputationDomain, bc::Function) where {T<:AbstractFloat}
+function samesize_conv(X::M, Y::M, Omega::ComputationDomain{T, M}, bc::Function
+    ) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
     if iseven(Omega.Nx)
         i1 = Omega.Mx
     else
@@ -91,7 +91,7 @@ get_r(x::T, y::T) where {T<:Real} = sqrt(x^2 + y^2)
 
 Return a 2D meshgrid spanned by `x, y`.
 """
-function meshgrid(x::AbstractVector{T}, y::AbstractVector{T}) where {T<:AbstractFloat}
+function meshgrid(x::V, y::V) where {T<:AbstractFloat, V<:AbstractVector{T}}
     one_x, one_y = ones(T, length(x)), ones(T, length(y))
     return x * one_y', one_x * y'
 end
@@ -120,8 +120,8 @@ function scalefactor(lat::T, lon::T, lat0::T, lon0::T; k0::T = T(1)) where {T<:R
     return 2*k0 / (1 + sin(lat0)*sin(lat) + cos(lat0)*cos(lat)*cos(lon-lon0))
 end
 
-function scalefactor(lat::AbstractMatrix{T}, lon::AbstractMatrix{T}, lat0::T, lon0::T;
-    kwargs... ) where {T<:Real}
+function scalefactor(lat::M, lon::M, lat0::T, lon0::T; kwargs...,
+    ) where {T<:Real, M<:AbstractMatrix{T}}
     K = similar(lat)
     @inbounds for idx in CartesianIndices(lat)
         K[idx] = scalefactor(lat[idx], lon[idx], lat0, lon0; kwargs...)
@@ -148,13 +148,8 @@ function latlon2stereo(lat::T, lon::T, lat0::T, lon0::T;
     return k, x, y
 end
 
-function latlon2stereo(
-    lat::AbstractMatrix{T},
-    lon::AbstractMatrix{T},
-    lat0::T,
-    lon0::T;
-    kwargs...,
-) where {T<:Real}
+function latlon2stereo(lat::M, lon::M, lat0::T, lon0::T; kwargs...,
+    ) where {T<:Real, M<:AbstractMatrix{T}}
     K, X, Y = similar(lat), similar(lat), similar(lat)
     @inbounds for idx in CartesianIndices(lat)
         K[idx], X[idx], Y[idx] = latlon2stereo(lat[idx], lon[idx], lat0, lon0; kwargs...)
@@ -236,18 +231,18 @@ end
     get_effective_viscosity(
         layer_viscosities::Vector{AbstractMatrix{T}},
         layers_thickness::Vector{T},
-        Omega::ComputationDomain{T},
+        Omega::ComputationDomain{T, M},
     ) where {T<:AbstractFloat}
 
 Compute equivalent viscosity for multilayer model by recursively applying
 the formula for a halfspace and a channel from Lingle and Clark (1975).
 """
 function get_effective_viscosity(
-    Omega::ComputationDomain{T},
+    Omega::ComputationDomain{T, M},
     layer_viscosities::Array{T, 3},
     layers_thickness::Array{T, 3},
     mantle_poissonratio::T,
-) where {T<:AbstractFloat}
+) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
 
     incompressible_poissonratio = 0.5
     compressibility_scaling = (1 + incompressible_poissonratio) / (1 + mantle_poissonratio)
@@ -283,10 +278,10 @@ number `kappa`, the `visc_ratio` and the `channel_thickness`.
 Reference: Bueler et al. 2007, below equation 15.
 """
 function three_layer_scaling(
-    Omega::ComputationDomain{T},
+    Omega::ComputationDomain{T, M},
     visc_ratio::Matrix{T},
     channel_thickness::Matrix{T},
-) where {T<:AbstractFloat}
+) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
 
     # kappa is the wavenumber of the harmonic load. (see Cathles 1975, p.43)
     # we assume this is related to the size of the domain!
@@ -501,11 +496,11 @@ Integrate load response over field by using 2D quadrature with specified
 support points and associated coefficients.
 """
 function get_elasticgreen(
-    Omega::ComputationDomain{T},
+    Omega::ComputationDomain{T, M},
     greenintegrand_function::Function,
     quad_support::Vector{T},
     quad_coeffs::Vector{T},
-) where {T<:AbstractFloat}
+) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
 
     dx, dy = Omega.dx, Omega.dy
     elasticgreen = similar(Omega.X)
@@ -641,9 +636,9 @@ function convert2Array(X::Vector)
 end
 
 function copystructs2cpu(
-    Omega::ComputationDomain{T},
-    p::LateralVariability{T},
-) where {T<:AbstractFloat}
+    Omega::ComputationDomain{T, M},
+    p::LateralVariability{T, M},
+) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
 
     Omega_cpu = ComputationDomain(Omega.Wx, Omega.Wy, Omega.Nx, Omega.Ny, use_cuda = false)
 

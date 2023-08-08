@@ -8,8 +8,10 @@ using CairoMakie
 # GLAC1D
 #####################################################
 
-function interpolated_glac1d_snapshots(Omega::ComputationDomain{T}) where {T<:AbstractFloat}
-    xl, yl, Hl, tvecl = load_glac1d("../data/GLAC1D/output/ANT-16KM_GLAC1D-nn4041ANT-30kto0k.nc") # load_full_glac1d()
+function interpolated_glac1d_snapshots(Omega::ComputationDomain{T, M}
+    ) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
+    file = "../data/GLAC1D/output/ANT-16KM_GLAC1D-nn4041ANT-30kto0k.nc"
+    xl, yl, Hl, tvecl = load_glac1d(file)   # load_full_glac1d()
     tvecl = years2seconds.(tvecl .* 1e3)    # (kyr) --> (s)
     xl .*= 1e3                              # (km) --> (m)
     yl .*= 1e3                              # (km) --> (m)

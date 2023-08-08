@@ -7,14 +7,15 @@ using JLD2: jldopen
 using DelimitedFiles: readdlm
 using Interpolations: linear_interpolation, Flat
 using FFTW: fft, ifft, plan_fft, plan_ifft
-using AbstractFFTs: Plan, ScaledPlan
+using AbstractFFTs
 using FastGaussQuadrature: gausslegendre
 using DSP: conv
-using CUDA: CuArray, CUFFT.plan_fft, CUFFT.plan_ifft, allowscalar
+using CUDA: CuArray, CUFFT, allowscalar
 using OrdinaryDiffEq: ODEProblem, solve, OrdinaryDiffEqAlgorithm
 using EnsembleKalmanProcesses
 using EnsembleKalmanProcesses.Observations
 using EnsembleKalmanProcesses.ParameterDistributions
+using SpecialFunctions: besselj0, besselj1
 
 using Reexport
 @reexport using Interpolations
@@ -30,6 +31,7 @@ include("derivatives.jl")
 include("geostate.jl")
 include("mechanics.jl")
 include("inversion.jl")
+include("analytic_solutions.jl")
 
 # structs.jl
 export ComputationDomain
@@ -87,5 +89,8 @@ export update_V_pov!, update_V_den!
 export ParamInversion
 export perform
 export extract_inversion
+
+# analytic solutions
+export analytic_solution
 
 end
