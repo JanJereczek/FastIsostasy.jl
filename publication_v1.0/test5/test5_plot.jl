@@ -19,8 +19,8 @@ function main(
     t_out = results.t_out
     t_out_kyr = round.(seconds2years.(t_out) ./ 1e3, digits=1)
     H_anom, Omega = sol["H"], sol["Omega"]
-    u = results.viscous
-    dudt = results.displacement_rate
+    u = results.u_out
+    dudt = results.dudt_out
 
     # We also want to have the absolute load
     _, __, H = interpolated_glac1d_snapshots(Omega)

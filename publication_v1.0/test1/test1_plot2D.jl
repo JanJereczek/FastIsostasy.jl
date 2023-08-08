@@ -23,7 +23,7 @@ function main(
     sol = load("../data/test1/$(case)_N$(N)_cpu.jld2")
     R, H, Omega, c, p = sol["R"], sol["H"], sol["Omega"], sol["c"], sol["p"]
     results = sol["results"]
-    u3D_elastic, u3D_viscous = results.elastic, results.viscous
+    u3D_elastic, u3D_viscous = results.ue_out, results.u_out
     sigma_zz_disc = generate_uniform_disc_load(Omega, c, R, H)
 
     # Computing analytical solution is quite expensive as it involves

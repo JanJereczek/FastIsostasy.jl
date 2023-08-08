@@ -9,13 +9,13 @@ R = 1000e3                  # ice disc radius (m)
 H = 1000.0                  # ice disc thickness (m)
 
 u_0, ue_0 = copy(Omega.null), copy(Omega.null)
-sstruct = SuperStruct(Omega, c, p, t_Hice_snapshots, Hice_snapshots,
+fi = FastIso(Omega, c, p, t_Hice_snapshots, Hice_snapshots,
     t_eta_snapshots, eta_snapshots, interactive_geostate; kwargs...)
 u = copy(u_0)
 
 for t in 0.0:10.0:100.0
-    # sstruct.Hice = 
-    u, dudt, ue, geoid, sealevel = forward_isostasy(dt, t_out, u, sstruct, BS3(), false)
+    # fi.Hice = 
+    u, dudt, ue, geoid, sealevel = forward_isostasy(dt, t_out, u, fi, BS3(), false)
     println(&quot;t = $t,    u_max = $(maximum(u)),    dudt_max = $(maximum(dudt))&quot;)
 end</code></pre><h2 id="GIA-following-Antarctic-deglaciation"><a class="docs-heading-anchor" href="#GIA-following-Antarctic-deglaciation">GIA following Antarctic deglaciation</a><a id="GIA-following-Antarctic-deglaciation-1"></a><a class="docs-heading-anchor-permalink" href="#GIA-following-Antarctic-deglaciation" title="Permalink"></a></h2><p>We now want to provide a tough example that presents:</p><ul><li>a heterogeneous lithosphere thickness</li><li>a heterogeneous upper-mantle viscosity</li><li>various viscous channels</li><li>a more elaborate load that evolves over time</li><li>changes in the sea-level</li></ul><p>For this we run a deglaciation of Antarctica, based on the ice thickness estimated in <a href=".">GLAC1D</a>.</p><pre><code class="language- hljs">W = 3000e3      # (m) half-width of the domain
 n = 7           # implies an NxN grid with N = 2^n = 128.

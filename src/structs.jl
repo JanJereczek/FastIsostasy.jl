@@ -1,10 +1,3 @@
-KernelMatrix = Union{Matrix{T}, CuArray{T, 2}} where {T<:Real}
-# FFTPlan = Union{cFFTWPlan{ComplexF64, -1, false, 2, UnitRange{Int64}},
-#     CUFFT.cCuFFTPlan{ComplexF64, -1, false, 2}}
-# IFFTPlan = Union{
-#     AbstractFFTs.ScaledPlan{ComplexF64, FFTW.cFFTWPlan{ComplexF64, 1, false, 2, UnitRange{Int64}}, Float64},
-#     AbstractFFTs.ScaledPlan{ComplexF64, CUDA.CUFFT.cCuFFTPlan{ComplexF64, 1, false, 2}, Float64}}
-
 #########################################################
 # Radial earth model
 #########################################################
@@ -285,13 +278,21 @@ struct PrecomputedFastiso{T<:AbstractFloat, M<:AbstractMatrix{T},
     pfft::P1
     pifft::AbstractFFTs.ScaledPlan{Complex{T}, P2, T}
     negligible_gradD::Bool
+    Hice::Interpolations.Extrapolation{M, 1, Interpolations.GriddedInterpolation{M, 1, Vector{M},
+        Gridded{Linear{Throw{OnGrid}}}, Tuple{Vector{T}}}, Gridded{Linear{Throw{OnGrid}}}}
+    eta::Interpolations.Extrapolation{M, 1, Interpolations.GriddedInterpolation{M, 1, Vector{M},
+        Gridded{Linear{Throw{OnGrid}}}, Tuple{Vector{T}}}, Gridded{Linear{Throw{OnGrid}}}}
 end
 
 
 function PrecomputedFastiso(
     Omega::ComputationDomain{T, M},
     c::PhysicalConstants{T},
-    p::LateralVariability{T, M};
+    p::LateralVariability{T, M},
+    t_Hice_snapshots::Vector{T},
+    Hice_snapshots::Vector{<:AbstractMatrix{T}},
+    t_eta_snapshots::Vector{T},
+    eta_snapshots::Vector{<:AbstractMatrix{T}};
     quad_precision::Int = 4,
 ) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
 
@@ -317,16 +318,19 @@ function PrecomputedFastiso(
     end
 
     # rhog = p.uppermantle_density .* c.g
+    Hice = linear_interpolation( t_Hice_snapshots,
+        kernelpromote(Hice_snapshots, Omega.arraykernel) )
+    eta = linear_interpolation(t_eta_snapshots,
+        kernelpromote(eta_snapshots, Omega.arraykernel) )
 
-    return PrecomputedFastiso(
-        kernelpromote(elasticgreen, Omega.arraykernel),
-        kernelpromote(geoidgreen, Omega.arraykernel),
-        p1, p2, negligible_gradD,
-    )
+    return PrecomputedFastiso(Omega.arraykernel(elasticgreen),
+        Omega.arraykernel(geoidgreen), p1, p2, negligible_gradD, Hice, eta)
 end
 
+null(Omega::ComputationDomain) = copy(Omega.arraykernel(Omega.null))
+
 """
-    SuperStruct()
+    FastIso()
 
 Return a struct containing all the other structs needed for the forward integration of the model:
  - Omega::ComputationDomain{T, M}
@@ -339,30 +343,53 @@ Return a struct containing all the other structs needed for the forward integrat
  - geostate::GeoState{T, M}
  - interactive_geostate::Bool
 """
-struct SuperStruct{T<:AbstractFloat, M<:AbstractMatrix{T}}
+struct FastIso{T<:AbstractFloat, M<:AbstractMatrix{T}}
     Omega::ComputationDomain{T, M}
     c::PhysicalConstants{T}
     p::LateralVariability{T, M}
     tools::PrecomputedFastiso{T, M}
-    Hice::Interpolations.Extrapolation{M, 1, Interpolations.GriddedInterpolation{M, 1, Vector{M},
-        Gridded{Linear{Throw{OnGrid}}}, Tuple{Vector{T}}}, Gridded{Linear{Throw{OnGrid}}}}
-    eta::Interpolations.Extrapolation
     refgeostate::RefGeoState{T, M}
     geostate::GeoState{T, M}
     interactive_geostate::Bool
+    internal_loadupdate::Bool
+    t_out::Vector{T}
+    u_out::Vector{Matrix{T}}
+    dudt_out::Vector{Matrix{T}}
+    ue_out::Vector{Matrix{T}}
+    geoid_out::Vector{Matrix{T}}
+    sealevel_out::Vector{Matrix{T}}
+    computation_time::Real
 end
 
-null(Omega::ComputationDomain) = copy(Omega.arraykernel(Omega.null))
-
-function SuperStruct(
+function FastIso(
     Omega::ComputationDomain{T, M},
     c::PhysicalConstants{T},
     p::LateralVariability{T, M},
+    t_out::Vector{<:Real},
+    interactive_geostate::Bool;
+    kwargs...,
+) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
+    # Creating some placeholders in case of an external update of the load.
+    t_Hice_snapshots = [extrema(t_out)...]
+    t_eta_snapshots = [extrema(t_out)...]
+    Hice_snapshots = [null(Omega), null(Omega)]
+    eta_snapshots = [p.effective_viscosity, p.effective_viscosity]
+    return FastIso(Omega, c, p, t_out, interactive_geostate, 
+        t_Hice_snapshots, Hice_snapshots, t_eta_snapshots, eta_snapshots,
+        internal_loadupdate = false; kwargs...)
+end
+
+function FastIso(
+    Omega::ComputationDomain{T, M},
+    c::PhysicalConstants{T},
+    p::LateralVariability{T, M},
+    t_out::Vector{<:Real},
+    interactive_geostate::Bool,
     t_Hice_snapshots::Vector{T},
     Hice_snapshots::Vector{<:AbstractMatrix{T}},
     t_eta_snapshots::Vector{T},
-    eta_snapshots::Vector{<:AbstractMatrix{T}},
-    interactive_geostate::Bool;
+    eta_snapshots::Vector{<:AbstractMatrix{T}};
+    internal_loadupdate::Bool = true,
     u_0::M = null(Omega),
     ue_0::M = null(Omega),
     geoid_0::M = null(Omega),
@@ -373,11 +400,8 @@ function SuperStruct(
     b_0::M = null(Omega),
 ) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
 
-    tools = PrecomputedFastiso(Omega, c, p)
-    Hice = linear_interpolation( t_Hice_snapshots,
-        kernelpromote(Hice_snapshots, Omega.arraykernel) )
-    eta = linear_interpolation(t_eta_snapshots,
-        kernelpromote(eta_snapshots, Omega.arraykernel) )
+    tools = PrecomputedFastiso(Omega, c, p, t_Hice_snapshots, Hice_snapshots,
+        t_eta_snapshots, eta_snapshots)
 
     refgeostate = RefGeoState(
         u_0, ue_0,                  # viscous and elastic displacement
@@ -403,31 +427,9 @@ function SuperStruct(
         0, years2seconds(10.0),     # countupdates, update step
         null(Omega),                # dtloadanom
     )
-    return SuperStruct(Omega, c, p, tools, Hice, eta,
-        refgeostate, geostate, interactive_geostate)
-end
 
-"""
-    FastisoResults(Omega::ComputationDomain, c::PhysicalConstants, p::LateralVariability)
-
-Return a `struct` containing the results of forward integration:
- - `t_out` the time output vector
- - `u3D_elastic` the elastic response over `t_out`
- - `u3D_viscous` the viscous response over `t_out`
- - `dudt3D_viscous` the displacement rate over `t_out`
- - `geoid3D` the geoid response over `t_out`
- - `Hice` an interpolator of the ice thickness over time
- - `eta` an interpolator of the upper-mantle viscosity over time
-"""
-struct FastisoResults{T<:AbstractFloat, M<:AbstractMatrix{T}}
-    t_out::Vector{T}
-    tools::PrecomputedFastiso{T, M}
-    viscous::Vector{Matrix{T}}
-    displacement_rate::Vector{Matrix{T}}
-    elastic::Vector{Matrix{T}}
-    geoid::Vector{Matrix{T}}
-    sealevel::Vector{Matrix{T}}
-    Hice::Interpolations.Extrapolation{M, 1, Interpolations.GriddedInterpolation{M, 1, Vector{M},
-        Gridded{Linear{Throw{OnGrid}}}, Tuple{Vector{T}}}, Gridded{Linear{Throw{OnGrid}}}}
-    eta::Interpolations.Extrapolation
+    u_out, dudt_out, ue_out, geoid_out, sealevel_out = init_results(null(Omega), t_out)
+    return FastIso(Omega, c, p, tools, refgeostate, geostate,
+        interactive_geostate, internal_loadupdate, t_out, u_out, dudt_out,
+        ue_out, geoid_out, sealevel_out, 0.0)
 end

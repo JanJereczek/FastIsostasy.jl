@@ -16,13 +16,13 @@ R = 1000e3                  # ice disc radius (m)
 H = 1000.0                  # ice disc thickness (m)
 
 u_0, ue_0 = copy(Omega.null), copy(Omega.null)
-sstruct = SuperStruct(Omega, c, p, t_Hice_snapshots, Hice_snapshots,
+fi = FastIso(Omega, c, p, t_Hice_snapshots, Hice_snapshots,
     t_eta_snapshots, eta_snapshots, interactive_geostate; kwargs...)
 u = copy(u_0)
 
 for t in 0.0:10.0:100.0
-    # sstruct.Hice = 
-    u, dudt, ue, geoid, sealevel = forward_isostasy(dt, t_out, u, sstruct, BS3(), false)
+    # fi.Hice = 
+    u, dudt, ue, geoid, sealevel = forward_isostasy(dt, t_out, u, fi, BS3(), false)
     println("t = $t,    u_max = $(maximum(u)),    dudt_max = $(maximum(dudt))")
 end
 ```
@@ -76,7 +76,7 @@ println("-------------------------------------")
 
 tinv = t_out[2:end]
 Hice = [Hcylinder for t in tinv]
-Y = results.viscous[2:end]
+Y = results.u_out[2:end]
 paraminv = ParamInversion(Omega, c, p, tinv, Y, Hice)
 priors, ukiobj = perform(paraminv)
 logeta, Gx, e_mean, e_sort = extract_inversion(priors, ukiobj, paraminv)

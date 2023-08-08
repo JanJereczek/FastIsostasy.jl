@@ -39,7 +39,7 @@ export PhysicalConstants
 export LateralVariability
 export PrecomputedFastiso
 export GeoState
-export SuperStruct
+export FastIso
 
 # utils.jl
 export years2seconds, seconds2years, m_per_sec2mm_per_yr

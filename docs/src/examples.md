@@ -40,16 +40,16 @@ t_out = years2seconds.([0.0, 100.0, 500.0, 1500.0, 5000.0, 10_000.0, 50_000.0])
 
 results = fastisostasy(t_out, Omega, c, p, Hice, ODEsolver = BS3())
 function plot3D_fastiso_results(Omega, results)
-    fig, ax, srf = surface(Omega.X, Omega.Y, results.elastic[end] + results.viscous[end],
+    fig, ax, srf = surface(Omega.X, Omega.Y, results.ue_out[end] + results.u_out[end],
         axis=(type=Axis3,), colormap = :cool)
-    wireframe!(ax, Omega.X, Omega.Y, results.elastic[end] + results.viscous[end],
+    wireframe!(ax, Omega.X, Omega.Y, results.ue_out[end] + results.u_out[end],
         color = :black, linewidth = 0.1)
     return fig
 end
 plot3D_fastiso_results(Omega, results)
 ```
 
-... and here goes the total displacement at ``t = 50 \, \mathrm{kyr}``! You can now access the elastic and viscous displacement at time `t_out[k]` by calling `results.elastic[k]` or `results.viscous[k]`. For the present case, the latter can be compared to an analytic solution that is known for this particular case. Let's look at the accuracy of our numerical scheme over time by running following plotting commands:
+... and here goes the total displacement at ``t = 50 \, \mathrm{kyr}``! You can now access the elastic and viscous displacement at time `t_out[k]` by calling `results.ue_out[k]` or `results.u_out[k]`. For the present case, the latter can be compared to an analytic solution that is known for this particular case. Let's look at the accuracy of our numerical scheme over time by running following plotting commands:
 
 ```@example MAIN
 ii, jj = Omega.Mx:Omega.Nx, Omega.My
@@ -64,7 +64,7 @@ analytic_support = vcat(1.0e-14, 10 .^ (-10:0.05:-3), 1.0)
 for i in eachindex(t_out)
     analytic_solution_r(r) = analytic_solution(r, t_out[i], c, p, H, R, analytic_support)
     u_analytic = analytic_solution_r.(r)
-    u_numeric = results.viscous[i][ii, jj]
+    u_numeric = results.u_out[i][ii, jj]
     lines!(ax, x, u_analytic, color = cmap[i], linewidth = 5,
         label = L"$u_{ana}(t = %$(round(seconds2years(t_out[i]))) \, \mathrm{yr})$")
     lines!(ax, x, u_numeric, color = cmap[i], linewidth = 5, linestyle = :dash,
@@ -107,3 +107,29 @@ That's it, nothing more!
 
 !!! info "Only CUDA supported!"
     For now only Nvidia GPUs are supported and there is no plan of extending this compatibility at this point.
+
+## Simple load and geometry - DIY
+
+Nonetheless, as any high-level convenience function, [`fastisostasy`](@ref) has limitations. An ice-sheet modeller typically wants to embed FastIsostasy within a time-stepping loop. This can be easily done by getting familiar with some intermediate-level functions. We here illustrate this by letting an ice cap grow over time. This growth is unphysical for the sake of keeping the example simple. 
+
+```@example MAIN
+W = 3000e3
+n = 6
+Omega = ComputationDomain(W, n)
+c = PhysicalConstants()
+p = LateralVariability(Omega)
+
+R = 1000e3                  # ice disc radius (m)
+H = 1000.0                  # ice disc thickness (m)
+
+u_0, ue_0 = copy(Omega.null), copy(Omega.null)
+fi = FastIso(Omega, c, p, t_Hice_snapshots, Hice_snapshots,
+    t_eta_snapshots, eta_snapshots, interactive_geostate; kwargs...)
+u = copy(u_0)
+
+for t in 0.0:10.0:100.0
+    fi.Hice = Hice .* normalized_asymptote(t)
+    u, dudt, ue, geoid, sealevel = forward_isostasy(dt, t_out, u, fi, BS3(), false)
+    println("t = $t,    u_max = $(maximum(u)),    dudt_max = $(maximum(dudt))")
+end
+```

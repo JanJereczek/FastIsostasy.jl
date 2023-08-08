@@ -35,7 +35,7 @@ end
 # Array utils
 #####################################################
 
-Base.fill(x::Real, sstruct::SuperStruct) = fill(x, sstruct.Omega)
+Base.fill(x::Real, fi::FastIso) = fill(x, fi.Omega)
 Base.fill(x::Real, Omega::ComputationDomain) = Omega.arraykernel(fill(x, Omega.Nx, Omega.Ny))
 
 """
@@ -651,6 +651,21 @@ function copystructs2cpu(
     return Omega_cpu, p_cpu
 end
 
+"""
+    init_results()
+
+Initialize some `Vector{<:AbstractMatrix}` where results shall be later stored.
+"""
+function init_results(ph::AbstractMatrix, t_out::Vector)
+    # initialize with placeholders
+    placeholder = Array(ph)
+    u_out = [copy(placeholder) for time in t_out]
+    dudt_out = [copy(placeholder) for time in t_out]
+    ue_out = [copy(placeholder) for time in t_out]
+    geoid_out = [copy(placeholder) for time in t_out]
+    sealevel_out = [copy(placeholder) for time in t_out]
+    return u_out, dudt_out, ue_out, geoid_out, sealevel_out
+end
 #####################################################
 # BC utils
 #####################################################

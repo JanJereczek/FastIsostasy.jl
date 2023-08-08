@@ -9,7 +9,7 @@ LateralVariability
 RefGeoState
 GeoState
 PrecomputedFastiso
-SuperStruct
+FastIso
 FastisoResults
 ```
 

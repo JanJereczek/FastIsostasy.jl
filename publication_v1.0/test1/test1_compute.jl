@@ -23,11 +23,9 @@ function main(
     Hcylinder = uniform_ice_cylinder(Omega, R, H)
     t_out = years2seconds.([0.0, 100.0, 500.0, 1500.0, 5000.0, 10_000.0, 50_000.0])
 
-    t1 = time()
     results = fastisostasy(t_out, Omega, c, p, Hcylinder, ODEsolver=solver,
         interactive_geostate=active_gs)
-    t_fastiso = time() - t1
-    println("Took $t_fastiso seconds!")
+    println("Took $(results.computation_time) seconds!")
     println("-------------------------------------")
 
     if use_cuda
@@ -42,13 +40,7 @@ function main(
     end
 
     filename = "$(solvername)_Nx$(Omega.Nx)_Ny$(Omega.Ny)_$(kernel)_$(gs)"
-    jldsave(
-        "../data/test1/$filename.jld2",
-        Omega = Omega, c = c, p = p,
-        results = results,
-        t_fastiso = t_fastiso,
-        R = R, H = H,
-    )
+    jldsave("../data/test1/$filename.jld2", results = results)
 end
 
 for use_cuda in [false] # [false, true]
