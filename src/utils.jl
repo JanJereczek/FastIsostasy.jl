@@ -75,6 +75,22 @@ function samesize_conv(X::M, Y::M, Omega::ComputationDomain{T, M}, bc::Function
     return view(convo, i1:i2, j1:j2)
 end
 
+"""
+    write_out(fi::FastIso)
+
+Write results in output vectors if the load is updated internally.
+If the load is updated externally, the user is responsible for writing results.
+"""
+function write_out!(fi::FastIso, k::Int)
+    if fi.internal_loadupdate
+        fi.u_out[k] .= copy(Array(fi.geostate.u))
+        fi.dudt_out[k] .= copy(Array(fi.geostate.dudt))
+        fi.ue_out[k] .= copy(Array(fi.geostate.ue))
+        fi.geoid_out[k] .= copy(Array(fi.geostate.geoid))
+        fi.sealevel_out[k] .= copy(Array(fi.geostate.sealevel))
+    end
+end
+
 #####################################################
 # Domain and projection utils
 #####################################################
@@ -635,7 +651,7 @@ function convert2Array(X::Vector)
     return [Array(x) for x in X]
 end
 
-function copystructs2cpu(
+function reinit_structs_cpu(
     Omega::ComputationDomain{T, M},
     p::LateralVariability{T, M},
 ) where {T<:AbstractFloat, M<:AbstractMatrix{T}}

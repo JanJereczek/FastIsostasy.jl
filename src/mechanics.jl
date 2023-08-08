@@ -41,7 +41,7 @@ function fastisostasy(
         t_Hice_snapshots, Hice_snapshots,
         t_eta_snapshots, eta_snapshots; kwargs...)
     forward_isostasy!(fi, dt, ODEsolver, verbose)
-    return fi
+    return FastIsoResults(fi)
 end
 
 """
@@ -49,61 +49,74 @@ end
 
 Forward-integrate the isostatic adjustment.
 """
+# function forward_isostasy!(fi::FastIso{T, M}, dt::T, ODEsolver::Any,
+#     verbose::Bool) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
+#     t_out = fi.t_out
+#     forward_isostasy!(fi, t_out, dt, ODEsolver, verbose)
+#     return nothing
+# end
+
 function forward_isostasy!(fi::FastIso{T, M}, dt::T, ODEsolver::Any,
     verbose::Bool) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
 
     t1 = time()
-
     t_out = fi.t_out
-    u = copy(fi.geostate.u)
-    dudt = copy(u)
 
-    @inbounds for k in eachindex(t_out)[1:end]
-        t0 = k == 1 ? T(0.0) : t_out[k-1]
-        if verbose
-            println("Computing until t = $(Int(round(seconds2years(t_out[k])))) years...")
-        end
-        if isa(ODEsolver, OrdinaryDiffEqAlgorithm)
-            prob = ODEProblem(forwardstep_isostasy!, u, (t0, t_out[k]), fi)
-            
-            if ODEsolver == Euler()
-                sol = solve(prob, ODEsolver, reltol=1e-3, dt = dt)
-            else
-                sol = solve(prob, ODEsolver, reltol=1e-3)
-            end
+    # Make a first diagnotisc update to store these values.
+    update_diagnostics!(fi.geostate.dudt, fi.geostate.u, fi, 0.0)
+    write_out!(fi, 1)
 
-            u .= sol(t_out[k], Val{0})
-            if k == 1
-                dudt_isostasy!(dudt, u, fi, t_out[k])
-            else
-                dudt .= sol(t_out[k], Val{1})
-            end
-        else
-            for t in t0:dt:t_out[k]
-                forwardstep_isostasy!(dudt, u, fi, t)
-                explicit_euler!(u, dudt, dt)
-            end
-        end
-        
-        # Convert outputs back to CPU for postprocessing
-        fi.u_out[k] .= copy(Array(u))
-        fi.dudt_out[k] .= copy(Array(dudt))
-        fi.ue_out[k] .= copy(Array(fi.geostate.ue))
-        fi.geoid_out[k] .= copy(Array(fi.geostate.geoid))
-        fi.sealevel_out[k] .= copy(Array(fi.geostate.sealevel))
+    # Check if solver available and initialize ODEProblem if possible.
+    if !isa(ODEsolver, OrdinaryDiffEqAlgorithm)
+        error("Provided ODEsolver is not supported.")
+    elseif ODEsolver != Euler()
+        diffeq = (alg = ODEsolver, abstol = 1e-9, reltol = 1e-6)
+        fi_ode = CoupledODEs(update_diagnostics!, fi.geostate.u, fi; diffeq)
+        # prob = ODEProblem(update_diagnostics!, u, (t_out[1], t_out[2]), fi)
     end
+
+    @inbounds for k in eachindex(t_out)[2:end]
+        difft = t_out[k]-t_out[k-1]
+        X, t = trajectory(fi_ode, difft, fi.geostate.u; t0 = t_out[k-1], Δt = difft)
+        fi.geostate.u .= reshape(X[2, :], fi.Omega.Nx, fi.Omega.Ny)
+        update_diagnostics!(fi.geostate.dudt, fi.geostate.u, fi, t[2])
+        println("$k, $(t_out[k]), $(minimum(fi.geostate.u))")
+        # (t0+Ttr):Δt:(t0+Ttr+T)
+        write_out!(fi, k)
+    end
+
+    # @inbounds for k in eachindex(t_out)[2:end]
+    #     if verbose
+    #         println("Computing until t = $(Int(round(seconds2years(t_out[k])))) years...")
+    #     end
+
+    #     if ODEsolver == Euler()
+    #         @inbounds for t in t_out[k-1]:dt:t_out[k]
+    #             update_diagnostics!(dudt, u, fi, t)
+    #             explicit_euler!(u, dudt, dt)
+    #         end
+    #     else
+
+            
+
+    #         # prob = remake(prob, u0 = fi.geostate.u, tspan = (t_out[k-1], t_out[k]), p = fi)
+    #         # sol = solve(prob, ODEsolver, reltol=1e-3)
+    #         # fi.geostate.dudt = sol(t_out[k], Val{1})
+    #     end
+
+    # end
 
     fi.computation_time += time() - t1
     return nothing
 end
 
 """
-    forwardstep_isostasy!(dudt, u, fi, t)
+    update_diagnostics!(dudt, u, fi, t)
 
-Forward integrate the isostatic adjustment over a single time step by updating the
-displacement rate `dudt`, and the sea-level state contained within `fi::FastIso`.
+Update all the diagnotisc variables, i.e. all fields of `fi.geostate` apart
+from the displacement, which requires an integrator.
 """
-function forwardstep_isostasy!(dudt::M, u::M, fi::FastIso{T, M}, t::T,
+function update_diagnostics!(dudt::M, u::M, fi::FastIso{T, M}, t::T,
     ) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
 
     # Order really matters here!
@@ -111,10 +124,9 @@ function forwardstep_isostasy!(dudt::M, u::M, fi::FastIso{T, M}, t::T,
         update_loadcolumns!(fi, fi.tools.Hice(t))
     end
     update_elasticresponse!(fi)
-
     fi.Omega.bc!(u, fi.Omega.Nx, fi.Omega.Ny)
     update_bedrock!(fi, u)
-
+    
     # Only update the geoid and sea level if geostate is interactive.
     # As integration requires smaller time steps than diagnostics,
     # only update geostate every fi.geostate.dt
@@ -161,19 +173,7 @@ function dudt_isostasy!(
     dudt[:, :] .= real.(fi.tools.pifft * ((fi.tools.pfft * (rhs ./ 
         (2 .* fi.p.effective_viscosity)) ) ./ Omega.pseudodiff))
 
-    return nothing
-end
-
-"""
-    explicit_euler!()
-
-Update the state `u` by performing an explicit Euler integration of its derivative `dudt`
-over a time step `dt`.
-"""
-function explicit_euler!(u::M, dudt::M, dt::T,
-    ) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
-    u .+= dudt .* dt
-    return nothing
+    return dudt
 end
 
 #####################################################

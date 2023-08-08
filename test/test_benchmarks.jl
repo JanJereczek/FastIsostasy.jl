@@ -39,7 +39,7 @@ function benchmark1()
 
     results = fastisostasy(t_out, Omega, c, p, Hcylinder, ODEsolver = BS3(),
         interactive_geostate = false, verbose = false)
-    Omega, p = copystructs2cpu(Omega, p)
+    Omega, p = reinit_structs_cpu(Omega, p)
 
     # Comparing to analytical results
     slicex, slicey = slice_along_x(Omega)
@@ -50,9 +50,9 @@ function benchmark1()
         t = t_out[k]
         analytic_solution_r(r) = analytic_solution(r, t, c, p, H, R, analytic_support)
         u_analytic = analytic_solution_r.( get_r.(x, y) )
-        @test mean(abs.(results.viscous[k][slicex, slicey] .- u_analytic)) < 5
-        @test maximum(abs.(results.viscous[k][slicex, slicey] .- u_analytic)) < 12
-        update_compfig!(axs, [results.viscous[k][slicex, slicey]], [u_analytic])
+        @test mean(abs.(results.u_out[k][slicex, slicey] .- u_analytic)) < 5
+        @test maximum(abs.(results.u_out[k][slicex, slicey] .- u_analytic)) < 12
+        update_compfig!(axs, [results.u_out[k][slicex, slicey]], [u_analytic])
     end
     save("plots/benchmark1/plot.png", fig)
 end
@@ -101,9 +101,9 @@ function benchmark2()
             dudt_bm = dudt_itp.(x)
             n_bm = n_itp.(x)
 
-            u_fi = results.viscous[k][slicex, slicey]
-            dudt_fi = m_per_sec2mm_per_yr.(results.displacement_rate[k][slicex, slicey])
-            n_fi = results.geoid[k][slicex, slicey]
+            u_fi = results.u_out[k][slicex, slicey]
+            dudt_fi = m_per_sec2mm_per_yr.(results.dudt_out[k][slicex, slicey])
+            n_fi = results.geoid_out[k][slicex, slicey]
 
             update_compfig!(axs, [u_fi, dudt_fi, n_fi], [u_bm, dudt_bm, n_bm])
 
@@ -144,7 +144,7 @@ function benchmark3()
 
         for k in eachindex(t_out)
             itp = linear_interpolation(x_sk, u_sk[:, k], extrapolation_bc = Flat())
-            u_fi, u_bm = results.viscous[k][slicex, slicey], itp.(x)
+            u_fi, u_bm = results.u_out[k][slicex, slicey], itp.(x)
             update_compfig!(axs, [u_fi], [u_bm])
             @test mean(abs.(u_fi .- u_bm)) .< mean_tol[m]
             @test maximum(abs.(u_fi .- u_bm)) .< max_tol[m]

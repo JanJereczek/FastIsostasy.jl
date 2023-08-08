@@ -19,7 +19,7 @@ FastisoResults
 fastisostasy
 forward_isostasy
 init_results
-forwardstep_isostasy!
+update_diagnostics!
 dudt_isostasy!
 simple_euler!
 corner_bc

@@ -1,6 +1,16 @@
 #########################################################
 # Radial earth model
 #########################################################
+"""
+    ReferenceEarthModel
+Return a struct with vectors of the:
+ - radius,
+ - depth,
+ - density,
+ - P-wave velocities,
+ - S-wave velocities,
+which are typically used to characterize the properties of an onion-like solid Earth
+"""
 struct ReferenceEarthModel{T<:AbstractFloat}
     radius::Vector{T}
     depth::Vector{T}
@@ -16,6 +26,8 @@ end
 #########################################################
 """
     ComputationDomain
+    ComputationDomain(W, n)
+    ComputationDomain(Wx, Wy, Nx, Ny)
 
 Return a struct containing all information related to geometry of the domain
 and potentially used parallelism. To initialize one with `2*W` and `2^n` grid cells:
@@ -235,6 +247,7 @@ Return a mutable struct containing the geostate which will be updated over the s
 """
 mutable struct GeoState{T<:AbstractFloat, M<:AbstractMatrix{T}}
     u::M                    # viscous displacement
+    dudt::M                 # viscous displacement rate
     ue::M                   # elastic displacement
     H_ice::M                # current height of ice column
     H_water::M              # current height of water column
@@ -279,9 +292,9 @@ struct PrecomputedFastiso{T<:AbstractFloat, M<:AbstractMatrix{T},
     pifft::AbstractFFTs.ScaledPlan{Complex{T}, P2, T}
     negligible_gradD::Bool
     Hice::Interpolations.Extrapolation{M, 1, Interpolations.GriddedInterpolation{M, 1, Vector{M},
-        Gridded{Linear{Throw{OnGrid}}}, Tuple{Vector{T}}}, Gridded{Linear{Throw{OnGrid}}}}
+        Gridded{Linear{Throw{OnGrid}}}, Tuple{Vector{T}}}, Gridded{Linear{Throw{OnGrid}}}, Flat{Nothing}}
     eta::Interpolations.Extrapolation{M, 1, Interpolations.GriddedInterpolation{M, 1, Vector{M},
-        Gridded{Linear{Throw{OnGrid}}}, Tuple{Vector{T}}}, Gridded{Linear{Throw{OnGrid}}}}
+        Gridded{Linear{Throw{OnGrid}}}, Tuple{Vector{T}}}, Gridded{Linear{Throw{OnGrid}}}, Flat{Nothing}}
 end
 
 
@@ -319,9 +332,9 @@ function PrecomputedFastiso(
 
     # rhog = p.uppermantle_density .* c.g
     Hice = linear_interpolation( t_Hice_snapshots,
-        kernelpromote(Hice_snapshots, Omega.arraykernel) )
+        kernelpromote(Hice_snapshots, Omega.arraykernel); extrapolation_bc=Flat())
     eta = linear_interpolation(t_eta_snapshots,
-        kernelpromote(eta_snapshots, Omega.arraykernel) )
+        kernelpromote(eta_snapshots, Omega.arraykernel); extrapolation_bc=Flat())
 
     return PrecomputedFastiso(Omega.arraykernel(elasticgreen),
         Omega.arraykernel(geoidgreen), p1, p2, negligible_gradD, Hice, eta)
@@ -343,7 +356,7 @@ Return a struct containing all the other structs needed for the forward integrat
  - geostate::GeoState{T, M}
  - interactive_geostate::Bool
 """
-struct FastIso{T<:AbstractFloat, M<:AbstractMatrix{T}}
+mutable struct FastIso{T<:AbstractFloat, M<:AbstractMatrix{T}}
     Omega::ComputationDomain{T, M}
     c::PhysicalConstants{T}
     p::LateralVariability{T, M}
@@ -391,6 +404,7 @@ function FastIso(
     eta_snapshots::Vector{<:AbstractMatrix{T}};
     internal_loadupdate::Bool = true,
     u_0::M = null(Omega),
+    dudt_0::M = null(Omega),
     ue_0::M = null(Omega),
     geoid_0::M = null(Omega),
     z_0::M = null(Omega),
@@ -404,9 +418,9 @@ function FastIso(
         t_eta_snapshots, eta_snapshots)
 
     refgeostate = RefGeoState(
-        u_0, ue_0,                  # viscous and elastic displacement
+        u_0, ue_0,          # viscous and elastic displacement
         H_ice_0, H_water_0, b_0,    # ice & liquid water column
-        z_0,                 # z0
+        z_0,                        # z0 (useful for external sealevel forcing)
         sealevel_0,                 # sealevel
         T(0.0),                     # sle_af
         T(0.0),                     # V_pov
@@ -414,8 +428,9 @@ function FastIso(
         T(0.0),                     # conservation_term
     )
     geostate = GeoState(
-        copy(u_0), copy(ue_0),      # viscous and elastic displacement
-        Hice(0.0),                  # ice column
+        copy(u_0), copy(dudt_0),    # viscous displacement and associated rate
+        copy(ue_0),                 # elastic displacement
+        tools.Hice(0.0),            # ice column
         copy(H_water_0),            # water column
         copy(b_0),                  # bedrock position
         geoid_0,                    # geoid perturbation
@@ -428,8 +443,36 @@ function FastIso(
         null(Omega),                # dtloadanom
     )
 
+    if 0 in t_out
+        nothing
+    else
+        t_out = vcat(0, t_out)
+    end
     u_out, dudt_out, ue_out, geoid_out, sealevel_out = init_results(null(Omega), t_out)
+    
     return FastIso(Omega, c, p, tools, refgeostate, geostate,
         interactive_geostate, internal_loadupdate, t_out, u_out, dudt_out,
         ue_out, geoid_out, sealevel_out, 0.0)
+end
+
+struct FastIsoResults{T<:AbstractFloat, M<:AbstractMatrix{T}}
+    Omega::ComputationDomain{T, M}
+    c::PhysicalConstants{T}
+    p::LateralVariability{T, M}
+    tools::PrecomputedFastiso{T, M}
+    refgeostate::RefGeoState{T, M}
+    geostate::GeoState{T, M}
+    interactive_geostate::Bool
+    internal_loadupdate::Bool
+    t_out::Vector{T}
+    u_out::Vector{Matrix{T}}
+    dudt_out::Vector{Matrix{T}}
+    ue_out::Vector{Matrix{T}}
+    geoid_out::Vector{Matrix{T}}
+    sealevel_out::Vector{Matrix{T}}
+    computation_time::Real
+end
+
+function FastIsoResults(fi::FastIso)
+    return FastIsoResults([getproperty(fi, fn) for fn in fieldnames(FastIso)]...)
 end

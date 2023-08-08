@@ -36,13 +36,14 @@ using CairoMakie
 R = 1000e3                  # ice disc radius (m)
 H = 1000.0                  # ice disc thickness (m)
 Hice = uniform_ice_cylinder(Omega, R, H)
-t_out = years2seconds.([0.0, 100.0, 500.0, 1500.0, 5000.0, 10_000.0, 50_000.0])
+t_out = years2seconds.([0.0, 200.0, 600.0, 2000.0, 5000.0, 10_000.0, 50_000.0])
 
 results = fastisostasy(t_out, Omega, c, p, Hice, ODEsolver = BS3())
 function plot3D_fastiso_results(Omega, results)
-    fig, ax, srf = surface(Omega.X, Omega.Y, results.ue_out[end] + results.u_out[end],
+    X, Y = Array(Omega.X), Array(Omega.Y)
+    fig, ax, srf = surface(X, Y, results.ue_out[end] + results.u_out[end],
         axis=(type=Axis3,), colormap = :cool)
-    wireframe!(ax, Omega.X, Omega.Y, results.ue_out[end] + results.u_out[end],
+    wireframe!(ax, X, Y, results.ue_out[end] + results.u_out[end],
         color = :black, linewidth = 0.1)
     return fig
 end
@@ -85,9 +86,9 @@ normalized_asymptote(t) = 1 - exp(-t/tau)
 t_asymptotic = collect(0.0:years2seconds(5000.0):t_out[end])
 
 H_asymptotic = [Hice .* normalized_asymptote(t) for t in t_asymptotic]
-results_asymptotic = fastisostasy(t_out, Omega, c, p, t_asymptotic, H_asymptotic,
-    ODEsolver = BS3())
-plot3D_fastiso_results(Omega, results_asymptotic)
+# results_asymptotic = fastisostasy(t_out, Omega, c, p, t_asymptotic, H_asymptotic,
+#     ODEsolver = "ExplicitEuler")
+# plot3D_fastiso_results(Omega, results_asymptotic)
 ```
 ### GPU support
 
@@ -99,8 +100,8 @@ Omega = ComputationDomain(W, n, use_cuda = true)
 p = LateralVariability(Omega, layer_viscosities = lv, layer_boundaries = lb)
 Hice = uniform_ice_cylinder(Omega, R, H)
 
-results_gpu = fastisostasy(t_out, Omega, c, p, Hice, ODEsolver = BS3())
-plot3D_fastiso_results(Omega, results_gpu)
+#results_gpu = fastisostasy(t_out, Omega, c, p, Hice, ODEsolver = BS3())
+#plot3D_fastiso_results(Omega, results_gpu)
 ```
 
 That's it, nothing more!
@@ -108,28 +109,97 @@ That's it, nothing more!
 !!! info "Only CUDA supported!"
     For now only Nvidia GPUs are supported and there is no plan of extending this compatibility at this point.
 
-## Simple load and geometry - DIY
+## Make your own time loop
 
-Nonetheless, as any high-level convenience function, [`fastisostasy`](@ref) has limitations. An ice-sheet modeller typically wants to embed FastIsostasy within a time-stepping loop. This can be easily done by getting familiar with some intermediate-level functions. We here illustrate this by letting an ice cap grow over time. This growth is unphysical for the sake of keeping the example simple. 
+As any high-level function, [`fastisostasy`](@ref) has limitations. An ice-sheet modeller typically wants to embed FastIsostasy within a time-stepping loop. This can be easily done by getting familiar with some intermediate-level functions:
 
 ```@example MAIN
-W = 3000e3
-n = 6
+Omega = ComputationDomain(3000e3, 6)
+c = PhysicalConstants(rho_litho = 0.0)
+p = LateralVariability(Omega)
+Hice = uniform_ice_cylinder(Omega, R, H)
+
+interactive_geostate = false
+fi = FastIso(Omega, c, p, t_out, interactive_geostate)
+dt = years2seconds(1.0)
+t = t_out[1]:dt:t_out[end]
+
+for k in eachindex(t)
+    if minimum(abs.(t[k] .- t_out)) < years2seconds(0.1)
+        println("t = $(round(seconds2years(t[k]), sigdigits=1)) yr,    "*
+                "u_min = $(round(minimum(fi.geostate.u), digits=2)) m")
+    end
+    update_loadcolumns!(fi, Hice)
+    update_diagnostics!(fi.geostate.dudt, fi.geostate.u, fi, t[k])
+    explicit_euler!(fi.geostate.u, fi.geostate.dudt, dt)
+end
+```
+
+Contrary to the previous examples, an explicit Euler method is used for integration. Whereas the previously used solvers were part of OrdinaryDiffEq.jl, the current one is a lightweigth implementation that aims to avoid a `remake` of the `ODEProblem` at each iteration. The latter option can however be a good idea **if you can afford large coupling time steps**. Here is an example of it:
+
+```@example MAIN
+dt_couple = years2seconds(200.0)
+t = collect(t_out[1]:dt_couple:t_out[end])
+fi = FastIso(Omega, c, p, t, interactive_geostate)
+prob0 = ODEProblem(update_diagnostics!, copy(fi.geostate.u), (t[1], t[2]), fi)
+
+for k in eachindex(t)[2:end]
+    update_loadcolumns!(fi, Hice)
+    prob = remake(prob0, u0 = fi.geostate.u, tspan = (t[k-1], t[k]), p = fi)
+    sol = solve(prob, BS3(), reltol=1e-3)
+    if minimum(abs.(t[k] .- t_out)) < years2seconds(0.1)
+        println("t = $(round(seconds2years(t[k]), sigdigits=1)) years,    "*
+                "u_min = $(round(minimum(fi.geostate.u), digits=2)) meters")
+    end
+end
+```
+
+!!! info "Coupling to julia Ice-Sheet model"
+    In case your Ice-Sheet model is programmed in julia, we highly recommend performing
+    the coupling within the function updating the derivatives and let `OrdinaryDiffEq.jl`
+    handle the rest.
+
+## Antarctic deglaciation
+
+We now want to provide a tough example that presents:
+- a heterogeneous lithosphere thickness
+- a heterogeneous upper-mantle viscosity
+- various viscous channels
+- a more elaborate load that evolves over time
+- changes in the sea-level
+
+For this we run a deglaciation of Antarctica, based on the ice thickness estimated in [GLAC1D]().
+
+```@example MAIN
+W = 3000e3      # (m) half-width of the domain
+n = 7           # implies an NxN grid with N = 2^n = 128.
 Omega = ComputationDomain(W, n)
 c = PhysicalConstants()
-p = LateralVariability(Omega)
+```
 
-R = 1000e3                  # ice disc radius (m)
-H = 1000.0                  # ice disc thickness (m)
+## Inversion of viscosity field
 
-u_0, ue_0 = copy(Omega.null), copy(Omega.null)
-fi = FastIso(Omega, c, p, t_Hice_snapshots, Hice_snapshots,
-    t_eta_snapshots, eta_snapshots, interactive_geostate; kwargs...)
-u = copy(u_0)
+FastIsostasy.jl relies on simplification of the full problem and might therefore need a calibration step to match real data or 3D GIA model output, thereafter simply referred to by data. By means of an unscented Kalman inversion, one can e.g. infer the appropriate field of effective mantle viscosity that matches the data best. Whereas this is known to be a tedious step, FastIsostasy is developped to ease the procedure by providing a convenience struct `Paraminversion` that can be run by:
 
-for t in 0.0:10.0:100.0
-    fi.Hice = Hice .* normalized_asymptote(t)
-    u, dudt, ue, geoid, sealevel = forward_isostasy(dt, t_out, u, fi, BS3(), false)
-    println("t = $t,    u_max = $(maximum(u)),    dudt_max = $(maximum(dudt))")
-end
+```@example MAIN
+Omega = ComputationDomain(W, n)
+
+lb = [88e3, 180e3, 280e3, 400e3]
+lv = get_wiens_layervisc(Omega)
+p = LateralVariability(Omega, layer_boundaries = lb, layer_viscosities = lv)
+ground_truth = copy(p.effective_viscosity)
+
+R = T(2000e3)               # ice disc radius (m)
+H = T(1000)                 # ice disc thickness (m)
+Hcylinder = uniform_ice_cylinder(Omega, R, H)
+t_out = years2seconds.(0.0:1_000.0:2_000.0)
+
+results = fastisostasy(t_out, Omega, c, p, Hcylinder, ODEsolver=BS3(), interactive_geostate=false)
+
+# tinv = t_out[2:end]
+# Hice = [Hcylinder for t in tinv]
+# Y = results.u_out[2:end]
+# paraminv = ParamInversion(Omega, c, p, tinv, Y, Hice)
+# priors, ukiobj = perform(paraminv)
+# logeta, Gx, e_mean, e_sort = extract_inversion(priors, ukiobj, paraminv)
 ```

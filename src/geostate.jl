@@ -115,18 +115,17 @@ function update_loadcolumns!(fi::FastIso{T, M}, H_ice::M
     ) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
 
     fi.geostate.H_ice .= H_ice
-    if fi.interactive_geostate
-        fi.geostate.H_water .= max.(fi.geostate.sealevel -
-            (fi.geostate.b + H_ice), 0)
-    end
+    # if fi.interactive_geostate
+    #     fi.geostate.H_water .= max.(fi.geostate.sealevel -
+    #         (fi.geostate.b + H_ice), 0)
+    # end
     # update sediment thickness
     return nothing
 end
 
-function update_bedrock!(fi::FastIso{T, M}, u::M
-    ) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
+function update_bedrock!(fi::FastIso{T, M}, u::M) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
     fi.geostate.u .= u
-    fi.geostate.b .= fi.refgeostate.b .+ fi.geostate.ue .+ u
+    fi.geostate.b .= fi.refgeostate.b .+ fi.geostate.ue .+ fi.geostate.u
     return nothing
 end
 

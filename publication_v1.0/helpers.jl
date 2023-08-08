@@ -1,4 +1,4 @@
 function unpack(results::FastIso)
-    Omega, p = copystructs2cpu(results.Omega, results.p)
+    Omega, p = reinit_structs_cpu(results.Omega, results.p)
     return Omega, results.c, p, results.t_out
 end

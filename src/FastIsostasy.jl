@@ -11,15 +11,17 @@ using AbstractFFTs
 using FastGaussQuadrature: gausslegendre
 using DSP: conv
 using CUDA: CuArray, CUFFT, allowscalar
-using OrdinaryDiffEq: ODEProblem, solve, OrdinaryDiffEqAlgorithm
+using OrdinaryDiffEq: OrdinaryDiffEqAlgorithm
 using EnsembleKalmanProcesses
 using EnsembleKalmanProcesses.Observations
 using EnsembleKalmanProcesses.ParameterDistributions
 using SpecialFunctions: besselj0, besselj1
+using DynamicalSystemsBase: step!, CoupledODEs, trajectory
 
 using Reexport
 @reexport using Interpolations
-@reexport using OrdinaryDiffEq: Euler, Midpoint, Heun, Ralston, BS3, BS5, RK4,
+@reexport using OrdinaryDiffEq: ODEProblem, solve, remake,
+    Euler, Midpoint, Heun, Ralston, BS3, BS5, RK4,
     OwrenZen3, OwrenZen4, OwrenZen5, Tsit5, DP5, RKO65, TanYam7, DP8,
     Feagin10, Feagin12, Feagin14, TsitPap8, Vern6, Vern7, Vern8, Vern9,
     VCABM, Rosenbrock23, QNDF, FBDF, ImplicitEuler
@@ -28,6 +30,7 @@ using Reexport
 include("structs.jl")
 include("utils.jl")
 include("derivatives.jl")
+include("integrators.jl")
 include("geostate.jl")
 include("mechanics.jl")
 include("inversion.jl")
@@ -44,7 +47,7 @@ export FastIso
 # utils.jl
 export years2seconds, seconds2years, m_per_sec2mm_per_yr
 export meshgrid, dist2angulardist, latlon2stereo, stereo2latlon
-export kernelpromote, convert2Array, copystructs2cpu
+export kernelpromote, convert2Array, reinit_structs_cpu
 
 export matrify, matrify
 export loginterp_viscosity
@@ -69,6 +72,8 @@ export meshgrid
 export get_quad_coeffs
 export get_elasticgreen
 export fastisostasy
+export forward_isostasy!, update_diagnostics!
+export explicit_euler!, explicit_rk4!
 export dudt_isostasy!
 export dudt_isostasy_sparse!
 export corner_bc!

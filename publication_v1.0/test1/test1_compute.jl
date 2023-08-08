@@ -29,7 +29,7 @@ function main(
     println("-------------------------------------")
 
     if use_cuda
-        Omega, p = copystructs2cpu(Omega, p)
+        Omega, p = reinit_structs_cpu(Omega, p)
     end
 
     gs = active_gs ? "geostate" : "isostate"
