@@ -11,7 +11,7 @@ include("helpers.jl")
 function main()
 
     H, R = 1e3, 1000e3
-    case = "ExplicitEuler"
+    case = "SimpleEuler"
     N = 256
     N2 = Int(N/2)
     N4 = Int(N/4)

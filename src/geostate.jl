@@ -1,92 +1,92 @@
 """
-    update_geoid!(fi::FastIso)
+    update_geoid!(fip::FastIsoProblem)
 
 Update the geoid by convoluting the Green's function with the load anom.
 """
-function update_geoid!(fi::FastIso{T, M}) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
-    fi.geostate.geoid .= samesize_conv(fi.tools.geoidgreen,
-        mass_anom(fi), fi.Omega, no_mean_bc)
+function update_geoid!(fip::FastIsoProblem{T, M}) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
+    fip.geostate.geoid .= samesize_conv(fip.tools.geoidgreen,
+        mass_anom(fip), fip.Omega, no_mean_bc)
     return nothing
 end
 
 """
-    columnanom_ice(fi)
+    columnanom_ice(fip)
 
 Compute the density-scaled anomaly of the ice column w.r.t. the reference state.
 """
-function columnanom_ice(fi::FastIso{T, M}) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
-    return fi.c.rho_ice .* (fi.geostate.H_ice - fi.refgeostate.H_ice)
+function columnanom_ice(fip::FastIsoProblem{T, M}) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
+    return fip.c.rho_ice .* (fip.geostate.H_ice - fip.refgeostate.H_ice)
 end
 
 """
-    columnanom_water(fi)
+    columnanom_water(fip)
 
 Compute the density-scaled anomaly of the (liquid) water column w.r.t. the reference state.
 """
-function columnanom_water(fi::FastIso{T, M}) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
-    return fi.c.rho_seawater .* (fi.geostate.H_water - fi.refgeostate.H_water)
+function columnanom_water(fip::FastIsoProblem{T, M}) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
+    return fip.c.rho_seawater .* (fip.geostate.H_water - fip.refgeostate.H_water)
 end
 
 """
-    columnanom_mantle(fi)
+    columnanom_mantle(fip)
 
 Compute the density-scaled anomaly of the mantle column w.r.t. the reference state.
 """
-function columnanom_mantle(fi::FastIso{T, M}) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
-    return fi.c.rho_uppermantle .* (fi.geostate.u - fi.refgeostate.u)
+function columnanom_mantle(fip::FastIsoProblem{T, M}) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
+    return fip.c.rho_uppermantle .* (fip.geostate.u - fip.refgeostate.u)
 end
 
 """
-    columnanom_litho(fi)
+    columnanom_litho(fip)
 
 Compute the density-scaled anomaly of the lithosphere column w.r.t. the reference state.
 """
-function columnanom_litho(fi::FastIso{T, M}) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
-    return fi.c.rho_litho .* (fi.geostate.ue - fi.refgeostate.ue)
+function columnanom_litho(fip::FastIsoProblem{T, M}) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
+    return fip.c.rho_litho .* (fip.geostate.ue - fip.refgeostate.ue)
 end
 
 """
-    columnanom_load(fi)
+    columnanom_load(fip)
 
 Compute the density-scaled anomaly of the load (ice + liquid water) column w.r.t.
 the reference state.
 """
-function columnanom_load(fi::FastIso{T, M}) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
-    return columnanom_ice(fi) + columnanom_water(fi) # + columnanom_sediment(fi)
+function columnanom_load(fip::FastIsoProblem{T, M}) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
+    return columnanom_ice(fip) + columnanom_water(fip) # + columnanom_sediment(fip)
 end
 
 """
-    columnanom_full(fi)
+    columnanom_full(fip)
 
 Compute the density-scaled anomaly of the all the columns (ice + liquid water + mantle)
 w.r.t. the reference state.
 
 Correction of the surface distortion is not needed here since rho * A * z / A = rho * z.
 """
-function columnanom_full(fi::FastIso{T, M}) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
+function columnanom_full(fip::FastIsoProblem{T, M}) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
     # columnanom_mantle() depends on sign of u, which is negative for depression.
     # Therefore, we only need to add the terms below.
-    return columnanom_load(fi) + columnanom_mantle(fi) +
-        columnanom_litho(fi)
+    return columnanom_load(fip) + columnanom_mantle(fip) +
+        columnanom_litho(fip)
 end
 
-function mass_anom(fi::FastIso{T, M}) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
-    surface = (fi.Omega.dx * fi.Omega.dy)
-    return correct_surfacedisctortion(surface .* columnanom_full(fi), fi)
+function mass_anom(fip::FastIsoProblem{T, M}) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
+    surface = (fip.Omega.dx * fip.Omega.dy)
+    return correct_surfacedisctortion(surface .* columnanom_full(fip), fip)
 end
 
-function correct_surfacedisctortion(column::M, fi::FastIso{T, M}
+function correct_surfacedisctortion(column::M, fip::FastIsoProblem{T, M}
     ) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
 
-    if fi.Omega.projection_correction
-        return column .* fi.Omega.K .^ 2
+    if fip.Omega.projection_correction
+        return column .* fip.Omega.K .^ 2
     else
         return column
     end
 end
 
 """
-    get_geoidgreen(fi::FastIso)
+    get_geoidgreen(fip::FastIsoProblem)
 
 Return the Green's function used to compute the anoms in geoid.
 
@@ -107,30 +107,30 @@ function unbounded_geoidgreen(R, c::PhysicalConstants{<:AbstractFloat})
 end
 
 """
-    update_loadcolumns!(fi::FastIso, u::AbstractMatrix{T}, H_ice::AbstractMatrix{T})
+    update_loadcolumns!(fip::FastIsoProblem, u::AbstractMatrix{T}, H_ice::AbstractMatrix{T})
 
 Update the load columns of a `::GeoState`.
 """
-function update_loadcolumns!(fi::FastIso{T, M}, H_ice::M
+function update_loadcolumns!(fip::FastIsoProblem{T, M}, H_ice::M
     ) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
 
-    fi.geostate.H_ice .= H_ice
-    # if fi.interactive_geostate
-    #     fi.geostate.H_water .= max.(fi.geostate.sealevel -
-    #         (fi.geostate.b + H_ice), 0)
+    fip.geostate.H_ice .= H_ice
+    # if fip.interactive_sealevel
+    #     fip.geostate.H_water .= max.(fip.geostate.sealevel -
+    #         (fip.geostate.b + H_ice), 0)
     # end
     # update sediment thickness
     return nothing
 end
 
-function update_bedrock!(fi::FastIso{T, M}, u::M) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
-    fi.geostate.u .= u
-    fi.geostate.b .= fi.refgeostate.b .+ fi.geostate.ue .+ fi.geostate.u
+function update_bedrock!(fip::FastIsoProblem{T, M}, u::M) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
+    fip.geostate.u .= u
+    fip.geostate.b .= fip.refgeostate.b .+ fip.geostate.ue .+ fip.geostate.u
     return nothing
 end
 
 """
-    update_sealevel!(fi::FastIso)
+    update_sealevel!(fip::FastIsoProblem)
 
 Update the sea-level by adding the various contributions.
 
@@ -138,107 +138,107 @@ Update the sea-level by adding the various contributions.
 
 Coulon et al. (2021), Figure 1.
 """
-function update_sealevel!(fi::FastIso{T, M}) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
-    update_slc!(fi)
-    fi.geostate.sealevel = fi.refgeostate.sealevel .+ 
-        fi.geostate.geoid .+ fi.geostate.slc .+
-        fi.refgeostate.conservation_term
+function update_sealevel!(fip::FastIsoProblem{T, M}) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
+    update_slc!(fip)
+    fip.geostate.sealevel = fip.refgeostate.sealevel .+ 
+        fip.geostate.geoid .+ fip.geostate.slc .+
+        fip.refgeostate.conservation_term
     return nothing
 end
 
 """
-    update_slc!(fi::FastIso)
+    update_slc!(fip::FastIsoProblem)
 
 Update the sea-level contribution of melting above floatation, density correction
 and potential ocean volume as in [^Goelzer2020], eq. (12).
 """
-function update_slc!(fi::FastIso{T, M}) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
-    update_V_af!(fi)
-    update_V_pov!(fi)
-    update_V_den!(fi)
-    update_slc_pov!(fi)
-    update_slc_den!(fi)
-    fi.geostate.slc = fi.geostate.slc_af + fi.geostate.slc_pov +
-        fi.geostate.slc_den
+function update_slc!(fip::FastIsoProblem{T, M}) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
+    update_V_af!(fip)
+    update_V_pov!(fip)
+    update_V_den!(fip)
+    update_slc_pov!(fip)
+    update_slc_den!(fip)
+    fip.geostate.slc = fip.geostate.slc_af + fip.geostate.slc_pov +
+        fip.geostate.slc_den
     return nothing
 end
 
 """
-    update_V_af!(fi::FastIso)
+    update_V_af!(fip::FastIsoProblem)
 
 Update the ice volume above floatation as in  [^Goelzer2020], eq. (13).
 Note: we do not use eq. (1) as it is only a special case of eq. (13) that does not
 allow a correct representation of external sea-level forcings.
 """
-function update_V_af!(fi::FastIso{T, M}) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
-    fi.geostate.V_af = sum( fi.geostate.H_ice .+
-        min.(fi.geostate.b .- fi.refgeostate.z0, 0) .*
-        (fi.c.rho_seawater / fi.c.rho_ice) .*
-        (fi.Omega.dx * fi.Omega.dy) ./ (fi.Omega.K .^ 2) )
+function update_V_af!(fip::FastIsoProblem{T, M}) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
+    fip.geostate.V_af = sum( fip.geostate.H_ice .+
+        min.(fip.geostate.b .- fip.refgeostate.z0, 0) .*
+        (fip.c.rho_seawater / fip.c.rho_ice) .*
+        (fip.Omega.dx * fip.Omega.dy) ./ (fip.Omega.K .^ 2) )
     return nothing
 end
 
 """
-    update_slc_af!(fi::FastIso)
+    update_slc_af!(fip::FastIsoProblem)
 
 Update the sea-level contribution of ice above floatation as in [^Goelzer2020], eq. (2).
 """
-function update_slc_af!(fi::FastIso{T, M}) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
-    fi.geostate.sle_af = fi.geostate.V_af / fi.c.A_ocean *
-        fi.c.rho_ice / fi.c.rho_seawater
-    fi.geostate.slc_af = -( fi.geostate.sle_af - fi.refgeostate.sle_af )
+function update_slc_af!(fip::FastIsoProblem{T, M}) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
+    fip.geostate.sle_af = fip.geostate.V_af / fip.c.A_ocean *
+        fip.c.rho_ice / fip.c.rho_seawater
+    fip.geostate.slc_af = -( fip.geostate.sle_af - fip.refgeostate.sle_af )
     return nothing
 end
 
 """
-    update_V_pov!(fi::FastIso)
+    update_V_pov!(fip::FastIsoProblem)
 
 Update the potential ocean volume as in [^Goelzer2020], eq. (14).
 Note: we do not use eq. (8) as it is only a special case of eq. (14) that does not
 allow a correct representation of external sea-level forcings.
 """
-function update_V_pov!(fi::FastIso{T, M}) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
-    fi.geostate.V_pov = sum( max.(fi.refgeostate.z0 .- 
-        fi.geostate.b, 0) .* (fi.Omega.dx * fi.Omega.dy) ./
-        (fi.Omega.K .^ 2) )
+function update_V_pov!(fip::FastIsoProblem{T, M}) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
+    fip.geostate.V_pov = sum( max.(fip.refgeostate.z0 .- 
+        fip.geostate.b, 0) .* (fip.Omega.dx * fip.Omega.dy) ./
+        (fip.Omega.K .^ 2) )
     return nothing
 end
 
 """
-    update_slc_pov!(fi::FastIso)
+    update_slc_pov!(fip::FastIsoProblem)
 
 Update the sea-level contribution associated with the potential ocean volume as
 in [^Goelzer2020], eq. (9).
 """
-function update_slc_pov!(fi::FastIso{T, M}) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
-    current = fi.geostate.V_pov / fi.c.A_ocean
-    reference = fi.refgeostate.V_pov / fi.c.A_ocean
-    fi.geostate.slc_pov = -(current - reference)
+function update_slc_pov!(fip::FastIsoProblem{T, M}) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
+    current = fip.geostate.V_pov / fip.c.A_ocean
+    reference = fip.refgeostate.V_pov / fip.c.A_ocean
+    fip.geostate.slc_pov = -(current - reference)
     return nothing
 end
 
 """
-    update_V_den!(fi::FastIso)
+    update_V_den!(fip::FastIsoProblem)
 
 Update the ocean volume associated with the density correction as in [^Goelzer2020], eq. (10).
 """
-function update_V_den!(fi::FastIso{T, M}) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
-    density_factor = fi.c.rho_ice / fi.c.rho_water -
-        fi.c.rho_ice / fi.c.rho_seawater
-    fi.geostate.V_den = sum( fi.geostate.H_ice .* density_factor ./
-        (fi.Omega.K .^ 2) .* (fi.Omega.dx * fi.Omega.dy) )
+function update_V_den!(fip::FastIsoProblem{T, M}) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
+    density_factor = fip.c.rho_ice / fip.c.rho_water -
+        fip.c.rho_ice / fip.c.rho_seawater
+    fip.geostate.V_den = sum( fip.geostate.H_ice .* density_factor ./
+        (fip.Omega.K .^ 2) .* (fip.Omega.dx * fip.Omega.dy) )
     return nothing
 end
 
 """
-    update_slc_den!(fi::FastIso)
+    update_slc_den!(fip::FastIsoProblem)
 
 Update the sea-level contribution associated with the density correction as
 in [^Goelzer2020], eq. (11).
 """
-function update_slc_den!(fi::FastIso{T, M}) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
-    current = fi.geostate.V_den / fi.c.A_ocean
-    reference = fi.refgeostate.V_den / fi.c.A_ocean
-    fi.geostate.slc_den = -( current - reference )
+function update_slc_den!(fip::FastIsoProblem{T, M}) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
+    current = fip.geostate.V_den / fip.c.A_ocean
+    reference = fip.refgeostate.V_den / fip.c.A_ocean
+    fip.geostate.slc_den = -( current - reference )
     return nothing
 end

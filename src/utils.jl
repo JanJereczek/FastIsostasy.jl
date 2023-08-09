@@ -35,7 +35,7 @@ end
 # Array utils
 #####################################################
 
-Base.fill(x::Real, fi::FastIso) = fill(x, fi.Omega)
+Base.fill(x::Real, fip::FastIsoProblem) = fill(x, fip.Omega)
 Base.fill(x::Real, Omega::ComputationDomain) = Omega.arraykernel(fill(x, Omega.Nx, Omega.Ny))
 
 """
@@ -76,18 +76,18 @@ function samesize_conv(X::M, Y::M, Omega::ComputationDomain{T, M}, bc::Function
 end
 
 """
-    write_out(fi::FastIso)
+    write_out(fip::FastIsoProblem)
 
 Write results in output vectors if the load is updated internally.
 If the load is updated externally, the user is responsible for writing results.
 """
-function write_out!(fi::FastIso, k::Int)
-    if fi.internal_loadupdate
-        fi.u_out[k] .= copy(Array(fi.geostate.u))
-        fi.dudt_out[k] .= copy(Array(fi.geostate.dudt))
-        fi.ue_out[k] .= copy(Array(fi.geostate.ue))
-        fi.geoid_out[k] .= copy(Array(fi.geostate.geoid))
-        fi.sealevel_out[k] .= copy(Array(fi.geostate.sealevel))
+function write_out!(fip::FastIsoProblem, k::Int)
+    if fip.internal_loadupdate
+        fip.out.u[k] .= copy(Array(fip.geostate.u))
+        fip.out.dudt[k] .= copy(Array(fip.geostate.dudt))
+        fip.out.ue[k] .= copy(Array(fip.geostate.ue))
+        fip.out.geoid[k] .= copy(Array(fip.geostate.geoid))
+        fip.out.sealevel[k] .= copy(Array(fip.geostate.sealevel))
     end
 end
 
@@ -672,15 +672,16 @@ end
 
 Initialize some `Vector{<:AbstractMatrix}` where results shall be later stored.
 """
-function init_results(ph::AbstractMatrix, t_out::Vector)
+function init_results(Omega::ComputationDomain{T, M}, t_out::Vector{T}) where
+    {T<:AbstractFloat, M<:AbstractMatrix{T}}
     # initialize with placeholders
-    placeholder = Array(ph)
-    u_out = [copy(placeholder) for time in t_out]
-    dudt_out = [copy(placeholder) for time in t_out]
-    ue_out = [copy(placeholder) for time in t_out]
-    geoid_out = [copy(placeholder) for time in t_out]
-    sealevel_out = [copy(placeholder) for time in t_out]
-    return u_out, dudt_out, ue_out, geoid_out, sealevel_out
+    placeholder = Array(null(Omega))
+    u_out = [copy(placeholder) for t in t_out]
+    dudt_out = [copy(placeholder) for t in t_out]
+    ue_out = [copy(placeholder) for t in t_out]
+    geoid_out = [copy(placeholder) for t in t_out]
+    sealevel_out = [copy(placeholder) for t in t_out]
+    return FastIsoOutputs(t_out, u_out, dudt_out, ue_out, geoid_out, sealevel_out, 0.0)
 end
 #####################################################
 # BC utils

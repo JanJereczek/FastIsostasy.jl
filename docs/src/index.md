@@ -23,7 +23,7 @@ If you already know about GIA, skip to [Overview of GIA for ice-sheet simulation
 
 The evolution of cryosphere components leads to changes in the ice and liquid water column and therefore in the vertical load applied upon the solid Earth. Glacial isostatic adjustment (GIA) denotes the mechanical response of the solid Earth, which is characterized by its vertical and horizontal displacement. GIA models usually encompass related processes, such as the resulting changes in sea-surface height and sea level.
 
-The magnitude and time scale of GIA depends on the applied load and on solid-Earth parameters, here assumed to be the density, the viscosity and the lithospheric thickness. These parameters display a radial and sometimes also a lateral variability, further jointly denoted by parameter "heterogeneity". For further details, please refer to [Wiens et al. 2021](https://www.lyellcollection.org/doi/full/10.1144/M56-2020-18) and [Ivins et al. 2023](https://www.lyellcollection.org/doi/full/10.1144/M56-2020-19).
+The magnitude and time scale of GIA depends on the applied load and on solid-Earth parameters, here assumed to be the density, the viscosity and the lithospheric thickness. These parameters display a radial and sometimes also a lateral variability, further jointly denoted by parameter "heterogeneity". For further details, please refer to [^Wiens2021] and [^Ivins2023].
 
 ### Why should we care?
 
@@ -37,13 +37,13 @@ The speed and magnitude of anthropogenic warming is a potential threat to the Gr
 
 GIA models present a wide range of complexity, which can only be briefly mentioned here. On the lower end, models such as the Elastic-Lithopshere/Viscous-Asthenopshere are (1) cheap to run and (2) easy to implement, which has made them popular within the ice-sheet modelling community. They present some acceptable limitations such as (3) regionally approximating a global problem and (4) lacking the radially layered structure of the solid Earth. However, some limitations have shown to be too important to be overlooked -- mainly the fact that (5) the heterogeneity of the lithospheric thickness and upper-mantle viscosity cannot be represented.
 
-On the higher end of the complexity spectrum, we find the 3D GIA models which address all the limitations of low-complexity models but are (1) expensive to run, (2) more tedious to couple to an ice-sheet model and (3) generally lack a well-documented and open-source code base. Due to these drawbacks, they do not represent a standard tool within the ice-sheet modelling community. Nonetheless, they are becoming increasingly used, as for instance in [Gomez et al. 2018](https://journals.ametsoc.org/view/journals/clim/31/10/jcli-d-17-0352.1.xml?tab_body=pdf) and [Van Calcar et al. 2023](https://egusphere.copernicus.org/preprints/2022/egusphere-2022-1328/).
+On the higher end of the complexity spectrum, we find the 3D GIA models which address all the limitations of low-complexity models but are (1) expensive to run, (2) more tedious to couple to an ice-sheet model and (3) generally lack a well-documented and open-source code base. Due to these drawbacks, they do not represent a standard tool within the ice-sheet modelling community. Nonetheless, they are becoming increasingly used, as for instance in [^Gomez2018] and [^VanCalcar2023].
 
 We here willingly omit to speak about 1D GIA models, as they lack the representation of heterogeneous solid-Earth parameters.
 
 ### Where is FastIsosatsy.jl on the complexity range?
 
-Although they are increasingly being coupled to ice-sheet models, we believe that the expense of 3D GIA models can be avoided while still addressing the aforementioned limitations of simplistic models. Models specifically designed for ice-sheet modelling, such as [Bueler et al. 2007](https://www.cambridge.org/core/journals/annals-of-glaciology/article/fast-computation-of-a-viscoelastic-deformable-earth-model-for-icesheet-simulations/C878DBDD01271F6EB7874C9C4125196C) and [Coulon et al. 2021](https://agupubs.onlinelibrary.wiley.com/doi/full/10.1029/2020JF006003), have shown first improvements in closing the gap between simplistic and expensive models. FastIsostasy continues this work by generalizing both of these contributions into one, while benchmarking results against 1D and 3D GIA models.
+Although they are increasingly being coupled to ice-sheet models, we believe that the expense of 3D GIA models can be avoided while still addressing the aforementioned limitations of simplistic models. Models specifically designed for ice-sheet modelling, such as [^Bueler2007] and [^Coulon2021], have shown first improvements in closing the gap between simplistic and expensive models. FastIsostasy continues this work by generalizing both of these contributions into one, while benchmarking results against 1D and 3D GIA models.
 
 FastIsostasy heavily relies on the Fast-Fourier Transform (FFT), as (1) its central PDE is solved by applying a Fourier collocation scheme and (2) important diagnostic fields are computed by matrix convolutions which can famously be accelerated by the use of FFT. FFT therefore inspired the name "FastIsostasy", along with a [GitHub repository](https://github.com/bueler/fast-earth) that eased the first steps of this package. The use of a performant language such as julia, as well as supporting performance-relevant computations on GPU allows FastIsostasy to live up to the expectations of low computation time.
 
@@ -66,28 +66,28 @@ FastIsostasy.jl largely relies on following packages:
 - [KalmanEnsembleProcesses.jl](https://github.com/CliMA/EnsembleKalmanProcesses.jl)
 
 [^Whitehouse2019]:
-    Pippa Whitehouse et al. (2019): [Solid Earth change and the evolution of the Antarctic Ice Sheet](https://esurf.copernicus.org/articles/6/401/2018/)
+    Pippa Whitehouse et al. (2019): [Solid Earth change and the evolution of the Antarctic Ice Sheet](https://doi.org/10.1038/s41467-018-08068-y)  (https://esurf.copernicus.org/articles/6/401/2018/)
 
 [^Wiens2021]:
-    Douglas Wiens et al. (2021): [The seismic structure of the Antarctic upper mantle](https://esurf.copernicus.org/articles/6/401/2018/)
+    Douglas Wiens et al. (2021): [The seismic structure of the Antarctic upper mantle](https://doi.org/10.1144/M56-2020-18)
 
 [^Ivins2023]:
-    Erik Ivins et al. (2023): [Antarctic upper mantle rheology](https://www.lyellcollection.org/doi/full/10.1144/M56-2020-19)
+    Erik Ivins et al. (2023): [Antarctic upper mantle rheology](https://doi.org/10.1144/M56-2020-19)
 
 [^Gomez2018]:
-    Natalya Gomez et al. (2018): [A Coupled Ice Sheet–Sea Level Model Incorporating 3D Earth Structure: Variations in Antarctica during the Last Deglacial Retreat](https://journals.ametsoc.org/view/journals/clim/31/10/jcli-d-17-0352.1.xml?tab_body=pdf)
+    Natalya Gomez et al. (2018): [A Coupled Ice Sheet-Sea Level Model Incorporating 3D Earth Structure: Variations in Antarctica during the Last Deglacial Retreat](https://doi.org/10.1175/JCLI-D-17-0352.1)
 
 [^VanCalcar2023]:
-    Caroline van Calcar et al. (2023): [Simulation of a fully coupled 3D GIA - ice-sheet model for the Antarctic Ice Sheet over a glacial cycle](https://egusphere.copernicus.org/preprints/2022/egusphere-2022-1328/)
+    Caroline van Calcar et al. (2023): [Simulation of a fully coupled 3D GIA - ice-sheet model for the Antarctic Ice Sheet over a glacial cycle](https://doi.org/10.5194/egusphere-2022-1328)
 
 [^Bueler2007]:
-    Ed Bueler et al. (2007): [Fast computation of a viscoelastic deformable Earth model for ice-sheet simulations](https://www.cambridge.org/core/journals/annals-of-glaciology/article/fast-computation-of-a-viscoelastic-deformable-earth-model-for-icesheet-simulations/C878DBDD01271F6EB7874C9C4125196C)
+    Ed Bueler et al. (2007): [Fast computation of a viscoelastic deformable Earth model for ice-sheet simulations](https://doi.org/10.3189/172756407782871567)
 
 [^Coulon2021]:
-    Violaine Coulon et al. (2021): [Contrasting Response of West and East Antarctic Ice Sheets to Glacial Isostatic Adjustment](https://agupubs.onlinelibrary.wiley.com/doi/full/10.1029/2020JF006003)
+    Violaine Coulon et al. (2021): [Contrasting Response of West and East Antarctic Ice Sheets to Glacial Isostatic Adjustment](https://doi.org/10.1029/2020JF006003)
 
 [^Goelzer2020]:
-    Heiko Goelzer et al. (2020): [Brief communication: On calculating the sea-level contribution in marine ice-sheet models](https://tc.copernicus.org/articles/14/833/2020/)
+    Heiko Goelzer et al. (2020): [Brief communication: On calculating the sea-level contribution in marine ice-sheet models](https://doi.org/10.5194/tc-14-833-2020)
 
 [^Snyder1987]:
     John Snyder (1987): [Map projections -- A working manual](https://pubs.er.usgs.gov/publication/pp1395)

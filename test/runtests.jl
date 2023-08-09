@@ -13,6 +13,8 @@ include("test_dimensions.jl")
     check_xy_ij()
     check_stereographic()
     benchmark1()
+    benchmark1_gpu()
+    benchmark1_external_loadupdate()
     benchmark2()
     benchmark3()
 end

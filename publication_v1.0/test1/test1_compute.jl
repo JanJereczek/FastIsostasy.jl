@@ -6,7 +6,7 @@ include("../test/helpers/compute.jl")
 function main(
     n::Int;                     # 2^n x 2^n cells on domain, (1)
     use_cuda::Bool = false,
-    solver::Any = "ExplicitEuler",
+    solver::Any = "SimpleEuler",
     active_gs::Bool = true,
 )
     T = Float64
@@ -23,8 +23,8 @@ function main(
     Hcylinder = uniform_ice_cylinder(Omega, R, H)
     t_out = years2seconds.([0.0, 100.0, 500.0, 1500.0, 5000.0, 10_000.0, 50_000.0])
 
-    results = fastisostasy(t_out, Omega, c, p, Hcylinder, ODEsolver=solver,
-        interactive_geostate=active_gs)
+    results = fastisostasy(t_out, Omega, c, p, Hcylinder, alg=solver,
+        interactive_sealevel=active_gs)
     println("Took $(results.computation_time) seconds!")
     println("-------------------------------------")
 
@@ -35,8 +35,8 @@ function main(
     gs = active_gs ? "geostate" : "isostate"
     if solver == BS3()
         solvername = "BS3"
-    elseif solver == "ExplicitEuler"
-        solvername = "ExplicitEuler"
+    elseif solver == "SimpleEuler"
+        solvername = "SimpleEuler"
     end
 
     filename = "$(solvername)_Nx$(Omega.Nx)_Ny$(Omega.Ny)_$(kernel)_$(gs)"
@@ -58,7 +58,7 @@ This file:
 main(n, use_cuda = false, solver = BS3(), active_gs = false)
 Took 0.6100420951843262 seconds!
 
-main(n, use_cuda = false, solver = "ExplicitEuler", active_gs = false)
+main(n, use_cuda = false, solver = "SimpleEuler", active_gs = false)
 Took 14.107969999313354 seconds!
 
 ------------------------------------
@@ -67,6 +67,6 @@ test1_rectangle.jl:
 main(63, 64, use_cuda = false, solver = BS3(), active_gs = false)
 Took 0.6303250789642334 seconds!
 
-main(63, 64, use_cuda = false, solver = "ExplicitEuler", active_gs = false)
+main(63, 64, use_cuda = false, solver = "SimpleEuler", active_gs = false)
 Took 14.486158847808838 seconds!
 =#

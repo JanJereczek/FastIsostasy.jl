@@ -5,7 +5,7 @@ include("../test/helpers/compute.jl")
 include("../test/helpers/loadmaps.jl")
 include("../test/helpers/viscmaps.jl")
 
-function main(n::Int, active_gs::Bool; use_cuda::Bool = false,solver = "ExplicitEuler")
+function main(n::Int, active_gs::Bool; use_cuda::Bool = false,solver = "SimpleEuler")
 
     T = Float64
     W = T(4000e3)               # half-length of the square domain (m)
@@ -31,8 +31,8 @@ function main(n::Int, active_gs::Bool; use_cuda::Bool = false,solver = "Explicit
     dH = [deltaH[:, :, k] for k in axes(deltaH, 3)]
     t1 = time()
     results = fastisostasy(t_out, Omega, c, p, t_out, dH,
-        interactive_geostate = active_gs,
-        ODEsolver=solver,
+        interactive_sealevel = active_gs,
+        alg=solver,
         dt = years2seconds(0.1),
     )
     t_fastiso = time() - t1
@@ -55,5 +55,5 @@ end
 
 cases = [false, true]
 for active_gs in cases[1:1]
-    main(6, active_gs, use_cuda=false, solver="ExplicitEuler")
+    main(6, active_gs, use_cuda=false, solver="SimpleEuler")
 end

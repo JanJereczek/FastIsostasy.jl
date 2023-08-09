@@ -78,7 +78,7 @@ function mainplot(n, heterogeneous)
 
     ylabels = [
         L"Vertical displacement (m) $\,$",
-        L"$u_\mathrm{Seakon} - u_\mathrm{FastIso}$ (m)",
+        L"$u_\mathrm{Seakon} - u_\mathrm{FastIsoProblem}$ (m)",
     ]
 
     yticklabelsvisible = [true, false]

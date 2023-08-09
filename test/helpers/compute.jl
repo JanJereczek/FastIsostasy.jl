@@ -39,7 +39,7 @@ function load_latychev(dir::String, x_lb::Real, x_ub::Real)
         # println( file, typeof( readdlm(joinpath(dir, file), ',')[:, 1] ) )
         u[:, i] = readdlm(joinpath(dir, file), ',')[idx, 2]
     end
-    u .-= u[:, 1]
+    # u .-= u[:, 1]
 
     return x, u
 end

@@ -16,7 +16,7 @@ using EnsembleKalmanProcesses
 using EnsembleKalmanProcesses.Observations
 using EnsembleKalmanProcesses.ParameterDistributions
 using SpecialFunctions: besselj0, besselj1
-using DynamicalSystemsBase: step!, CoupledODEs, trajectory
+using DynamicalSystemsBase: CoupledODEs, trajectory
 
 using Reexport
 @reexport using Interpolations
@@ -40,9 +40,9 @@ include("analytic_solutions.jl")
 export ComputationDomain
 export PhysicalConstants
 export LateralVariability
-export PrecomputedFastiso
-export GeoState
-export FastIso
+export FastIsoTools
+export GeoState, RefGeoState
+export FastIsoProblem
 
 # utils.jl
 export years2seconds, seconds2years, m_per_sec2mm_per_yr
@@ -59,6 +59,8 @@ export samesize_conv
 export load_prem, compute_gravity, ReferenceEarthModel, maxwelltime_scaling!, compute_shearmodulus
 export uniform_ice_cylinder, stereo_ice_cylinder, stereo_ice_cap
 
+export write_out!
+
 # derivatives.jl
 export mixed_fdx
 export mixed_fdy
@@ -73,10 +75,11 @@ export get_quad_coeffs
 export get_elasticgreen
 export fastisostasy
 export forward_isostasy!, update_diagnostics!
-export explicit_euler!, explicit_rk4!
+export explicit_euler!, SimpleEuler
 export dudt_isostasy!
 export dudt_isostasy_sparse!
 export corner_bc!
+export init, solve!, step!
 
 # estimation.jl
 export init_optim, integrated_rmse, ViscOptim, optimize_viscosity, Options

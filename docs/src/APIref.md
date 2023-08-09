@@ -8,8 +8,8 @@ PhysicalConstants
 LateralVariability
 RefGeoState
 GeoState
-PrecomputedFastiso
-FastIso
+FastIsoTools
+FastIsoProblem
 FastisoResults
 ```
 

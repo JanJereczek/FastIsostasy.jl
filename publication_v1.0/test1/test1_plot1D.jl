@@ -62,7 +62,7 @@ function main(
     save("plots/test1/$filekey.pdf", fig)
 end
 
-case = "ExplicitEuler"
+case = "SimpleEuler"
 for n in 6:6
     main(n, case)
 end

@@ -1,144 +1,106 @@
 #####################################################
 # Forward integration
 #####################################################
-
 """
-    fastisostasy()
+    solve!(fip)
 
-Main function.
-List of all available solvers [here](https://docs.sciml.ai/DiffEqDocs/stable/solvers/ode_solve/#OrdinaryDiffEq.jl-for-Non-Stiff-Equations).
+Solve the isostatic adjustment problem defined in `fip::FastIsoProblem`.
 """
-function fastisostasy(
-    t_out::Vector{T},
-    Omega::ComputationDomain{T, M},
-    c::PhysicalConstants{T},
-    p::LateralVariability{T, M},
-    Hice_snapshot::AbstractMatrix{T};
-    kwargs...,
-) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
-    t_Hice_snapshots = [t_out[1], t_out[end]]
-    Hice_snapshots = [Hice_snapshot, Hice_snapshot]
-    return fastisostasy(t_out, Omega, c, p, t_Hice_snapshots, Hice_snapshots; kwargs...)
-end
-
-function fastisostasy(
-    t_out::Vector{T},
-    Omega::ComputationDomain{T, M},
-    c::PhysicalConstants{T},
-    p::LateralVariability{T, M},
-    t_Hice_snapshots::Vector{T},
-    Hice_snapshots::Vector{<:AbstractMatrix{T}};
-    dt::T = T(years2seconds(1.0)),
-    ODEsolver::Any = "ExplicitEuler",
-    t_eta_snapshots::Vector{T} = [t_out[1], t_out[end]],
-    eta_snapshots::Vector{<:AbstractMatrix{T}} = [p.effective_viscosity, p.effective_viscosity],
-    interactive_geostate::Bool = false,
-    verbose::Bool = true,
-    kwargs...,
-) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
-
-    fi = FastIso(Omega, c, p, t_out, interactive_geostate, 
-        t_Hice_snapshots, Hice_snapshots,
-        t_eta_snapshots, eta_snapshots; kwargs...)
-    forward_isostasy!(fi, dt, ODEsolver, verbose)
-    return FastIsoResults(fi)
-end
-
-"""
-    forward_isostasy!()
-
-Forward-integrate the isostatic adjustment.
-"""
-# function forward_isostasy!(fi::FastIso{T, M}, dt::T, ODEsolver::Any,
-#     verbose::Bool) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
-#     t_out = fi.t_out
-#     forward_isostasy!(fi, t_out, dt, ODEsolver, verbose)
-#     return nothing
-# end
-
-function forward_isostasy!(fi::FastIso{T, M}, dt::T, ODEsolver::Any,
-    verbose::Bool) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
+function solve!(fip::FastIsoProblem{T, M}) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
 
     t1 = time()
-    t_out = fi.t_out
-
-    # Make a first diagnotisc update to store these values.
-    update_diagnostics!(fi.geostate.dudt, fi.geostate.u, fi, 0.0)
-    write_out!(fi, 1)
-
-    # Check if solver available and initialize ODEProblem if possible.
-    if !isa(ODEsolver, OrdinaryDiffEqAlgorithm)
-        error("Provided ODEsolver is not supported.")
-    elseif ODEsolver != Euler()
-        diffeq = (alg = ODEsolver, abstol = 1e-9, reltol = 1e-6)
-        fi_ode = CoupledODEs(update_diagnostics!, fi.geostate.u, fi; diffeq)
-        # prob = ODEProblem(update_diagnostics!, u, (t_out[1], t_out[2]), fi)
+    if !(fip.internal_loadupdate)
+        error("`solve!` does not support external updating of the load. Use `step!` instead.")
     end
 
+    t_out = fip.out.t
+
+    # Make a first diagnotisc update to store these values. (k=1)
+    update_diagnostics!(fip.geostate.dudt, fip.geostate.u, fip, t_out[1])
+    write_out!(fip, 1)
+
+    # Initialize dummy ODEProblem and perform integration.
+    dummy = ODEProblem(update_diagnostics!, fip.geostate.u, (0.0, 1.0), fip)
     @inbounds for k in eachindex(t_out)[2:end]
-        difft = t_out[k]-t_out[k-1]
-        X, t = trajectory(fi_ode, difft, fi.geostate.u; t0 = t_out[k-1], Δt = difft)
-        fi.geostate.u .= reshape(X[2, :], fi.Omega.Nx, fi.Omega.Ny)
-        update_diagnostics!(fi.geostate.dudt, fi.geostate.u, fi, t[2])
-        println("$k, $(t_out[k]), $(minimum(fi.geostate.u))")
-        # (t0+Ttr):Δt:(t0+Ttr+T)
-        write_out!(fi, k)
+        if fip.verbose
+            println("Computing until t = $(Int(round(seconds2years(t_out[k])))) years...")
+        end
+        if fip.diffeq.alg != SimpleEuler()
+            prob = remake(dummy, u0 = fip.geostate.u, tspan = (t_out[k-1], t_out[k]), p = fip)
+            sol = solve(prob, fip.diffeq.alg, reltol=1e-3)
+            fip.geostate.dudt = sol(t_out[k], Val{1})
+        else
+            @inbounds for t in t_out[k-1]:fip.diffeq.dt:t_out[k]
+                update_diagnostics!(fip.geostate.dudt, fip.geostate.u, fip, t)
+                explicit_euler!(fip.geostate.u, fip.geostate.dudt, fip.diffeq.dt)
+                write_out!(fip, k)
+            end
+        end
+        write_out!(fip, k)
     end
 
-    # @inbounds for k in eachindex(t_out)[2:end]
-    #     if verbose
-    #         println("Computing until t = $(Int(round(seconds2years(t_out[k])))) years...")
-    #     end
-
-    #     if ODEsolver == Euler()
-    #         @inbounds for t in t_out[k-1]:dt:t_out[k]
-    #             update_diagnostics!(dudt, u, fi, t)
-    #             explicit_euler!(u, dudt, dt)
-    #         end
-    #     else
-
-            
-
-    #         # prob = remake(prob, u0 = fi.geostate.u, tspan = (t_out[k-1], t_out[k]), p = fi)
-    #         # sol = solve(prob, ODEsolver, reltol=1e-3)
-    #         # fi.geostate.dudt = sol(t_out[k], Val{1})
-    #     end
-
-    # end
-
-    fi.computation_time += time() - t1
+    fip.out.computation_time += time()-t1
     return nothing
 end
 
 """
-    update_diagnostics!(dudt, u, fi, t)
+    init(fip)
 
-Update all the diagnotisc variables, i.e. all fields of `fi.geostate` apart
+Initialize `ode::CoupledODEs`, aimed to be used in [`step!`](@ref).
+"""
+init(fip::FastIsoProblem) = CoupledODEs(update_diagnostics!,
+    fip.geostate.u, fip; fip.diffeq)
+
+"""
+    init(fip)
+
+Step `fip::FastIsoProblem` over `tspan` and based on `ode::CoupledODEs`, typically
+obtained by [`init`](@ref).
+"""
+function step!(fip::FastIsoProblem{T, M}, ode::CoupledODEs,
+    tspan::Tuple{T, T}) where {T<:AbstractFloat, M<:Matrix{T}}
+
+    fip.out.computation_time -= time()
+    dt = tspan[2] - tspan[1]
+    X, t = trajectory(ode, dt, fip.geostate.u; t0 = tspan[1], Δt = dt)
+    fip.geostate.u .= reshape(X[2, :], fip.Omega.Nx, fip.Omega.Ny)
+    update_diagnostics!(fip.geostate.dudt, fip.geostate.u, fip, t[2])
+    fip.out.computation_time += time()
+end
+
+"""
+    update_diagnostics!(dudt, u, fip, t)
+
+Update all the diagnotisc variables, i.e. all fields of `fip.geostate` apart
 from the displacement, which requires an integrator.
 """
-function update_diagnostics!(dudt::M, u::M, fi::FastIso{T, M}, t::T,
+function update_diagnostics!(dudt::M, u::M, fip::FastIsoProblem{T, M}, t::T,
     ) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
 
     # Order really matters here!
-    if fi.internal_loadupdate
-        update_loadcolumns!(fi, fi.tools.Hice(t))
-    end
-    update_elasticresponse!(fi)
-    fi.Omega.bc!(u, fi.Omega.Nx, fi.Omega.Ny)
-    update_bedrock!(fi, u)
+
+    # Make sure that integrated viscous displacement satisfies BC.
+    fip.Omega.bc!(u, fip.Omega.Nx, fip.Omega.Ny)
     
-    # Only update the geoid and sea level if geostate is interactive.
-    # As integration requires smaller time steps than diagnostics,
-    # only update geostate every fi.geostate.dt
-    if fi.interactive_geostate &&
-        (t / fi.geostate.dt >= fi.geostate.countupdates)
-        update_geoid!(fi)
-        update_sealevel!(fi)
-        fi.geostate.countupdates += 1
-        # println("Updated GeoState at t=$(seconds2years(t))")
+    if fip.internal_loadupdate
+        update_loadcolumns!(fip, fip.tools.Hice(t))
     end
 
-    dudt_isostasy!(dudt, u, fi, t)
+    # Only update the geoid and sea level if geostate is interactive.
+    # As integration requires smaller time steps than diagnostics,
+    # only update geostate every fip.geostate.dt
+    if (t / fip.geostate.dt >= fip.geostate.countupdates)
+        # if elastic update placed after geoid, worse match with (Spada et al. 2011)
+        update_elasticresponse!(fip)
+        if fip.interactive_sealevel
+            update_geoid!(fip)
+            update_sealevel!(fip)
+        end
+        fip.geostate.countupdates += 1
+    end
+
+    update_bedrock!(fip, u)
+    dudt_isostasy!(dudt, u, fip, t)
     return nothing
 end
 
@@ -150,30 +112,29 @@ Update the displacement rate `dudt` of the viscous response.
 function dudt_isostasy!(
     dudt::AbstractMatrix{T},
     u::AbstractMatrix{T},
-    fi::FastIso{T, M},
+    fip::FastIsoProblem{T, M},
     t::T,
 ) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
 
-    Omega = fi.Omega
-    rhs = - fi.c.g .* columnanom_full(fi)
+    Omega = fip.Omega
+    rhs = - fip.c.g .* columnanom_full(fip)
 
-    if fi.tools.negligible_gradD
-        biharmonic_u = Omega.biharmonic .* (fi.tools.pfft * u)
-        rhs += - fi.p.litho_rigidity .* real.( fi.tools.pifft * biharmonic_u )
+    if fip.tools.negligible_gradD
+        biharmonic_u = Omega.biharmonic .* (fip.tools.pfft * u)
+        rhs += - fip.p.litho_rigidity .* real.( fip.tools.pifft * biharmonic_u )
     else
         dudxx, dudyy = Omega.fdxx(u), Omega.fdyy(u)
-        Mxx = -fi.p.litho_rigidity .* (dudxx + fi.p.litho_poissonratio .* dudyy)
-        Myy = -fi.p.litho_rigidity .* (dudyy + fi.p.litho_poissonratio .* dudxx)
-        Mxy = -fi.p.litho_rigidity .* (1 - fi.p.litho_poissonratio) .* Omega.fdxy(u)
+        Mxx = -fip.p.litho_rigidity .* (dudxx + fip.p.litho_poissonratio .* dudyy)
+        Myy = -fip.p.litho_rigidity .* (dudyy + fip.p.litho_poissonratio .* dudxx)
+        Mxy = -fip.p.litho_rigidity .* (1 - fip.p.litho_poissonratio) .* Omega.fdxy(u)
         rhs += Omega.fdxx(Mxx) + Omega.fdyy(Myy) + 2 .* Omega.fdxy(Mxy)
     end
 
-    # dudt[:, :] .= real.(fi.tools.pifft * ((fi.tools.pfft * rhs) ./
-    #     Omega.pseudodiff)) ./ (2 .* fi.p.effective_viscosity)
-    dudt[:, :] .= real.(fi.tools.pifft * ((fi.tools.pfft * (rhs ./ 
-        (2 .* fi.p.effective_viscosity)) ) ./ Omega.pseudodiff))
-
-    return dudt
+    # dudt[:, :] .= real.(fip.tools.pifft * ((fip.tools.pfft * rhs) ./
+    #     Omega.pseudodiff)) ./ (2 .* fip.p.effective_viscosity)
+    dudt[:, :] .= real.(fip.tools.pifft * ((fip.tools.pfft * (rhs ./ 
+        (2 .* fip.p.effective_viscosity)) ) ./ Omega.pseudodiff))
+    return nothing
 end
 
 #####################################################
@@ -203,7 +164,7 @@ end
 
 Apply boundary condition on Fourier collocation solution.
 Assume that mean deformation at borders of domain is 0.
-Same as Bueler et al. (2007).
+Same as [^Bueler2007].
 """
 function edge_bc(u::AbstractMatrix{<:AbstractFloat}, Nx::Int, Ny::Int)
     u_bc = copy(u)
@@ -218,7 +179,6 @@ function edge_bc!(u::AbstractMatrix{<:AbstractFloat}, Nx::Int, Ny::Int)
     return u
 end
 
-no_bc!(u::AbstractMatrix{<:AbstractFloat}, Nx::Int, Ny::Int) = nothing
 no_bc(u::AbstractMatrix{<:AbstractFloat}, Nx::Int, Ny::Int) = u
 
 function no_mean_bc!(u::AbstractMatrix{<:AbstractFloat}, Nx::Int, Ny::Int)
@@ -235,14 +195,14 @@ end
 # Elastic response
 #####################################################
 """
-    update_elasticresponse!(fi::FastIso)
+    update_elasticresponse!(fip::FastIsoProblem)
 
 Update the elastic response by convoluting the Green's function with the load anom.
-To use coefficients differing from (Farell 1972), see [PrecomputedFastiso](@ref).
+To use coefficients differing from (Farell 1972), see [FastIsoTools](@ref).
 """
-function update_elasticresponse!(fi::FastIso{T, M}
+function update_elasticresponse!(fip::FastIsoProblem{T, M}
     ) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
-    rgh = correct_surfacedisctortion(columnanom_load(fi), fi)
-    fi.geostate.ue .= samesize_conv(fi.tools.elasticgreen, rgh, fi.Omega, no_bc)
+    rgh = correct_surfacedisctortion(columnanom_load(fip), fip)
+    fip.geostate.ue .= samesize_conv(fip.tools.elasticgreen, rgh, fip.Omega, no_bc) #edge_bc
     return nothing
 end

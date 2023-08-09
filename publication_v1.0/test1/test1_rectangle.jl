@@ -7,7 +7,7 @@ function main(
     Nx::Int,
     Ny::Int;
     use_cuda::Bool = false,
-    solver::Any = "ExplicitEuler",
+    solver::Any = "SimpleEuler",
     active_gs::Bool = true,
 )
     T = Float64
@@ -25,8 +25,8 @@ function main(
     t_out = years2seconds.([0.0, 100.0, 500.0, 1500.0, 5000.0, 10_000.0, 50_000.0])
 
     t1 = time()
-    results = fastisostasy(t_out, Omega, c, p, Hcylinder, ODEsolver=solver,
-        interactive_geostate=active_gs)
+    results = fastisostasy(t_out, Omega, c, p, Hcylinder, alg=solver,
+        interactive_sealevel=active_gs)
     t_fastiso = time() - t1
     println("Took $t_fastiso seconds!")
     println("-------------------------------------")
@@ -46,5 +46,5 @@ function main(
     )
 end
 
-main(63, 64, use_cuda = false, solver = "ExplicitEuler", active_gs = false)
+main(63, 64, use_cuda = false, solver = "SimpleEuler", active_gs = false)
 
