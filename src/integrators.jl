@@ -1,10 +1,10 @@
 """
-    explicit_euler!()
+    simple_euler!()
 
 Update the state `u` by performing an explicit Euler integration of its derivative `dudt`
 over a time step `dt`.
 """
-function explicit_euler!(u::M, dudt::M, dt::T,
+function simple_euler!(u::M, dudt::M, dt::T,
     ) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
     u .+= dudt .* dt
     return nothing

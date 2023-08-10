@@ -78,7 +78,7 @@ for k in eachindex(t)
     end
     update_loadcolumns!(fip, Hice)   #  .* normalized_asymptote(t[k])
     update_diagnostics!(fip.geostate.dudt, fip.geostate.u, fip, t[k])
-    explicit_euler!(fip.geostate.u, fip.geostate.dudt, dt)
+    simple_euler!(fip.geostate.u, fip.geostate.dudt, dt)
 end
 
 
