@@ -6,12 +6,12 @@ using Distributions: MvNormal
 using JLD2: jldopen
 using DelimitedFiles: readdlm
 using Interpolations: linear_interpolation, Flat
-using FFTW: fft, ifft, plan_fft, plan_ifft
+using FFTW: plan_fft, plan_ifft
 using AbstractFFTs
 using FastGaussQuadrature: gausslegendre
 using DSP: conv
 using CUDA: CuArray, CUFFT, allowscalar
-using OrdinaryDiffEq: OrdinaryDiffEqAlgorithm
+using OrdinaryDiffEq: ODEProblem, solve, remake, OrdinaryDiffEqAlgorithm
 using EnsembleKalmanProcesses
 using EnsembleKalmanProcesses.Observations
 using EnsembleKalmanProcesses.ParameterDistributions
@@ -20,12 +20,11 @@ using DynamicalSystemsBase: CoupledODEs, trajectory
 
 using Reexport
 @reexport using Interpolations
-@reexport using OrdinaryDiffEq: ODEProblem, solve, remake,
-    Euler, Midpoint, Heun, Ralston, BS3, BS5, RK4,
+@reexport using OrdinaryDiffEq: Euler, Midpoint, Heun, Ralston, BS3, BS5, RK4,
     OwrenZen3, OwrenZen4, OwrenZen5, Tsit5, DP5, RKO65, TanYam7, DP8,
     Feagin10, Feagin12, Feagin14, TsitPap8, Vern6, Vern7, Vern8, Vern9,
-    VCABM, Rosenbrock23, QNDF, FBDF, ImplicitEuler
-# KuttaPRK2p5(dt=), Trapezoid(autodiff = false), PDIRK44(autodiff = false)
+    SSPRK22, SSPRK33, SSPRK53, SSPRK63, SSPRK73, SSPRK83, SSPRK432, SSPRK43,
+    SSPRK932, SSPRK54, SSPRK104, SSPRKMSVS32, SSPRKMSVS43, SSPRK53_2N1, SSPRK53_2N2
 
 include("structs.jl")
 include("utils.jl")
@@ -37,66 +36,45 @@ include("inversion.jl")
 include("analytic_solutions.jl")
 
 # structs.jl
-export ComputationDomain
-export PhysicalConstants
-export LateralVariability
-export FastIsoTools
+export ComputationDomain, PhysicalConstants
+export ReferenceEarthModel, LateralVariability
 export GeoState, RefGeoState
-export FastIsoProblem
+export FastIsoTools, FastIsoProblem
 
 # utils.jl
 export years2seconds, seconds2years, m_per_sec2mm_per_yr
 export meshgrid, dist2angulardist, latlon2stereo, stereo2latlon
-export kernelpromote, convert2Array, reinit_structs_cpu
+export matrify, kernelpromote, reinit_structs_cpu
 
-export matrify, matrify
-export loginterp_viscosity
-export get_rigidity
-export get_r
-export gauss_distr
+export loginterp_viscosity, get_rigidity, load_prem
+export maxwelltime_scaling!, compute_shearmodulus
 
-export samesize_conv
-export load_prem, compute_gravity, ReferenceEarthModel, maxwelltime_scaling!, compute_shearmodulus
+export get_r, gauss_distr, samesize_conv
 export uniform_ice_cylinder, stereo_ice_cylinder, stereo_ice_cap
-
 export write_out!
 
-# derivatives.jl
-export mixed_fdx
-export mixed_fdy
-export mixed_fdxx
-export mixed_fdyy
-export get_differential_fourier
-
-# mechanics.jl
 export quadrature1D
 export meshgrid
 export get_quad_coeffs
 export get_elasticgreen
-export fastisostasy
-export forward_isostasy!, update_diagnostics!
-export explicit_euler!, SimpleEuler
-export dudt_isostasy!
-export dudt_isostasy_sparse!
-export corner_bc!
-export init, solve!, step!
 
-# estimation.jl
-export init_optim, integrated_rmse, ViscOptim, optimize_viscosity, Options
+# derivatives.jl
+export mixed_fdx, mixed_fdy, mixed_fdxx, mixed_fdyy
+export get_differential_fourier
+export central_fdx, mixed_fdx, mixed_fdx!
+
+# mechanics.jl
+export dudt_isostasy!, update_diagnostics!
+export simple_euler!, SimpleEuler
+export init, solve!, step!
+export corner_bc!, no_bc
+export update_loadcolumns!, update_elasticresponse!, update_geoid!, update_sealevel!
 
 # geostate.jl
-export update_geoid!, update_sealevel!, update_loadcolumns!
-export columnanom_ice, columnanom_water, columnanom_mantle
-export columnanom_load, columnanom_full, totalmass_anom
-export get_loadchange, get_geoidgreen
-export update_slc!, update_slc_pov!, update_slc_den!
-export update_V_af!, update_slc_af!
-export update_V_pov!, update_V_den!
+export columnanom_load, correct_surfacedisctortion, columnanom_full
 
 # inversion.jl
-export ParamInversion
-export perform
-export extract_inversion
+export ParamInversion, perform, extract_inversion
 
 # analytic solutions
 export analytic_solution
