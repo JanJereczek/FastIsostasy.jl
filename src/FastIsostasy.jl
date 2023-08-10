@@ -62,6 +62,7 @@ export get_elasticgreen
 export mixed_fdx, mixed_fdy, mixed_fdxx, mixed_fdyy
 export get_differential_fourier
 export central_fdx, mixed_fdx, mixed_fdx!
+export dxx!, dyy!, dxy!, dx!, dy!
 
 # mechanics.jl
 export dudt_isostasy!, update_diagnostics!

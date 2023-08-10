@@ -57,22 +57,8 @@ end
 
 function samesize_conv(X::M, Y::M, Omega::ComputationDomain{T, M}, bc::Function
     ) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
-    if iseven(Omega.Nx)
-        i1 = Omega.Mx
-    else
-        i1 = Omega.Mx+1
-    end
-    i2 = 2*Omega.Nx-1-Omega.Mx
-
-    if iseven(Omega.Ny)
-        j1 = Omega.My
-    else
-        j1 = Omega.My+1
-    end
-    j2 = 2*Omega.Ny-1-Omega.My
-
     convo = bc(conv(X, Y), 2*Omega.Nx-1, 2*Omega.Ny-1)
-    return view(convo, i1:i2, j1:j2)
+    return view(convo, Omega.i1:Omega.i2, Omega.j1:Omega.j2)
 end
 
 """
@@ -94,7 +80,6 @@ end
 #####################################################
 # Domain and projection utils
 #####################################################
-
 """
     get_r(x::T, y::T) where {T<:Real}
 
@@ -208,12 +193,6 @@ end
 #####################################################
 # Math utils
 #####################################################
-
-function gauss_distr(x::T, mu::Vector{T}, sigma::Matrix{T}) where {T<:AbstractFloat}
-    k = length(mu)
-    return (2 * π)^(k/2) * det(sigma) * exp( -0.5 * (x .- mu)' * inv(sigma) * (x .- mu) )
-end
-
 """
     gauss_distr(X::AbstractMatrix{T}, Y::AbstractMatrix{T},
         mu::Vector{<:Real}, sigma::Matrix{<:Real})
@@ -221,8 +200,8 @@ end
 Compute `Z = f(X,Y)` with `f` a Gaussian function parametrized by mean
 `mu` and covariance `sigma`.
 """
-function gauss_distr(X::AbstractMatrix{T}, Y::AbstractMatrix{T},
-    mu::Vector{<:Real}, sigma::Matrix{<:Real}) where {T<:AbstractFloat}
+function gauss_distr(X::M, Y::M, mu::Vector{T}, sigma::Matrix{T}) where
+    {T<:AbstractFloat, M<:Matrix{T}}
     k = length(mu)
     G = similar(X)
     invsigma = inv(sigma)
@@ -317,63 +296,6 @@ function three_layer_scaling(
     return (num1 + num2 + num3) ./ (denum1 + denum2 + denum3)
 end
 
-# function get_effective_viscosity2(
-#     Omega::ComputationDomain{T},
-#     layer_viscosities::Array{T, 3},
-#     layers_thickness::Array{T, 3},
-#     mantle_poissonratio::T,
-# ) where {T<:AbstractFloat}
-
-#     incompressible_poissonratio = 0.5
-#     compressibility_scaling = (1 + incompressible_poissonratio) / (1 + mantle_poissonratio)
-
-#     effective_viscosity = layer_viscosities[:, :, end]
-#     if size(layer_viscosities, 3) > 1
-#         for i in axes(layer_viscosities, 3)[1:end-1]
-#             channel_viscosity = layer_viscosities[:, :, end - i]
-#             channel_thickness = layers_thickness[:, :, end - i + 1]
-#             viscosity_ratio = channel_viscosity ./ effective_viscosity
-#             update_effective_viscosity!(effective_viscosity, Omega, viscosity_ratio,
-#                 channel_thickness)
-#         end
-#     end
-#     return effective_viscosity .* compressibility_scaling
-# end
-
-# function update_effective_viscosity!(
-#     effective_viscosity,
-#     Omega,
-#     viscosity_ratio,
-#     channel_thickness,
-# )
-#     effective_viscosity .= real.( ifft( fft(effective_viscosity) .*
-#         # fft(three_layer_scaling(Omega, viscosity_ratio, channel_thickness)) ))
-#         fourier_three_layer_scaling(Omega, viscosity_ratio, channel_thickness) ))
-#     return effective_viscosity
-# end
-
-# function fourier_three_layer_scaling(
-#     Omega::ComputationDomain{T},
-#     visc_ratio::Matrix{T},
-#     channel_thickness::Matrix{T},
-# ) where {T<:AbstractFloat}
-
-#     Tc = mean(channel_thickness)
-#     ft_visc_ratio = fft(visc_ratio) .+ 1e-10
-#     C = cosh.(Tc .* Omega.pseudodiff)
-#     S = sinh.(Tc .* Omega.pseudodiff)
-
-#     num1 = 2 .* ft_visc_ratio .* C .* S
-#     num2 = (1 .- ft_visc_ratio .^ 2) .* Tc .^ 2 .* Omega.pseudodiff .^ 2
-#     num3 = ft_visc_ratio .^ 2 .* S .^ 2 + C .^ 2
-
-#     denum1 = (ft_visc_ratio .+ 1 ./ ft_visc_ratio) .* C .* S
-#     denum2 = (ft_visc_ratio .- 1 ./ ft_visc_ratio) .* Tc .* Omega.pseudodiff
-#     denum3 = S .^ 2 + C .^ 2
-    
-#     return (num1 + num2 + num3) ./ (denum1 + denum2 + denum3)
-# end
-
 """
     loginterp_viscosity(tvec, layer_viscosities, layers_thickness, pseudodiff)
 
@@ -425,22 +347,6 @@ end
 #     return mean(prem.density[idx])
 # end
 
-function compute_shearmodulus(m::ReferenceEarthModel)
-    return m.density .* (m.Vsv + m.Vsh) ./ 2
-end
-
-function maxwelltime_scaling(layer_viscosities, layer_shearmoduli)
-    return layer_shearmoduli[end] ./ layer_shearmoduli .* layer_viscosities
-end
-
-function maxwelltime_scaling!(layer_viscosities, layer_boundaries, m::ReferenceEarthModel)
-    mu = compute_shearmodulus(m)
-    layer_meandepths = (layer_boundaries[:, :, 1:end-1] + layer_boundaries[:, :, 2:end]) ./ 2
-    layer_meandepths = cat(layer_meandepths, layer_boundaries[:, :, end], dims = 3)
-    mu_itp = linear_interpolation(m.depth, mu)
-    layer_meanshearmoduli = layer_viscosities ./ 1e21 .* mu_itp.(layer_meandepths)
-    layer_viscosities .*= layer_meanshearmoduli[:, :, end] ./ layer_meanshearmoduli
-end
 
 function equilazation_layer()
 
@@ -643,27 +549,15 @@ function kernelpromote(X::Vector{M}, arraykernel) where {M<:AbstractArray{T}} wh
     end
 end
 
-function convert2CuArray(X::Vector)
-    return [CuArray(x) for x in X]
-end
-
-function convert2Array(X::Vector)
-    return [Array(x) for x in X]
-end
-
-function reinit_structs_cpu(
-    Omega::ComputationDomain{T, M},
-    p::LateralVariability{T, M},
-) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
+function reinit_structs_cpu(Omega::ComputationDomain{T, M}, p::LateralVariability{T, M}
+    ) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
 
     Omega_cpu = ComputationDomain(Omega.Wx, Omega.Wy, Omega.Nx, Omega.Ny, use_cuda = false)
-
     p_cpu = LateralVariability(
         Omega_cpu;
         layer_boundaries = Array(p.layer_boundaries),
         layer_viscosities = Array(p.layer_viscosities),
     )
-
     return Omega_cpu, p_cpu
 end
 

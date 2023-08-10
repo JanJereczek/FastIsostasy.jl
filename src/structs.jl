@@ -1,3 +1,17 @@
+abstract type SecondDerivative end
+
+mutable struct Dummies{T<:AbstractFloat, M<:AbstractMatrix{T}}
+    rhs::M
+    uxx::M
+    uyy::M
+    ux::M
+    uxy::M
+    Mxxxx::M
+    Myyyy::M
+    Mxyx::M
+    Mxyxy::M
+end
+
 #########################################################
 # Computation domain
 #########################################################
@@ -32,6 +46,10 @@ struct ComputationDomain{T<:AbstractFloat, M<:AbstractMatrix{T}}
     y::Vector{T}
     X::M
     Y::M
+    i1::Int
+    i2::Int
+    j1::Int
+    j2::Int
     R::M
     Theta::M
     Lat::M
@@ -43,12 +61,8 @@ struct ComputationDomain{T<:AbstractFloat, M<:AbstractMatrix{T}}
     harmonic::M     # harmonic operator
     biharmonic::M   # biharmonic operator
     use_cuda::Bool
-    arraykernel                     # Array or CuArray depending on chosen hardware
+    arraykernel::Any                # Array or CuArray depending on chosen hardware
     bc!::Function                   # Boundary conditions
-    extension::Function             # Function to extend domain if needed for BCs
-    fdxx::Function                  # FDM for 2nd order derivative in x
-    fdyy::Function                  # FDM for 2nd order derivative in y
-    fdxy::Function                  # # FDM for 2nd order derivative in x, y
 end
 
 function ComputationDomain(W::T, n::Int; kwargs...) where {T<:AbstractFloat}
@@ -85,7 +99,7 @@ function ComputationDomain(
     if projection_correction
         K = scalefactor(deg2rad.(Lat), deg2rad.(Lon), deg2rad(lat0), deg2rad(lon0))
     else
-        K = kernelpromote(fill(1, Nx, Ny), arraykernel)
+        K = fill(T(1), Nx, Ny)
     end
 
     # Differential operators in Fourier space
@@ -96,15 +110,24 @@ function ComputationDomain(
     X, Y, null, R, Theta, Lat, Lon, K, pseudodiff, harmonic, biharmonic = kernelpromote(
         [X, Y, null, R, Theta, Lat, Lon, K, pseudodiff, harmonic, biharmonic], arraykernel)
 
-    extension(M) = M
-    fdxx(M) = mixed_fdxx(M, K .* dx)
-    fdyy(M) = mixed_fdyy(M, K .* dy)
-    fdxy(M) = mixed_fdxy(M, K .* dx, K .* dy)
+    # Precompute indices for samesize_conv()
+    if iseven(Nx)
+        i1 = Mx
+    else
+        i1 = Mx+1
+    end
+    i2 = 2*Nx-1-Mx
 
-    return ComputationDomain(Wx, Wy, Nx, Ny, Mx, My, dx, dy, x, y, X, Y,
-        R, Theta, Lat, Lon, K, projection_correction, null,
-        pseudodiff, harmonic, biharmonic, use_cuda, arraykernel,
-        bc!, extension, fdxx, fdyy, fdxy)
+    if iseven(Ny)
+        j1 = My
+    else
+        j1 = My+1
+    end
+    j2 = 2*Ny-1-My
+
+    return ComputationDomain(Wx, Wy, Nx, Ny, Mx, My, dx, dy, x, y, X, Y, i1, i2, j1, j2, R,
+        Theta, Lat, Lon, K, projection_correction, null, pseudodiff, harmonic, biharmonic,
+        use_cuda, arraykernel, bc!)
 end
 
 #########################################################
@@ -271,7 +294,6 @@ mutable struct GeoState{T<:AbstractFloat, M<:AbstractMatrix{T}}
     slc::T                  # total sealevel contribution
     countupdates::Int       # count the updates of the geostate
     dt::T                   # update step
-    dtloadanom::M           # load anomaly wrt previous time step
 end
 
 #########################################################
@@ -300,6 +322,7 @@ struct FastIsoTools{T<:AbstractFloat, M<:AbstractMatrix{T},
         Gridded{Linear{Throw{OnGrid}}}, Tuple{Vector{T}}}, Gridded{Linear{Throw{OnGrid}}}, Flat{Nothing}}
     eta::Interpolations.Extrapolation{M, 1, Interpolations.GriddedInterpolation{M, 1, Vector{M},
         Gridded{Linear{Throw{OnGrid}}}, Tuple{Vector{T}}}, Gridded{Linear{Throw{OnGrid}}}, Flat{Nothing}}
+    dummies::Dummies{T, M}
 end
 
 function FastIsoTools(
@@ -340,8 +363,9 @@ function FastIsoTools(
     eta = linear_interpolation(t_eta_snapshots,
         kernelpromote(eta_snapshots, Omega.arraykernel); extrapolation_bc=Flat())
 
-    return FastIsoTools(Omega.arraykernel(elasticgreen),
-        Omega.arraykernel(geoidgreen), p1, p2, negligible_gradD, Hice, eta)
+    dummies = Dummies([null(Omega) for i in eachindex(fieldnames(Dummies))]...)
+    return FastIsoTools(Omega.arraykernel(elasticgreen), Omega.arraykernel(geoidgreen),
+        p1, p2, negligible_gradD, Hice, eta, dummies)
 end
 
 null(Omega::ComputationDomain) = copy(Omega.arraykernel(Omega.null))
@@ -495,7 +519,6 @@ function FastIsoProblem(
         T(0.0), T(0.0),             # V_den terms
         T(0.0),                     # total sl-contribution & conservation term
         0, years2seconds(10.0),     # countupdates, update step
-        null(Omega),                # dtloadanom
     )
 
     # Extend the vector with a zero at beginning if not already the case

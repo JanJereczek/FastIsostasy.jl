@@ -27,12 +27,12 @@ function solve!(fip::FastIsoProblem{T, M}) where {T<:AbstractFloat, M<:AbstractM
         end
         if fip.diffeq.alg != SimpleEuler()
             prob = remake(dummy, u0 = fip.geostate.u, tspan = (t_out[k-1], t_out[k]), p = fip)
-            sol = solve(prob, fip.diffeq.alg, reltol=1e-3)
+            sol = solve(prob, fip.diffeq.alg, reltol=1e-6)
             fip.geostate.dudt = sol(t_out[k], Val{1})
         else
             @inbounds for t in t_out[k-1]:fip.diffeq.dt:t_out[k]
                 update_diagnostics!(fip.geostate.dudt, fip.geostate.u, fip, t)
-                explicit_euler!(fip.geostate.u, fip.geostate.dudt, fip.diffeq.dt)
+                simple_euler!(fip.geostate.u, fip.geostate.dudt, fip.diffeq.dt)
                 write_out!(fip, k)
             end
         end
@@ -109,26 +109,33 @@ end
 
 Update the displacement rate `dudt` of the viscous response.
 """
-function dudt_isostasy!(
-    dudt::AbstractMatrix{T},
-    u::AbstractMatrix{T},
-    fip::FastIsoProblem{T, M},
-    t::T,
-) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
+function dudt_isostasy!(dudt::M, u::M, fip::FastIsoProblem{T, M}, t::T) where
+    {T<:AbstractFloat, M<:AbstractMatrix{T}}
 
     Omega = fip.Omega
-    rhs = - fip.c.g .* columnanom_full(fip)
+    rhs = -fip.c.g .* columnanom_full(fip)
+    dudxx = mixed_fdxx(u, Omega.K .* Omega.dx)
+    dudyy = mixed_fdyy(u, Omega.K .* Omega.dy)
+    dudxy = mixed_fdxy(u, Omega.K .* Omega.dx, Omega.K .* Omega.dy)
 
-    if fip.tools.negligible_gradD
-        biharmonic_u = Omega.biharmonic .* (fip.tools.pfft * u)
-        rhs += - fip.p.litho_rigidity .* real.( fip.tools.pifft * biharmonic_u )
-    else
-        dudxx, dudyy = Omega.fdxx(u), Omega.fdyy(u)
-        Mxx = -fip.p.litho_rigidity .* (dudxx + fip.p.litho_poissonratio .* dudyy)
-        Myy = -fip.p.litho_rigidity .* (dudyy + fip.p.litho_poissonratio .* dudxx)
-        Mxy = -fip.p.litho_rigidity .* (1 - fip.p.litho_poissonratio) .* Omega.fdxy(u)
-        rhs += Omega.fdxx(Mxx) + Omega.fdyy(Myy) + 2 .* Omega.fdxy(Mxy)
-    end
+    Mxx = -fip.p.litho_rigidity .* (dudxx + fip.p.litho_poissonratio .* dudyy)
+    Myy = -fip.p.litho_rigidity .* (dudyy + fip.p.litho_poissonratio .* dudxx)
+    Mxy = -fip.p.litho_rigidity .* (1 - fip.p.litho_poissonratio) .* dudxy
+    rhs +=  mixed_fdxx(Mxx, Omega.K .* Omega.dx) +
+            mixed_fdyy(Myy, Omega.K .* Omega.dy) +
+            2 .* mixed_fdxy(Mxy, Omega.K .* Omega.dx, Omega.K .* Omega.dy)
+
+    # dxx!(d.uxx, u, Omega)
+    # dyy!(d.uyy, u, Omega)
+    # dxy!(d.ux, d.uxy, u, Omega)
+    # Mxx = -fip.p.litho_rigidity .* (d.uxx + fip.p.litho_poissonratio .* d.uyy)
+    # Myy = -fip.p.litho_rigidity .* (d.uyy + fip.p.litho_poissonratio .* d.uxx)
+    # Mxy = -fip.p.litho_rigidity .* (1 - fip.p.litho_poissonratio) .* d.uxy
+    # dxx!(d.Mxxxx, Mxx, Omega)
+    # dyy!(d.Myyyy, Myy, Omega)
+    # dxy!(d.Mxyx, d.Mxyxy, Mxy, Omega)
+    # rhs += d.Mxxxx + d.Mxyxy + 2 .* d.Mxyxy
+    println(extrema(rhs))
 
     # dudt[:, :] .= real.(fip.tools.pifft * ((fip.tools.pfft * rhs) ./
     #     Omega.pseudodiff)) ./ (2 .* fip.p.effective_viscosity)
@@ -136,6 +143,35 @@ function dudt_isostasy!(
         (2 .* fip.p.effective_viscosity)) ) ./ Omega.pseudodiff))
     return nothing
 end
+
+# function dudt_isostasy!(
+#     dudt::AbstractMatrix{T},
+#     u::AbstractMatrix{T},
+#     fip::FastIsoProblem{T, M},
+#     t::T,
+# ) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
+
+#     Omega = fip.Omega
+#     rhs = - fip.c.g .* columnanom_full(fip)
+
+#     if fip.tools.negligible_gradD
+#         biharmonic_u = Omega.biharmonic .* (fip.tools.pfft * u)
+#         rhs += - fip.p.litho_rigidity .* real.( fip.tools.pifft * biharmonic_u )
+#     else
+#         dudxx, dudyy = Omega.fdxx(u), Omega.fdyy(u)
+#         Mxx = -fip.p.litho_rigidity .* (dudxx + fip.p.litho_poissonratio .* dudyy)
+#         Myy = -fip.p.litho_rigidity .* (dudyy + fip.p.litho_poissonratio .* dudxx)
+#         Mxy = -fip.p.litho_rigidity .* (1 - fip.p.litho_poissonratio) .* Omega.fdxy(u)
+#         rhs += Omega.fdxx(Mxx) + Omega.fdyy(Myy) + 2 .* Omega.fdxy(Mxy)
+#     end
+
+#     # dudt[:, :] .= real.(fip.tools.pifft * ((fip.tools.pfft * rhs) ./
+#     #     Omega.pseudodiff)) ./ (2 .* fip.p.effective_viscosity)
+#     dudt[:, :] .= real.(fip.tools.pifft * ((fip.tools.pfft * (rhs ./ 
+#         (2 .* fip.p.effective_viscosity)) ) ./ Omega.pseudodiff))
+#     return nothing
+# end
+
 
 #####################################################
 # BCs
@@ -154,7 +190,8 @@ end
 
 function corner_bc!(u::AbstractMatrix{<:AbstractFloat}, Nx::Int, Ny::Int)
     allowscalar() do
-        u .-= ( view(u,1,1) + view(u,Nx,1) + view(u,1,Ny) + view(u,Nx,Ny) ) / 4
+        # u .-= ( view(u,1,1) + view(u,Nx,1) + view(u,1,Ny) + view(u,Nx,Ny) ) / 4
+        u .-= ( u[1, 1] + u[Nx, 1] + u[1, Ny] + u[Nx, Ny] ) / 4
     end
     return u
 end
@@ -205,4 +242,24 @@ function update_elasticresponse!(fip::FastIsoProblem{T, M}
     rgh = correct_surfacedisctortion(columnanom_load(fip), fip)
     fip.geostate.ue .= samesize_conv(fip.tools.elasticgreen, rgh, fip.Omega, no_bc) #edge_bc
     return nothing
+end
+
+#####################################################
+# Mechanics utils
+#####################################################
+function compute_shearmodulus(m::ReferenceEarthModel)
+    return m.density .* (m.Vsv + m.Vsh) ./ 2
+end
+
+function maxwelltime_scaling(layer_viscosities, layer_shearmoduli)
+    return layer_shearmoduli[end] ./ layer_shearmoduli .* layer_viscosities
+end
+
+function maxwelltime_scaling!(layer_viscosities, layer_boundaries, m::ReferenceEarthModel)
+    mu = compute_shearmodulus(m)
+    layer_meandepths = (layer_boundaries[:, :, 1:end-1] + layer_boundaries[:, :, 2:end]) ./ 2
+    layer_meandepths = cat(layer_meandepths, layer_boundaries[:, :, end], dims = 3)
+    mu_itp = linear_interpolation(m.depth, mu)
+    layer_meanshearmoduli = layer_viscosities ./ 1e21 .* mu_itp.(layer_meandepths)
+    layer_viscosities .*= layer_meanshearmoduli[:, :, end] ./ layer_meanshearmoduli
 end

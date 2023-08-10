@@ -1,91 +1,111 @@
-"""
-    ParamInversion
+#=
+indices:
+params i
+samples j
+time k
+iterations n
+=#
 
-Return a struct containing all variables and configs related to the inversion of
-Solid-Earth parameter fields based on displacement fields. For now, only viscosity
-can be inverted but future versions will support lithosphere rigidity.
-For now, the unscented Kalman inversion is the only method available but ensemble
-Kalman inversion will be available in future.
 """
-# For now, method is fixed to UKI
-struct ParamInversion
-    Omega::ComputationDomain
-    c::PhysicalConstants
-    p::LateralVariability
-    t::Vector
-    y::Vector
-    Hice::Vector{Matrix}
-    obs_idx::Matrix
-    case::String
-    method::Any
-    nt::Int
-    nparams::Int
-    nobs::Int
-    paramspriors::NamedTuple
-    N_iter::Int
-    α_reg::Real
-    update_freq::Int
-    n_samples::Int
-    μ_y::Vector
-    Σ_y::Matrix
+    InversionConfig
+
+Struct containing configuration parameters for a [`ParamInversion`].
+"""
+Base.@kwdef struct InversionConfig
+    case::String = "viscosity"
+    method::Any = Unscented
+    paramspriors::NamedTuple = defaultpriors(case)
+    N_iter::Int = 20
+    α_reg::Real = 1.0
+    update_freq::Int = 1
+    n_samples::Int = 100
+    scale_obscov::Real = 10000.0
 end
 
-function ParamInversion(
-    t::Vector,
-    u::Vector{Matrix},
-    Hice::Vector{Matrix};
-    W = 3000e3,
-    kwargs...,
-)
-    n1, n2 = size(u[1])
-    Omega = ComputationDomain(W, n1)
-    c = PhysicalConstants()
-    p = LateralVariability(Omega)
-    return ParamInversion(Omega, c, p, t, u, Hice; kwargs...)
+"""
+    InversionData
+
+Struct containing data (either observational or output of a golden standard model) for a [`ParamInversion`].
+"""
+struct InversionData{T<:AbstractFloat, M<:Matrix{T}}
+    t::Vector{T}        # Time vector
+    y::Vector{T}        # Response (anomaly)
+    Hice::Vector{M}     # Ice thickness (anomaly)
+    idx::BitMatrix      # Index matrix (cell = 1 --> run inversion)
+    nt::Int             # number of time steps
+    nparams::Int        # number of values to estimate
+    nobs::Int           # number of observed values = nt * nparams
 end
 
-function ParamInversion(
-    Omega::ComputationDomain,
-    c::PhysicalConstants,
-    p::LateralVariability,
-    t::Vector,
-    U::Vector{Matrix{T}},
-    Hice::Vector{Matrix{T}};
-    case::String = "viscosity",
-    method::Any = Unscented,
-    Htol::Real = 1.0,
-    paramspriors::NamedTuple = defaultpriors(case),
-    N_iter::Int = 20,
-    α_reg::Real = 1.0,
-    update_freq::Int = 1,
-    n_samples::Int = 100,
-    scale_obscov::Real = 10000.0,
-) where {T<:AbstractFloat}
+
+function InversionData(t, U, Hice, config; Htol::Real = 1.0)   # Hwater
     if (length(t) != length(U)) ||
         (length(t) != length(Hice)) ||
         (length(U) != length(Hice))
         error("The length of the provided a time vector, displacement field history and load history do not match!")
     end
 
-    maxHtransient = max.( [abs.(H) for H in Hice]... )
-    obs_idx = where_response(maxHtransient, Htol)
-    significantload = vcat( [H[obs_idx] for H in Hice]... )
+    obs_idx = where_significant(Hice, Htol)
     nt = length(t)
     nparams = sum(obs_idx)
-    nobs = nt * nparams
-
-    if nobs != length(significantload)
-        error("The number of observations with significant loading do not correspond to the dimension of the Kalman problem.")
+    if config.case == "both"
+        nparams *= 2
     end
 
+    nobs = nt * nparams
     y = vcat([u[obs_idx] for u in U]...)
+    if nobs != length(y)
+        error("The number of observations with significant loading does not correspond to the dimension of the Kalman problem.")
+    end
+    return InversionData(t, y, Hice, obs_idx, nt, nparams, nobs)
+end
 
+"""
+    ParamInversion
+
+Struct containing variables and configs for the inversion of
+Solid-Earth parameter fields. For now, only viscosity can be inverted but future
+versions will support lithosphere rigidity. For now, the unscented Kalman inversion
+is the only method available but ensemble Kalman inversion will be available in future.
+"""
+struct ParamInversion{T<:AbstractFloat, M<:Matrix{T}}
+    Omega::ComputationDomain{T, M}
+    c::PhysicalConstants{T}
+    p::LateralVariability{T, M}
+    config::InversionConfig
+    data::InversionData{T, M}
+    μ_y::Vector{T}
+    Σ_y::M
+end
+
+# function ParamInversion(
+#     t::Vector,
+#     U::Vector{Matrix},
+#     Hice::Vector{Matrix};
+#     Wx::Real = 3000e3,
+#     Wy::Real = 3000e3,
+#     kwargs...,
+# )
+#     Nx, Ny = size(U[1])
+#     Omega = ComputationDomain(Wx, Wy, Nx, Ny)
+#     c = PhysicalConstants()
+#     p = LateralVariability(Omega)
+#     return ParamInversion(Omega, c, p, t, u, Hice; kwargs...)
+# end
+
+
+function ParamInversion(
+    Omega::ComputationDomain{T, M},
+    c::PhysicalConstants{T},
+    p::LateralVariability{T, M},
+    config::InversionConfig,
+    data::InversionData{T, M},
+) where {T<:AbstractFloat, M<:Matrix{T}}
     # Generating noisy observations
-    μ_y = zeros(nobs)
-    Σ_y = uncorrelated_obs_covariance(scale_obscov, significantload)
-
-    return ParamInversion(Omega, c, p, t, y, Hice, obs_idx, case, method, nt, nparams, nobs,
-        paramspriors, N_iter, α_reg, update_freq, n_samples, μ_y, Σ_y)
+    μ_y = zeros(data.nobs)
+    loadscaling_obscov = vcat( [H[data.idx] for H in data.Hice]... )
+    Σ_y = uncorrelated_obs_covariance(scale_obscov, loadscaling_obscov)
+    return ParamInversion(Omega, c, p, config, data, μ_y, Σ_y)
 
 end
 
@@ -110,25 +130,27 @@ inversion as initialized in `paraminv`.
 """
 function perform(paraminv::ParamInversion)
 
-    ynoisy = zeros(paraminv.nobs, paraminv.n_samples)
-    for i in 1:paraminv.n_samples
-        ynoisy[:, i] = paraminv.y .+ rand(MvNormal(paraminv.μ_y, paraminv.Σ_y))
+    data, config = paraminv.data, paraminv.config
+    ynoisy = zeros(data.nobs, config.n_samples)
+    @inbounds for j in 1:config.n_samples
+        ynoisy[:, j] = data.y .+ rand(MvNormal(paraminv.μ_y, paraminv.Σ_y))
     end
     truth = Observations.Observation(ynoisy, paraminv.Σ_y, ["Noisy truth"])
     truth_sample = truth.mean
 
     priors = combine_distributions([constrained_gaussian( "p_$(i)",
-        paraminv.paramspriors.mean, paraminv.paramspriors.var,
-        paraminv.paramspriors.lowerbound, paraminv.paramspriors.upperbound) for i in 1:paraminv.nparams])
+        config.paramspriors.mean, config.paramspriors.var,
+        config.paramspriors.lowerbound, config.paramspriors.upperbound)
+        for i in 1:config.nparams])
 
     # Here we also could use process = Inversion()
     process = Unscented(mean(priors), cov(priors);
-        α_reg = paraminv.α_reg, update_freq = paraminv.update_freq)
+        α_reg = config.α_reg, update_freq = config.update_freq)
     ukiobj = EnsembleKalmanProcess(truth_sample, truth.obs_noise_cov, process)
-    err = zeros(paraminv.N_iter)
-    for n in 1:paraminv.N_iter
+    err = zeros(config.N_iter)
+    for n in 1:config.N_iter
         ϕ_n = get_ϕ_final(priors, ukiobj)       # Params in physical/constrained space
-        G_n = [fastisostasy(ϕ_n[:, j], paraminv) for j in axes(ϕ_n, 2)]      # Evaluate forward map
+        G_n = [forward_fastiso(ϕ_n[:, j], paraminv) for j in axes(ϕ_n, 2)]      # Evaluate forward map
         G_ens = hcat(G_n...)
         EnsembleKalmanProcesses.update_ensemble!(ukiobj, G_ens)
         err[n] = get_error(ukiobj)[end]
@@ -138,38 +160,43 @@ function perform(paraminv::ParamInversion)
 end
 
 # ϕ_n = get_ϕ_final(priors, ukiobj)
-
-function fastisostasy(params::Vector, paraminv::ParamInversion)
-    if paraminv.case == "viscosity"
-        paraminv.p.effective_viscosity[paraminv.obs_idx] .= 10 .^ params
-    elseif paraminv.case == "rigidity"
-        paraminv.p.lithosphere_rigidity[paraminv.obs_idx] .= params
-    elseif paraminv.case == "both"
-        paraminv.p.effective_viscosity[paraminv.obs_idx] .= 10 .^ params[1:mparams]
-        paraminv.p.lithosphere_rigidity[paraminv.obs_idx] .= params[mparams+1:end]
+function FastIsoProblem(params::Vector, paraminv::ParamInversion)
+    config, data = paraminv.data, paraminv.config
+    if config.case == "viscosity"
+        paraminv.p.effective_viscosity[data.idx] .= 10 .^ params
+    elseif config.case == "rigidity"
+        paraminv.p.lithosphere_rigidity[data.idx] .= params
+    elseif config.case == "both"
+        paraminv.p.effective_viscosity[data.idx] .= 10 .^ params[1:mparams]
+        paraminv.p.lithosphere_rigidity[data.idx] .= params[mparams+1:end]
     end
+    interactive_sealevel = false
+    return FastIsoProblem(paraminv.Omega, paraminv.c, paraminv.p, t,
+        interactive_sealevel, paraminv.Hice, verbose = false)
+end
 
-    t = vcat(0.0, paraminv.t)
-    results = fastisostasy(t, paraminv.Omega, paraminv.c,
-        paraminv.p, paraminv.Hice[1], alg=BS3(), verbose = false)
-    Gx = vcat([reshape(u[paraminv.obs_idx],
-        paraminv.nparams) for u in results.u_out[2:end]]...)
+function forward_fastiso(params::Vector, paraminv::ParamInversion)
+    fip = FastIsoProblem(params, paraminv)
+    solve!(fip)
+    Gx = vcat([reshape(u[paraminv.data.idx],
+        paraminv.nparams) for u in fip.out.u[2:end]]...)
     # results are only taken from the 2nd index onwards because
     # the first index returns the solution at time t=0.
     return Gx
 end
 
 """
-    where_response()
+    where_significant()
 
 Find points of parameter field that can be inverted. We here assume that 
 """
-function where_response(load, loadtol)
-    return abs.(load) .> loadtol
+function where_significant(X::Vector{Matrix}, tol::Real)
+    transientmax = max.( [abs.(x) for x in X]... )
+    return transientmax .> tol
 end
 
-function uncorrelated_obs_covariance(scale_obscov, significantload)
-    diagvar = scale_obscov ./ (significantload .+ 1)   # 10000.0
+function uncorrelated_obs_covariance(scale_obscov, loadscaling_obscov)
+    diagvar = scale_obscov ./ (loadscaling_obscov .+ 1)   # 10000.0
     return convert(Array, Diagonal(diagvar) )
 end
 
