@@ -1,6 +1,8 @@
-abstract type SecondDerivative end
-
-mutable struct Dummies{T<:AbstractFloat, M<:AbstractMatrix{T}}
+#########################################################
+# Convenience
+#########################################################
+KernelMatrix{T} = Union{Matrix{T}, CuMatrix{T}} where {T<:AbstractFloat}
+mutable struct PreAllocated{T<:AbstractFloat, M<:KernelMatrix{T}}
     rhs::M
     uxx::M
     uyy::M
@@ -33,7 +35,7 @@ If a rectangular domain is needed, run:
 Omega = ComputationDomain(Wx, Wy, Nx, Ny)
 ```
 """
-struct ComputationDomain{T<:AbstractFloat, M<:AbstractMatrix{T}}
+struct ComputationDomain{T<:AbstractFloat, M<:KernelMatrix{T}}
     Wx::T                           # Domain length in x (m)
     Wy::T                           # Domain length in y (m)
     Nx::Int                         # Number of grid points in x-dimension
@@ -42,6 +44,8 @@ struct ComputationDomain{T<:AbstractFloat, M<:AbstractMatrix{T}}
     My::Int                         # Ny/2
     dx::T                           # Spatial discretization in x
     dy::T                           # Spatial discretization in y
+    Dx::M
+    Dy::M
     x::Vector{T}
     y::Vector{T}
     X::M
@@ -58,8 +62,6 @@ struct ComputationDomain{T<:AbstractFloat, M<:AbstractMatrix{T}}
     projection_correction::Bool
     null::M         # a zero matrix of size Nx x Ny
     pseudodiff::M   # pseudodiff operator
-    harmonic::M     # harmonic operator
-    biharmonic::M   # biharmonic operator
     use_cuda::Bool
     arraykernel::Any                # Array or CuArray depending on chosen hardware
     bc!::Function                   # Boundary conditions
@@ -103,12 +105,13 @@ function ComputationDomain(
     end
 
     # Differential operators in Fourier space
-    pseudodiff, harmonic, biharmonic = get_differential_fourier(Wx, Wy, Nx, Ny)
+    pseudodiff, harmonic = get_differential_fourier(Wx, Wy, Nx, Ny)
     # Avoid division by zero. Tolerance ϵ of the order of the neighboring terms.
     # Tests show that it does not lead to errors wrt analytical or benchmark solutions.
-
-    X, Y, null, R, Theta, Lat, Lon, K, pseudodiff, harmonic, biharmonic = kernelpromote(
-        [X, Y, null, R, Theta, Lat, Lon, K, pseudodiff, harmonic, biharmonic], arraykernel)
+    pseudodiff[1, 1] = mean([pseudodiff[1,2], pseudodiff[2,1]])
+    
+    X, Y, null, R, Theta, Lat, Lon, K, pseudodiff = kernelpromote(
+        [X, Y, null, R, Theta, Lat, Lon, K, pseudodiff], arraykernel)
 
     # Precompute indices for samesize_conv()
     if iseven(Nx)
@@ -125,9 +128,9 @@ function ComputationDomain(
     end
     j2 = 2*Ny-1-My
 
-    return ComputationDomain(Wx, Wy, Nx, Ny, Mx, My, dx, dy, x, y, X, Y, i1, i2, j1, j2, R,
-        Theta, Lat, Lon, K, projection_correction, null, pseudodiff, harmonic, biharmonic,
-        use_cuda, arraykernel, bc!)
+    return ComputationDomain(Wx, Wy, Nx, Ny, Mx, My, dx, dy, K .* dx, K .* dy,
+        x, y, X, Y, i1, i2, j1, j2, R, Theta, Lat, Lon, K, projection_correction,
+        null, pseudodiff, use_cuda, arraykernel, bc!)
 end
 
 #########################################################
@@ -183,7 +186,7 @@ end
 Return a struct containing all information related to the radially layered structure of the solid Earth and
 its parameters.
 """
-mutable struct LateralVariability{T<:AbstractFloat, M<:AbstractMatrix{T}}
+mutable struct LateralVariability{T<:AbstractFloat, M<:KernelMatrix{T}}
     effective_viscosity::M
     litho_thickness::M
     litho_rigidity::M
@@ -218,7 +221,7 @@ function LateralVariability(
     litho_poissonratio::T = litho_poissonratio,
     mantle_poissonratio::T = mantle_poissonratio,
 ) where {
-    T<:AbstractFloat, M<:AbstractMatrix{T},
+    T<:AbstractFloat, M<:KernelMatrix{T},
     A<:Union{Vector{T}, Array{T, 3}},
     B<:Union{Vector{T}, Array{T, 3}},
 }
@@ -255,7 +258,7 @@ end
 
 Return a struct containing the reference [`GeoState`](@ref).
 """
-struct RefGeoState{T<:AbstractFloat, M<:AbstractMatrix{T}}
+struct RefGeoState{T<:AbstractFloat, M<:KernelMatrix{T}}
     u::M                    # viscous displacement
     ue::M                   # elastic displacement
     H_ice::M                # reference height of ice column
@@ -275,7 +278,7 @@ end
 Return a mutable struct containing the geostate which will be updated over the simulation.
 The geostate contains all the states of the [`FastIsoProblem`] to be solved.
 """
-mutable struct GeoState{T<:AbstractFloat, M<:AbstractMatrix{T}}
+mutable struct GeoState{T<:AbstractFloat, M<:KernelMatrix{T}}
     u::M                    # viscous displacement
     dudt::M                 # viscous displacement rate
     ue::M                   # elastic displacement
@@ -303,26 +306,23 @@ end
     FastIsoTools(Omega::ComputationDomain, c::PhysicalConstants, p::LateralVariability)
 
 Return a `struct` containing pre-computed tools to perform forward-stepping of the model, namely:
- - elasticgreen::AbstractMatrix{T}
- - fourier_elasticgreen::AbstractMatrix{T}{Complex{T}}
+ - elasticgreen::KernelMatrix{T}
+ - fourier_elasticgreen::KernelMatrix{T}{Complex{T}}
  - pfft::AbstractFFTs.Plan
  - pifft::AbstractFFTs.ScaledPlan
- - negligible_gradD::Bool
- - rhog::T
- - geoidgreen::AbstractMatrix{T}
+ - geoidgreen::KernelMatrix{T}
 """
-struct FastIsoTools{T<:AbstractFloat, M<:AbstractMatrix{T},
+struct FastIsoTools{T<:AbstractFloat, M<:KernelMatrix{T},
     P1<:AbstractFFTs.Plan{Complex{T}}, P2<:AbstractFFTs.Plan{Complex{T}}}
     elasticgreen::M
     geoidgreen::M
     pfft::P1
     pifft::AbstractFFTs.ScaledPlan{Complex{T}, P2, T}
-    negligible_gradD::Bool
     Hice::Interpolations.Extrapolation{M, 1, Interpolations.GriddedInterpolation{M, 1, Vector{M},
         Gridded{Linear{Throw{OnGrid}}}, Tuple{Vector{T}}}, Gridded{Linear{Throw{OnGrid}}}, Flat{Nothing}}
     eta::Interpolations.Extrapolation{M, 1, Interpolations.GriddedInterpolation{M, 1, Vector{M},
         Gridded{Linear{Throw{OnGrid}}}, Tuple{Vector{T}}}, Gridded{Linear{Throw{OnGrid}}}, Flat{Nothing}}
-    dummies::Dummies{T, M}
+    prealloc::PreAllocated{T, M}
 end
 
 function FastIsoTools(
@@ -330,11 +330,11 @@ function FastIsoTools(
     c::PhysicalConstants{T},
     p::LateralVariability{T, M},
     t_Hice_snapshots::Vector{T},
-    Hice_snapshots::Vector{<:AbstractMatrix{T}},
+    Hice_snapshots::Vector{<:KernelMatrix{T}},
     t_eta_snapshots::Vector{T},
-    eta_snapshots::Vector{<:AbstractMatrix{T}};
+    eta_snapshots::Vector{<:KernelMatrix{T}};
     quad_precision::Int = 4,
-) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
+) where {T<:AbstractFloat, M<:KernelMatrix{T}}
 
     # Elastic response variables
     distance, greenintegrand_coeffs = get_greenintegrand_coeffs(T)
@@ -342,11 +342,6 @@ function FastIsoTools(
     quad_support, quad_coeffs = get_quad_coeffs(T, quad_precision)
     elasticgreen = get_elasticgreen(Omega, greenintegrand_function, quad_support, quad_coeffs)
     geoidgreen = get_geoidgreen(Omega, c)
-
-    # Check if thickness constant upto 1km tolerance
-    mean_litho_rigidity = fill(mean(p.litho_rigidity), Omega)
-    negligible_gradD = isapprox(p.litho_rigidity,
-        Omega.arraykernel(mean_litho_rigidity), atol = 1e3)
 
     # FFT plans depening on CPU vs. GPU usage
     if Omega.use_cuda
@@ -363,9 +358,9 @@ function FastIsoTools(
     eta = linear_interpolation(t_eta_snapshots,
         kernelpromote(eta_snapshots, Omega.arraykernel); extrapolation_bc=Flat())
 
-    dummies = Dummies([null(Omega) for i in eachindex(fieldnames(Dummies))]...)
+    prealloc = PreAllocated([null(Omega) for i in eachindex(fieldnames(PreAllocated))]...)
     return FastIsoTools(Omega.arraykernel(elasticgreen), Omega.arraykernel(geoidgreen),
-        p1, p2, negligible_gradD, Hice, eta, dummies)
+        p1, p2, Hice, eta, prealloc)
 end
 
 null(Omega::ComputationDomain) = copy(Omega.arraykernel(Omega.null))
@@ -401,7 +396,7 @@ Return a struct containing all the other structs needed for the forward integrat
  - geostate::GeoState{T, M}
  - interactive_sealevel::Bool
 """
-struct FastIsoProblem{T<:AbstractFloat, M<:AbstractMatrix{T}}
+struct FastIsoProblem{T<:AbstractFloat, M<:KernelMatrix{T}}
     Omega::ComputationDomain{T, M}
     c::PhysicalConstants{T}
     p::LateralVariability{T, M}
@@ -422,7 +417,7 @@ function FastIsoProblem(
     t_out::Vector{<:Real},
     interactive_sealevel::Bool;
     kwargs...,
-) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
+) where {T<:AbstractFloat, M<:KernelMatrix{T}}
     # Creating some placeholders in case of an external update of the load.
     t_Hice_snapshots = [extrema(t_out)...]
     Hice_snapshots = [null(Omega), null(Omega)]
@@ -436,9 +431,9 @@ function FastIsoProblem(
     p::LateralVariability{T, M},
     t_out::Vector{<:Real},
     interactive_sealevel::Bool,
-    Hice::AbstractMatrix{T};
+    Hice::KernelMatrix{T};
     kwargs...,
-) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
+) where {T<:AbstractFloat, M<:KernelMatrix{T}}
     # Constant interpolator in case viscosity is fixed over time.
     t_Hice_snapshots = [extrema(t_out)...]
     Hice_snapshots = [Hice, Hice]
@@ -453,9 +448,9 @@ function FastIsoProblem(
     t_out::Vector{<:Real},
     interactive_sealevel::Bool,
     t_Hice_snapshots::Vector{T},
-    Hice_snapshots::Vector{<:AbstractMatrix{T}};
+    Hice_snapshots::Vector{<:KernelMatrix{T}};
     kwargs...,
-) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
+) where {T<:AbstractFloat, M<:KernelMatrix{T}}
     # Constant interpolator in case viscosity is fixed over time.
     t_eta_snapshots = [extrema(t_out)...]
     eta_snapshots = [p.effective_viscosity, p.effective_viscosity]
@@ -471,9 +466,9 @@ function FastIsoProblem(
     t_out::Vector{<:Real},
     interactive_sealevel::Bool,
     t_Hice_snapshots::Vector{T},
-    Hice_snapshots::Vector{<:AbstractMatrix{T}},
+    Hice_snapshots::Vector{<:KernelMatrix{T}},
     t_eta_snapshots::Vector{T},
-    eta_snapshots::Vector{<:AbstractMatrix{T}};
+    eta_snapshots::Vector{<:KernelMatrix{T}};
     diffeq::NamedTuple = (alg = BS3(), reltol = 1e-3),
     verbose::Bool = false,
     internal_loadupdate::Bool = true,
@@ -486,7 +481,7 @@ function FastIsoProblem(
     H_ice_0::M = null(Omega),
     H_water_0::M = null(Omega),
     b_0::M = null(Omega),
-) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
+) where {T<:AbstractFloat, M<:KernelMatrix{T}}
 
     if !isa(diffeq.alg, OrdinaryDiffEqAlgorithm) && !isa(diffeq.alg, SimpleEuler)
         error("Provided algorithm for solving ODE is not supported.")

@@ -78,22 +78,6 @@ struct ParamInversion{T<:AbstractFloat, M<:Matrix{T}}
     Σ_y::M
 end
 
-# function ParamInversion(
-#     t::Vector,
-#     U::Vector{Matrix},
-#     Hice::Vector{Matrix};
-#     Wx::Real = 3000e3,
-#     Wy::Real = 3000e3,
-#     kwargs...,
-# )
-#     Nx, Ny = size(U[1])
-#     Omega = ComputationDomain(Wx, Wy, Nx, Ny)
-#     c = PhysicalConstants()
-#     p = LateralVariability(Omega)
-#     return ParamInversion(Omega, c, p, t, u, Hice; kwargs...)
-# end
-
-
 function ParamInversion(
     Omega::ComputationDomain{T, M},
     c::PhysicalConstants{T},
@@ -130,25 +114,24 @@ inversion as initialized in `paraminv`.
 """
 function perform(paraminv::ParamInversion)
 
-    data, config = paraminv.data, paraminv.config
-    ynoisy = zeros(data.nobs, config.n_samples)
-    @inbounds for j in 1:config.n_samples
-        ynoisy[:, j] = data.y .+ rand(MvNormal(paraminv.μ_y, paraminv.Σ_y))
+    c, d = paraminv.config, paraminv.data
+    yn = zeros(d.nobs, c.n_samples)
+    @inbounds for j in 1:c.n_samples
+        yn[:, j] = d.y .+ rand(MvNormal(paraminv.μ_y, paraminv.Σ_y))
     end
-    truth = Observations.Observation(ynoisy, paraminv.Σ_y, ["Noisy truth"])
-    truth_sample = truth.mean
+    ynoisy = Observations.Observation(yn, paraminv.Σ_y, ["Noisy truth"])
 
     priors = combine_distributions([constrained_gaussian( "p_$(i)",
-        config.paramspriors.mean, config.paramspriors.var,
-        config.paramspriors.lowerbound, config.paramspriors.upperbound)
-        for i in 1:config.nparams])
+        c.paramspriors.mean, c.paramspriors.var,
+        c.paramspriors.lowerbound, c.paramspriors.upperbound)
+        for i in 1:c.nparams])
 
     # Here we also could use process = Inversion()
     process = Unscented(mean(priors), cov(priors);
-        α_reg = config.α_reg, update_freq = config.update_freq)
-    ukiobj = EnsembleKalmanProcess(truth_sample, truth.obs_noise_cov, process)
-    err = zeros(config.N_iter)
-    for n in 1:config.N_iter
+        α_reg = c.α_reg, update_freq = c.update_freq)
+    ukiobj = EnsembleKalmanProcess(ynoisy.mean, ynoisy.obs_noise_cov, process)
+    err = zeros(c.N_iter)
+    for n in 1:c.N_iter
         ϕ_n = get_ϕ_final(priors, ukiobj)       # Params in physical/constrained space
         G_n = [forward_fastiso(ϕ_n[:, j], paraminv) for j in axes(ϕ_n, 2)]      # Evaluate forward map
         G_ens = hcat(G_n...)
@@ -171,17 +154,15 @@ function FastIsoProblem(params::Vector, paraminv::ParamInversion)
         paraminv.p.lithosphere_rigidity[data.idx] .= params[mparams+1:end]
     end
     interactive_sealevel = false
-    return FastIsoProblem(paraminv.Omega, paraminv.c, paraminv.p, t,
-        interactive_sealevel, paraminv.Hice, verbose = false)
+    return FastIsoProblem(paraminv.Omega, paraminv.c, paraminv.p, paraminv.data.t,
+        interactive_sealevel, paraminv.data.Hice, verbose = false)
 end
 
 function forward_fastiso(params::Vector, paraminv::ParamInversion)
     fip = FastIsoProblem(params, paraminv)
     solve!(fip)
-    Gx = vcat([reshape(u[paraminv.data.idx],
-        paraminv.nparams) for u in fip.out.u[2:end]]...)
-    # results are only taken from the 2nd index onwards because
-    # the first index returns the solution at time t=0.
+    Gx = vcat([reshape(u[paraminv.data.idx], paraminv.nparams) for u in fip.out.u[2:end]]...)
+    # results taken from k=2 onwards because k=1 returns the solution at time t=0.
     return Gx
 end
 

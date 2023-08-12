@@ -48,21 +48,23 @@ end
 
 function benchmark1()
     # Generating numerical results
-    Omega = ComputationDomain(3000e3, 6)
+    Omega = ComputationDomain(3000e3, 7, projection_correction = false)
     c, p, R, H, Hcylinder, t_out, interactive_sealevel = benchmark1_constants(Omega)
     fip = FastIsoProblem(Omega, c, p, t_out, interactive_sealevel, Hcylinder)
     solve!(fip)
+    println("Computation took $(fip.out.computation_time) s")
     fig = benchmark1_compare(Omega, fip, H, R)
     save("plots/benchmark1/plot.png", fig)
 end
 
 function benchmark1_gpu()
     # Generating numerical results
-    Omega = ComputationDomain(3000e3, 7, use_cuda = true)
+    Omega = ComputationDomain(3000e3, 7, use_cuda = true, projection_correction = false)
     c, p, R, H, Hcylinder, t_out, interactive_sealevel = benchmark1_constants(Omega)
     fip = FastIsoProblem(Omega, c, p, t_out, interactive_sealevel, Hcylinder,
-        diffeq = (alg = SimpleEuler(), dt = years2seconds(2.0)))
+        diffeq = (alg = SimpleEuler(), dt = years2seconds(1.0)))
     solve!(fip)
+    println("Computation took $(fip.out.computation_time) s")
     Omega, p = reinit_structs_cpu(Omega, p)
 
     fig = benchmark1_compare(Omega, fip, H, R)
@@ -82,6 +84,7 @@ function benchmark1_external_loadupdate()
         step!(fip, ode, (fip.out.t[k-1], fip.out.t[k]))
         write_out!(fip, k)
     end
+    println("Computation took $(fip.out.computation_time)")
 
     fig = benchmark1_compare(Omega, fip, H, R)
     save("plots/benchmark1/plot_external_loadupdate.png", fig)
@@ -156,7 +159,7 @@ function benchmark3()
 
     slicex, slicey = slice_along_x(Omega)
     x = Omega.X[slicex, slicey]
-    cmap = cgrad(:jet, length(fip.out.t), categorical = true)
+    cmap = cgrad(:jet, length(t_out), categorical = true)
 
     cases = ["gaussian_lo_D", "gaussian_hi_D", "gaussian_lo_η", "gaussian_hi_η",
         "no_litho", "ref"]

@@ -154,27 +154,26 @@ c = PhysicalConstants()
 
 ## Inversion of viscosity field
 
-FastIsostasy.jl relies on simplification of the full problem and might therefore need a calibration step to match real data or 3D GIA model output, thereafter simply referred to by data. By means of an unscented Kalman inversion, one can e.g. infer the appropriate field of effective mantle viscosity that matches the data best. Whereas this is known to be a tedious step, FastIsostasy is developped to ease the procedure by providing a convenience struct [`Paraminversion`](@ref) that can be run by:
+FastIsostasy.jl relies on simplification of the full problem and might therefore need a calibration step to match the data, typically obtained from observations or from a "golden-standard" 3D GIA model. By means of an unscented Kalman inversion, one can e.g. infer the appropriate field of effective mantle viscosity that matches the data best. Whereas this is known to be a tedious step, FastIsostasy is developped to ease the procedure by providing a convenience struct [`Paraminversion`](@ref) that can be run by:
 
 ```@example MAIN
-Omega = ComputationDomain(W, n)
-
+Omega = ComputationDomain(3000e3, 6)
 lb = [88e3, 180e3, 280e3, 400e3]
 lv = get_wiens_layervisc(Omega)
 p = LateralVariability(Omega, layer_boundaries = lb, layer_viscosities = lv)
+R, H = 2000e3, 1e3
+Hcylinder = uniform_ice_cylinder(Omega, R, H)
+Hice = [Hcylinder for t in t_out]
+t_out = years2seconds.(1_000.0:1_000.0:2_000.0)
+fip = FastIsoProblem(Omega, c, p, t_out, interactive_sealevel, Hice)
+solve!(fip)
 ground_truth = copy(p.effective_viscosity)
 
-R = T(2000e3)               # ice disc radius (m)
-H = T(1000)                 # ice disc thickness (m)
-Hice = uniform_ice_cylinder(Omega, R, H)
-t_out = years2seconds.(0.0:1_000.0:2_000.0)
-
-# tinv = t_out[2:end]
-# Hice = [Hcylinder for t in tinv]
-# Y = results.u_out[2:end]
-# paraminv = ParamInversion(Omega, c, p, tinv, Y, Hice)
-# priors, ukiobj = perform(paraminv)
-# logeta, Gx, e_mean, e_sort = extract_inversion(priors, ukiobj, paraminv)
+config = InversionConfig()
+data = InversionData(t_out, fip.out.u, Hice, config)
+paraminv = ParamInversion(Omega, c, p, config, data)
+priors, ukiobj = perform(paraminv)
+logeta, Gx, e_mean, e_sort = extract_inversion(priors, ukiobj, paraminv)
 ```
 
 [^Wiens2021]:

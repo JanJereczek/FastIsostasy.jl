@@ -10,13 +10,15 @@ using FFTW: plan_fft, plan_ifft
 using AbstractFFTs
 using FastGaussQuadrature: gausslegendre
 using DSP: conv
-using CUDA: CuArray, CUFFT, allowscalar
+using CUDA: CuArray, CuMatrix, CUFFT, allowscalar
 using OrdinaryDiffEq: ODEProblem, solve, remake, OrdinaryDiffEqAlgorithm
 using EnsembleKalmanProcesses
 using EnsembleKalmanProcesses.Observations
 using EnsembleKalmanProcesses.ParameterDistributions
 using SpecialFunctions: besselj0, besselj1
 using DynamicalSystemsBase: CoupledODEs, trajectory
+using ParallelStencil
+using ParallelStencil.FiniteDifferences2D
 
 using Reexport
 @reexport using Interpolations
@@ -36,6 +38,7 @@ include("inversion.jl")
 include("analytic_solutions.jl")
 
 # structs.jl
+export KernelMatrix
 export ComputationDomain, PhysicalConstants
 export ReferenceEarthModel, LateralVariability
 export GeoState, RefGeoState
@@ -59,10 +62,9 @@ export get_quad_coeffs
 export get_elasticgreen
 
 # derivatives.jl
-export mixed_fdx, mixed_fdy, mixed_fdxx, mixed_fdyy
 export get_differential_fourier
-export central_fdx, mixed_fdx, mixed_fdx!
-export dxx!, dyy!, dxy!, dx!, dy!
+export update_second_derivatives!, scale_derivatives!, flatbc!
+export dxx!, dyy!, dxy!
 
 # mechanics.jl
 export dudt_isostasy!, update_diagnostics!
@@ -73,9 +75,10 @@ export update_loadcolumns!, update_elasticresponse!, update_geoid!, update_seale
 
 # geostate.jl
 export columnanom_load, correct_surfacedisctortion, columnanom_full
+export columnanom_ice, columnanom_water
 
 # inversion.jl
-export ParamInversion, perform, extract_inversion
+export InversionConfig, InversionData, ParamInversion, perform, extract_inversion
 
 # analytic solutions
 export analytic_solution

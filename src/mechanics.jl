@@ -6,7 +6,7 @@
 
 Solve the isostatic adjustment problem defined in `fip::FastIsoProblem`.
 """
-function solve!(fip::FastIsoProblem{T, M}) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
+function solve!(fip::FastIsoProblem{T, M}) where {T<:AbstractFloat, M<:KernelMatrix{T}}
 
     t1 = time()
     if !(fip.internal_loadupdate)
@@ -75,7 +75,7 @@ Update all the diagnotisc variables, i.e. all fields of `fip.geostate` apart
 from the displacement, which requires an integrator.
 """
 function update_diagnostics!(dudt::M, u::M, fip::FastIsoProblem{T, M}, t::T,
-    ) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
+    ) where {T<:AbstractFloat, M<:KernelMatrix{T}}
 
     # Order really matters here!
 
@@ -110,68 +110,22 @@ end
 Update the displacement rate `dudt` of the viscous response.
 """
 function dudt_isostasy!(dudt::M, u::M, fip::FastIsoProblem{T, M}, t::T) where
-    {T<:AbstractFloat, M<:AbstractMatrix{T}}
+    {T<:AbstractFloat, M<:KernelMatrix{T}}
 
-    Omega = fip.Omega
-    rhs = -fip.c.g .* columnanom_full(fip)
-    dudxx = mixed_fdxx(u, Omega.K .* Omega.dx)
-    dudyy = mixed_fdyy(u, Omega.K .* Omega.dy)
-    dudxy = mixed_fdxy(u, Omega.K .* Omega.dx, Omega.K .* Omega.dy)
-
-    Mxx = -fip.p.litho_rigidity .* (dudxx + fip.p.litho_poissonratio .* dudyy)
-    Myy = -fip.p.litho_rigidity .* (dudyy + fip.p.litho_poissonratio .* dudxx)
-    Mxy = -fip.p.litho_rigidity .* (1 - fip.p.litho_poissonratio) .* dudxy
-    rhs +=  mixed_fdxx(Mxx, Omega.K .* Omega.dx) +
-            mixed_fdyy(Myy, Omega.K .* Omega.dy) +
-            2 .* mixed_fdxy(Mxy, Omega.K .* Omega.dx, Omega.K .* Omega.dy)
-
-    # dxx!(d.uxx, u, Omega)
-    # dyy!(d.uyy, u, Omega)
-    # dxy!(d.ux, d.uxy, u, Omega)
-    # Mxx = -fip.p.litho_rigidity .* (d.uxx + fip.p.litho_poissonratio .* d.uyy)
-    # Myy = -fip.p.litho_rigidity .* (d.uyy + fip.p.litho_poissonratio .* d.uxx)
-    # Mxy = -fip.p.litho_rigidity .* (1 - fip.p.litho_poissonratio) .* d.uxy
-    # dxx!(d.Mxxxx, Mxx, Omega)
-    # dyy!(d.Myyyy, Myy, Omega)
-    # dxy!(d.Mxyx, d.Mxyxy, Mxy, Omega)
-    # rhs += d.Mxxxx + d.Mxyxy + 2 .* d.Mxyxy
-    println(extrema(rhs))
-
+    Omega, P = fip.Omega, fip.tools.prealloc
+    P.rhs .= -fip.c.g .* columnanom_full(fip)
+    update_second_derivatives!(P.uxx, P.uyy, P.ux, P.uxy, u, Omega)
+    Mxx = -fip.p.litho_rigidity .* (P.uxx + fip.p.litho_poissonratio .* P.uyy)
+    Myy = -fip.p.litho_rigidity .* (P.uyy + fip.p.litho_poissonratio .* P.uxx)
+    Mxy = -fip.p.litho_rigidity .* (1 - fip.p.litho_poissonratio) .* P.uxy
+    update_second_derivatives!(P.Mxxxx, P.Myyyy, P.Mxyx, P.Mxyxy, Mxx, Myy, Mxy, Omega)
+    P.rhs += P.Mxxxx + P.Mxyxy + 2 .* P.Mxyxy
     # dudt[:, :] .= real.(fip.tools.pifft * ((fip.tools.pfft * rhs) ./
     #     Omega.pseudodiff)) ./ (2 .* fip.p.effective_viscosity)
-    dudt[:, :] .= real.(fip.tools.pifft * ((fip.tools.pfft * (rhs ./ 
+    dudt[:, :] .= real.(fip.tools.pifft * ((fip.tools.pfft * (P.rhs ./ 
         (2 .* fip.p.effective_viscosity)) ) ./ Omega.pseudodiff))
     return nothing
 end
-
-# function dudt_isostasy!(
-#     dudt::AbstractMatrix{T},
-#     u::AbstractMatrix{T},
-#     fip::FastIsoProblem{T, M},
-#     t::T,
-# ) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
-
-#     Omega = fip.Omega
-#     rhs = - fip.c.g .* columnanom_full(fip)
-
-#     if fip.tools.negligible_gradD
-#         biharmonic_u = Omega.biharmonic .* (fip.tools.pfft * u)
-#         rhs += - fip.p.litho_rigidity .* real.( fip.tools.pifft * biharmonic_u )
-#     else
-#         dudxx, dudyy = Omega.fdxx(u), Omega.fdyy(u)
-#         Mxx = -fip.p.litho_rigidity .* (dudxx + fip.p.litho_poissonratio .* dudyy)
-#         Myy = -fip.p.litho_rigidity .* (dudyy + fip.p.litho_poissonratio .* dudxx)
-#         Mxy = -fip.p.litho_rigidity .* (1 - fip.p.litho_poissonratio) .* Omega.fdxy(u)
-#         rhs += Omega.fdxx(Mxx) + Omega.fdyy(Myy) + 2 .* Omega.fdxy(Mxy)
-#     end
-
-#     # dudt[:, :] .= real.(fip.tools.pifft * ((fip.tools.pfft * rhs) ./
-#     #     Omega.pseudodiff)) ./ (2 .* fip.p.effective_viscosity)
-#     dudt[:, :] .= real.(fip.tools.pifft * ((fip.tools.pfft * (rhs ./ 
-#         (2 .* fip.p.effective_viscosity)) ) ./ Omega.pseudodiff))
-#     return nothing
-# end
-
 
 #####################################################
 # BCs
@@ -183,12 +137,12 @@ end
 Apply boundary condition on Fourier collocation solution.
 Assume that mean deformation at corners of domain is 0.
 """
-function corner_bc(u::AbstractMatrix{<:AbstractFloat}, Nx::Int, Ny::Int)
+function corner_bc(u::KernelMatrix{<:AbstractFloat}, Nx::Int, Ny::Int)
     u_bc = copy(u)
     return corner_bc!(u_bc, Nx, Ny)
 end
 
-function corner_bc!(u::AbstractMatrix{<:AbstractFloat}, Nx::Int, Ny::Int)
+function corner_bc!(u::KernelMatrix{<:AbstractFloat}, Nx::Int, Ny::Int)
     allowscalar() do
         # u .-= ( view(u,1,1) + view(u,Nx,1) + view(u,1,Ny) + view(u,Nx,Ny) ) / 4
         u .-= ( u[1, 1] + u[Nx, 1] + u[1, Ny] + u[Nx, Ny] ) / 4
@@ -203,12 +157,12 @@ Apply boundary condition on Fourier collocation solution.
 Assume that mean deformation at borders of domain is 0.
 Same as [^Bueler2007].
 """
-function edge_bc(u::AbstractMatrix{<:AbstractFloat}, Nx::Int, Ny::Int)
+function edge_bc(u::KernelMatrix{<:AbstractFloat}, Nx::Int, Ny::Int)
     u_bc = copy(u)
     return edge_bc!(u_bc, Nx, Ny)
 end
 
-function edge_bc!(u::AbstractMatrix{<:AbstractFloat}, Nx::Int, Ny::Int)
+function edge_bc!(u::KernelMatrix{<:AbstractFloat}, Nx::Int, Ny::Int)
     allowscalar() do
         u .-= sum( view(u,1,:) + view(u,Nx,:) + view(u,:,Ny) + view(u,:,1) ) /
             (2*Nx + 2*Ny)
@@ -216,14 +170,14 @@ function edge_bc!(u::AbstractMatrix{<:AbstractFloat}, Nx::Int, Ny::Int)
     return u
 end
 
-no_bc(u::AbstractMatrix{<:AbstractFloat}, Nx::Int, Ny::Int) = u
+no_bc(u::KernelMatrix{<:AbstractFloat}, Nx::Int, Ny::Int) = u
 
-function no_mean_bc!(u::AbstractMatrix{<:AbstractFloat}, Nx::Int, Ny::Int)
+function no_mean_bc!(u::KernelMatrix{<:AbstractFloat}, Nx::Int, Ny::Int)
     u .= u .- mean(u)
     return u
 end
 
-function no_mean_bc(u::AbstractMatrix{<:AbstractFloat}, Nx::Int, Ny::Int)
+function no_mean_bc(u::KernelMatrix{<:AbstractFloat}, Nx::Int, Ny::Int)
     u_bc = copy(u)
     return no_mean_bc!(u_bc, Nx, Ny)
 end
@@ -238,7 +192,7 @@ Update the elastic response by convoluting the Green's function with the load an
 To use coefficients differing from (Farell 1972), see [FastIsoTools](@ref).
 """
 function update_elasticresponse!(fip::FastIsoProblem{T, M}
-    ) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
+    ) where {T<:AbstractFloat, M<:KernelMatrix{T}}
     rgh = correct_surfacedisctortion(columnanom_load(fip), fip)
     fip.geostate.ue .= samesize_conv(fip.tools.elasticgreen, rgh, fip.Omega, no_bc) #edge_bc
     return nothing

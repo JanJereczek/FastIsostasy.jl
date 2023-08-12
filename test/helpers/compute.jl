@@ -52,7 +52,7 @@ function generate_uniform_disc_load(
     c::PhysicalConstants,
     R::Real,
     H::Real,
-) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
+) where {T<:AbstractFloat, M<:KernelMatrix{T}}
     mask = mask_disc(Omega.X, Omega.Y, R)
     return - mask .* (c.rho_ice * c.g * H)
 end
@@ -66,8 +66,8 @@ function generate_gaussian_field(
     z_background::T,
     xy_peak::Vector{T},
     z_peak::T,
-    sigma::AbstractMatrix{T},
-) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
+    sigma::KernelMatrix{T},
+) where {T<:AbstractFloat, M<:KernelMatrix{T}}
     if Omega.Nx == Omega.Ny
         N = Omega.Nx
     else

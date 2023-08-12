@@ -56,7 +56,7 @@ function matrify(x::Vector{T}, Nx::Int, Ny::Int) where {T<:Real}
 end
 
 function samesize_conv(X::M, Y::M, Omega::ComputationDomain{T, M}, bc::Function
-    ) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
+    ) where {T<:AbstractFloat, M<:KernelMatrix{T}}
     convo = bc(conv(X, Y), 2*Omega.Nx-1, 2*Omega.Ny-1)
     return view(convo, Omega.i1:Omega.i2, Omega.j1:Omega.j2)
 end
@@ -112,7 +112,7 @@ end
 
 Compute scaling factor of stereographic projection for a given latitude `lat`
 longitude `lon`, reference latitude `lat0` and reference longitude `lon0`.
-Optionally one can provide `lat::AbstractMatrix` and `lon::AbstractMatrix`
+Optionally one can provide `lat::KernelMatrix` and `lon::KernelMatrix`
 if the scale factor is to be computed for the whole domain.
 Note: angles must be provided in radians!
 Reference: John P. Snyder (1987), p. 157, eq. (21-4).
@@ -122,7 +122,7 @@ function scalefactor(lat::T, lon::T, lat0::T, lon0::T; k0::T = T(1)) where {T<:R
 end
 
 function scalefactor(lat::M, lon::M, lat0::T, lon0::T; kwargs...,
-    ) where {T<:Real, M<:AbstractMatrix{T}}
+    ) where {T<:Real, M<:KernelMatrix{T}}
     K = similar(lat)
     @inbounds for idx in CartesianIndices(lat)
         K[idx] = scalefactor(lat[idx], lon[idx], lat0, lon0; kwargs...)
@@ -135,7 +135,7 @@ end
 
 Compute stereographic projection (x,y) for a given latitude `lat`
 longitude `lon`, reference latitude `lat0` and reference longitude `lon0`.
-Optionally one can provide `lat::AbstractMatrix` and `lon::AbstractMatrix`
+Optionally one can provide `lat::KernelMatrix` and `lon::KernelMatrix`
 if the projection is to be computed for the whole domain.
 Note: angles must be provided in degrees!
 Reference: John P. Snyder (1987), p. 157, eq. (21-2), (21-3), (21-4).
@@ -150,7 +150,7 @@ function latlon2stereo(lat::T, lon::T, lat0::T, lon0::T;
 end
 
 function latlon2stereo(lat::M, lon::M, lat0::T, lon0::T; kwargs...,
-    ) where {T<:Real, M<:AbstractMatrix{T}}
+    ) where {T<:Real, M<:KernelMatrix{T}}
     K, X, Y = similar(lat), similar(lat), similar(lat)
     @inbounds for idx in CartesianIndices(lat)
         K[idx], X[idx], Y[idx] = latlon2stereo(lat[idx], lon[idx], lat0, lon0; kwargs...)
@@ -163,7 +163,7 @@ end
 
 Compute the inverse stereographic projection `(lat, lon)` based on Cartesian coordinates
 `(x,y)` and for a given reference latitude `lat0` and reference longitude `lon0`.
-Optionally one can provide `x::AbstractMatrix` and `y::AbstractMatrix`
+Optionally one can provide `x::KernelMatrix` and `y::KernelMatrix`
 if the projection is to be computed for the whole domain.
 Note: angles must be  para elloprovided in degrees!
 
@@ -180,7 +180,7 @@ function stereo2latlon(x::T, y::T, lat0::T, lon0::T;
     return rad2deg(lat), rad2deg(lon)
 end
 
-function stereo2latlon(x::AbstractMatrix{T}, y::AbstractMatrix{T}, lat0::T, lon0::T;
+function stereo2latlon(x::KernelMatrix{T}, y::KernelMatrix{T}, lat0::T, lon0::T;
     kwargs...) where {T<:Real}
     Lat, Lon = copy(x), copy(x)
     @inbounds for idx in CartesianIndices(x)
@@ -194,7 +194,7 @@ end
 # Math utils
 #####################################################
 """
-    gauss_distr(X::AbstractMatrix{T}, Y::AbstractMatrix{T},
+    gauss_distr(X::KernelMatrix{T}, Y::KernelMatrix{T},
         mu::Vector{<:Real}, sigma::Matrix{<:Real})
 
 Compute `Z = f(X,Y)` with `f` a Gaussian function parametrized by mean
@@ -224,7 +224,7 @@ end
 
 """
     get_effective_viscosity(
-        layer_viscosities::Vector{AbstractMatrix{T}},
+        layer_viscosities::Vector{KernelMatrix{T}},
         layers_thickness::Vector{T},
         Omega::ComputationDomain{T, M},
     ) where {T<:AbstractFloat}
@@ -237,7 +237,7 @@ function get_effective_viscosity(
     layer_viscosities::Array{T, 3},
     layers_thickness::Array{T, 3},
     mantle_poissonratio::T,
-) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
+) where {T<:AbstractFloat, M<:KernelMatrix{T}}
 
     incompressible_poissonratio = 0.5
     compressibility_scaling = (1 + incompressible_poissonratio) / (1 + mantle_poissonratio)
@@ -276,7 +276,7 @@ function three_layer_scaling(
     Omega::ComputationDomain{T, M},
     visc_ratio::Matrix{T},
     channel_thickness::Matrix{T},
-) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
+) where {T<:AbstractFloat, M<:KernelMatrix{T}}
 
     # kappa is the wavenumber of the harmonic load. (see Cathles 1975, p.43)
     # we assume this is related to the size of the domain!
@@ -306,7 +306,7 @@ function loginterp_viscosity(
     tvec::AbstractVector{T},
     layer_viscosities::Array{T, 4},
     layers_thickness::Array{T, 3},
-    pseudodiff::AbstractMatrix{T},
+    pseudodiff::KernelMatrix{T},
     mantle_poissonratio::T,
 ) where {T<:AbstractFloat}
     n1, n2, n3, nt = size(layer_viscosities)
@@ -422,10 +422,10 @@ function get_elasticgreen(
     greenintegrand_function::Function,
     quad_support::Vector{T},
     quad_coeffs::Vector{T},
-) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
+) where {T<:AbstractFloat, M<:KernelMatrix{T}}
 
     dx, dy = Omega.dx, Omega.dy
-    elasticgreen = similar(Omega.X)
+    elasticgreen = fill(T(0), Omega.Nx, Omega.Ny)
 
     @inbounds for i = 1:Omega.Nx, j = 1:Omega.Ny
         p = i - Omega.Mx - 1
@@ -440,7 +440,7 @@ function get_elasticgreen(
             (q+1)*dy,
         )
     end
-    return elasticgreen
+    return Omega.arraykernel(elasticgreen)
 end
 
 #####################################################
@@ -550,7 +550,7 @@ function kernelpromote(X::Vector{M}, arraykernel) where {M<:AbstractArray{T}} wh
 end
 
 function reinit_structs_cpu(Omega::ComputationDomain{T, M}, p::LateralVariability{T, M}
-    ) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
+    ) where {T<:AbstractFloat, M<:KernelMatrix{T}}
 
     Omega_cpu = ComputationDomain(Omega.Wx, Omega.Wy, Omega.Nx, Omega.Ny, use_cuda = false)
     p_cpu = LateralVariability(
@@ -564,10 +564,10 @@ end
 """
     init_results()
 
-Initialize some `Vector{<:AbstractMatrix}` where results shall be later stored.
+Initialize some `Vector{<:KernelMatrix}` where results shall be later stored.
 """
 function init_results(Omega::ComputationDomain{T, M}, t_out::Vector{T}) where
-    {T<:AbstractFloat, M<:AbstractMatrix{T}}
+    {T<:AbstractFloat, M<:KernelMatrix{T}}
     # initialize with placeholders
     placeholder = Array(null(Omega))
     u_out = [copy(placeholder) for t in t_out]
@@ -595,14 +595,19 @@ function zeropad_extension(M::Matrix{T}, Nx::Int, Ny::Int) where {T<:AbstractFlo
     return M_zeropadded
 end
 
+function init()
+    println("Initializing CUDA Stencil")
+    @init_parallel_stencil(CUDA, Float64, 2)
+end
+
 #####################################################
 # Example utils
 #####################################################
-function mask_disc(X::AbstractMatrix{T}, Y::AbstractMatrix{T}, R::T) where {T<:AbstractFloat}
+function mask_disc(X::KernelMatrix{T}, Y::KernelMatrix{T}, R::T) where {T<:AbstractFloat}
     return mask_disc(sqrt.(X.^2 + Y.^2), R)
 end
 
-function mask_disc(r::AbstractMatrix{T}, R::T) where {T<:AbstractFloat}
+function mask_disc(r::KernelMatrix{T}, R::T) where {T<:AbstractFloat}
     return T.(r .< R)
 end
 
