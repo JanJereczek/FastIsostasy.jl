@@ -3,6 +3,7 @@
 ## Basic structs
 
 ```@docs
+KernelMatrix
 ComputationDomain
 PhysicalConstants
 LateralVariability
@@ -10,50 +11,25 @@ RefGeoState
 GeoState
 FastIsoTools
 FastIsoProblem
-FastisoResults
 ```
 
 ## Mechanics
 
 ```@docs
-fastisostasy
-forward_isostasy
-init_results
+solve!
+step!
 update_diagnostics!
 dudt_isostasy!
-simple_euler!
-corner_bc
-edge_bc
-compute_elastic_response
-```
-
-## Sea-level
-
-```@docs
-update_geoid!
-columnanom_ice
-columnanom_water
-columnanom_mantle
-columnanom_load
-columnanom_full
-get_geoidgreen
-update_loadcolumns!
-update_sealevel!
-update_slc!
-update_V_af!
-update_slc_af!
-update_V_pov!
-update_slc_pov!
-update_V_den!
-update_slc_den!
+update_elasticresponse!
 ```
 
 ## Parameter inversion
 
 ```@docs
+InversionConfig
+InversionData
 ParamInversion
 perform
-where_response
 ```
 ## Utils
 
@@ -61,28 +37,17 @@ where_response
 years2seconds
 seconds2years
 m_per_sec2mm_per_yr
-matrify
-get_r
 meshgrid
-dist2angulardist
-sphericaldistance
 scalefactor
 latlon2stereo
 stereo2latlon
-get_rigidity
-get_effective_viscosity
-get_differential_fourier
-get_viscosity_ratio
-three_layer_scaling
-loginterp_viscosity
-hyperbolic_channel_coeffs
-get_greenintegrand_coeffs
-build_greenintegrand
-get_elasticgreen
-get_quad_coeffs
-quadrature1D
-quadrature2D
-get_normalized_lin_transform
-normalized_lin_transform
-kernelpromote
 ```
+
+[^Goelzer2020]:
+    Heiko Goelzer et al. (2020): [Brief communication: On calculating the sea-level contribution in marine ice-sheet models](https://doi.org/10.5194/tc-14-833-2020)
+
+[^Snyder1987]:
+    John Snyder (1987): [Map projections -- A working manual](https://pubs.er.usgs.gov/publication/pp1395)
+
+[^Farrell1972]:
+    William Farrel (1972): [Deformation of the Earth by surface Loads, Farell 1972](https://doi.org/10.1029/RG010i003p00761)

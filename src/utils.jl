@@ -109,13 +109,11 @@ end
 
 """
     scalefactor(lat::T, lon::T, lat0::T, lon0::T) where {T<:Real}
+    scalefactor(lat::M, lon::M, lat0::T, lon0::T) where {T<:Real, M<:KernelMatrix{T}}
 
-Compute scaling factor of stereographic projection for a given latitude `lat`
-longitude `lon`, reference latitude `lat0` and reference longitude `lon0`.
-Optionally one can provide `lat::KernelMatrix` and `lon::KernelMatrix`
-if the scale factor is to be computed for the whole domain.
-Note: angles must be provided in radians!
-Reference: John P. Snyder (1987), p. 157, eq. (21-4).
+Compute scaling factor of stereographic projection for a given `(lat, lon)` and reference
+`(lat0, lon0)`. Angles must be provided in radians.
+Reference: [^Snyder1987], p. 157, eq. (21-4).
 """
 function scalefactor(lat::T, lon::T, lat0::T, lon0::T; k0::T = T(1)) where {T<:Real}
     return 2*k0 / (1 + sin(lat0)*sin(lat) + cos(lat0)*cos(lat)*cos(lon-lon0))

@@ -189,7 +189,7 @@ end
     update_elasticresponse!(fip::FastIsoProblem)
 
 Update the elastic response by convoluting the Green's function with the load anom.
-To use coefficients differing from (Farell 1972), see [FastIsoTools](@ref).
+To use coefficients differing from [^Farrell1972], see [FastIsoTools](@ref).
 """
 function update_elasticresponse!(fip::FastIsoProblem{T, M}
     ) where {T<:AbstractFloat, M<:KernelMatrix{T}}

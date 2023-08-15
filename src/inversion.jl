@@ -200,10 +200,16 @@ function print_kalmanprocess_evolution(paraminv, n, ϕ_n, err_n, cov_n)
     return nothing
 end
 
-function extract_inversion(priors, ukiobj, paraminv)
+"""
+    extract_inversion()
+
+Extract results of parameter inversion from the `priors` and `ukiobj` that
+resulted from `perform!(paraminv::ParamInversion)`.
+"""
+function extract_inversion(priors, ukiobj, data::InversionData)
     p = get_ϕ_mean_final(priors, ukiobj)
     Gx = get_g_mean_final(ukiobj)
-    e_mean = mean(abs.(paraminv.y - Gx))
-    e_sort = sort(abs.(paraminv.y - Gx))
+    e_mean = mean(abs.(data.y - Gx))
+    e_sort = sort(abs.(data.y - Gx))
     return p, Gx, e_mean, e_sort
 end

@@ -1,6 +1,11 @@
 #########################################################
 # Convenience
 #########################################################
+"""
+    KernelMatrix
+
+An allias for `Union{Matrix{T}, CuMatrix{T}} where {T<:AbstractFloat}`.
+"""
 KernelMatrix{T} = Union{Matrix{T}, CuMatrix{T}} where {T<:AbstractFloat}
 mutable struct PreAllocated{T<:AbstractFloat, M<:KernelMatrix{T}}
     rhs::M
@@ -140,7 +145,13 @@ end
     PhysicalConstants
 
 Return a struct containing important physical constants.
-Comes with default values that can however be changed by the user (e.g. ice density).
+Comes with default values that can however be changed by the user, for instance by running:
+
+```julia
+c = PhysicalConstants(rho_ice = 0.93)   # (kg/m^3)
+```
+
+All constants are given in SI units (kilogram, meter, second).
 """
 Base.@kwdef struct PhysicalConstants{T<:AbstractFloat}
     mE::T = 5.972e24                        # Earth's mass (kg)
@@ -181,10 +192,23 @@ struct ReferenceEarthModel{T<:AbstractFloat}
 end
 
 """
-    LateralVariability
+    LateralVariability(Omega; layer_boundaries, layer_viscosities)
 
-Return a struct containing all information related to the radially layered structure of the solid Earth and
-its parameters.
+Return a struct containing all information related to the lateral variability of
+solid-Earth parameters. To initialize with values other than default, run:
+
+```julia
+Omega = ComputationDomain(3000e3, 7)
+lb = [100e3, 300e3]
+lv = [1e19, 1e21]
+p = LateralVariability(Omega, layer_boundaries = lb, layer_viscosities = lv)
+```
+
+which initializes a lithosphere of thickness \$T_1 = 100 \\mathrm{km}\$, a viscous
+channel between \$T_1\$ and \$T_2 = 200 \\mathrm{km}\$ and a viscous halfspace starting
+at \$T_2\$. This represents a homogenous case. For heterogeneous ones, simply make
+`lb::Vector{Matrix}`, `lv::Vector{Matrix}` such that the vector elements represent the
+lateral variability of each layer on the grid of `Omega::ComputationDomain`.
 """
 mutable struct LateralVariability{T<:AbstractFloat, M<:KernelMatrix{T}}
     effective_viscosity::M
@@ -305,12 +329,10 @@ end
 """
     FastIsoTools(Omega::ComputationDomain, c::PhysicalConstants, p::LateralVariability)
 
-Return a `struct` containing pre-computed tools to perform forward-stepping of the model, namely:
- - elasticgreen::KernelMatrix{T}
- - fourier_elasticgreen::KernelMatrix{T}{Complex{T}}
- - pfft::AbstractFFTs.Plan
- - pifft::AbstractFFTs.ScaledPlan
- - geoidgreen::KernelMatrix{T}
+Return a `struct` containing pre-computed tools to perform forward-stepping of the model.
+This includes the Green's functions for the computation of the lithosphere and geoid
+displacement, plans for FFTs, interpolators of the load and the viscosity over time and
+preallocated arrays.
 """
 struct FastIsoTools{T<:AbstractFloat, M<:KernelMatrix{T},
     P1<:AbstractFFTs.Plan{Complex{T}}, P2<:AbstractFFTs.Plan{Complex{T}}}
@@ -328,7 +350,6 @@ end
 function FastIsoTools(
     Omega::ComputationDomain{T, M},
     c::PhysicalConstants{T},
-    p::LateralVariability{T, M},
     t_Hice_snapshots::Vector{T},
     Hice_snapshots::Vector{<:KernelMatrix{T}},
     t_eta_snapshots::Vector{T},
@@ -366,9 +387,11 @@ end
 null(Omega::ComputationDomain) = copy(Omega.arraykernel(Omega.null))
 
 """
-    FastIsoOutputs
+    FastIsoOutputs()
 
-Return a struct containing the fields that were saved over a [`FastIsoProblem`].
+Return a struct containing the fields of viscous displacement, viscous displacement rate,
+elastic displacement, geoid displacement, sea level and the computation time resulting
+from solving a [`FastIsoProblem`](@ref).
 """
 mutable struct FastIsoOutputs{T<:AbstractFloat}
     t::Vector{T}
@@ -383,18 +406,13 @@ end
 struct SimpleEuler end
 
 """
-    FastIsoProblem()
+    FastIsoProblem(Omega, c, p, t_out, interactive_sealevel)
+    FastIsoProblem(Omega, c, p, t_out, interactive_sealevel, Hice)
+    FastIsoProblem(Omega, c, p, t_out, interactive_sealevel, t_Hice, Hice)
 
-Return a struct containing all the other structs needed for the forward integration of the model:
- - Omega::ComputationDomain{T, M}
- - c::PhysicalConstants{T}
- - p::LateralVariability{T, M}
- - tools::FastIsoTools{T, M}
- - Hice::Interpolations.Extrapolation
- - eta::Interpolations.Extrapolation
- - refgeostate::RefGeoState{T, M}
- - geostate::GeoState{T, M}
- - interactive_sealevel::Bool
+Return a struct containing all the other structs needed for the forward integration of the
+model over `Omega::ComputationDomain` with parameters `c::PhysicalConstants` and
+`p::LateralVariability`. The outputs are stored at `t_out::Vector{<:AbstractFloat}`.
 """
 struct FastIsoProblem{T<:AbstractFloat, M<:KernelMatrix{T}}
     Omega::ComputationDomain{T, M}
@@ -487,7 +505,7 @@ function FastIsoProblem(
         error("Provided algorithm for solving ODE is not supported.")
     end
 
-    tools = FastIsoTools(Omega, c, p, t_Hice_snapshots, Hice_snapshots,
+    tools = FastIsoTools(Omega, c, t_Hice_snapshots, Hice_snapshots,
         t_eta_snapshots, eta_snapshots)
 
     refgeostate = RefGeoState(
