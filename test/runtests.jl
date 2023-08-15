@@ -1,7 +1,7 @@
 push!(LOAD_PATH, "../")
 using FastIsostasy
 using Test, CairoMakie
-using Interpolations, LinearAlgebra
+using Interpolations, LinearAlgebra, Statistics
 using JLD2, DelimitedFiles
 
 include("helpers/compute.jl")
@@ -10,6 +10,7 @@ include("test_benchmarks.jl")
 include("test_dimensions.jl")
 include("test_derivatives.jl")
 
+const make_plots = false
 @testset "FastIsostasy.jl" begin
     check_xy_ij()
     check_stereographic()
