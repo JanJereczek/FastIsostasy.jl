@@ -3,19 +3,6 @@ using FastIsostasy, JLD2
 include("../test/helpers/compute.jl")
 include("../test/helpers/viscmaps.jl")
 
-function get_wiens_layervisc(Omega)
-    halfspace_logviscosity = fill(21.0, Omega.Nx, Omega.Ny)
-    Eta, Eta_mean, z = load_wiens_2021(Omega.X, Omega.Y)
-    eta_interpolators, eta_mean_interpolator = interpolate_viscosity_xy(
-        Omega.X, Omega.Y, Eta, Eta_mean)
-    lv = 10.0 .^ cat(
-        [itp.(Omega.X, Omega.Y) for itp in eta_interpolators]...,
-        halfspace_logviscosity,
-        dims=3,
-    )
-    return lv
-end
-
 function main(; n=5)
     T = Float64
     W = T(3000e3)               # half-length of the square domain (m)
@@ -23,7 +10,7 @@ function main(; n=5)
     c = PhysicalConstants()
 
     lb = [88e3, 180e3, 280e3, 400e3]
-    lv = get_wiens_layervisc(Omega)
+    lv = load_wiens2021(Omega)
     p = LateralVariability(Omega, layer_boundaries = lb, layer_viscosities = lv)
     ground_truth = copy(p.effective_viscosity)
 

@@ -27,13 +27,12 @@ function solve!(fip::FastIsoProblem{T, M}) where {T<:AbstractFloat, M<:KernelMat
         end
         if fip.diffeq.alg != SimpleEuler()
             prob = remake(dummy, u0 = fip.geostate.u, tspan = (t_out[k-1], t_out[k]), p = fip)
-            sol = solve(prob, fip.diffeq.alg, reltol=1e-6)
+            sol = solve(prob, fip.diffeq.alg, reltol=fip.diffeq.reltol)
             fip.geostate.dudt = sol(t_out[k], Val{1})
         else
             @inbounds for t in t_out[k-1]:fip.diffeq.dt:t_out[k]
                 update_diagnostics!(fip.geostate.dudt, fip.geostate.u, fip, t)
                 simple_euler!(fip.geostate.u, fip.geostate.dudt, fip.diffeq.dt)
-                write_out!(fip, k)
             end
         end
         write_out!(fip, k)
@@ -52,7 +51,7 @@ init(fip::FastIsoProblem) = CoupledODEs(update_diagnostics!,
     fip.geostate.u, fip; fip.diffeq)
 
 """
-    init(fip)
+    step!(fip)
 
 Step `fip::FastIsoProblem` over `tspan` and based on `ode::CoupledODEs`, typically
 obtained by [`init`](@ref).

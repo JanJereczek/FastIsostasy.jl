@@ -33,7 +33,7 @@ makedocs(
     authors = "Jan Swierczek-Jereczek",
     pages = PAGES,
     doctest = CI,
-    draft = true,
+    draft = false,
 )
 
 deploydocs(;

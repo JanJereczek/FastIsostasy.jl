@@ -14,7 +14,7 @@ Initializing a [`LateralVariability`](@ref) with parameters corresponding to thi
 using FastIsostasy
 
 W = 3000e3      # (m) half-width of the domain Wx = Wy
-n = 6           # implies an Nx x Ny grid with Nx = Ny = 2^n = 64.
+n = 7           # implies an Nx x Ny grid with Nx = Ny = 2^n = 64.
 Omega = ComputationDomain(W, n)
 c = PhysicalConstants(rho_litho = 0.0)
 
@@ -24,13 +24,13 @@ p = LateralVariability(Omega, layer_viscosities = lv, layer_boundaries = lb)
 extrema(p.effective_viscosity)
 ```
 
-As expected, the effective viscosity is a homogeneous field. It corresponds to a nonlinear mean of the layered values provided by the user. Note that we have set `` ŗho_\mathrm{litho} = 0 `` to prevent the lithosphere from contributing to the hydrostatic, upward force. This is made to comply with the later computed analytical solution, which assumes a purely elastic lithosphere. In reality, this is however arguably wrong and the default choice `c = PhysicalConstants()` therefore uses `` ŗho_\mathrm{litho} = 2600 \, \mathrm{kg \, m^{-3}} ``.
+As expected, the effective viscosity is a homogeneous field. It corresponds to a nonlinear mean of the layered values provided by the user. Note that we have set \$\ŗho_\mathrm{litho} = 0\$ to prevent the lithosphere from contributing to the hydrostatic, upward force. This is made to comply with the later computed analytical solution, which assumes a purely elastic lithosphere. In reality, this is however arguably wrong and the default choice `c = PhysicalConstants()` therefore uses \$ \ŗho_\mathrm{litho} = 2600 \, \mathrm{kg \, m^{-3}} \$.
 
 The next section shows how to use the now obtained `p::LateralVariability` for actual GIA computation.
 
 ## Simple load and geometry
 
-We now apply a constant load, here a cylinder of ice with radius ``R = 1000 \, \mathrm{km}`` and thickness ``H = 1 \, \mathrm{km}``, over `Omega::ComputationDomain` introduced in [Multi-layer Earth](@ref). To formulate the problem conviniently, we use [`FastIsoProblem`](@ref), a struct containing the variables and options that are necessary to perform the integration over time. We can then simply apply `solve!(fip::FastIsoProblem)` to perform the integration of the ODE. Under the hood, the ODE is obtained from the PDE by applying a Fourier collocation scheme contained in [`dudt_isostasy!`](@ref). The integration is performed according to `FastIsoProblem.diffeq::NamedTuple`, which contains the algorithm and optionally tolerances, maximum iteration number... etc.
+We now apply a constant load, here a cylinder of ice with radius \$ R = 1000 \, \mathrm{km} \$ and thickness \$H = 1 \, \mathrm{km}\$, over `Omega::ComputationDomain` introduced in [Multi-layer Earth](@ref). To formulate the problem conviniently, we use [`FastIsoProblem`](@ref), a struct containing the variables and options that are necessary to perform the integration over time. We can then simply apply `solve!(fip::FastIsoProblem)` to perform the integration of the ODE. Under the hood, the ODE is obtained from the PDE by applying a Fourier collocation scheme contained in [`dudt_isostasy!`](@ref). The integration is performed according to `FastIsoProblem.diffeq::NamedTuple`, which contains the algorithm and optionally tolerances, maximum iteration number... etc.
 
 ```@example MAIN
 using CairoMakie
@@ -40,9 +40,9 @@ H = 1e3                     # ice disc thickness (m)
 Hice = uniform_ice_cylinder(Omega, R, H)
 t_out = years2seconds.([0.0, 200.0, 600.0, 2000.0, 5000.0, 10_000.0, 50_000.0])
 interactive_sealevel = false
-
 fip = FastIsoProblem(Omega, c, p, t_out, interactive_sealevel, Hice)
 solve!(fip)
+
 function plot3D(fip, k_idx)
     X, Y, out = Array(fip.Omega.X), Array(fip.Omega.Y), fip.out
     zl = extrema(out.ue[end] + out.u[end])
@@ -59,10 +59,10 @@ end
 plot3D(fip, [lastindex(t_out) ÷ 2, lastindex(t_out)])
 ```
 
-... and here goes the total displacement at ``t = 50 \, \mathrm{kyr}``! You can now access the elastic and viscous displacement at time `t_out[k]` by respectively calling `fip.out.ue[k]` and `fip.out.u[k]`. For the present case, the latter can be compared to an analytic solution that is known for this particular case. Let's look at the accuracy of our numerical scheme over time by running following plotting commands:
+... and here goes the total displacement at \$t = 50 \, \mathrm{kyr}\$. You can now access the elastic and viscous displacement at time `t_out[k]` by respectively calling `fip.out.ue[k]` and `fip.out.u[k]`. For the present case, the latter can be compared to an analytic solution that is known for this particular case. Let's look at the accuracy of our numerical scheme over time by running following plotting commands:
 
 ```@example MAIN
-fig = Figure(fontsize = 10)
+fig = Figure()
 ax = Axis(fig[1, 1])
 cmap = cgrad(:jet, length(t_out), categorical = true)
 ii, jj = Omega.Mx:Omega.Nx, Omega.My
@@ -89,10 +89,10 @@ That looks pretty good! One might however object that the convenience function [
 
 ### GPU support
 
-For about $n > 6$, the previous example can be computed even faster by using GPU parallelism. It could not represent less work from the user's perspective, as it boils down to calling [`ComputationDomain`](@ref) with an extra keyword argument and passing it to a `::LateralVariability` with the viscosity and depth values defined earlier:
+For about $n > 7$, the previous example can be computed even faster by using GPU parallelism. It could not represent less work from the user's perspective, as it boils down to calling [`ComputationDomain`](@ref) with an extra keyword argument and passing it to a `::LateralVariability` with the viscosity and depth values defined earlier:
 
 ```@example MAIN
-n = 7
+n = 8
 Omega = ComputationDomain(W, n, use_cuda = true)
 p = LateralVariability(Omega, layer_viscosities = lv, layer_boundaries = lb)
 Hice = uniform_ice_cylinder(Omega, R, H)
@@ -132,7 +132,7 @@ plot3D(fip, [lastindex(t_out) ÷ 2, lastindex(t_out)])
     handle the rest.
 
 !!! info "GPU not supported"
-    `step!` does not support GPU computation so far. Make sure your model is initialized
+    [`step!`] does not support GPU computation so far. Make sure your model is initialized
     on CPU!
 ## Antarctic deglaciation
 
@@ -159,7 +159,7 @@ FastIsostasy.jl relies on simplification of the full problem and might therefore
 ```@example MAIN
 Omega = ComputationDomain(3000e3, 6)
 lb = [88e3, 180e3, 280e3, 400e3]
-lv = get_wiens_layervisc(Omega)
+lv = load_wiens2021(Omega)
 p = LateralVariability(Omega, layer_boundaries = lb, layer_viscosities = lv)
 R, H = 2000e3, 1e3
 Hcylinder = uniform_ice_cylinder(Omega, R, H)

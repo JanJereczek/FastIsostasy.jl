@@ -10,40 +10,6 @@ function interpolate_spada_benchmark(c, data)
     return itp
 end
 
-function load_spada()
-    prefix ="../testdata/Spada/"
-    cases = ["u_cap", "u_disc", "dudt_cap", "dudt_disc", "n_cap", "n_disc"]
-    snapshots = ["0", "1", "2", "5", "10", "inf"]
-    data = Dict{String, Vector{Matrix{Float64}}}()
-    for case in cases
-        tmp = Matrix{Float64}[]
-        for snapshot in snapshots
-            fname = string(prefix, case, "_", snapshot, ".csv")
-            append!(tmp, [readdlm(fname, ',', Float64)])
-        end
-        data[case] = tmp
-    end
-    return data
-end
-
-function load_latychev(dir::String, x_lb::Real, x_ub::Real)
-    files = readdir(dir)
-    
-    x_full = readdlm(joinpath(dir, files[1]), ',')[:, 1]
-    idx = x_lb .< x_full .< x_ub
-    x = x_full[idx]
-
-    u = zeros(length(x), length(files))
-    for i in eachindex(files)
-        file = files[i]
-        # println( file, typeof( readdlm(joinpath(dir, file), ',')[:, 1] ) )
-        u[:, i] = readdlm(joinpath(dir, file), ',')[idx, 2]
-    end
-    # u .-= u[:, 1]
-
-    return x, u
-end
-
 #####################################################
 # Idealised load cases
 #####################################################

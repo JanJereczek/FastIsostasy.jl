@@ -3,9 +3,6 @@ using JLD2
 using CairoMakie
 using Interpolations
 
-function filter_nan_viscosity(M::Matrix{T}) where {T<:AbstractFloat}
-    return M[.!isnan.(M[:, 3]), :]
-end
 
 function get2Dinterpolator(M::Matrix{T}) where {T<:AbstractFloat}
     return linear_interpolation( (M[:, 1], M[:, 2]), M[:, 3] )
@@ -19,43 +16,11 @@ function km2m!(V::Vector{Matrix{T}}) where {T<:AbstractFloat}
     end
 end
 
-function loop_f_over_vecmat(f::Function, V::Vector{Matrix{T}}) where {T<:AbstractFloat}
-    [f(M) for M in V]
-end
+
 
 function get_closest_eta(x::T, y::T, M::Matrix{T}) where {T<:AbstractFloat}
     l = argmin( (x .- M[:, 1]).^2 + (y .- M[:, 2]).^2 )
     return M[l, 3]
-end
-
-function load_wiens_2021(X, Y)
-    #=
-    Columns:
-        1. x coordinate (km)
-        2. y coordinate (km)
-        3. viscosity (log10 Pa s)
-        4. depth (km)
-        5. radius (km)
-        6. longitude (deg)
-        7. latitude (deg)
-    =#
-    eta_100km = readdlm("../data/visc_field/ANT_20_vis_100.txt")
-    eta_200km = readdlm("../data/visc_field/ANT_20_vis_200.txt")
-    eta_300km = readdlm("../data/visc_field/ANT_20_vis_300.txt")
-    z = range( 100e3, stop = 300e3, step = 100e3 )
-    nz = length(z)
-
-    eta_withnan = [eta_100km, eta_200km, eta_300km]
-    eta = loop_f_over_vecmat(filter_nan_viscosity, eta_withnan)
-    km2m!(eta)
-    Eta = zeros(Float64, (size(X,1), size(X,2), nz))
-    for k in axes(Eta, 3)
-        for i in axes(Eta, 1), j in axes(Eta, 2)
-            Eta[i, j, k] = get_closest_eta(X[i,j], Y[i,j], eta[k])
-        end
-    end
-    Eta_mean = mean(Eta, dims=3)
-    return Eta, Eta_mean, z
 end
 
 function interpolate_viscosity_xy(X, Y, Eta, Eta_mean)
@@ -86,7 +51,7 @@ function viscositytxt2matrix()
     x = collect(range( -W, stop = W, step = dx ))
     y = copy( x )
     X, Y = meshgrid(x, y)
-    Eta, Eta_mean, z = load_wiens_2021(X, Y)
+    Eta, Eta_mean, z = load_wiens2021(X, Y)
     interpolate_viscosity_xy(X, Y, Eta, Eta_mean)
 
     fig = Figure(resolution = (1600, 600))

@@ -106,7 +106,7 @@ end
 using FastIsostasy
 Omega = ComputationDomain(3000e3, 6)
 lb = [88e3, 180e3, 280e3, 400e3]
-lv = get_wiens_layervisc(Omega)
+lv = load_wiens2021(Omega)
 p = LateralVariability(Omega, layer_boundaries = lb, layer_viscosities = lv)
 R, H = 2000e3, 1e3
 Hcylinder = uniform_ice_cylinder(Omega, R, H)
@@ -120,4 +120,4 @@ config = InversionConfig()
 data = InversionData(t_out, fip.out.u, Hice, config)
 paraminv = ParamInversion(Omega, c, p, config, data)
 priors, ukiobj = perform(paraminv)
-logeta, Gx, e_mean, e_sort = extract_inversion(priors, ukiobj, paraminv)
+logeta, Gx, e_mean, e_sort = extract_inversion(priors, ukiobj, data)

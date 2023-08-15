@@ -17,7 +17,7 @@ function slice_spada(
 ) where {T<:AbstractFloat}
 
     ncases = length(vars)
-    data = load_spada()
+    data = load_spada2011()
     keys = ["u_disc", "u_cap", "dudt_disc", "dudt_cap", "n_disc", "n_cap"]
 
     if case == "viscous"

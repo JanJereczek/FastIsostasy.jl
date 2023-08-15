@@ -3,7 +3,7 @@ module FastIsostasy
 using LinearAlgebra
 using Statistics: mean
 using Distributions: MvNormal
-using JLD2: jldopen
+using JLD2
 using DelimitedFiles: readdlm
 using Interpolations: linear_interpolation, Flat
 using FFTW: plan_fft, plan_ifft
@@ -36,6 +36,7 @@ include("geostate.jl")
 include("mechanics.jl")
 include("inversion.jl")
 include("analytic_solutions.jl")
+include("dataloaders.jl")
 
 # structs.jl
 export KernelMatrix
@@ -82,5 +83,8 @@ export InversionConfig, InversionData, ParamInversion, perform, extract_inversio
 
 # analytic solutions
 export analytic_solution
+
+# data loaders
+export load_spada2011, load_latychev2023, load_wiens2021
 
 end

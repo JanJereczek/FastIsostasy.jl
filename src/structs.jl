@@ -487,7 +487,7 @@ function FastIsoProblem(
     Hice_snapshots::Vector{<:KernelMatrix{T}},
     t_eta_snapshots::Vector{T},
     eta_snapshots::Vector{<:KernelMatrix{T}};
-    diffeq::NamedTuple = (alg = BS3(), reltol = 1e-3),
+    diffeq::NamedTuple = (alg = BS3(), reltol = 1e-6),
     verbose::Bool = false,
     internal_loadupdate::Bool = true,
     u_0::M = null(Omega),
