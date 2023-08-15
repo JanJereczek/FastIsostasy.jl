@@ -11,7 +11,7 @@ function interpolate_spada_benchmark(c, data)
 end
 
 function load_spada()
-    prefix ="../data/test2/Spada/"
+    prefix ="../testdata/Spada/"
     cases = ["u_cap", "u_disc", "dudt_cap", "dudt_disc", "n_cap", "n_disc"]
     snapshots = ["0", "1", "2", "5", "10", "inf"]
     data = Dict{String, Vector{Matrix{Float64}}}()
