@@ -6,7 +6,7 @@ using Interpolations
 include("../test/helpers/compute.jl")
 include("../test/helpers/viscmaps.jl")
 
-function main(n::Int, case::String; use_cuda::Bool = true, solver = "ExplicitEuler")
+function main(n::Int, case::String; use_cuda::Bool = true, solver = "SimpleEuler")
 
     T = Float64
     W = T(3000e3)                       # half-length of the square domain (m)
@@ -49,15 +49,15 @@ function main(n::Int, case::String; use_cuda::Bool = true, solver = "ExplicitEul
 
     t1 = time()
     results = fastisostasy(t_out, Omega, c, p, Hcylinder,
-        interactive_geostate = false,
-        ODEsolver=solver,
+        interactive_sealevel = false,
+        alg=solver,
     )
     t_fastiso = time() - t1
     println("Took $t_fastiso seconds!")
     println("-------------------------------------")
 
     if use_cuda
-        Omega, p = copystructs2cpu(Omega, p)
+        Omega, p = reinit_structs_cpu(Omega, p)
     end
 
     jldsave(

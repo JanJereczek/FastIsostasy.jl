@@ -39,7 +39,7 @@ function main(
         ) )
 
         k = argmin( (results.t_out .- t).^2 )
-        u_numeric = results.viscous[k][islice:end, jslice]
+        u_numeric = results.u_out[k][islice:end, jslice]
 
         lines!(
             ax,
@@ -62,7 +62,7 @@ function main(
     save("plots/test1/$filekey.pdf", fig)
 end
 
-case = "ExplicitEuler"
+case = "SimpleEuler"
 for n in 6:6
     main(n, case)
 end

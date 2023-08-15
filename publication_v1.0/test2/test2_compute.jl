@@ -45,13 +45,13 @@ function main(
     sl0 = fill(-Inf, Omega.Nx, Omega.Ny)
     t1 = time()
     results = fastisostasy(t_out, Omega, c, p, H_ice, sealevel_0 = sl0,
-        ODEsolver = "ExplicitEuler", interactive_geostate = true)
+        alg = "SimpleEuler", interactive_sealevel = true)
     t_fastiso = time() - t1
     println("Took $t_fastiso seconds!")
     println("-------------------------------------")
 
     if use_cuda
-        Omega, p = copystructs2cpu(Omega, p)
+        Omega, p = reinit_structs_cpu(Omega, p)
     end
 
     filename = "$(case)_Nx$(Omega.Nx)_Ny$(Omega.Ny)_$(kernel)"

@@ -1,21 +1,22 @@
-KernelMatrix = Union{Matrix{T}, CuArray{T, 2}} where {T<:Real}
-# FFTPlan = Union{cFFTWPlan{ComplexF64, -1, false, 2, UnitRange{Int64}},
-#     CUFFT.cCuFFTPlan{ComplexF64, -1, false, 2}}
-# IFFTPlan = Union{
-#     AbstractFFTs.ScaledPlan{ComplexF64, FFTW.cFFTWPlan{ComplexF64, 1, false, 2, UnitRange{Int64}}, Float64},
-#     AbstractFFTs.ScaledPlan{ComplexF64, CUDA.CUFFT.cCuFFTPlan{ComplexF64, 1, false, 2}, Float64}}
+#########################################################
+# Convenience
+#########################################################
+"""
+    KernelMatrix
 
-#########################################################
-# Radial earth model
-#########################################################
-struct ReferenceEarthModel{T<:AbstractFloat}
-    radius::Vector{T}
-    depth::Vector{T}
-    density::Vector{T}
-    Vpv::Vector{T}
-    Vph::Vector{T}
-    Vsv::Vector{T}
-    Vsh::Vector{T}
+An allias for `Union{Matrix{T}, CuMatrix{T}} where {T<:AbstractFloat}`.
+"""
+KernelMatrix{T} = Union{Matrix{T}, CuMatrix{T}} where {T<:AbstractFloat}
+mutable struct PreAllocated{T<:AbstractFloat, M<:KernelMatrix{T}}
+    rhs::M
+    uxx::M
+    uyy::M
+    ux::M
+    uxy::M
+    Mxxxx::M
+    Myyyy::M
+    Mxyx::M
+    Mxyxy::M
 end
 
 #########################################################
@@ -23,6 +24,8 @@ end
 #########################################################
 """
     ComputationDomain
+    ComputationDomain(W, n)
+    ComputationDomain(Wx, Wy, Nx, Ny)
 
 Return a struct containing all information related to geometry of the domain
 and potentially used parallelism. To initialize one with `2*W` and `2^n` grid cells:
@@ -30,8 +33,14 @@ and potentially used parallelism. To initialize one with `2*W` and `2^n` grid ce
 ```julia
 Omega = ComputationDomain(W, n)
 ```
+
+If a rectangular domain is needed, run:
+
+```julia
+Omega = ComputationDomain(Wx, Wy, Nx, Ny)
+```
 """
-struct ComputationDomain{T<:AbstractFloat, M<:AbstractMatrix{T}}
+struct ComputationDomain{T<:AbstractFloat, M<:KernelMatrix{T}}
     Wx::T                           # Domain length in x (m)
     Wy::T                           # Domain length in y (m)
     Nx::Int                         # Number of grid points in x-dimension
@@ -40,10 +49,16 @@ struct ComputationDomain{T<:AbstractFloat, M<:AbstractMatrix{T}}
     My::Int                         # Ny/2
     dx::T                           # Spatial discretization in x
     dy::T                           # Spatial discretization in y
+    Dx::M
+    Dy::M
     x::Vector{T}
     y::Vector{T}
     X::M
     Y::M
+    i1::Int
+    i2::Int
+    j1::Int
+    j2::Int
     R::M
     Theta::M
     Lat::M
@@ -52,15 +67,9 @@ struct ComputationDomain{T<:AbstractFloat, M<:AbstractMatrix{T}}
     projection_correction::Bool
     null::M         # a zero matrix of size Nx x Ny
     pseudodiff::M   # pseudodiff operator
-    harmonic::M     # harmonic operator
-    biharmonic::M   # biharmonic operator
     use_cuda::Bool
-    arraykernel                     # Array or CuArray depending on chosen hardware
+    arraykernel::Any                # Array or CuArray depending on chosen hardware
     bc!::Function                   # Boundary conditions
-    extension::Function             # Function to extend domain if needed for BCs
-    fdxx::Function                  # FDM for 2nd order derivative in x
-    fdyy::Function                  # FDM for 2nd order derivative in y
-    fdxy::Function                  # # FDM for 2nd order derivative in x, y
 end
 
 function ComputationDomain(W::T, n::Int; kwargs...) where {T<:AbstractFloat}
@@ -97,27 +106,36 @@ function ComputationDomain(
     if projection_correction
         K = scalefactor(deg2rad.(Lat), deg2rad.(Lon), deg2rad(lat0), deg2rad(lon0))
     else
-        K = kernelpromote(fill(1, Nx, Ny), arraykernel)
+        K = fill(T(1), Nx, Ny)
     end
 
     # Differential operators in Fourier space
-    pseudodiff, harmonic, biharmonic = get_differential_fourier(Wx, Wy, Nx, Ny)
-    pseudodiff[1, 1] = mean([pseudodiff[1,2], pseudodiff[2,1]])
+    pseudodiff, harmonic = get_differential_fourier(Wx, Wy, Nx, Ny)
     # Avoid division by zero. Tolerance ϵ of the order of the neighboring terms.
     # Tests show that it does not lead to errors wrt analytical or benchmark solutions.
+    pseudodiff[1, 1] = mean([pseudodiff[1,2], pseudodiff[2,1]])
+    
+    X, Y, null, R, Theta, Lat, Lon, K, pseudodiff = kernelpromote(
+        [X, Y, null, R, Theta, Lat, Lon, K, pseudodiff], arraykernel)
 
-    X, Y, null, R, Theta, Lat, Lon, K, pseudodiff, harmonic, biharmonic = kernelpromote(
-        [X, Y, null, R, Theta, Lat, Lon, K, pseudodiff, harmonic, biharmonic], arraykernel)
+    # Precompute indices for samesize_conv()
+    if iseven(Nx)
+        i1 = Mx
+    else
+        i1 = Mx+1
+    end
+    i2 = 2*Nx-1-Mx
 
-    extension(M) = M
-    fdxx(M) = mixed_fdxx(M, K .* dx)
-    fdyy(M) = mixed_fdyy(M, K .* dy)
-    fdxy(M) = mixed_fdxy(M, K .* dx, K .* dy)
+    if iseven(Ny)
+        j1 = My
+    else
+        j1 = My+1
+    end
+    j2 = 2*Ny-1-My
 
-    return ComputationDomain(Wx, Wy, Nx, Ny, Mx, My, dx, dy, x, y, X, Y,
-        R, Theta, Lat, Lon, K, projection_correction, null,
-        pseudodiff, harmonic, biharmonic, use_cuda, arraykernel,
-        bc!, extension, fdxx, fdyy, fdxy)
+    return ComputationDomain(Wx, Wy, Nx, Ny, Mx, My, dx, dy, K .* dx, K .* dy,
+        x, y, X, Y, i1, i2, j1, j2, R, Theta, Lat, Lon, K, projection_correction,
+        null, pseudodiff, use_cuda, arraykernel, bc!)
 end
 
 #########################################################
@@ -127,6 +145,13 @@ end
     PhysicalConstants
 
 Return a struct containing important physical constants.
+Comes with default values that can however be changed by the user, for instance by running:
+
+```julia
+c = PhysicalConstants(rho_ice = 0.93)   # (kg/m^3)
+```
+
+All constants are given in SI units (kilogram, meter, second).
 """
 Base.@kwdef struct PhysicalConstants{T<:AbstractFloat}
     mE::T = 5.972e24                        # Earth's mass (kg)
@@ -147,12 +172,45 @@ end
 # Multi-layer Earth
 #########################################################
 """
-    LateralVariability
-
-Return a struct containing all information related to the radially layered structure of the solid Earth and
-its parameters.
+    ReferenceEarthModel
+Return a struct with vectors containing the:
+ - radius (distance from Earth center),
+ - depth (distance from Earth surface),
+ - density,
+ - P-wave velocities,
+ - S-wave velocities,
+which are typically used to characterize the properties of a spherically symmetrical solid Earth.
 """
-mutable struct LateralVariability{T<:AbstractFloat, M<:AbstractMatrix{T}}
+struct ReferenceEarthModel{T<:AbstractFloat}
+    radius::Vector{T}
+    depth::Vector{T}
+    density::Vector{T}
+    Vpv::Vector{T}
+    Vph::Vector{T}
+    Vsv::Vector{T}
+    Vsh::Vector{T}
+end
+
+"""
+    LateralVariability(Omega; layer_boundaries, layer_viscosities)
+
+Return a struct containing all information related to the lateral variability of
+solid-Earth parameters. To initialize with values other than default, run:
+
+```julia
+Omega = ComputationDomain(3000e3, 7)
+lb = [100e3, 300e3]
+lv = [1e19, 1e21]
+p = LateralVariability(Omega, layer_boundaries = lb, layer_viscosities = lv)
+```
+
+which initializes a lithosphere of thickness \$T_1 = 100 \\mathrm{km}\$, a viscous
+channel between \$T_1\$ and \$T_2 = 200 \\mathrm{km}\$ and a viscous halfspace starting
+at \$T_2\$. This represents a homogenous case. For heterogeneous ones, simply make
+`lb::Vector{Matrix}`, `lv::Vector{Matrix}` such that the vector elements represent the
+lateral variability of each layer on the grid of `Omega::ComputationDomain`.
+"""
+mutable struct LateralVariability{T<:AbstractFloat, M<:KernelMatrix{T}}
     effective_viscosity::M
     litho_thickness::M
     litho_rigidity::M
@@ -187,7 +245,7 @@ function LateralVariability(
     litho_poissonratio::T = litho_poissonratio,
     mantle_poissonratio::T = mantle_poissonratio,
 ) where {
-    T<:AbstractFloat, M<:AbstractMatrix{T},
+    T<:AbstractFloat, M<:KernelMatrix{T},
     A<:Union{Vector{T}, Array{T, 3}},
     B<:Union{Vector{T}, Array{T, 3}},
 }
@@ -216,12 +274,15 @@ function LateralVariability(
 
 end
 
+#########################################################
+# Geostate
+#########################################################
 """
     RefGeoState
 
-Return a struct containing the reference geostate. We define the geostate to be all quantities related to sea-level.
+Return a struct containing the reference [`GeoState`](@ref).
 """
-struct RefGeoState{T<:AbstractFloat, M<:AbstractMatrix{T}}
+struct RefGeoState{T<:AbstractFloat, M<:KernelMatrix{T}}
     u::M                    # viscous displacement
     ue::M                   # elastic displacement
     H_ice::M                # reference height of ice column
@@ -239,9 +300,11 @@ end
     GeoState
 
 Return a mutable struct containing the geostate which will be updated over the simulation.
+The geostate contains all the states of the [`FastIsoProblem`] to be solved.
 """
-mutable struct GeoState{T<:AbstractFloat, M<:AbstractMatrix{T}}
+mutable struct GeoState{T<:AbstractFloat, M<:KernelMatrix{T}}
     u::M                    # viscous displacement
+    dudt::M                 # viscous displacement rate
     ue::M                   # elastic displacement
     H_ice::M                # current height of ice column
     H_water::M              # current height of water column
@@ -258,42 +321,41 @@ mutable struct GeoState{T<:AbstractFloat, M<:AbstractMatrix{T}}
     slc::T                  # total sealevel contribution
     countupdates::Int       # count the updates of the geostate
     dt::T                   # update step
-    dtloadanom::M           # load anomaly wrt previous time step
 end
 
+#########################################################
+# FastIsostasy
+#########################################################
 """
-    PrecomputedFastiso(Omega::ComputationDomain, c::PhysicalConstants, p::LateralVariability)
+    FastIsoTools(Omega::ComputationDomain, c::PhysicalConstants, p::LateralVariability)
 
-Return a `struct` containing pre-computed tools to perform forward-stepping of the model, namely:
- - elasticgreen::AbstractMatrix{T}
- - fourier_elasticgreen::AbstractMatrix{T}{Complex{T}}
- - pfft::AbstractFFTs.Plan
- - pifft::AbstractFFTs.ScaledPlan
- - Dx::AbstractMatrix{T}
- - Dy::AbstractMatrix{T}
- - Dxx::AbstractMatrix{T}
- - Dyy::AbstractMatrix{T}
- - Dxy::AbstractMatrix{T}
- - negligible_gradD::Bool
- - rhog::T
- - geoidgreen::AbstractMatrix{T}
+Return a `struct` containing pre-computed tools to perform forward-stepping of the model.
+This includes the Green's functions for the computation of the lithosphere and geoid
+displacement, plans for FFTs, interpolators of the load and the viscosity over time and
+preallocated arrays.
 """
-struct PrecomputedFastiso{T<:AbstractFloat, M<:AbstractMatrix{T},
+struct FastIsoTools{T<:AbstractFloat, M<:KernelMatrix{T},
     P1<:AbstractFFTs.Plan{Complex{T}}, P2<:AbstractFFTs.Plan{Complex{T}}}
     elasticgreen::M
     geoidgreen::M
     pfft::P1
     pifft::AbstractFFTs.ScaledPlan{Complex{T}, P2, T}
-    negligible_gradD::Bool
+    Hice::Interpolations.Extrapolation{M, 1, Interpolations.GriddedInterpolation{M, 1, Vector{M},
+        Gridded{Linear{Throw{OnGrid}}}, Tuple{Vector{T}}}, Gridded{Linear{Throw{OnGrid}}}, Flat{Nothing}}
+    eta::Interpolations.Extrapolation{M, 1, Interpolations.GriddedInterpolation{M, 1, Vector{M},
+        Gridded{Linear{Throw{OnGrid}}}, Tuple{Vector{T}}}, Gridded{Linear{Throw{OnGrid}}}, Flat{Nothing}}
+    prealloc::PreAllocated{T, M}
 end
 
-
-function PrecomputedFastiso(
+function FastIsoTools(
     Omega::ComputationDomain{T, M},
     c::PhysicalConstants{T},
-    p::LateralVariability{T, M};
+    t_Hice_snapshots::Vector{T},
+    Hice_snapshots::Vector{<:KernelMatrix{T}},
+    t_eta_snapshots::Vector{T},
+    eta_snapshots::Vector{<:KernelMatrix{T}};
     quad_precision::Int = 4,
-) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
+) where {T<:AbstractFloat, M<:KernelMatrix{T}}
 
     # Elastic response variables
     distance, greenintegrand_coeffs = get_greenintegrand_coeffs(T)
@@ -301,11 +363,6 @@ function PrecomputedFastiso(
     quad_support, quad_coeffs = get_quad_coeffs(T, quad_precision)
     elasticgreen = get_elasticgreen(Omega, greenintegrand_function, quad_support, quad_coeffs)
     geoidgreen = get_geoidgreen(Omega, c)
-
-    # Check if thickness constant upto 1km tolerance
-    mean_litho_rigidity = fill(mean(p.litho_rigidity), Omega)
-    negligible_gradD = isapprox(p.litho_rigidity,
-        Omega.arraykernel(mean_litho_rigidity), atol = 1e3)
 
     # FFT plans depening on CPU vs. GPU usage
     if Omega.use_cuda
@@ -317,53 +374,124 @@ function PrecomputedFastiso(
     end
 
     # rhog = p.uppermantle_density .* c.g
+    Hice = linear_interpolation( t_Hice_snapshots,
+        kernelpromote(Hice_snapshots, Omega.arraykernel); extrapolation_bc=Flat())
+    eta = linear_interpolation(t_eta_snapshots,
+        kernelpromote(eta_snapshots, Omega.arraykernel); extrapolation_bc=Flat())
 
-    return PrecomputedFastiso(
-        kernelpromote(elasticgreen, Omega.arraykernel),
-        kernelpromote(geoidgreen, Omega.arraykernel),
-        p1, p2, negligible_gradD,
-    )
-end
-
-"""
-    SuperStruct()
-
-Return a struct containing all the other structs needed for the forward integration of the model:
- - Omega::ComputationDomain{T, M}
- - c::PhysicalConstants{T}
- - p::LateralVariability{T, M}
- - tools::PrecomputedFastiso{T, M}
- - Hice::Interpolations.Extrapolation
- - eta::Interpolations.Extrapolation
- - refgeostate::RefGeoState{T, M}
- - geostate::GeoState{T, M}
- - interactive_geostate::Bool
-"""
-struct SuperStruct{T<:AbstractFloat, M<:AbstractMatrix{T}}
-    Omega::ComputationDomain{T, M}
-    c::PhysicalConstants{T}
-    p::LateralVariability{T, M}
-    tools::PrecomputedFastiso{T, M}
-    Hice::Interpolations.Extrapolation{M, 1, Interpolations.GriddedInterpolation{M, 1, Vector{M},
-        Gridded{Linear{Throw{OnGrid}}}, Tuple{Vector{T}}}, Gridded{Linear{Throw{OnGrid}}}}
-    eta::Interpolations.Extrapolation
-    refgeostate::RefGeoState{T, M}
-    geostate::GeoState{T, M}
-    interactive_geostate::Bool
+    prealloc = PreAllocated([null(Omega) for i in eachindex(fieldnames(PreAllocated))]...)
+    return FastIsoTools(Omega.arraykernel(elasticgreen), Omega.arraykernel(geoidgreen),
+        p1, p2, Hice, eta, prealloc)
 end
 
 null(Omega::ComputationDomain) = copy(Omega.arraykernel(Omega.null))
 
-function SuperStruct(
+"""
+    FastIsoOutputs()
+
+Return a struct containing the fields of viscous displacement, viscous displacement rate,
+elastic displacement, geoid displacement, sea level and the computation time resulting
+from solving a [`FastIsoProblem`](@ref).
+"""
+mutable struct FastIsoOutputs{T<:AbstractFloat}
+    t::Vector{T}
+    u::Vector{Matrix{T}}
+    dudt::Vector{Matrix{T}}
+    ue::Vector{Matrix{T}}
+    geoid::Vector{Matrix{T}}
+    sealevel::Vector{Matrix{T}}
+    computation_time::Float64
+end
+
+struct SimpleEuler end
+
+"""
+    FastIsoProblem(Omega, c, p, t_out, interactive_sealevel)
+    FastIsoProblem(Omega, c, p, t_out, interactive_sealevel, Hice)
+    FastIsoProblem(Omega, c, p, t_out, interactive_sealevel, t_Hice, Hice)
+
+Return a struct containing all the other structs needed for the forward integration of the
+model over `Omega::ComputationDomain` with parameters `c::PhysicalConstants` and
+`p::LateralVariability`. The outputs are stored at `t_out::Vector{<:AbstractFloat}`.
+"""
+struct FastIsoProblem{T<:AbstractFloat, M<:KernelMatrix{T}}
+    Omega::ComputationDomain{T, M}
+    c::PhysicalConstants{T}
+    p::LateralVariability{T, M}
+    tools::FastIsoTools{T, M}
+    refgeostate::RefGeoState{T, M}
+    geostate::GeoState{T, M}
+    interactive_sealevel::Bool
+    internal_loadupdate::Bool
+    diffeq::NamedTuple
+    verbose::Bool
+    out::FastIsoOutputs
+end
+
+function FastIsoProblem(
     Omega::ComputationDomain{T, M},
     c::PhysicalConstants{T},
     p::LateralVariability{T, M},
+    t_out::Vector{<:Real},
+    interactive_sealevel::Bool;
+    kwargs...,
+) where {T<:AbstractFloat, M<:KernelMatrix{T}}
+    # Creating some placeholders in case of an external update of the load.
+    t_Hice_snapshots = [extrema(t_out)...]
+    Hice_snapshots = [null(Omega), null(Omega)]
+    return FastIsoProblem(Omega, c, p, t_out, interactive_sealevel,
+        t_Hice_snapshots, Hice_snapshots, internal_loadupdate = false; kwargs...)
+end
+
+function FastIsoProblem(
+    Omega::ComputationDomain{T, M},
+    c::PhysicalConstants{T},
+    p::LateralVariability{T, M},
+    t_out::Vector{<:Real},
+    interactive_sealevel::Bool,
+    Hice::KernelMatrix{T};
+    kwargs...,
+) where {T<:AbstractFloat, M<:KernelMatrix{T}}
+    # Constant interpolator in case viscosity is fixed over time.
+    t_Hice_snapshots = [extrema(t_out)...]
+    Hice_snapshots = [Hice, Hice]
+    return FastIsoProblem(Omega, c, p, t_out, interactive_sealevel, 
+        t_Hice_snapshots, Hice_snapshots, internal_loadupdate = true; kwargs...)
+end
+
+function FastIsoProblem(
+    Omega::ComputationDomain{T, M},
+    c::PhysicalConstants{T},
+    p::LateralVariability{T, M},
+    t_out::Vector{<:Real},
+    interactive_sealevel::Bool,
     t_Hice_snapshots::Vector{T},
-    Hice_snapshots::Vector{<:AbstractMatrix{T}},
+    Hice_snapshots::Vector{<:KernelMatrix{T}};
+    kwargs...,
+) where {T<:AbstractFloat, M<:KernelMatrix{T}}
+    # Constant interpolator in case viscosity is fixed over time.
+    t_eta_snapshots = [extrema(t_out)...]
+    eta_snapshots = [p.effective_viscosity, p.effective_viscosity]
+    return FastIsoProblem(Omega, c, p, t_out, interactive_sealevel, 
+        t_Hice_snapshots, Hice_snapshots, t_eta_snapshots, eta_snapshots,
+        internal_loadupdate = true; kwargs...)
+end
+
+function FastIsoProblem(
+    Omega::ComputationDomain{T, M},
+    c::PhysicalConstants{T},
+    p::LateralVariability{T, M},
+    t_out::Vector{<:Real},
+    interactive_sealevel::Bool,
+    t_Hice_snapshots::Vector{T},
+    Hice_snapshots::Vector{<:KernelMatrix{T}},
     t_eta_snapshots::Vector{T},
-    eta_snapshots::Vector{<:AbstractMatrix{T}},
-    interactive_geostate::Bool;
+    eta_snapshots::Vector{<:KernelMatrix{T}};
+    diffeq::NamedTuple = (alg = BS3(), reltol = 1e-3),
+    verbose::Bool = false,
+    internal_loadupdate::Bool = true,
     u_0::M = null(Omega),
+    dudt_0::M = null(Omega),
     ue_0::M = null(Omega),
     geoid_0::M = null(Omega),
     z_0::M = null(Omega),
@@ -371,27 +499,30 @@ function SuperStruct(
     H_ice_0::M = null(Omega),
     H_water_0::M = null(Omega),
     b_0::M = null(Omega),
-) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
+) where {T<:AbstractFloat, M<:KernelMatrix{T}}
 
-    tools = PrecomputedFastiso(Omega, c, p)
-    Hice = linear_interpolation( t_Hice_snapshots,
-        kernelpromote(Hice_snapshots, Omega.arraykernel) )
-    eta = linear_interpolation(t_eta_snapshots,
-        kernelpromote(eta_snapshots, Omega.arraykernel) )
+    if !isa(diffeq.alg, OrdinaryDiffEqAlgorithm) && !isa(diffeq.alg, SimpleEuler)
+        error("Provided algorithm for solving ODE is not supported.")
+    end
+
+    tools = FastIsoTools(Omega, c, t_Hice_snapshots, Hice_snapshots,
+        t_eta_snapshots, eta_snapshots)
 
     refgeostate = RefGeoState(
-        u_0, ue_0,                  # viscous and elastic displacement
+        u_0, ue_0,          # viscous and elastic displacement
         H_ice_0, H_water_0, b_0,    # ice & liquid water column
-        z_0,                 # z0
+        z_0,                        # z0 (useful for external sealevel forcing)
         sealevel_0,                 # sealevel
         T(0.0),                     # sle_af
         T(0.0),                     # V_pov
         T(0.0),                     # V_den
         T(0.0),                     # conservation_term
     )
+    
     geostate = GeoState(
-        copy(u_0), copy(ue_0),      # viscous and elastic displacement
-        Hice(0.0),                  # ice column
+        copy(u_0), copy(dudt_0),    # viscous displacement and associated rate
+        copy(ue_0),                 # elastic displacement
+        tools.Hice(0.0),            # ice column
         copy(H_water_0),            # water column
         copy(b_0),                  # bedrock position
         geoid_0,                    # geoid perturbation
@@ -401,33 +532,16 @@ function SuperStruct(
         T(0.0), T(0.0),             # V_den terms
         T(0.0),                     # total sl-contribution & conservation term
         0, years2seconds(10.0),     # countupdates, update step
-        null(Omega),                # dtloadanom
     )
-    return SuperStruct(Omega, c, p, tools, Hice, eta,
-        refgeostate, geostate, interactive_geostate)
-end
 
-"""
-    FastisoResults(Omega::ComputationDomain, c::PhysicalConstants, p::LateralVariability)
+    # Extend the vector with a zero at beginning if not already the case
+    # Typically needed for post-processing.
+    if !(0 in t_out)
+        pushfirst!(0, t_out)
+    end
 
-Return a `struct` containing the results of forward integration:
- - `t_out` the time output vector
- - `u3D_elastic` the elastic response over `t_out`
- - `u3D_viscous` the viscous response over `t_out`
- - `dudt3D_viscous` the displacement rate over `t_out`
- - `geoid3D` the geoid response over `t_out`
- - `Hice` an interpolator of the ice thickness over time
- - `eta` an interpolator of the upper-mantle viscosity over time
-"""
-struct FastisoResults{T<:AbstractFloat, M<:AbstractMatrix{T}}
-    t_out::Vector{T}
-    tools::PrecomputedFastiso{T, M}
-    viscous::Vector{Matrix{T}}
-    displacement_rate::Vector{Matrix{T}}
-    elastic::Vector{Matrix{T}}
-    geoid::Vector{Matrix{T}}
-    sealevel::Vector{Matrix{T}}
-    Hice::Interpolations.Extrapolation{M, 1, Interpolations.GriddedInterpolation{M, 1, Vector{M},
-        Gridded{Linear{Throw{OnGrid}}}, Tuple{Vector{T}}}, Gridded{Linear{Throw{OnGrid}}}}
-    eta::Interpolations.Extrapolation
+    out = init_results(Omega, t_out)
+    
+    return FastIsoProblem(Omega, c, p, tools, refgeostate, geostate, interactive_sealevel,
+        internal_loadupdate, diffeq, verbose, out)
 end

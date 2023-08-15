@@ -11,7 +11,7 @@ function interpolate_spada_benchmark(c, data)
 end
 
 function load_spada()
-    prefix ="../data/test2/Spada/"
+    prefix ="../testdata/Spada/"
     cases = ["u_cap", "u_disc", "dudt_cap", "dudt_disc", "n_cap", "n_disc"]
     snapshots = ["0", "1", "2", "5", "10", "inf"]
     data = Dict{String, Vector{Matrix{Float64}}}()
@@ -39,7 +39,7 @@ function load_latychev(dir::String, x_lb::Real, x_ub::Real)
         # println( file, typeof( readdlm(joinpath(dir, file), ',')[:, 1] ) )
         u[:, i] = readdlm(joinpath(dir, file), ',')[idx, 2]
     end
-    u .-= u[:, 1]
+    # u .-= u[:, 1]
 
     return x, u
 end
@@ -52,7 +52,7 @@ function generate_uniform_disc_load(
     c::PhysicalConstants,
     R::Real,
     H::Real,
-) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
+) where {T<:AbstractFloat, M<:KernelMatrix{T}}
     mask = mask_disc(Omega.X, Omega.Y, R)
     return - mask .* (c.rho_ice * c.g * H)
 end
@@ -66,8 +66,8 @@ function generate_gaussian_field(
     z_background::T,
     xy_peak::Vector{T},
     z_peak::T,
-    sigma::AbstractMatrix{T},
-) where {T<:AbstractFloat, M<:AbstractMatrix{T}}
+    sigma::KernelMatrix{T},
+) where {T<:AbstractFloat, M<:KernelMatrix{T}}
     if Omega.Nx == Omega.Ny
         N = Omega.Nx
     else

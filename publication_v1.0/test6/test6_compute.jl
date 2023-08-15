@@ -33,14 +33,14 @@ function main(; n=5)
     t_out = years2seconds.(0.0:1_000.0:2_000.0)
 
     t1 = time()
-    results = fastisostasy(t_out, Omega, c, p, Hcylinder, ODEsolver=BS3(), interactive_geostate=false)
+    results = fastisostasy(t_out, Omega, c, p, Hcylinder, alg=BS3(), interactive_sealevel=false)
     t_fastiso = time() - t1
     println("Took $t_fastiso seconds!")
     println("-------------------------------------")
 
     tinv = t_out[2:end]
     Hice = [Hcylinder for t in tinv]
-    Y = results.viscous[2:end]
+    Y = results.u_out[2:end]
     paraminv = ParamInversion(Omega, c, p, tinv, Y, Hice)
     priors, ukiobj = perform(paraminv)
     logeta, Gx, e_mean, e_sort = extract_inversion(priors, ukiobj, paraminv)

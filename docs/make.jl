@@ -12,6 +12,7 @@ using FastIsostasy
 # %% Build docs
 PAGES = [
     "index.md",
+    "introGIA.md",
     "examples.md",
     "APIref.md",
 ]
@@ -32,7 +33,7 @@ makedocs(
     authors = "Jan Swierczek-Jereczek",
     pages = PAGES,
     doctest = CI,
-    draft = false,
+    draft = true,
 )
 
 deploydocs(;

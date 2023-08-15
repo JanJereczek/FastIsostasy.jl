@@ -6,19 +6,19 @@ using JLD2
 using LinearAlgebra
 include("../test/helpers/compute.jl")
 include("../test/helpers/plot.jl")
+include("helpers.jl")
 
 function main()
 
-    case = "ExplicitEuler"
+    H, R = 1e3, 1000e3
+    case = "SimpleEuler"
     N = 256
     N2 = Int(N/2)
     N4 = Int(N/4)
     hash = "$(case)_N$(N)_gpu_isostate"
     sol = load("../data/test1/$hash.jld2")
-    Omega, c, p, H, R = sol["Omega"], sol["c"], sol["p"], sol["H"], sol["R"]
     results = sol["results"]
-
-    t_out = results.t_out
+    Omega, c, p, t_out = unpack(results)
 
     ftsize = 48
     lwidth = 4
@@ -36,7 +36,7 @@ function main()
         tyr = Int(round(t_2Dplot[i]))
         t = years2seconds(t_2Dplot[i])
         k = argmin( (t_out .- t) .^ 2 )
-        u_numeric = results.viscous[k]
+        u_numeric = results.u_out[k]
 
         letter = letters[i]
         ax3D = Axis3(
@@ -101,7 +101,7 @@ function main()
         analytic_solution_r(r) = analytic_solution(r, t, c, p, H, R, analytic_support)
         u_analytic = analytic_solution_r.( sqrt.( x .^ 2 + y .^ 2 ) )
         k = argmin( (t_out .- t) .^ 2 )
-        u_numeric = diag(results.viscous[k])
+        u_numeric = diag(results.u_out[k])
         tyr = Int(round(seconds2years(t)))
 
         if i == 1
@@ -161,14 +161,14 @@ function main()
     for N in Nvec
         hash = "$(case)_N$(N)_gpu_isostate"
         sol = load("../data/test1/$hash.jld2")
+        results = sol["results"]
+        Omega, c, p, t_out = unpack(results)
 
         islice, jslice = Int(round(N/2)), Int(round(N/2))
-        Omega, c, p, H, R = sol["Omega"], sol["c"], sol["p"], sol["H"], sol["R"]
-        results = sol["results"]
         x, y = Omega.X[islice, jslice:end], Omega.Y[islice, jslice:end] 
         analytic_solution_r(r) = analytic_solution(r, t_end, c, p, H, R, analytic_support)
         u_analytic = analytic_solution_r.( sqrt.( x .^ 2 + y .^ 2 ) )
-        u_numeric = results.viscous[end]
+        u_numeric = results.u_out[end]
         abs_error = abs.(u_analytic - u_numeric[islice, jslice:end])
 
         append!(delta_x, Omega.Wx * 1e-3 / N)
