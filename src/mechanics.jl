@@ -113,12 +113,17 @@ function dudt_isostasy!(dudt::M, u::M, fip::FastIsoProblem{T, M}, t::T) where
 
     Omega, P = fip.Omega, fip.tools.prealloc
     P.rhs .= -fip.c.g .* columnanom_full(fip)
-    update_second_derivatives!(P.uxx, P.uyy, P.ux, P.uxy, u, Omega)
-    Mxx = -fip.p.litho_rigidity .* (P.uxx + fip.p.litho_poissonratio .* P.uyy)
-    Myy = -fip.p.litho_rigidity .* (P.uyy + fip.p.litho_poissonratio .* P.uxx)
-    Mxy = -fip.p.litho_rigidity .* (1 - fip.p.litho_poissonratio) .* P.uxy
-    update_second_derivatives!(P.Mxxxx, P.Myyyy, P.Mxyx, P.Mxyxy, Mxx, Myy, Mxy, Omega)
-    P.rhs += P.Mxxxx + P.Mxyxy + 2 .* P.Mxyxy
+    if fip.neglect_litho_gradients
+        biharmonic_u = Omega.biharmonic .* (fip.tools.pfft * u)
+        P.rhs -= fip.p.litho_rigidity .* real.( fip.tools.pifft * biharmonic_u )
+    else
+        update_second_derivatives!(P.uxx, P.uyy, P.ux, P.uxy, u, Omega)
+        Mxx = - fip.p.litho_rigidity .* (P.uxx + fip.p.litho_poissonratio .* P.uyy)
+        Myy = - fip.p.litho_rigidity .* (P.uyy + fip.p.litho_poissonratio .* P.uxx)
+        Mxy = - fip.p.litho_rigidity .* (1 - fip.p.litho_poissonratio) .* P.uxy
+        update_second_derivatives!(P.Mxxxx, P.Myyyy, P.Mxyx, P.Mxyxy, Mxx, Myy, Mxy, Omega)
+        P.rhs += P.Mxxxx + P.Mxyxy + 2 .* P.Mxyxy
+    end
     # dudt[:, :] .= real.(fip.tools.pifft * ((fip.tools.pfft * rhs) ./
     #     Omega.pseudodiff)) ./ (2 .* fip.p.effective_viscosity)
     dudt[:, :] .= real.(fip.tools.pifft * ((fip.tools.pfft * (P.rhs ./ 

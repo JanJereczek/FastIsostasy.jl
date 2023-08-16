@@ -48,9 +48,9 @@ end
 
 function benchmark1()
     # Generating numerical results
-    Omega = ComputationDomain(3000e3, 7, projection_correction = false)
+    Omega = ComputationDomain(3000e3, 6, projection_correction = false)
     c, p, R, H, Hcylinder, t_out, interactive_sealevel = benchmark1_constants(Omega)
-    fip = FastIsoProblem(Omega, c, p, t_out, interactive_sealevel, Hcylinder)
+    fip = FastIsoProblem(Omega, c, p, t_out, interactive_sealevel, false, Hcylinder, verbose = true)
     solve!(fip)
     println("Computation took $(fip.out.computation_time) s")
     if make_plots

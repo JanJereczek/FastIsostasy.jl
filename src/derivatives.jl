@@ -8,6 +8,7 @@ function update_second_derivatives!(uxx::M, uyy::M, ux::M, uxy::M, u1::M, u2::M,
     Omega::ComputationDomain{T, M}) where {T<:AbstractFloat, M<:Matrix{T}}
     dxx!(uxx, u1, Omega)
     dyy!(uyy, u2, Omega)
+    # dxy!(uxy, u3, Omega)
     dxy!(ux, uxy, u3, Omega)
 end
 
@@ -20,6 +21,8 @@ function dxx!(du::M, u::M, Omega::ComputationDomain{T, M}) where
         end
         du[1, j] = du[2, j]
         du[Omega.Nx, j] = du[Omega.Nx-1, j]
+        # du[1, j] = (u[2, j] - 2*u[1, j] + u[Omega.Nx, j]) / (Omega.K[1, j] * Omega.dx)^2
+        # du[Omega.Nx, j] = (u[1, j] - 2*u[Omega.Nx, j] + u[Omega.Nx-1, j]) / (Omega.K[Omega.Nx, j] * Omega.dx)^2
     end
 end
 
@@ -32,8 +35,34 @@ function dyy!(du::M, u::M, Omega::ComputationDomain{T, M}) where
         end
         du[i, 1] = du[i, 2]
         du[i, Omega.Ny] = du[i, Omega.Ny-1]
+        # du[i, 1] = (u[i, 2] - 2*u[i, 1] + u[i, Omega.Ny]) / (Omega.K[i, 1] * Omega.dy)^2
+        # du[i, Omega.Ny] = (u[i, 1] - 2*u[i, Omega.Ny] + u[i, Omega.Ny-1]) / (Omega.K[i, Omega.Ny] * Omega.dy)^2
     end
 end
+
+# function dxy!(du::M, u::M, Omega::ComputationDomain{T, M}) where
+#     {T<:AbstractFloat, M<:Matrix{T}}
+#     # @boundscheck (dxy.Nx, dxy.Ny) == size(u) || throw(BoundsError())
+#     @inbounds for i in axes(du, 1)[2:Omega.Nx-1]
+#         for j in axes(du, 2)[2:Omega.Ny-1]
+#             du[i, j] = (u[i, j+1] + u[i, j-1] + u[i+1, j] + u[i-1, j] - 2*u[i, j] - u[i+1, j-1] - u[i+1, j-1]) /
+#                 (2 .* Omega.Dy[i, j] * Omega.Dx[i, j])
+#         end
+#         # du[i, 1] = du[i, 2]
+#         # du[i, Omega.Ny] = du[i, Omega.Ny-1]
+#         # du[i, 1] = (u[i, 2] - 2*u[i, 1] + u[i, Omega.Ny]) / (Omega.K[i, 1] * Omega.dy)^2
+#         # du[i, Omega.Ny] = (u[i, 1] - 2*u[i, Omega.Ny] + u[i, Omega.Ny-1]) / (Omega.K[i, Omega.Ny] * Omega.dy)^2
+#     end
+#     du[1, 2:Omega.Ny-1] = du[2, 2:Omega.Ny-1]
+#     du[Omega.Nx, 2:Omega.Ny-1] = du[Omega.Nx, 2:Omega.Ny-1]
+#     du[2:Omega.Nx-1, 1] = du[2:Omega.Nx-1, 2]
+#     du[2:Omega.Nx-1, Omega.Ny] = du[2:Omega.Nx-1, Omega.Ny]
+
+#     du[1, 1] = mean([du[1,2], du[2,1]])
+#     du[Omega.Nx, 1] = mean([du[Omega.Nx,2], du[Omega.Nx-1,1]])
+#     du[1, Omega.Ny] = mean([du[1,Omega.Ny-1], du[2,Omega.Ny]])
+#     du[Omega.Nx, Omega.Ny] = mean([du[Omega.Nx,Omega.Ny-1], du[Omega.Nx-1,Omega.Ny]])
+# end
 
 function dxy!(ux::M, uxy::M, u::M, Omega::ComputationDomain{T, M}) where
     {T<:AbstractFloat, M<:Matrix{T}}
@@ -64,64 +93,6 @@ function dy!(du::M, u::M, Omega::ComputationDomain{T, M}) where
     end
 end
 
-################
-
-function update_second_derivatives!(uxx::M, uyy::M, ux::M, uxy::M, u1::M, u2::M, u3::M,
-    Omega::ComputationDomain{T, M}) where {T<:AbstractFloat, M<:CuMatrix{T}}
-    dxx!(uxx, u1, Omega.Dx, Omega.Nx, Omega.Ny)
-    dyy!(uyy, u2, Omega.Dy, Omega.Nx, Omega.Ny)
-    dxy!(ux, uxy, u3, Omega.Dx, Omega.Dy, Omega.Nx, Omega.Ny)
-end
-
-function dxx!(uxx::M, u::M, Dx::M, Nx::Int, Ny::Int) where {T<:AbstractFloat, M<:CuMatrix{T}}
-    @parallel (2:Nx-1, 1:Ny) dxx!(uxx, u, Dx)
-    @parallel (1:Ny) flatbcx!(uxx, Nx)
-    return nothing
-end
-@parallel_indices (ix, iy) function dxx!(du::M, u::M, Dx::M) where M
-    du[ix, iy] = (u[ix+1, iy] - 2 * u[ix, iy] + u[ix-1, iy]) / (Dx[ix, iy]^2)
-    return nothing
-end
-
-function dyy!(uyy::M, u::M, Dy::M, Nx::Int, Ny::Int) where {T<:AbstractFloat, M<:CuMatrix{T}}
-    @parallel (1:Nx, 2:Ny-1) dyy!(uyy, u, Dy)
-    @parallel (1:Nx) flatbcy!(uyy, Ny)
-    return nothing
-end
-@parallel_indices (ix, iy) function dyy!(du::M, u::M, Dy::M) where M
-    du[ix, iy] = (u[ix, iy+1] - 2 * u[ix, iy] + u[ix, iy-1]) / (Dy[ix, iy]^2)
-    return nothing
-end
-
-function dxy!(ux::M, uxy::M, u::M, Dx::M, Dy::M, Nx::Int, Ny::Int) where
-    {T<:AbstractFloat, M<:CuMatrix{T}}
-    @parallel (2:Nx-1, 1:Ny) dx!(ux, u, Dx)
-    @parallel (1:Ny) flatbcx!(ux, Nx)
-    @parallel (1:Nx, 2:Ny-1) dy!(uxy, ux, Dy)
-    @parallel (1:Nx) flatbcy!(uxy, Ny)
-    return nothing
-end
-@parallel_indices (ix, iy) function dx!(du::M, u::M, Dx::M) where M
-    du[ix, iy] = (u[ix+1, iy] - u[ix-1, iy]) / (2 * Dx[ix, iy])
-    return nothing
-end
-@parallel_indices (ix, iy) function dy!(du::M, u::M, Dy::M) where M
-    du[ix, iy] = (u[ix, iy+1] - u[ix, iy-1]) / (2 * Dy[ix, iy])
-    return nothing
-end
-
-
-@parallel_indices (iy) function flatbcx!(u, Nx)
-    u[1, iy] = u[2, iy]
-    u[Nx, iy] = u[Nx-1, iy]
-    return nothing
-end
-
-@parallel_indices (ix) function flatbcy!(u, Ny)
-    u[ix, 1] = u[ix, 2]
-    u[ix, Ny] = u[ix, Ny-1]
-    return nothing
-end
 #####################################################
 
 # Fourier
@@ -140,8 +111,8 @@ function get_differential_fourier(Wx::T, Wy::T, Nx::Int, Ny::Int) where {T<:Real
     X_coeffs, Y_coeffs = meshgrid(x_coeffs, y_coeffs)
     harmonic_coeffs = X_coeffs .^ 2 + Y_coeffs .^ 2
     pseudodiff_coeffs = sqrt.(harmonic_coeffs)
-    # biharmonic_coeffs = harmonic_coeffs .^ 2
-    return pseudodiff_coeffs, harmonic_coeffs
+    biharmonic_coeffs = harmonic_coeffs .^ 2
+    return pseudodiff_coeffs, harmonic_coeffs, biharmonic_coeffs
 end
 
 function fftint(N::Int)

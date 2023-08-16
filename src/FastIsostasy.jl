@@ -31,6 +31,7 @@ using Reexport
 include("structs.jl")
 include("utils.jl")
 include("derivatives.jl")
+include("derivatives_parallel.jl")
 include("integrators.jl")
 include("geostate.jl")
 include("mechanics.jl")
