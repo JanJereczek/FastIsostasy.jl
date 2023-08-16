@@ -122,7 +122,7 @@ function dudt_isostasy!(dudt::M, u::M, fip::FastIsoProblem{T, M}, t::T) where
         Myy = - fip.p.litho_rigidity .* (P.uyy + fip.p.litho_poissonratio .* P.uxx)
         Mxy = - fip.p.litho_rigidity .* (1 - fip.p.litho_poissonratio) .* P.uxy
         update_second_derivatives!(P.Mxxxx, P.Myyyy, P.Mxyx, P.Mxyxy, Mxx, Myy, Mxy, Omega)
-        P.rhs += P.Mxxxx + P.Mxyxy + 2 .* P.Mxyxy
+        P.rhs += P.Mxxxx + P.Myyyy + 2 .* P.Mxyxy
     end
     # dudt[:, :] .= real.(fip.tools.pifft * ((fip.tools.pfft * rhs) ./
     #     Omega.pseudodiff)) ./ (2 .* fip.p.effective_viscosity)

@@ -436,14 +436,13 @@ function FastIsoProblem(
     c::PhysicalConstants{T},
     p::LateralVariability{T, M},
     t_out::Vector{<:Real},
-    interactive_sealevel::Bool,
-    neglect_litho_gradients::Bool;
+    interactive_sealevel::Bool;
     kwargs...,
 ) where {T<:AbstractFloat, M<:KernelMatrix{T}}
     # Creating some placeholders in case of an external update of the load.
     t_Hice_snapshots = [extrema(t_out)...]
     Hice_snapshots = [null(Omega), null(Omega)]
-    return FastIsoProblem(Omega, c, p, t_out, interactive_sealevel, neglect_litho_gradients,
+    return FastIsoProblem(Omega, c, p, t_out, interactive_sealevel,
         t_Hice_snapshots, Hice_snapshots, internal_loadupdate = false; kwargs...)
 end
 
@@ -453,14 +452,13 @@ function FastIsoProblem(
     p::LateralVariability{T, M},
     t_out::Vector{<:Real},
     interactive_sealevel::Bool,
-    neglect_litho_gradients::Bool,
     Hice::KernelMatrix{T};
     kwargs...,
 ) where {T<:AbstractFloat, M<:KernelMatrix{T}}
     # Constant interpolator in case viscosity is fixed over time.
     t_Hice_snapshots = [extrema(t_out)...]
     Hice_snapshots = [Hice, Hice]
-    return FastIsoProblem(Omega, c, p, t_out, interactive_sealevel, neglect_litho_gradients,
+    return FastIsoProblem(Omega, c, p, t_out, interactive_sealevel,
         t_Hice_snapshots, Hice_snapshots, internal_loadupdate = true; kwargs...)
 end
 
@@ -470,7 +468,6 @@ function FastIsoProblem(
     p::LateralVariability{T, M},
     t_out::Vector{<:Real},
     interactive_sealevel::Bool,
-    neglect_litho_gradients::Bool,
     t_Hice_snapshots::Vector{T},
     Hice_snapshots::Vector{<:KernelMatrix{T}};
     kwargs...,
@@ -478,7 +475,7 @@ function FastIsoProblem(
     # Constant interpolator in case viscosity is fixed over time.
     t_eta_snapshots = [extrema(t_out)...]
     eta_snapshots = [p.effective_viscosity, p.effective_viscosity]
-    return FastIsoProblem(Omega, c, p, t_out, interactive_sealevel, neglect_litho_gradients,
+    return FastIsoProblem(Omega, c, p, t_out, interactive_sealevel,
         t_Hice_snapshots, Hice_snapshots, t_eta_snapshots, eta_snapshots,
         internal_loadupdate = true; kwargs...)
 end
@@ -489,7 +486,6 @@ function FastIsoProblem(
     p::LateralVariability{T, M},
     t_out::Vector{<:Real},
     interactive_sealevel::Bool,
-    neglect_litho_gradients::Bool,
     t_Hice_snapshots::Vector{T},
     Hice_snapshots::Vector{<:KernelMatrix{T}},
     t_eta_snapshots::Vector{T},
@@ -497,6 +493,7 @@ function FastIsoProblem(
     diffeq::NamedTuple = (alg = BS3(), reltol = 1e-6),
     verbose::Bool = false,
     internal_loadupdate::Bool = true,
+    neglect_litho_gradients::Bool = false,
     u_0::M = null(Omega),
     dudt_0::M = null(Omega),
     ue_0::M = null(Omega),
