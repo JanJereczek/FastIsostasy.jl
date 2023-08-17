@@ -540,12 +540,27 @@ function FastIsoProblem(
 
     # Extend the vector with a zero at beginning if not already the case
     # Typically needed for post-processing.
-    if !(0 in t_out)
-        pushfirst!(0, t_out)
+    if 0 in t_out
+        out = init_results(Omega, t_out)
+    else
+        out = init_results(Omega, vcat(T(0), t_out))
     end
-
-    out = init_results(Omega, t_out)
     
     return FastIsoProblem(Omega, c, p, tools, refgeostate, geostate, interactive_sealevel,
         internal_loadupdate, neglect_litho_gradients, diffeq, verbose, out)
+end
+
+function remake!(fip::FastIsoProblem)
+    fip.geostate.u = null(fip.Omega) #fip.refgeostate.u
+    fip.geostate.dudt = null(fip.Omega)
+    fip.geostate.ue = null(fip.Omega) #fip.refgeostate.ue
+    fip.geostate.geoid = null(fip.Omega)
+    fip.geostate.sealevel = null(fip.Omega) #fip.refgeostate.sealevel
+    fip.geostate.H_water = null(fip.Omega) #fip.refgeostate.H_water
+    fip.geostate.H_ice = fip.tools.Hice(0.0)
+    fip.geostate.b = fip.refgeostate.b
+    fip.geostate.countupdates = 0
+
+    fip.out
+    return nothing
 end

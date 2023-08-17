@@ -12,7 +12,6 @@ function solve!(fip::FastIsoProblem{T, M}) where {T<:AbstractFloat, M<:KernelMat
     if !(fip.internal_loadupdate)
         error("`solve!` does not support external updating of the load. Use `step!` instead.")
     end
-
     t_out = fip.out.t
 
     # Make a first diagnotisc update to store these values. (k=1)

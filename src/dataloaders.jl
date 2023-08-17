@@ -43,14 +43,14 @@ end
 function load_wiens2021(Omega::ComputationDomain{T, M}; halfspace_logvisc::Real = 21) where
     {T<:AbstractFloat, M<:KernelMatrix{T}}
 
-    jld2file = "Wiens2021_Nx=$(Omega.Nx)_Ny=$(Omega.Ny).jld2"
-    dir = "../data"
-    if occursin(jld2file, readdir(dir))
-        println("Preprocessed JLD2 file already exists. Skipping pre-processing.")
-    else
-        jld2_wiens2021(Omega.X, jld2file, dir)
-    end
-    @load "$jld2file" logviscosity3D logvisc_interpolators
+    jld2file = "Wiens2021_Nx=64_Ny=64.jld2"
+    dir = joinpath(@__DIR__, "../testdata/Wiens")
+    # if jld2file in readdir(dir)
+    #     println("Preprocessed JLD2 file already exists. Skipping pre-processing.")
+    # else
+    #     jld2_wiens2021(Omega, jld2file, dir)
+    # end
+    @load "$dir/$jld2file" logvisc3D logvisc_interpolators
 
     lv = 10.0 .^ cat( [itp.(Omega.X, Omega.Y) for itp in logvisc_interpolators]...,
         fill(T(halfspace_logvisc), Omega.Nx, Omega.Ny), dims=3)
@@ -60,22 +60,23 @@ end
 function jld2_wiens2021(Omega::ComputationDomain, jld2file::String, dir::String)
 
     X, Y, Nx, Ny = Omega.X, Omega.Y, Omega.Nx, Omega.Ny
-    x, y = X[1,:], Y[:,1]
+    x, y = X[:, 1], Y[1, :]
     rawdata = [readdlm(file) for file in readdir(dir, join = true)]
-    logvisc = [filter_nan_viscosity(M) for M in rawdata]
+    logvisc = [wiens_filter_nan_viscosity(M) for M in rawdata]
     km2m!(logvisc)
 
     z = [100e3, 200e3, 300e3]
     logvisc3D = zeros(Float64, (Nx, Ny, length(z)))
     for k in axes(logvisc3D, 3)
         for i in axes(logvisc3D, 1), j in axes(logvisc3D, 2)
-            logvisc3D[i, j, k] = get_closest_eta(X[i,j], Y[i,j], logvisc[k])
+            logvisc3D[i, j, k] = wiens_get_closest_eta(X[i,j], Y[i,j], logvisc[k])
         end
     end
 
     logvisc_interpolators = [linear_interpolation( (x, y), logvisc3D[:, :, k],
         extrapolation_bc = Flat() ) for k in axes(logvisc3D, 3)]
-    jldsave(jld2file, logvisc3D = logvisc3D, logvisc_interpolators = logvisc_interpolators)
+    jldsave(joinpath(dir, jld2file), logvisc3D = logvisc3D,
+        logvisc_interpolators = logvisc_interpolators)
     return nothing
 end
 

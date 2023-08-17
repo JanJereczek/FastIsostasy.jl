@@ -575,6 +575,19 @@ function init_results(Omega::ComputationDomain{T, M}, t_out::Vector{T}) where
     sealevel_out = [copy(placeholder) for t in t_out]
     return FastIsoOutputs(t_out, u_out, dudt_out, ue_out, geoid_out, sealevel_out, 0.0)
 end
+
+function init_results(fip::FastIsoProblem, Omega::ComputationDomain{T, M}, t_out::Vector{T}
+    ) where {T<:AbstractFloat, M<:KernelMatrix{T}}
+    # initialize with placeholders
+    placeholder = Array(null(Omega))
+    fip.out.u = [copy(placeholder) for t in t_out]
+    fip.out.dudt = [copy(placeholder) for t in t_out]
+    fip.out.ue = [copy(placeholder) for t in t_out]
+    fip.out.geoid = [copy(placeholder) for t in t_out]
+    fip.out.sealevel = [copy(placeholder) for t in t_out]
+    fip.out.computation_time = 0.0
+    return nothing
+end
 #####################################################
 # BC utils
 #####################################################

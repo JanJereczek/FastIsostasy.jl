@@ -1,7 +1,7 @@
 module FastIsostasy
 
 using LinearAlgebra
-using Statistics: mean
+using Statistics: mean, cov
 using Distributions: MvNormal
 using JLD2
 using DelimitedFiles: readdlm
@@ -18,7 +18,6 @@ using EnsembleKalmanProcesses.ParameterDistributions
 using SpecialFunctions: besselj0, besselj1
 using DynamicalSystemsBase: CoupledODEs, trajectory
 using ParallelStencil
-using ParallelStencil.FiniteDifferences2D
 
 using Reexport
 @reexport using Interpolations
@@ -49,19 +48,16 @@ export FastIsoTools, FastIsoProblem
 # utils.jl
 export years2seconds, seconds2years, m_per_sec2mm_per_yr
 export meshgrid, dist2angulardist, latlon2stereo, stereo2latlon
-export matrify, kernelpromote, reinit_structs_cpu
+export matrify, kernelpromote, reinit_structs_cpu, meshgrid
 
 export loginterp_viscosity, get_rigidity, load_prem
 export maxwelltime_scaling!, compute_shearmodulus
 
 export get_r, gauss_distr, samesize_conv
 export uniform_ice_cylinder, stereo_ice_cylinder, stereo_ice_cap
-export write_out!
+export quadrature1D, get_quad_coeffs, get_elasticgreen
+export write_out!, remake!
 
-export quadrature1D
-export meshgrid
-export get_quad_coeffs
-export get_elasticgreen
 
 # derivatives.jl
 export get_differential_fourier
