@@ -66,8 +66,7 @@ Correction of the surface distortion is not needed here since rho * A * z / A = 
 function columnanom_full(fip::FastIsoProblem{T, M}) where {T<:AbstractFloat, M<:KernelMatrix{T}}
     # columnanom_mantle() depends on sign of u, which is negative for depression.
     # Therefore, we only need to add the terms below.
-    return columnanom_load(fip) + columnanom_mantle(fip) +
-        columnanom_litho(fip)
+    return columnanom_load(fip) + columnanom_mantle(fip) + columnanom_litho(fip)
 end
 
 function mass_anom(fip::FastIsoProblem{T, M}) where {T<:AbstractFloat, M<:KernelMatrix{T}}

@@ -138,7 +138,7 @@ function perform(paraminv::ParamInversion{T, M}) where {T<:AbstractFloat, M<:Mat
             if rem(j, 10) == 0
                 println("n = $n, j = $j")
             end
-            G_ens[:, j] .= forward_fastiso(ϕ_n[:, j], paraminv)
+            G_ens[:, j] = forward_fastiso(ϕ_n[:, j], paraminv)
         end
         EnsembleKalmanProcesses.update_ensemble!(ukiobj, G_ens)
         err[n] = get_error(ukiobj)[end]
