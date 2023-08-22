@@ -40,6 +40,14 @@ end
 # Parameter fields
 #############################################################
 
+"""
+    load_wiens2021(Omega)
+
+Load the viscosity layers estimated in [^Wiens2021] into a 3D array with \$ x, y, z \$
+respectively the first, second and third dimension of the array.
+
+Will be replaced in future by `load_paramfield(publication = "Wiens2021")`.
+"""
 function load_wiens2021(Omega::ComputationDomain{T, M}; halfspace_logvisc::Real = 21) where
     {T<:AbstractFloat, M<:KernelMatrix{T}}
 

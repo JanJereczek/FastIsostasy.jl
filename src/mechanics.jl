@@ -28,13 +28,13 @@ function solve!(fip::FastIsoProblem{T, M}) where {T<:AbstractFloat, M<:KernelMat
         if fip.diffeq.alg != SimpleEuler()
             prob = remake(dummy, u0 = fip.geostate.u, tspan = (t_out[k-1], t_out[k]), p = fip)
             sol = solve(prob, fip.diffeq.alg, reltol=fip.diffeq.reltol)
+            fip.geostate.dudt = sol(t_out[k], Val{1})
         else
             @inbounds for t in t_out[k-1]:fip.diffeq.dt:t_out[k]
                 update_diagnostics!(fip.geostate.dudt, fip.geostate.u, fip, t)
                 simple_euler!(fip.geostate.u, fip.geostate.dudt, fip.diffeq.dt)
             end
         end
-        fip.geostate.dudt = sol(t_out[k], Val{1})
         write_out!(fip, k)
     end
 
@@ -45,7 +45,7 @@ end
 """
     init(fip)
 
-Initialize `ode::CoupledODEs`, aimed to be used in [`step!`](@ref).
+Initialize an `ode::CoupledODEs`, aimed to be used in [`step!`](@ref).
 """
 init(fip::FastIsoProblem) = CoupledODEs(update_diagnostics!,
     fip.geostate.u, fip; fip.diffeq)
@@ -60,8 +60,7 @@ function step!(fip::FastIsoProblem{T, M}, ode::CoupledODEs,
     tspan::Tuple{T, T}) where {T<:AbstractFloat, M<:Matrix{T}}
 
     fip.out.computation_time -= time()
-    dt = tspan[2] - tspan[1]
-    X, t = trajectory(ode, dt, fip.geostate.u; t0 = tspan[1], Δt = dt)
+    dt = tspan[2] - tspan[1]    X, t = trajectory(ode, dt, fip.geostate.u; t0 = tspan[1], Δt = dt)
     fip.geostate.u .= reshape(X[2, :], fip.Omega.Nx, fip.Omega.Ny)
     update_diagnostics!(fip.geostate.dudt, fip.geostate.u, fip, t[2])
     fip.out.computation_time += time()
