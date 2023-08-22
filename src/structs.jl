@@ -120,8 +120,8 @@ function ComputationDomain(
     # Tests show that it does not lead to errors wrt analytical or benchmark solutions.
     pseudodiff[1, 1] = 1e-3 * mean([pseudodiff[1,2], pseudodiff[2,1]])
     
-    X, Y, null, R, Theta, Lat, Lon, K, pseudodiff = kernelpromote(
-        [X, Y, null, R, Theta, Lat, Lon, K, pseudodiff], arraykernel)
+    X, Y, null, R, Theta, Lat, Lon, K, pseudodiff, harmonic, biharmonic = kernelpromote(
+        [X, Y, null, R, Theta, Lat, Lon, K, pseudodiff, harmonic, biharmonic], arraykernel)
 
     # Precompute indices for samesize_conv()
     if iseven(Nx)
@@ -332,7 +332,7 @@ end
 # FastIsostasy
 #########################################################
 """
-    FastIsoTools(Omega::ComputationDomain, c::PhysicalConstants, p::LateralVariability)
+    FastIsoTools(Omega, c, p)
 
 Return a `struct` containing pre-computed tools to perform forward-stepping of the model.
 This includes the Green's functions for the computation of the lithosphere and geoid

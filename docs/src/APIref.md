@@ -16,7 +16,8 @@ FastIsoProblem
 ## Mechanics
 
 ```@docs
-solve!
+solve!(::FastIsoProblem)
+init
 step!
 update_diagnostics!
 dudt_isostasy!
@@ -29,7 +30,7 @@ update_elasticresponse!
 InversionConfig
 InversionData
 InversionProblem
-perform
+solve!(::InversionProblem)
 ```
 ## Utils
 
@@ -41,6 +42,7 @@ meshgrid
 scalefactor
 latlon2stereo
 stereo2latlon
+write_out!
 ```
 
 [^Goelzer2020]:

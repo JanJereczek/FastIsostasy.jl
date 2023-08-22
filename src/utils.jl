@@ -62,7 +62,7 @@ function samesize_conv(X::M, Y::M, Omega::ComputationDomain{T, M}, bc::Function
 end
 
 """
-    write_out(fip::FastIsoProblem)
+    write_out!(fip::FastIsoProblem)
 
 Write results in output vectors if the load is updated internally.
 If the load is updated externally, the user is responsible for writing results.
@@ -547,6 +547,12 @@ function kernelpromote(X::Vector{M}, arraykernel) where {M<:AbstractArray{T}} wh
     end
 end
 
+"""
+    reinit_structs_cpu(Omega, p)
+
+Reinitialize `Omega::ComputationDomain` and `p::LateralVariability` on the CPU, mostly
+for post-processing purposes.
+"""
 function reinit_structs_cpu(Omega::ComputationDomain{T, M}, p::LateralVariability{T, M}
     ) where {T<:AbstractFloat, M<:KernelMatrix{T}}
 

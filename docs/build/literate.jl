@@ -103,21 +103,21 @@ end
 
 
 
-using FastIsostasy
-Omega = ComputationDomain(3000e3, 6)
+using FastIsostasy, CairoMakie
+Omega = ComputationDomain(3000e3, 5)
+c = PhysicalConstants()
 lb = [88e3, 180e3, 280e3, 400e3]
 lv = load_wiens2021(Omega)
 p = LateralVariability(Omega, layer_boundaries = lb, layer_viscosities = lv)
-R, H = 2000e3, 1e3
-Hcylinder = uniform_ice_cylinder(Omega, R, H)
-Hice = [Hcylinder for t in t_out]
-t_out = years2seconds.(1_000.0:1_000.0:2_000.0)
-fip = FastIsoProblem(Omega, c, p, t_out, interactive_sealevel, Hice)
+R, H = 1000e3, 1e3
+Hice = uniform_ice_cylinder(Omega, R, H)
+t_out = years2seconds.(1e3:1e3:2e3)
+fip = FastIsoProblem(Omega, c, p, t_out, false, Hice)
 solve!(fip)
 ground_truth = copy(p.effective_viscosity)
 
 config = InversionConfig()
-data = InversionData(t_out, fip.out.u, Hice, config)
+data = InversionData(fip.out.t, fip.out.u, [Hice, Hice, Hice], config)
 paraminv = InversionProblem(Omega, c, p, config, data)
-priors, ukiobj = perform(paraminv)
+priors, ukiobj = solve(paraminv)
 logeta, Gx, e_mean, e_sort = extract_inversion(priors, ukiobj, data)

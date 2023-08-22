@@ -24,13 +24,13 @@ p = LateralVariability(Omega, layer_viscosities = lv, layer_boundaries = lb)
 extrema(p.effective_viscosity)
 ```
 
-As expected, the effective viscosity is a homogeneous field. It corresponds to a nonlinear mean of the layered values provided by the user. Note that we have set \$\ŗho_\mathrm{litho} = 0\$ to prevent the lithosphere from contributing to the hydrostatic, upward force. This is made to comply with the later computed analytical solution, which assumes a purely elastic lithosphere. In reality, this is however arguably wrong and the default choice `c = PhysicalConstants()` therefore uses \$ \ŗho_\mathrm{litho} = 2600 \, \mathrm{kg \, m^{-3}} \$.
+As expected, the effective viscosity is a homogeneous field. It corresponds to a nonlinear mean of the layered values provided by the user. Note that we have set $$\ŗho_{litho} = 0$$ to prevent the lithosphere from contributing to the hydrostatic, upward force. This is made to comply with the later computed analytical solution, which assumes a purely elastic lithosphere. In reality, this is however arguably wrong and the default choice `c = PhysicalConstants()` therefore uses $$\ŗho_{litho} = 2600 \, \mathrm{kg \, m^{-3}}$$.
 
 The next section shows how to use the now obtained `p::LateralVariability` for actual GIA computation.
 
 ## Simple load and geometry
 
-We now apply a constant load, here a cylinder of ice with radius \$ R = 1000 \, \mathrm{km} \$ and thickness \$H = 1 \, \mathrm{km}\$, over `Omega::ComputationDomain` introduced in [Multi-layer Earth](@ref). To formulate the problem conviniently, we use [`FastIsoProblem`](@ref), a struct containing the variables and options that are necessary to perform the integration over time. We can then simply apply `solve!(fip::FastIsoProblem)` to perform the integration of the ODE. Under the hood, the ODE is obtained from the PDE by applying a Fourier collocation scheme contained in [`dudt_isostasy!`](@ref). The integration is performed according to `FastIsoProblem.diffeq::NamedTuple`, which contains the algorithm and optionally tolerances, maximum iteration number... etc.
+We now apply a constant load, here a cylinder of ice with radius $$ R = 1000 \, \mathrm{km} $$ and thickness $$H = 1 \, \mathrm{km}$$, over `Omega::ComputationDomain` introduced in [Multi-layer Earth](@ref). To formulate the problem conviniently, we use [`FastIsoProblem`](@ref), a struct containing the variables and options that are necessary to perform the integration over time. We can then simply apply `solve!(fip::FastIsoProblem)` to perform the integration of the ODE. Under the hood, the ODE is obtained from the PDE by applying a Fourier collocation scheme contained in [`dudt_isostasy!`](@ref). The integration is performed according to `FastIsoProblem.diffeq::NamedTuple`, which contains the algorithm and optionally tolerances, maximum iteration number... etc.
 
 ```@example MAIN
 using CairoMakie
@@ -59,7 +59,7 @@ end
 plot3D(fip, [lastindex(t_out) ÷ 2, lastindex(t_out)])
 ```
 
-... and here goes the total displacement at \$t = 50 \, \mathrm{kyr}\$. You can now access the elastic and viscous displacement at time `t_out[k]` by respectively calling `fip.out.ue[k]` and `fip.out.u[k]`. For the present case, the latter can be compared to an analytic solution that is known for this particular case. Let's look at the accuracy of our numerical scheme over time by running following plotting commands:
+... and here goes the total displacement at $$t = 50 \, \mathrm{kyr}$$. You can now access the elastic and viscous displacement at time `t_out[k]` by respectively calling `fip.out.ue[k]` and `fip.out.u[k]`. For the present case, the latter can be compared to an analytic solution that is known for this particular case. Let's look at the accuracy of our numerical scheme over time by running following plotting commands:
 
 ```@example MAIN
 fig = Figure()
@@ -85,11 +85,9 @@ axislegend(ax, position = :rb, nbanks = 2, patchsize = (50.0f0, 20.0f0))
 fig
 ```
 
-That looks pretty good! One might however object that the convenience function [`fastisostasy`](@ref) ends up being not so convenient as soon as the ice load changes over time. This case can however be easily handled, as shown in the next section.
+## GPU support
 
-### GPU support
-
-For about $n > 7$, the previous example can be computed even faster by using GPU parallelism. It could not represent less work from the user's perspective, as it boils down to calling [`ComputationDomain`](@ref) with an extra keyword argument and passing it to a `::LateralVariability` with the viscosity and depth values defined earlier:
+For about $$n > 7$$, the previous example can be computed even faster by using GPU parallelism. It could not represent less work from the user's perspective, as it boils down to calling [`ComputationDomain`](@ref) with an extra keyword argument and passing it to a `::LateralVariability` with the viscosity and depth values defined earlier:
 
 ```@example MAIN
 n = 8
@@ -105,6 +103,7 @@ That's it, nothing more! For postprocessing, consider using [`reinit_structs_cpu
 
 !!! info "Only CUDA supported!"
     For now only Nvidia GPUs are supported and there is no plan of extending this compatibility at this point.
+
 
 ## Make your own time loop
 
@@ -132,8 +131,9 @@ plot3D(fip, [lastindex(t_out) ÷ 2, lastindex(t_out)])
     handle the rest.
 
 !!! info "GPU not supported"
-    [`step!`] does not support GPU computation so far. Make sure your model is initialized
-    on CPU!
+    [`step!`](@ref) does not support GPU computation so far. Make sure your model is initialized
+    on CPU.
+
 ## Antarctic deglaciation
 
 We now want to provide an example that presents:
@@ -146,10 +146,7 @@ We now want to provide an example that presents:
 For this we run a deglaciation of Antarctica with lithospheric thickness and upper-mantle viscosity from [^Wiens2021] and the ice thickness history from [^Briggs2014]. Since the load is known and the isostatic response does not influence it (one-way coupling), we can provide snapshots of the ice thickness and their associated time to [`FastIsoProblem`](@ref). Under the hood, an interpolator is created and called within the time integration. 
 
 ```@example MAIN
-W = 3000e3      # (m) half-width of the domain
-n = 7           # implies an NxN grid with N = 2^n = 128.
-Omega = ComputationDomain(W, n)
-c = PhysicalConstants()
+# Code is coming soon!
 ```
 
 ## Inversion of viscosity field
@@ -164,7 +161,7 @@ lv = load_wiens2021(Omega)
 p = LateralVariability(Omega, layer_boundaries = lb, layer_viscosities = lv)
 ```
 
-To make this problem more exciting, we shift the center of the ice load to \$ (-1000, -1000) \, \mathrm{km} \$ where the viscosity field displays a less uniform structure. For the sake of simplicity, the data to fit is obtained from a FastIsostasy simulation with the ground-truth viscosity field.
+To make this problem more exciting, we shift the center of the ice load to $$ (-1000, -1000) \: \mathrm{km} $$ where the viscosity field displays a less uniform structure. For the sake of simplicity, the data to fit is obtained from a FastIsostasy simulation with the ground-truth viscosity field.
 
 ```@example MAIN
 R, H = 1000e3, 1e3
@@ -172,7 +169,7 @@ Hice = uniform_ice_cylinder(Omega, R, H, center = [-1000e3, -1000e3])
 t_out = years2seconds.(1e3:1e3:2e3)
 fip = FastIsoProblem(Omega, c, p, t_out, false, Hice)
 solve!(fip)
-ground_truth = copy(p.effective_viscosity)
+true_viscosity = copy(p.effective_viscosity);
 ```
 
 Now that we have the displacement field, we can recover the viscosity field from which it results. We therefore pass an [`InversionConfig`](@ref) and an [`InversionData`](@ref) to an [`InversionProblem`](@ref). Let's look at the initialized viscosity field:
@@ -183,16 +180,15 @@ data = InversionData(copy(fip.out.t[2:end]), copy(fip.out.u[2:end]), copy([Hice,
 paraminv = InversionProblem(deepcopy(fip), config, data)
 
 function plot_viscfields(paraminv)
-    logeta, Gx, abserror = extract_inversion(paraminv)
-    p_estim = copy(ground_truth)
-    p_estim[paraminv.data.idx] .= 10 .^ logeta
+    estim_viscosity = copy(true_viscosity)
+    estim_viscosity[paraminv.data.idx] .= 10 .^ get_ϕ_mean_final(paraminv.priors, paraminv.ukiobj)
 
     cmap = cgrad(:jet, rev = true)
     crange = (20, 21.2)
     fig = Figure()
     axs = [Axis(fig[1,i], aspect = DataAspect()) for i in 1:2]
-    heatmap!(axs[1], log10.(ground_truth), colormap = cmap, colorrange = crange)
-    heatmap!(axs[2], log10.(p_estim), colormap = cmap, colorrange = crange)
+    heatmap!(axs[1], log10.(true_viscosity), colormap = cmap, colorrange = crange)
+    heatmap!(axs[2], log10.(estim_viscosity), colormap = cmap, colorrange = crange)
     Colorbar(fig[2, :], vertical = false, colormap = cmap, colorrange = crange,
         width = Relative(0.5))
     return fig

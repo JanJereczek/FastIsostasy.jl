@@ -56,7 +56,7 @@ export maxwelltime_scaling!, compute_shearmodulus
 export get_r, gauss_distr, samesize_conv
 export uniform_ice_cylinder, stereo_ice_cylinder, stereo_ice_cap
 export quadrature1D, get_quad_coeffs, get_elasticgreen
-export write_out!, remake!
+export write_out!, remake!, reinit_structs_cpu
 
 
 # derivatives.jl
@@ -83,5 +83,8 @@ export analytic_solution
 
 # data loaders
 export load_spada2011, load_latychev2023, load_wiens2021
+
+# EnsembleKalmanProcesses
+export get_ϕ_mean_final
 
 end
