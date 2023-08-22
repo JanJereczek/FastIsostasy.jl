@@ -118,6 +118,6 @@ ground_truth = copy(p.effective_viscosity)
 
 config = InversionConfig()
 data = InversionData(t_out, fip.out.u, Hice, config)
-paraminv = ParamInversion(Omega, c, p, config, data)
+paraminv = InversionProblem(Omega, c, p, config, data)
 priors, ukiobj = perform(paraminv)
 logeta, Gx, e_mean, e_sort = extract_inversion(priors, ukiobj, data)

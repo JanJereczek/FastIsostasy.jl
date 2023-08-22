@@ -9,23 +9,31 @@ iterations n
 """
     InversionConfig
 
-Struct containing configuration parameters for a [`ParamInversion`].
+Struct containing configuration parameters for a [`InversionProblem`].
+
+Need to choose regularization factor α ∈ (0,1],  
+When you have enough observation data α=1: no regularization
+
+update_freq 1 : approximate posterior cov matrix with an uninformative prior
+            0 : weighted average between posterior cov matrix with an uninformative prior and prior
 """
 Base.@kwdef struct InversionConfig
     case::String = "viscosity"
     method::Any = Unscented
     paramspriors::NamedTuple = defaultpriors(case)
-    N_iter::Int = 20         # 20
+    N_iter::Int = 20            # 20
     α_reg::Real = 1.0
-    update_freq::Int = 1
-    n_samples::Int = 20     # 100
+    update_freq::Int = 1        # 1
+    n_samples::Int = 100        # 100
     scale_obscov::Real = 10000.0
 end
+
+
 
 """
     InversionData
 
-Struct containing data (either observational or output of a golden standard model) for a [`ParamInversion`].
+Struct containing data (either observational or output of a golden standard model) for a [`InversionProblem`].
 """
 struct InversionData{T<:AbstractFloat, M<:Matrix{T}}
     t::Vector{T}        # Time vector
@@ -61,31 +69,51 @@ function InversionData(t, U, Hice, config; Htol::Real = 1.0)   # Hwater
 end
 
 """
-    ParamInversion
+    InversionProblem
 
 Struct containing variables and configs for the inversion of
 Solid-Earth parameter fields. For now, only viscosity can be inverted but future
 versions will support lithosphere rigidity. For now, the unscented Kalman inversion
 is the only method available but ensemble Kalman inversion will be available in future.
 """
-struct ParamInversion{T<:AbstractFloat, M<:Matrix{T}}
+struct InversionProblem{T<:AbstractFloat, M<:Matrix{T}}
     fip::FastIsoProblem{T, M}
     config::InversionConfig
     data::InversionData{T, M}
-    μ_y::Vector{T}
-    Σ_y::M
+    priors::ParameterDistribution
+    ukiobj::EnsembleKalmanProcess{T, Int64, Unscented{T, Int64}, DefaultScheduler{T}}
+    error::Vector{T}
+    G_ens::M
 end
 
-function ParamInversion(
-    fip::FastIsoProblem{T, M},
-    config::InversionConfig,
-    data::InversionData{T, M},
-) where {T<:AbstractFloat, M<:Matrix{T}}
+function InversionProblem(fip::FastIsoProblem{T, M}, config::InversionConfig,
+    data::InversionData{T, M}) where {T<:AbstractFloat, M<:Matrix{T}}
+    
     # Generating noisy observations
     μ_y = zeros(data.nobs)
     loadscaling_obscov = vcat( [H[data.idx] for H in data.Hice]... )
     Σ_y = uncorrelated_obs_covariance(config.scale_obscov, loadscaling_obscov)
-    return ParamInversion(fip, config, data, μ_y, Σ_y)
+    yn = zeros(T, data.nobs, config.n_samples)
+    @inbounds for j in 1:config.n_samples
+        yn[:, j] = data.y .+ rand(MvNormal(μ_y, Σ_y))
+    end
+    ynoisy = Observations.Observation(yn, Σ_y, ["Noisy truth"])
+
+    # Defining priors
+    priors = combine_distributions([constrained_gaussian( "p_$(i)",
+        config.paramspriors.mean, config.paramspriors.var,
+        config.paramspriors.lowerbound, config.paramspriors.upperbound)
+        for i in 1:data.nparams])
+
+    # Init process and arrays
+    process = Unscented(mean(priors), cov(priors);  # Could also use process = Inversion()
+        α_reg = config.α_reg, update_freq = config.update_freq)
+    ukiobj = EnsembleKalmanProcess(ynoisy.mean, ynoisy.obs_noise_cov, process)
+    error = fill(T(Inf), config.N_iter)
+    ϕ_tool = get_ϕ_final(priors, ukiobj)       # Params in physical/constrained space
+    G_ens = zeros(T, data.nobs, size(ϕ_tool, 2))
+
+    return InversionProblem(fip, config, data, priors, ukiobj, error, G_ens)
 
 end
 
@@ -103,66 +131,52 @@ function defaultpriors(case)
 end
 
 """
-    perform(paraminv::ParamInversion)
+    solve!(paraminv::InversionProblem)
 
 Return `priors` and `ukiobj` that allow to extract the results of the parameter
 inversion as initialized in `paraminv`.
 """
-function perform(paraminv::ParamInversion{T, M}) where {T<:AbstractFloat, M<:Matrix{T}}
-    config, data = paraminv.config, paraminv.data
-    yn = zeros(T, data.nobs, config.n_samples)
-    println("Generating the perturbed ensemble...")
-    @inbounds for j in 1:config.n_samples
-        yn[:, j] = data.y .+ rand(MvNormal(paraminv.μ_y, paraminv.Σ_y))
-    end
-    ynoisy = Observations.Observation(yn, paraminv.Σ_y, ["Noisy truth"])
-
-    println("Defining priors...")
-    priors = combine_distributions([constrained_gaussian( "p_$(i)",
-        config.paramspriors.mean, config.paramspriors.var,
-        config.paramspriors.lowerbound, config.paramspriors.upperbound)
-        for i in 1:data.nparams])
-
-    println("Inititializing iteration loop...")
-    # Here we also could use process = Inversion()
-    process = Unscented(mean(priors), cov(priors);
-        α_reg = config.α_reg, update_freq = config.update_freq)
-    ukiobj = EnsembleKalmanProcess(ynoisy.mean, ynoisy.obs_noise_cov, process)
-    err = zeros(T, config.N_iter)
-    ϕ_n = get_ϕ_final(priors, ukiobj)       # Params in physical/constrained space
-    G_ens = zeros(T, data.nobs, size(ϕ_n, 2))
+function solve!(paraminv::InversionProblem{T, M}; verbose::Bool = false) where
+    {T<:AbstractFloat, M<:Matrix{T}}
     
-    for n in 1:config.N_iter
-        println("Populating G matrix...")
-        for j in axes(ϕ_n, 2)
-            if rem(j, 10) == 0
-                println("n = $n, j = $j")
+    for n in 1:paraminv.config.N_iter
+
+        # Get params in physical/constrained space
+        ϕ_n = get_ϕ_final(paraminv.priors, paraminv.ukiobj)
+
+        @inbounds for j in axes(ϕ_n, 2)
+            if verbose && (rem(j, 10) == 0)
+                println("Populating ensemble displacement matrix at n = $n, j = $j")
             end
-            G_ens[:, j] = forward_fastiso(ϕ_n[:, j], paraminv)
+            paraminv.G_ens[:, j] = forward_fastiso(ϕ_n[:, j], paraminv)
         end
-        EnsembleKalmanProcesses.update_ensemble!(ukiobj, G_ens)
-        err[n] = get_error(ukiobj)[end]
-        print_kalmanprocess_evolution(paraminv, n, ϕ_n, err[n], ukiobj.process.uu_cov[n])
-        ϕ_n .= get_ϕ_final(priors, ukiobj)
+
+        if verbose 
+            println("Extrema of ensemble displacement matrix: $(extrema(paraminv.G_ens))")
+        end
+
+        EnsembleKalmanProcesses.update_ensemble!(paraminv.ukiobj, paraminv.G_ens)
+        paraminv.error[n] = get_error(paraminv.ukiobj)[end]
+        print_inversion_evolution(paraminv, n, ϕ_n)
     end
-    return priors, ukiobj
+    return nothing
 end
 
-function forward_fastiso(optimparams::Vector, paraminv::ParamInversion)
-    dummyfip = paraminv.fip
-    remake!(dummyfip)
+function forward_fastiso(optimparams::Vector{T}, paraminv::InversionProblem{T, M}) where
+    {T<:AbstractFloat, M<:Matrix{T}}
+    remake!(paraminv.fip)
     config, data = paraminv.config, paraminv.data
     if config.case == "viscosity"
-        dummyfip.p.effective_viscosity[data.idx] .= 10.0 .^  optimparams
+        paraminv.fip.p.effective_viscosity[data.idx] .= 10.0 .^  optimparams
     elseif config.case == "rigidity"
-        dummyfip.p.lithosphere_rigidity[data.idx] .=  optimparams
+        paraminv.fip.p.lithosphere_rigidity[data.idx] .=  optimparams
     elseif config.case == "both"
-        dummyfip.p.effective_viscosity[data.idx] .= 10.0 .^  optimparams[1:mparams]
-        dummyfip.p.lithosphere_rigidity[data.idx] .=  optimparams[mparams+1:end]
+        paraminv.fip.p.effective_viscosity[data.idx] .= 10.0 .^  optimparams[1:mparams]
+        paraminv.fip.p.lithosphere_rigidity[data.idx] .=  optimparams[mparams+1:end]
     end
-    solve!(dummyfip)
+    solve!(paraminv.fip)
     # results taken from k=2 onwards because k=1 returns the solution at time t=0.
-    return vcat([reshape(u[data.idx], data.nparams) for u in  dummyfip.out.u[2:end]]...)
+    return vcat([reshape(u[data.idx], data.nparams) for u in  paraminv.fip.out.u[2:end]]...)
 end
 
 """
@@ -184,18 +198,22 @@ end
 function correlated_obs_covariance()
 end
 
-function print_kalmanprocess_evolution(paraminv, n, ϕ_n, err_n, cov_n)
+function print_inversion_evolution(paraminv, n, ϕ_n)
+    err_n = paraminv.error[n]
+    cov_n = paraminv.ukiobj.process.uu_cov[n]
+
     println("------------------")
-    println("size: $(size(ϕ_n))")
+    println("Ensemble size: $(size(ϕ_n))")
+    println("Iteration: $n, Error: $err_n, norm(Cov): $(norm(cov_n))")
     if paraminv.config.case == "viscosity" || paraminv.config.case == "rigidity"
-        println("mean $(paraminv.config.case): $(mean(ϕ_n))")
+        println("Mean $(paraminv.config.case): $(round(mean(ϕ_n), digits = 4))")
+        println("Extrema of $(paraminv.config.case): $(extrema(ϕ_n))")
     elseif paraminv.config.case == "both"
         m = paraminv.data.nparams ÷ 2
         meanvisc = round( mean(ϕ_n[1:m, :]), digits = 4)
         meanrigd = round( mean(ϕ_n[m+1:end, :]), digits = 4)
-        println("mean viscosity: $meanvisc,  mean rigidity: $meanrigd")
+        println("Mean viscosity: $meanvisc,  mean rigidity: $meanrigd")
     end
-    println("Iteration: $n, Error: $err_n, norm(Cov): $(norm(cov_n))")
     return nothing
 end
 
@@ -203,12 +221,11 @@ end
     extract_inversion()
 
 Extract results of parameter inversion from the `priors` and `ukiobj` that
-resulted from `perform!(paraminv::ParamInversion)`.
+resulted from `solve!(paraminv::InversionProblem)`.
 """
-function extract_inversion(priors, ukiobj, data::InversionData)
-    p = get_ϕ_mean_final(priors, ukiobj)
-    Gx = get_g_mean_final(ukiobj)
-    e_mean = mean(abs.(data.y - Gx))
-    e_sort = sort(abs.(data.y - Gx))
-    return p, Gx, e_mean, e_sort
+function extract_inversion(paraminv::InversionProblem)
+    p = get_ϕ_mean_final(paraminv.priors, paraminv.ukiobj)
+    Gx = get_g_mean_final(paraminv.ukiobj)
+    abserror = abs.(paraminv.data.y - Gx)
+    return p, Gx, abserror
 end

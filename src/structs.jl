@@ -13,6 +13,9 @@ mutable struct PreAllocated{T<:AbstractFloat, M<:KernelMatrix{T}}
     uyy::M
     ux::M
     uxy::M
+    Mxx::M
+    Myy::M
+    Mxy::M
     Mxxxx::M
     Myyyy::M
     Mxyx::M
@@ -490,7 +493,7 @@ function FastIsoProblem(
     Hice_snapshots::Vector{<:KernelMatrix{T}},
     t_eta_snapshots::Vector{T},
     eta_snapshots::Vector{<:KernelMatrix{T}};
-    diffeq::NamedTuple = (alg = BS3(), reltol = 1e-3),
+    diffeq::NamedTuple = (alg = Tsit5(), reltol = 1e-3),
     verbose::Bool = false,
     internal_loadupdate::Bool = true,
     neglect_litho_gradients::Bool = false,
@@ -561,6 +564,8 @@ function remake!(fip::FastIsoProblem)
     fip.geostate.b = fip.refgeostate.b
     fip.geostate.countupdates = 0
 
-    fip.out
+    out = init_results(fip.Omega, fip.out.t)
+    fip.out.u = out.u
+    fip.out.ue = out.ue
     return nothing
 end

@@ -614,20 +614,18 @@ end
 #####################################################
 # Example utils
 #####################################################
-function mask_disc(X::KernelMatrix{T}, Y::KernelMatrix{T}, R::T) where {T<:AbstractFloat}
-    return mask_disc(sqrt.(X.^2 + Y.^2), R)
+function mask_disc(X::KernelMatrix{T}, Y::KernelMatrix{T}, R::T;
+    center::Vector{<:Real}) where {T<:AbstractFloat}
+    return mask_disc(sqrt.((X .- center[1]) .^ 2 + (Y .- center[2]) .^ 2), R)
 end
 
 function mask_disc(r::KernelMatrix{T}, R::T) where {T<:AbstractFloat}
     return T.(r .< R)
 end
 
-function uniform_ice_cylinder(
-    Omega::ComputationDomain,
-    R::T,
-    H::T,
-) where {T<:AbstractFloat}
-    M = mask_disc(Omega.X, Omega.Y, R)
+function uniform_ice_cylinder(Omega::ComputationDomain, R::T, H::T;
+    center::Vector{<:Real} = [0.0, 0.0]) where {T<:AbstractFloat}
+    M = mask_disc(Omega.X, Omega.Y, R, center = center)
     return M .* H
 end
 

@@ -28,7 +28,7 @@ update_elasticresponse!
 ```@docs
 InversionConfig
 InversionData
-ParamInversion
+InversionProblem
 perform
 ```
 ## Utils

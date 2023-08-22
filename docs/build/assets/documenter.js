@@ -116,8 +116,8 @@ function copyToClipboard(text) {
         document.execCommand("copy");
 
         resolve();
-      } catch (err) {
-        reject(err);
+      } catch (error) {
+        reject(error);
       } finally {
         document.body.removeChild(el);
       }

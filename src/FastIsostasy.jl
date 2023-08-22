@@ -76,7 +76,7 @@ export columnanom_load, correct_surfacedisctortion, columnanom_full
 export columnanom_ice, columnanom_water
 
 # inversion.jl
-export InversionConfig, InversionData, ParamInversion, perform, extract_inversion
+export InversionConfig, InversionData, InversionProblem, solve, extract_inversion
 
 # analytic solutions
 export analytic_solution

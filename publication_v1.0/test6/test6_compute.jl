@@ -28,7 +28,7 @@ function main(; n=5)
     tinv = t_out[2:end]
     Hice = [Hcylinder for t in tinv]
     Y = results.u_out[2:end]
-    paraminv = ParamInversion(Omega, c, p, tinv, Y, Hice)
+    paraminv = InversionProblem(Omega, c, p, tinv, Y, Hice)
     priors, ukiobj = perform(paraminv)
     logeta, Gx, e_mean, e_sort = extract_inversion(priors, ukiobj, paraminv)
 

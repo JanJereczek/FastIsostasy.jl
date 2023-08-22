@@ -8,6 +8,7 @@ Solve the isostatic adjustment problem defined in `fip::FastIsoProblem`.
 """
 function solve!(fip::FastIsoProblem{T, M}) where {T<:AbstractFloat, M<:KernelMatrix{T}}
 
+    # println(extrema(fip.p.effective_viscosity))
     t1 = time()
     if !(fip.internal_loadupdate)
         error("`solve!` does not support external updating of the load. Use `step!` instead.")
@@ -27,13 +28,13 @@ function solve!(fip::FastIsoProblem{T, M}) where {T<:AbstractFloat, M<:KernelMat
         if fip.diffeq.alg != SimpleEuler()
             prob = remake(dummy, u0 = fip.geostate.u, tspan = (t_out[k-1], t_out[k]), p = fip)
             sol = solve(prob, fip.diffeq.alg, reltol=fip.diffeq.reltol)
-            fip.geostate.dudt = sol(t_out[k], Val{1})
         else
             @inbounds for t in t_out[k-1]:fip.diffeq.dt:t_out[k]
                 update_diagnostics!(fip.geostate.dudt, fip.geostate.u, fip, t)
                 simple_euler!(fip.geostate.u, fip.geostate.dudt, fip.diffeq.dt)
             end
         end
+        fip.geostate.dudt = sol(t_out[k], Val{1})
         write_out!(fip, k)
     end
 
@@ -117,15 +118,16 @@ function dudt_isostasy!(dudt::M, u::M, fip::FastIsoProblem{T, M}, t::T) where
         P.rhs -= fip.p.litho_rigidity .* real.( fip.tools.pifft * biharmonic_u )
     else
         update_second_derivatives!(P.uxx, P.uyy, P.ux, P.uxy, u, Omega)
-        Mxx = - fip.p.litho_rigidity .* (P.uxx + fip.p.litho_poissonratio .* P.uyy)
-        Myy = - fip.p.litho_rigidity .* (P.uyy + fip.p.litho_poissonratio .* P.uxx)
-        Mxy = - fip.p.litho_rigidity .* (1 - fip.p.litho_poissonratio) .* P.uxy
-        update_second_derivatives!(P.Mxxxx, P.Myyyy, P.Mxyx, P.Mxyxy, Mxx, Myy, Mxy, Omega)
+        P.Mxx .= - fip.p.litho_rigidity .* (P.uxx + fip.p.litho_poissonratio .* P.uyy)
+        P.Myy .= - fip.p.litho_rigidity .* (P.uyy + fip.p.litho_poissonratio .* P.uxx)
+        P.Mxy .= - fip.p.litho_rigidity .* (1 - fip.p.litho_poissonratio) .* P.uxy
+        update_second_derivatives!(P.Mxxxx, P.Myyyy, P.Mxyx, P.Mxyxy, P.Mxx, P.Myy,
+            P.Mxy, Omega)
         P.rhs += P.Mxxxx + P.Myyyy + 2 .* P.Mxyxy
     end
     # dudt[:, :] .= real.(fip.tools.pifft * ((fip.tools.pfft * rhs) ./
     #     Omega.pseudodiff)) ./ (2 .* fip.p.effective_viscosity)
-    dudt = real.(fip.tools.pifft * ((fip.tools.pfft * (P.rhs ./ 
+    dudt .= real.(fip.tools.pifft * ((fip.tools.pfft * (P.rhs ./ 
         (2 .* fip.p.effective_viscosity)) ) ./ Omega.pseudodiff))
     return nothing
 end
