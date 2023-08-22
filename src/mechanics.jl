@@ -60,10 +60,12 @@ function step!(fip::FastIsoProblem{T, M}, ode::CoupledODEs,
     tspan::Tuple{T, T}) where {T<:AbstractFloat, M<:Matrix{T}}
 
     fip.out.computation_time -= time()
-    dt = tspan[2] - tspan[1]    X, t = trajectory(ode, dt, fip.geostate.u; t0 = tspan[1], Δt = dt)
+    dt = tspan[2] - tspan[1]
+    X, t = trajectory(ode, dt, fip.geostate.u; t0 = tspan[1], Δt = dt)
     fip.geostate.u .= reshape(X[2, :], fip.Omega.Nx, fip.Omega.Ny)
     update_diagnostics!(fip.geostate.dudt, fip.geostate.u, fip, t[2])
     fip.out.computation_time += time()
+    return nothing
 end
 
 """
