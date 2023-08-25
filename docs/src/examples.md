@@ -167,9 +167,10 @@ To make this problem more exciting, we shift the center of the ice load to $$ (-
 R, H = 1000e3, 1e3
 Hice = uniform_ice_cylinder(Omega, R, H, center = [-1000e3, -1000e3])
 t_out = years2seconds.(1e3:1e3:2e3)
+
+true_viscosity = copy(p.effective_viscosity)
 fip = FastIsoProblem(Omega, c, p, t_out, false, Hice)
 solve!(fip)
-true_viscosity = copy(p.effective_viscosity);
 ```
 
 Now that we have the displacement field, we can recover the viscosity field from which it results. We therefore pass an [`InversionConfig`](@ref) and an [`InversionData`](@ref) to an [`InversionProblem`](@ref). Let's look at the initialized viscosity field:

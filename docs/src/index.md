@@ -11,11 +11,11 @@ FastIsostasy relies on a hybrid Fourier/finite-difference collocation of the pro
 
 ## Getting started
 
-FastIsostasy.jl is work under devlopment and is not a registered julia package yet. To install it, please run:
+FastIsostasy.jl is a registered julia package. To install it, please run:
 
 ```julia
 using Pkg
-Pkg.add("https://github.com/JanJereczek/FastIsostasy.jl")
+Pkg.add("FastIsostasy")
 ```
 
 ## How to read the docs?

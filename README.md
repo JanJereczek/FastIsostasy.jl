@@ -11,11 +11,11 @@ FastIsostasy relies on a hybrid Fourier/finite-difference collocation of the pro
 
 ## Getting started
 
-FastIsostasy.jl is work under devlopment and is not a registered julia package yet. To install it, please run:
+FastIsostasy.jl is a registered julia package. To install it, please run:
 
 ```julia
 using Pkg
-Pkg.add("https://github.com/JanJereczek/FastIsostasy.jl")
+Pkg.add("FastIsostasy")
 ```
 
 ## Example
@@ -27,4 +27,4 @@ The animation above depicts:
 - **(b)** The displacement rate of the bedrock resulting from changes in the ice load.
 - **(c)** The total displacement obtained by integrating the rate.
 
-This computation is performed with a time step of $$ \mathrm{dt} = 1 \mathrm{yr}$$ and $$N_{x} = N_{y} = 128 $$. Without any parallelization, it is a matter of minutes on a modern machine and only requires few lines of code. For more details, see the [docs](https://janjereczek.github.io/FastIsostasy.jl/dev/).
+This computation is performed with a time step of $\mathrm{dt} = 1 \mathrm{yr}$ and $N_{x} = N_{y} = 128$. Without any parallelization, it is a matter of minutes on a modern machine and only requires few lines of code. For more details, see the [docs](https://janjereczek.github.io/FastIsostasy.jl/dev/).
