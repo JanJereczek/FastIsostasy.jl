@@ -90,7 +90,7 @@ function ComputationDomain(
     Ny::Int;
     bc!::Function = corner_bc!,
     use_cuda::Bool = false,
-    lat0::T = T(-71.0),
+    lat0::T = T(-90.0),
     lon0::T = T(0.0),
     projection_correction::Bool = true,
 ) where {T<:AbstractFloat}
@@ -160,7 +160,7 @@ All constants are given in SI units (kilogram, meter, second).
 """
 Base.@kwdef struct PhysicalConstants{T<:AbstractFloat}
     mE::T = 5.972e24                        # Earth's mass (kg)
-    r_equator::T = 6.371e6                  # Earth radius at equator (m)
+    r_equator::T = 6371e3                  # Earth radius at equator (m)
     r_pole::T = 6.357e6                     # Earth radius at pole (m)
     A_ocean::T = 3.625e14                   # Ocean surface (m) as in Goelzer (2020) before Eq. (9)
     g::T = 9.8                              # Mean Earth acceleration at surface (m/s^2)
