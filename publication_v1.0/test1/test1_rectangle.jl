@@ -14,7 +14,7 @@ function main(
     W = T(3000e3)               # half-length of the square domain (m)
     Omega = ComputationDomain(W, W, Nx, Ny, use_cuda = use_cuda)
     c = PhysicalConstants()
-    p = LateralVariability(Omega)
+    p = LayeredEarth(Omega)
 
     kernel = use_cuda ? "gpu" : "cpu"
     println("Computing on $kernel and $(Omega.Ny) x $(Omega.Nx) grid...")

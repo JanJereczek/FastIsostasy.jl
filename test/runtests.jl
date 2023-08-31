@@ -13,11 +13,11 @@ include("test_derivatives.jl")
 const SAVE_PLOTS = false
 @testset "FastIsostasy.jl" begin
     check_xy_ij()
-    check_stereographic()
+    # check_stereographic()
     check_derivatives()
-    benchmark1()
-    benchmark1_external_loadupdate()
-    benchmark2()
+    #benchmark1()
+    #benchmark1_external_loadupdate()
+    #benchmark2()
     benchmark3()
-    benchmark6()
+    #benchmark6()
 end

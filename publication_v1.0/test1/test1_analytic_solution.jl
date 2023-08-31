@@ -19,9 +19,9 @@ function main(
     c = PhysicalConstants()
     if occursin("2layers", case)
         lv = [1e21, 1e21]
-        p = LateralVariability(Omega, layer_viscosities = lv)
+        p = LayeredEarth(Omega, layer_viscosities = lv)
     elseif occursin("3layers", case)
-        p = LateralVariability(Omega)
+        p = LayeredEarth(Omega)
     end
 
     timespan = years2seconds.([0.0, 5e4])           # (yr) -> (s)

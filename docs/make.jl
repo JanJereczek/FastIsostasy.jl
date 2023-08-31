@@ -1,19 +1,24 @@
 # Standard stuff
 cd(@__DIR__)
 CI = get(ENV, "CI", nothing) == "true" || get(ENV, "GITHUB_TOKEN", nothing) !== nothing
-using CairoMakie
-using Documenter
+using CairoMakie, Documenter, Literate
 using DocumenterTools: Themes
 ENV["JULIA_DEBUG"] = "Documenter"
 # Packages specific to these docs
 push!(LOAD_PATH, "../")
 using FastIsostasy
 
+Literate.markdown("src/examples/tutorial.jl", "src/examples"; credit = false)
+Literate.markdown("src/examples/deglaciation.jl", "src/examples"; credit = false)
+Literate.markdown("src/examples/inversion.jl", "src/examples"; credit = false)
+
 # %% Build docs
 PAGES = [
     "index.md",
     "introGIA.md",
-    "examples.md",
+    "examples/tutorial.md",
+    "examples/deglaciation.md",
+    "examples/inversion.md",
     "APIref.md",
 ]
 

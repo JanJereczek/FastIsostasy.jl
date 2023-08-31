@@ -3,3 +3,6 @@ plots
 old
 data
 wip
+docs/build/
+docs/src/logo/*
+docs/src/examples/*.md

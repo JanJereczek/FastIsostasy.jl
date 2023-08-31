@@ -10,7 +10,7 @@ end
 n = 7
 Omega = ComputationDomain(3000e3, n, projection_correction = false)
 c = PhysicalConstants()
-p = LateralVariability(Omega)
+p = LayeredEarth(Omega)
 alpha = 10.0                        # max latitude (°) of ice cap
 Hmax = 1500.0
 Hice = stereo_ice_cap(Omega, alpha, Hmax)

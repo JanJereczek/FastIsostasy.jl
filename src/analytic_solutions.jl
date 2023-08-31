@@ -5,7 +5,7 @@ function analytic_solution(
     r::T,
     t::T,
     c::PhysicalConstants,
-    p::LateralVariability,
+    p::LayeredEarth,
     H0::T,
     R0::T,
     domains::Vector{T};
@@ -38,7 +38,7 @@ function analytic_integrand(
     r::T,
     t::T,
     c::PhysicalConstants,
-    p::LateralVariability,
+    p::LayeredEarth,
     R0::T,
 ) where {T<:AbstractFloat}
 
@@ -54,7 +54,7 @@ function equilibrium_integrand(
     kappa::T,
     r::T,
     c::PhysicalConstants,
-    p::LateralVariability,
+    p::LayeredEarth,
     R0::T,
 ) where {T<:AbstractFloat}
     beta = c.rho_uppermantle * c.g + mean(p.litho_rigidity) * kappa ^ 4

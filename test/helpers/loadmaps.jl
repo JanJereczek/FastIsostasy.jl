@@ -77,7 +77,7 @@ function stereographic_projection(
     lat::T,
     lon::T,
     R::T;
-    lat0=T(-71.0),
+    lat0=T(-90.0),
     lon0=T(0.0),
 ) where {T<:Real}
     lat, lon, lat0, lon0 = deg2rad.([lat, lon, lat0, lon0])

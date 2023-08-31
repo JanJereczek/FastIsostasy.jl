@@ -8,7 +8,7 @@ c = PhysicalConstants()
 
 lv = [1e19, 1e21]       # (Pa s)
 lb = [88e3, 400e3]      # (m)
-p = LateralVariability(Omega, layer_viscosities = lv, layer_boundaries = lb)
+p = LayeredEarth(Omega, layer_viscosities = lv, layer_boundaries = lb)
 
 R = 1000e3                  # ice disc radius (m)
 H = 1000.0                  # ice disc thickness (m)
@@ -25,7 +25,7 @@ Omega = ComputationDomain(W, n)
 c = PhysicalConstants()
 lv = [1e19, 1e21]       # (Pa s)
 lb = [88e3, 400e3]      # (m)
-p = LateralVariability(Omega, layer_viscosities = lv, layer_boundaries = lb)
+p = LayeredEarth(Omega, layer_viscosities = lv, layer_boundaries = lb)
 
 R = 1000e3                  # ice disc radius (m)
 H = 1000.0                  # ice disc thickness (m)
@@ -57,7 +57,7 @@ end
 
 Omega = ComputationDomain(3000e3, 6)
 c = PhysicalConstants(rho_litho = 0.0)
-p = LateralVariability(Omega, layer_viscosities = [1e19, 1e21], layer_boundaries = [88e3, 400e3])
+p = LayeredEarth(Omega, layer_viscosities = [1e19, 1e21], layer_boundaries = [88e3, 400e3])
 
 R = 1000e3                  # ice disc radius (m)
 H = 1000.0                  # ice disc thickness (m)
@@ -108,7 +108,7 @@ Omega = ComputationDomain(3000e3, 5)
 c = PhysicalConstants()
 lb = [88e3, 180e3, 280e3, 400e3]
 lv = load_wiens2021(Omega)
-p = LateralVariability(Omega, layer_boundaries = lb, layer_viscosities = lv)
+p = LayeredEarth(Omega, layer_boundaries = lb, layer_viscosities = lv)
 R, H = 1000e3, 1e3
 Hice = uniform_ice_cylinder(Omega, R, H)
 t_out = years2seconds.(1e3:1e3:2e3)

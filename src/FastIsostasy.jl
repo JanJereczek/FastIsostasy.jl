@@ -41,7 +41,7 @@ include("dataloaders.jl")
 # structs.jl
 export KernelMatrix
 export ComputationDomain, PhysicalConstants
-export ReferenceEarthModel, LateralVariability
+export ReferenceEarthModel, LayeredEarth
 export GeoState, RefGeoState
 export FastIsoTools, FastIsoProblem
 

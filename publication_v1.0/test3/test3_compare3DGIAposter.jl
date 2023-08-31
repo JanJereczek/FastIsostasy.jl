@@ -28,7 +28,7 @@ function load_latychev2023(dir::String, idx)
 end
 
 phi = -180:0.1:180
-R = 6.371e6
+R = 6371e3
 r = R .* deg2rad.(phi)
 idx = -1 .< r .< 3e6
 r_plot = r[idx]

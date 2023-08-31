@@ -6,7 +6,7 @@
 KernelMatrix
 ComputationDomain
 PhysicalConstants
-LateralVariability
+LayeredEarth
 RefGeoState
 GeoState
 FastIsoTools

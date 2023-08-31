@@ -2,7 +2,7 @@
 
 julia_version = "1.9.2"
 manifest_format = "2.0"
-project_hash = "26aeace847f7abd843e1133ce419c2a03439bdcc"
+project_hash = "75b06866ed9570a58a5f283592a279412c535422"
 
 [[deps.ANSIColoredPrinters]]
 git-tree-sha1 = "574baf8110975760d391c710b6341da1afa48d8c"
@@ -791,6 +791,12 @@ deps = ["LinearAlgebra", "Mods", "Permutations", "Primes", "SimplePolynomials"]
 git-tree-sha1 = "558a338f1eeabe933f9c2d4052aa7c2c707c3d52"
 uuid = "9b3f67b0-2d00-526e-9884-9e4938f8fb88"
 version = "0.1.12"
+
+[[deps.Literate]]
+deps = ["Base64", "IOCapture", "JSON", "REPL"]
+git-tree-sha1 = "f65966c5518ed2b9db90944d7657c312190854f1"
+uuid = "98b081ad-f1c9-55d3-8b20-4c87d4299306"
+version = "2.14.2"
 
 [[deps.LogExpFunctions]]
 deps = ["DocStringExtensions", "IrrationalConstants", "LinearAlgebra"]

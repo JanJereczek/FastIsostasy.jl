@@ -116,6 +116,7 @@ function ComputationDomain(
 
     # Differential operators in Fourier space
     pseudodiff, harmonic, biharmonic = get_differential_fourier(Wx, Wy, Nx, Ny)
+    # pseudodiff, harmonic, biharmonic = get_differential_fourier(Wx, Wy, Nx, Ny, Mx, My, K)
     # Avoid division by zero. Tolerance ϵ of the order of the neighboring terms.
     # Tests show that it does not lead to errors wrt analytical or benchmark solutions.
     pseudodiff[1, 1] = 1e-3 * mean([pseudodiff[1,2], pseudodiff[2,1]])
@@ -197,7 +198,7 @@ struct ReferenceEarthModel{T<:AbstractFloat}
 end
 
 """
-    LateralVariability(Omega; layer_boundaries, layer_viscosities)
+    LayeredEarth(Omega; layer_boundaries, layer_viscosities)
 
 Return a struct containing all information related to the lateral variability of
 solid-Earth parameters. To initialize with values other than default, run:
@@ -206,7 +207,7 @@ solid-Earth parameters. To initialize with values other than default, run:
 Omega = ComputationDomain(3000e3, 7)
 lb = [100e3, 300e3]
 lv = [1e19, 1e21]
-p = LateralVariability(Omega, layer_boundaries = lb, layer_viscosities = lv)
+p = LayeredEarth(Omega, layer_boundaries = lb, layer_viscosities = lv)
 ```
 
 which initializes a lithosphere of thickness \$T_1 = 100 \\mathrm{km}\$, a viscous
@@ -215,7 +216,7 @@ at \$T_2\$. This represents a homogenous case. For heterogeneous ones, simply ma
 `lb::Vector{Matrix}`, `lv::Vector{Matrix}` such that the vector elements represent the
 lateral variability of each layer on the grid of `Omega::ComputationDomain`.
 """
-mutable struct LateralVariability{T<:AbstractFloat, M<:KernelMatrix{T}}
+mutable struct LayeredEarth{T<:AbstractFloat, M<:KernelMatrix{T}}
     effective_viscosity::M
     litho_thickness::M
     litho_rigidity::M
@@ -242,7 +243,7 @@ layer_boundaries = [88e3, 400e3]
 # layer_viscosities = [1e19, 1e21]u"Pa*s"      # (Bueler 2007, Ivins 2022, Fig 12 WAIS)
 # layer_boundaries = [88e3, 400e3]u"m"
 
-function LateralVariability(
+function LayeredEarth(
     Omega::ComputationDomain{T, M};
     layer_boundaries::A = layer_boundaries,
     layer_viscosities::B = layer_viscosities,
@@ -271,7 +272,7 @@ function LateralVariability(
 
     litho_thickness, litho_rigidity, effective_viscosity = kernelpromote(
         [litho_thickness, litho_rigidity, effective_viscosity], Omega.arraykernel)
-    return LateralVariability(
+    return LayeredEarth(
         effective_viscosity,
         litho_thickness, litho_rigidity, litho_poissonratio,
         mantle_poissonratio, layer_viscosities, layer_boundaries,
@@ -417,12 +418,12 @@ struct SimpleEuler end
 
 Return a struct containing all the other structs needed for the forward integration of the
 model over `Omega::ComputationDomain` with parameters `c::PhysicalConstants` and
-`p::LateralVariability`. The outputs are stored at `t_out::Vector{<:AbstractFloat}`.
+`p::LayeredEarth`. The outputs are stored at `t_out::Vector{<:AbstractFloat}`.
 """
 struct FastIsoProblem{T<:AbstractFloat, M<:KernelMatrix{T}}
     Omega::ComputationDomain{T, M}
     c::PhysicalConstants{T}
-    p::LateralVariability{T, M}
+    p::LayeredEarth{T, M}
     tools::FastIsoTools{T, M}
     refgeostate::RefGeoState{T, M}
     geostate::GeoState{T, M}
@@ -437,7 +438,7 @@ end
 function FastIsoProblem(
     Omega::ComputationDomain{T, M},
     c::PhysicalConstants{T},
-    p::LateralVariability{T, M},
+    p::LayeredEarth{T, M},
     t_out::Vector{<:Real},
     interactive_sealevel::Bool;
     kwargs...,
@@ -452,7 +453,7 @@ end
 function FastIsoProblem(
     Omega::ComputationDomain{T, M},
     c::PhysicalConstants{T},
-    p::LateralVariability{T, M},
+    p::LayeredEarth{T, M},
     t_out::Vector{<:Real},
     interactive_sealevel::Bool,
     Hice::KernelMatrix{T};
@@ -468,7 +469,7 @@ end
 function FastIsoProblem(
     Omega::ComputationDomain{T, M},
     c::PhysicalConstants{T},
-    p::LateralVariability{T, M},
+    p::LayeredEarth{T, M},
     t_out::Vector{<:Real},
     interactive_sealevel::Bool,
     t_Hice_snapshots::Vector{T},
@@ -486,7 +487,7 @@ end
 function FastIsoProblem(
     Omega::ComputationDomain{T, M},
     c::PhysicalConstants{T},
-    p::LateralVariability{T, M},
+    p::LayeredEarth{T, M},
     t_out::Vector{<:Real},
     interactive_sealevel::Bool,
     t_Hice_snapshots::Vector{T},

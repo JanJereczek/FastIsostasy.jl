@@ -19,7 +19,7 @@ function main(
     nu = 0.28
     E = G * 2 * (1 + nu)
     lb = c.r_equator .- [6301e3, 5951e3, 5701e3]
-    p = LateralVariability(
+    p = LayeredEarth(
         Omega,
         layer_boundaries = lb,
         layer_viscosities = [1e21, 1e21, 2e21],

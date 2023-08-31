@@ -22,7 +22,7 @@ function main(n::Int, active_gs::Bool; use_cuda::Bool = false,solver = "SimpleEu
         halfspace_logviscosity,
         dims=3,
     )
-    p = LateralVariability(Omega, layer_boundaries = lb, layer_viscosities = lv)
+    p = LayeredEarth(Omega, layer_boundaries = lb, layer_viscosities = lv)
 
     kernel = use_cuda ? "gpu" : "cpu"
     println("Computing on $kernel and $(Omega.Nx) x $(Omega.Ny) grid...")

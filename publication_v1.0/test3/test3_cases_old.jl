@@ -15,7 +15,7 @@ function choose_case(case::String, Omega::ComputationDomain, c::PhysicalConstant
     #     lb1 = generate_gaussian_field(Omega, 150e3, [0.0, 0.0], -100e3, sigma)
     #     lb2 = fill(250e3, Omega.Nx, Omega.Ny)
     #     lb = cat(lb1, lb2, dims=3)
-    #     p = LateralVariability(Omega, c, layer_boundaries = lb, layer_viscosities = [eta, eta],
+    #     p = LayeredEarth(Omega, c, layer_boundaries = lb, layer_viscosities = [eta, eta],
     #         layer_densities = [rho])
     if case == "gaussian_lo_D"
         lb1 = generate_gaussian_field(Omega, 150e3, [0.0, 0.0], -100e3, sigma)
@@ -26,18 +26,18 @@ function choose_case(case::String, Omega::ComputationDomain, c::PhysicalConstant
         lb = cat(lb1, lb2, lb3, lb4, lb5, dims=3)
         lv = fill(1e21, size(lb))
         maxwelltime_scaling!(lv, lb, prem)
-        p = LateralVariability(Omega, layer_boundaries = lb,
+        p = LayeredEarth(Omega, layer_boundaries = lb,
             layer_viscosities = lv)
     elseif case == "gaussian_hi_D"
         lb1 = generate_gaussian_field(Omega, 150e3, [0.0, 0.0], 100e3, sigma)
         lb2 = fill(250e3, Omega.Nx, Omega.Ny)
         lb = cat(lb1, lb2, dims=3)
-        p = LateralVariability(Omega, layer_boundaries = lb,
+        p = LayeredEarth(Omega, layer_boundaries = lb,
             layer_viscosities = [eta, eta])
     elseif case == "no_litho"
         lb = fill(0.001e3, Omega.Nx, Omega.Ny, 1)
         lv = [eta]
-        p = LateralVariability(Omega, layer_boundaries = lb,
+        p = LayeredEarth(Omega, layer_boundaries = lb,
             layer_viscosities = lv)
     elseif case == "gaussian_lo_η"
         gauss_visc = maxwelltime_scaling * 10.0 .^ generate_gaussian_field(Omega, 21.0, [0.0, 0.0], -1.0, sigma)
@@ -45,7 +45,7 @@ function choose_case(case::String, Omega::ComputationDomain, c::PhysicalConstant
         lb1 = fill(150e3, Omega.Nx, Omega.Ny)
         lb2 = fill(1000e3, Omega.Nx, Omega.Ny)
         lb = cat(lb1, lb2, dims=3)
-        p = LateralVariability(Omega, layer_boundaries = lb,
+        p = LayeredEarth(Omega, layer_boundaries = lb,
             layer_viscosities = lv)
     elseif case == "gaussian_hi_η"
         gauss_visc = maxwelltime_scaling * 10.0 .^ generate_gaussian_field(Omega, 21.0, [0.0, 0.0], 1.0, sigma)
@@ -53,7 +53,7 @@ function choose_case(case::String, Omega::ComputationDomain, c::PhysicalConstant
         lb1 = fill(150e3, Omega.Nx, Omega.Ny)
         lb2 = fill(1000e3, Omega.Nx, Omega.Ny)
         lb = cat(lb1, lb2, dims=3)
-        p = LateralVariability(Omega, layer_boundaries = lb,
+        p = LayeredEarth(Omega, layer_boundaries = lb,
             layer_viscosities = lv)
     end
 

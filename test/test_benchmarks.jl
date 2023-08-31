@@ -19,7 +19,7 @@ end
 
 function benchmark1_constants(Omega)
     c = PhysicalConstants(rho_litho = 0.0)
-    p = LateralVariability(Omega)
+    p = LayeredEarth(Omega)
     R, H = 1000e3, 1e3
     Hcylinder = uniform_ice_cylinder(Omega, R, H)
     t_out = years2seconds.([0.0, 100.0, 500.0, 1500.0, 5000.0, 10_000.0, 50_000.0])
@@ -103,7 +103,7 @@ function benchmark2()
     G, nu = 0.50605e11, 0.28        # shear modulus (Pa) and Poisson ratio of lithsphere
     E = G * 2 * (1 + nu)
     lb = c.r_equator .- [6301e3, 5951e3, 5701e3]
-    p = LateralVariability( Omega, layer_boundaries = lb,
+    p = LayeredEarth( Omega, layer_boundaries = lb,
         layer_viscosities = [1e21, 1e21, 2e21], litho_youngmodulus = E,
         litho_poissonratio = nu )
     t_out = years2seconds.([0.0, 1e3, 2e3, 5e3, 1e4, 1e5])
@@ -214,7 +214,7 @@ function benchmark6()
     c = PhysicalConstants()
     lb = [88e3, 180e3, 280e3, 400e3]
     lv = load_wiens2021(Omega)
-    p = LateralVariability(Omega, layer_boundaries = lb, layer_viscosities = lv)
+    p = LayeredEarth(Omega, layer_boundaries = lb, layer_viscosities = lv)
     R, H = 1000e3, 1e3
     Hice = uniform_ice_cylinder(Omega, R, H, center = [-1000e3, -1000e3])
     t_out = years2seconds.(1e3:1e3:2e3)

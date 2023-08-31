@@ -103,7 +103,7 @@ end
 Convert Euclidean to angular distance along great circle.
 """
 function dist2angulardist(r::Real)
-    R = 6.371e6     # radius at equator
+    R = 6371e3     # radius at equator
     return 2 * atan( r / (2 * R) )
 end
 
@@ -139,7 +139,7 @@ Note: angles must be provided in degrees!
 Reference: John P. Snyder (1987), p. 157, eq. (21-2), (21-3), (21-4).
 """
 function latlon2stereo(lat::T, lon::T, lat0::T, lon0::T;
-    R::T = T(6.371e6), kwargs...) where {T<:Real}
+    R::T = T(6371e3), kwargs...) where {T<:Real}
     lat, lon, lat0, lon0 = deg2rad.([lat, lon, lat0, lon0])
     k = scalefactor(lat, lon, lat0, lon0; kwargs...)
     x = R * k * cos(lat) * sin(lon - lon0)
@@ -169,20 +169,20 @@ Convert stereographic (x,y)-coordinates to latitude-longitude.
 Reference: John P. Snyder (1987), p. 159, eq. (20-14), (20-15), (20-18), (21-15).
 """
 function stereo2latlon(x::T, y::T, lat0::T, lon0::T;
-    R::T = T(6.371e6), k0::T = T(1)) where {T<:Real}
+    R::T = T(6371e3), k0::T = T(1)) where {T<:Real}
     lat0, lon0 = deg2rad.([lat0, lon0])
-    r = get_r(x, y) + 1e-20     # add small tolerance to avoid division by zero
-    c = 2 * atan( r/(2*R*k0) )
+    r = get_r(x, y) + 1e-8      # add small tolerance to avoid division by zero
+    c = 2 * atan(r, 2*R*k0)
     lat = asin( cos(c) * sin(lat0) + y/r * sin(c) * cos(lat0) )
-    lon = lon0 + atan( x*sin(c), (r * cos(lat0) * cos(c) - y * sin(lat0) * sin(c)) )
+    lon = lon0 + atan( x*sin(c), ( - y * sin(lat0) * sin(c)) ) #(r * cos(lat0) * cos(c) - y * sin(lat0) * sin(c)) 
     return rad2deg(lat), rad2deg(lon)
 end
 
-function stereo2latlon(x::KernelMatrix{T}, y::KernelMatrix{T}, lat0::T, lon0::T;
+function stereo2latlon(X::Matrix{T}, Y::Matrix{T}, lat0::T, lon0::T;
     kwargs...) where {T<:Real}
-    Lat, Lon = copy(x), copy(x)
-    @inbounds for idx in CartesianIndices(x)
-        Lat[idx], Lon[idx] = stereo2latlon(x[idx], y[idx], lat0, lon0; kwargs...)
+    Lat, Lon = copy(X), copy(X)
+    @inbounds for idx in CartesianIndices(X)
+        Lat[idx], Lon[idx] = stereo2latlon(X[idx], Y[idx], lat0, lon0; kwargs...)
     end
     return Lat, Lon
 end
@@ -550,14 +550,14 @@ end
 """
     reinit_structs_cpu(Omega, p)
 
-Reinitialize `Omega::ComputationDomain` and `p::LateralVariability` on the CPU, mostly
+Reinitialize `Omega::ComputationDomain` and `p::LayeredEarth` on the CPU, mostly
 for post-processing purposes.
 """
-function reinit_structs_cpu(Omega::ComputationDomain{T, M}, p::LateralVariability{T, M}
+function reinit_structs_cpu(Omega::ComputationDomain{T, M}, p::LayeredEarth{T, M}
     ) where {T<:AbstractFloat, M<:KernelMatrix{T}}
 
     Omega_cpu = ComputationDomain(Omega.Wx, Omega.Wy, Omega.Nx, Omega.Ny, use_cuda = false)
-    p_cpu = LateralVariability(
+    p_cpu = LayeredEarth(
         Omega_cpu;
         layer_boundaries = Array(p.layer_boundaries),
         layer_viscosities = Array(p.layer_viscosities),
