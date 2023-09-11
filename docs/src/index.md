@@ -33,6 +33,8 @@ FastIsostasy.jl was written thanks to the sheer amount of work that people inves
 - [DynamicalSystemsBase.jl](https://github.com/JuliaDynamics/DynamicalSystemsBase.jl)
 - [DSP.jl](https://github.com/JuliaDSP/DSP.jl)
 - [KalmanEnsembleProcesses.jl](https://github.com/CliMA/EnsembleKalmanProcesses.jl)
+- [SpecialFunctions.jl]()
+- And all the fantastic development tools that ease the every-day work so much: [Documenter.jl](), [Literate.jl](), [Test.jl]() as well as [Oceananigans]() for providing a template of how well geoscientific models can actually be documented.
 
 [^Whitehouse2019]:
     Pippa Whitehouse et al. (2019): [Solid Earth change and the evolution of the Antarctic Ice Sheet](https://doi.org/10.1038/s41467-018-08068-y)
