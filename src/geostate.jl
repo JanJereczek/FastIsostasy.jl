@@ -110,10 +110,12 @@ function update_loadcolumns!(fip::FastIsoProblem{T, M}, H_ice::M
     ) where {T<:AbstractFloat, M<:KernelMatrix{T}}
 
     fip.geostate.H_ice .= H_ice
-    # if fip.interactive_sealevel
-    #     fip.geostate.H_water .= max.(fip.geostate.sealevel -
-    #         (fip.geostate.b + H_ice), 0)
-    # end
+    if fip.interactive_sealevel
+        update_mask_grounded!(fip)
+        fip.geostate.H_water .= .!(fip.geostate.maskgrounded) .* fip.geostate.sealevel
+        # fip.geostate.H_water .= max.(fip.geostate.sealevel -
+        #     (fip.geostate.b + H_ice), 0)
+    end
     # update sediment thickness
     return nothing
 end
@@ -135,7 +137,7 @@ Coulon et al. (2021), Figure 1.
 """
 function update_sealevel!(fip::FastIsoProblem{T, M}) where {T<:AbstractFloat, M<:KernelMatrix{T}}
     update_slc!(fip)
-    fip.geostate.sealevel = fip.refgeostate.sealevel .+ 
+    fip.geostate.sealevel .= fip.refgeostate.sealevel .+ 
         fip.geostate.geoid .+ fip.geostate.slc .+
         fip.refgeostate.conservation_term
     return nothing
@@ -158,6 +160,18 @@ function update_slc!(fip::FastIsoProblem{T, M}) where {T<:AbstractFloat, M<:Kern
     return nothing
 end
 
+function height_above_floatation(fip::FastIsoProblem{T, M}) where
+    {T<:AbstractFloat, M<:KernelMatrix{T}}
+    return fip.geostate.H_ice .+ min.(fip.geostate.b .- fip.refgeostate.z0, 0) .*
+        (fip.c.rho_seawater / fip.c.rho_ice)
+end
+
+function update_mask_grounded!(fip::FastIsoProblem{T, M}) where
+    {T<:AbstractFloat, M<:KernelMatrix{T}}
+    fip.geostate.maskgrounded .= height_above_floatation(fip) .> 0
+end
+
+
 """
     update_V_af!(fip::FastIsoProblem)
 
@@ -166,9 +180,7 @@ Note: we do not use eq. (1) as it is only a special case of eq. (13) that does n
 allow a correct representation of external sea-level forcings.
 """
 function update_V_af!(fip::FastIsoProblem{T, M}) where {T<:AbstractFloat, M<:KernelMatrix{T}}
-    fip.geostate.V_af = sum( fip.geostate.H_ice .+
-        min.(fip.geostate.b .- fip.refgeostate.z0, 0) .*
-        (fip.c.rho_seawater / fip.c.rho_ice) .*
+    fip.geostate.V_af = sum( height_above_floatation(fip) .*
         (fip.Omega.dx * fip.Omega.dy) ./ (fip.Omega.K .^ 2) )
     return nothing
 end

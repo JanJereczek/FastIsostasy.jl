@@ -57,7 +57,7 @@ function mainplot(n, heterogeneous)
         title1 = L"Gaussian decrease of viscosity $\,$"
         title2 = L"Gaussian increase of viscosity $\,$"
     elseif heterogeneous == "none"
-        seakon_files = ["E0L4V4", "E0L4V4"]
+        seakon_files = ["E0L4V4", "E0L0V1"]
         fastiso_files = ["ref_$suffix.jld2", "no_litho_$suffix.jld2"]
         elims = (-20, 45)
         title1 = L"Homogeneous PREM configuration $\,$"

@@ -345,7 +345,6 @@ end
 #     return mean(prem.density[idx])
 # end
 
-
 function equilazation_layer()
 
 end
