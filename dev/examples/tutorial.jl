@@ -44,7 +44,7 @@ p = LayeredEarth(Omega, layer_viscosities = lv, layer_boundaries = lb)
 extrema(p.effective_viscosity)
 
 #=
-As expected, the effective viscosity is a homogeneous field. It corresponds to a nonlinear mean of the layered values provided by the user. Note that we have set $$\ŗho_{litho} = 0$$ to prevent the lithosphere from contributing to the hydrostatic, upward force. This is made to comply with the later computed analytical solution, which assumes a purely elastic lithosphere that does not generate a hydrostatic upward force when displaced. In reality, this is arguably wrong and the default choice `c = PhysicalConstants()` therefore uses $$\ŗho_{litho} = 2600 \, \mathrm{kg \, m^{-3}}$$.
+As expected, the effective viscosity is a homogeneous field. It corresponds to a nonlinear mean of the layered values provided by the user. Note that we have set $$ \ŗho_{litho} = 0 $$ to prevent the lithosphere from contributing to the hydrostatic, upward force. This is made to comply with the later computed analytical solution, which assumes a purely elastic lithosphere that does not generate a hydrostatic upward force when displaced. In reality, this is arguably wrong and the default choice `c = PhysicalConstants()` therefore uses $$ \ŗho_{litho} = 2600 \, \mathrm{kg \, m^{-3}} $$.
 
 The next section shows how to use the now obtained `p::LayeredEarth` for actual GIA computation.
 
