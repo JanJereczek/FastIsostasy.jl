@@ -1,52 +1,48 @@
 push!(LOAD_PATH, "../")
 using FastIsostasy
 using JLD2
-include("../test/helpers/compute.jl")
+include("../../test/helpers/compute.jl")
 
-function main(
-    n::Int;                     # 2^n x 2^n cells on domain, (1)
-    use_cuda::Bool = false,
-    solver::Any = "SimpleEuler",
-    active_gs::Bool = true,
-)
+function main(n::Int; use_cuda::Bool = false, interactive_sl::Bool = false,
+    dense::Bool = false)
     T = Float64
     W = T(3000e3)               # half-length of the square domain (m)
-    Omega = ComputationDomain(W, n, use_cuda = use_cuda)
-    c = PhysicalConstants()
-    p = LayeredEarth(Omega)
+    Omega = ComputationDomain(W, n, use_cuda = use_cuda, projection_correction = false)
+    c = PhysicalConstants(rho_litho = 0.0)
+    p = LayeredEarth(Omega, layer_viscosities = [1e21], layer_boundaries = [88e3])
 
     kernel = use_cuda ? "gpu" : "cpu"
     println("Computing on $kernel and $(Omega.Ny) x $(Omega.Nx) grid...")
 
     R = T(1000e3)               # ice disc radius (m)
     H = T(1000)                 # ice disc thickness (m)
-    Hcylinder = uniform_ice_cylinder(Omega, R, H)
-    t_out = years2seconds.([0.0, 100.0, 500.0, 1500.0, 5000.0, 10_000.0, 50_000.0])
+    Hice = uniform_ice_cylinder(Omega, R, H)
+    
+    filename = "Nx=$(Omega.Nx)_Ny=$(Omega.Ny)_$(kernel)_interactive_sl=$interactive_sl"
+    if dense
+        filename *= "-dense"
+        t_out = years2seconds.(0:100:50_000)
+    else
+        t_out = years2seconds.([0.0, 100.0, 500.0, 1500.0, 5000.0, 10_000.0, 50_000.0])
+    end
 
-    results = fastisostasy(t_out, Omega, c, p, Hcylinder, alg=solver,
-        interactive_sealevel=active_gs)
-    println("Took $(results.computation_time) seconds!")
+    fip = FastIsoProblem(Omega, c, p, t_out, interactive_sl, Hice)
+        # diffeq = (alg = SimpleEuler(), dt = years2seconds(1.0)))
+    solve!(fip)
+    println("Computation took $(fip.out.computation_time) seconds!")
     println("-------------------------------------")
 
     if use_cuda
         Omega, p = reinit_structs_cpu(Omega, p)
     end
 
-    gs = active_gs ? "geostate" : "isostate"
-    if solver == BS3()
-        solvername = "BS3"
-    elseif solver == "SimpleEuler"
-        solvername = "SimpleEuler"
-    end
-
-    filename = "$(solvername)_Nx$(Omega.Nx)_Ny$(Omega.Ny)_$(kernel)_$(gs)"
-    jldsave("../data/test1/$filename.jld2", results = results)
+    @save "../data/test1/$filename.jld2" fip Hice
 end
 
 for use_cuda in [false] # [false, true]
-    for active_gs in [false] # [false, true]
-        for n in 8:8 # 3:8
-            main(n, use_cuda = use_cuda, solver = BS3(), active_gs = active_gs)
+    for interactive_sl in [false] # [false, true]
+        for n in 6:6
+            main(n, use_cuda = use_cuda, dense = true)
         end
     end
 end

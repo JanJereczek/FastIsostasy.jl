@@ -4,7 +4,12 @@ function choose_case(case::String, Omega::ComputationDomain, c::PhysicalConstant
     W = (Omega.Wx + Omega.Wy) / 2
     sigma = diagm([(W/4)^2, (W/4)^2])
 
-    if case == "gaussian_lo_D" || case == "gaussian_hi_D" || case == "no_litho"
+    if case == "homogeneous"
+        lb1 = fill(150e3, Omega.Nx, Omega.Ny)
+        lb = cat(lb1, dims=3)
+        lv = fill(eta, size(lb))
+        p = LayeredEarth(Omega, layer_boundaries = lb, layer_viscosities = lv)
+    elseif case == "gaussian_lo_D" || case == "gaussian_hi_D" || case == "no_litho"
         if case == "gaussian_lo_D"
             lb1 = generate_gaussian_field(Omega, 150e3, [0.0, 0.0], -100e3, sigma)
             lb2 = fill(151e3, Omega.Nx, Omega.Ny)

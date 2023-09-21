@@ -33,7 +33,7 @@ function main(; n=5)
     logeta, Gx, e_mean, e_sort = extract_inversion(priors, ukiobj, paraminv)
 
     jldsave(
-        "../data/test6/n=$n.jld2",
+        "../data/test4/n=$n.jld2",
         Omega = Omega, ground_truth = ground_truth, paraminv = paraminv,
         priors = priors, ukiobj = ukiobj,
         logeta = logeta, Gx = Gx, e_mean = e_mean, e_sort = e_sort,

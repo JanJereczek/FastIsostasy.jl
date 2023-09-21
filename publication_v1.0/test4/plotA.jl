@@ -14,7 +14,7 @@ function main(
 
     N = 2^n
     filekey = "$(case)_Nx$(N)_Ny$(N)"
-    sol = load("../data/test5/$filekey.jld2")
+    sol = load("../data/test4/$filekey.jld2")
     results = sol["results"]
     t_out = results.t_out
     t_out_kyr = round.(seconds2years.(t_out) ./ 1e3, digits=1)
@@ -178,7 +178,7 @@ function main(
     )
 
     framerate = 24
-    plotname = "plots/test5/loaduplift_$filekey"
+    plotname = "plots/test4/loaduplift_$filekey"
     record(fig, "$plotname.mp4", eachindex(u), framerate = framerate) do k
             i[] = k
     end

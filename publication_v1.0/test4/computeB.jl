@@ -181,7 +181,7 @@ function main(n::Int, active_gs::Bool; use_cuda::Bool = false,solver = "SimpleEu
 
     case = active_gs ? "geostate" : "isostate"
     jldsave(
-        "../data/test5/$(case)_Nx$(Omega.Nx)_Ny$(Omega.Ny).jld2",
+        "../data/test4/$(case)_Nx$(Omega.Nx)_Ny$(Omega.Ny).jld2",
         Omega = Omega, c = c, p = p,
         results = results,
         t_fastiso = t_fastiso,

@@ -2,8 +2,6 @@ push!(LOAD_PATH, "../")
 using FastIsostasy
 using JLD2, NCDatasets, CairoMakie, Interpolations, DelimitedFiles
 
-not(x::Bool) = !x
-
 function lon360tolon180(lon, X)
     permidx = lon .> 180
     lon180 = vcat(lon[permidx] .- 360, lon[not.(permidx)])
@@ -51,7 +49,7 @@ function compute5C()
     points = Observable(Point2f[(t[1], Hsum[1])])
     lines!(ax2, points)
 
-    record(fig, "plots/test5/ICE6G-cylce.mp4", eachindex(t), framerate = 10) do k
+    record(fig, "plots/test4/ICE6G-cylce.mp4", eachindex(t), framerate = 10) do k
         kobs[] = k
         new_point = Point2f(t[k], Hsum[k])
         points[] = push!(points[], new_point)
@@ -82,6 +80,6 @@ function compute5C()
     solve!(fip)
     println("Computation took $(fip.out.computation_time) s")
 
-    @save "../data/test5/ICE6G/homogeneous-interactivesl=$interactive_sl-N="*
+    @save "../data/test4/ICE6G/homogeneous-interactivesl=$interactive_sl-N="*
         "$(Omega.Nx).jld2" t fip Hitp Hice_vec deltaH
 end

@@ -22,8 +22,12 @@ function load_laty_ICE6G()
     Lon, ulaty = lon360tolon180(Lon[:, 1], ulaty)
 
     for k in eachindex(tlaty)
-        fig = heatmap(ulaty[:, :, k], colorrange = (-500, 500), colormap = :PuOr)
-        save("plots/test5/laty-ICE6G-global$(tlaty[k]).png", fig)
+        fig = Figure(resolution = (1600, 900), fontsize = 30)
+        ax = Axis(fig[1,1], aspect = DataAspect())
+        hidedecorations!(ax)
+        hm = heatmap!(ulaty[:, :, k], colorrange = (-400, 400), colormap = :PuOr)
+        Colorbar(fig[1, 2], hm, height = Relative(0.8), label = "Displacement (m)")
+        save("plots/test4/laty-ICE6G-global-lorange-$(tlaty[k]).png", fig)
     end
     itp = linear_interpolation((Lon[:, 1], Lat[1, :], tlaty), ulaty,
         extrapolation_bc = Flat())

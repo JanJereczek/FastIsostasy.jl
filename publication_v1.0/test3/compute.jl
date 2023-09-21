@@ -1,8 +1,8 @@
 push!(LOAD_PATH, "../")
 using FastIsostasy
-using JLD2
-include("test3_cases.jl")
-include("../test/helpers/compute.jl")
+using JLD2, LinearAlgebra
+include("cases.jl")
+include("../../test/helpers/compute.jl")
 
 function main(
     n::Int,                     # 2^n x 2^n cells on domain, (1)
@@ -22,7 +22,7 @@ function main(
 
     R = T(1000e3)               # ice disc radius (m)
     H = T(1000)                 # ice disc thickness (m)
-    Hcylinder = uniform_ice_cylinder(Omega, R, H)
+    Hice = uniform_ice_cylinder(Omega, R, H)
     if dense_out
         t_out = years2seconds.( vcat(0:1_000:5_000, 10_000:5_000:50_000) )
         densekey = "dense"
@@ -31,32 +31,19 @@ function main(
         densekey = "sparse"
     end
 
-    t1 = time()
-    results = fastisostasy(
-        t_out, Omega, c, p, Hcylinder,
-        interactive_sealevel = false, # dt = years2seconds(2.0),
-        alg = BS3())
-    t_fastiso = time() - t1
-    println("Took $t_fastiso seconds!")
+    fip = FastIsoProblem(Omega, c, p, t_out, false, Hice)
+    solve!(fip)
+    println("Took $(fip.out.computation_time) seconds!")
     println("-------------------------------------")
 
-    if use_cuda
-        Omega, p = reinit_structs_cpu(Omega, p)
-    end
-
     filename = "$(case)_$(kernel)_Nx$(Omega.Nx)_Ny$(Omega.Ny)_$densekey"
-    jldsave(
-        "../data/test3/$filename.jld2",
-        Omega = Omega, c = c, p = p,
-        results = results,
-        t_fastiso = t_fastiso,
-        R = R, H = H,
-    )
+    @save "../data/test3/$filename.jld2" fip Hice
 end
 
-for n in 6:6
-    # ["gaussian_lo_D", "gaussian_hi_D", "no_litho", "ref", "gaussian_lo_η", "gaussian_hi_η"]
-    for case in ["gaussian_lo_D", "gaussian_hi_D", "no_litho", "ref", "gaussian_lo_η", "gaussian_hi_η"]
+for n in 7:7
+    # ["gaussian_lo_D", "gaussian_hi_D", "no_litho", "ref",
+    #     "gaussian_lo_η", "gaussian_hi_η", "homogeneous"]
+    for case in ["homogeneous"]
         main(n, case, use_cuda = false, dense_out = true)
     end
 end

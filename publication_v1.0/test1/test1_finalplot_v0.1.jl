@@ -217,7 +217,8 @@ function main()
         end
         scatterlines!(ax2, Nvec, runtime, label = L"%$kernel $\,$", linewidth = lwidth, markersize = msize)
     end
-    axislegend(ax2, position = :lt, width = 200, linepoints = [Point2f(0, 0.5), Point2f(2, 0.5)], patchlabelgap = 40)
+    axislegend(ax2, position = :lt, width = 200,
+        linepoints = [Point2f(0, 0.5), Point2f(2, 0.5)], patchlabelgap = 40)
 
     colgap!(fig.layout, 10)
     rowgap!(fig.layout, 80)

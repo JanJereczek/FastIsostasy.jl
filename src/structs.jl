@@ -309,7 +309,7 @@ Return a mutable struct containing the geostate which will be updated over the s
 The geostate contains all the states of the [`FastIsoProblem`] to be solved.
 """
 mutable struct GeoState{T<:AbstractFloat, M<:KernelMatrix{T}}
-    maskgrounded::BitMatrix # mask for grounded ice
+    maskgrounded::KernelMatrix{<:Bool} # mask for grounded ice
     u::M                    # viscous displacement
     dudt::M                 # viscous displacement rate
     ue::M                   # elastic displacement
@@ -529,7 +529,7 @@ function FastIsoProblem(
     )
     
     geostate = GeoState(
-        null(Omega) .> 1,           # mask for grounded ice
+        collect(null(Omega) .> 1),  # mask for grounded ice
         copy(u_0), copy(dudt_0),    # viscous displacement and associated rate
         copy(ue_0),                 # elastic displacement
         tools.Hice(0.0),            # ice column

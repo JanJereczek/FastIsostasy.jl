@@ -1,7 +1,7 @@
 push!(LOAD_PATH, "../")
 using FastIsostasy
 using JLD2
-include("../test/helpers/compute.jl")
+include("../../test/helpers/compute.jl")
 
 function main(
     n::Int,             # 2^n cells on domain (1)
@@ -12,7 +12,7 @@ function main(
     T = Float64
     W = T(3000e3)               # half-length of the square domain (m)
     Omega = ComputationDomain(W, n, use_cuda = use_cuda)
-    c = PhysicalConstants(rho_ice = 0.931e3)
+    c = PhysicalConstants(rho_ice = 0.931e3, rho_uppermantle = 3.3e3)
     # layer_densities = [3.438e3, 3.871e3],
 
     G = 0.50605e11              # shear modulus (Pa)
@@ -34,39 +34,27 @@ function main(
         alpha = T(10)                       # max latitude (°) of uniform ice disc
         Hmax = T(1000)                      # uniform ice thickness (m)
         R = deg2rad(alpha) * c.r_equator    # disc radius (m), (Earth radius as in Spada)
-        H_ice = stereo_ice_cylinder(Omega, R, Hmax)
+        Hice = stereo_ice_cylinder(Omega, R, Hmax)
     elseif occursin("cap", case)
         alpha = T(10)                       # max latitude (°) of ice cap
         Hmax = T(1500)
-        H_ice = stereo_ice_cap(Omega, alpha, Hmax)
+        Hice = stereo_ice_cap(Omega, alpha, Hmax)
     end
     t_out = years2seconds.([0.0, 1.0, 1e3, 2e3, 5e3, 1e4, 1e5])
 
-    sl0 = fill(-Inf, Omega.Nx, Omega.Ny)
-    t1 = time()
-    results = fastisostasy(t_out, Omega, c, p, H_ice, sealevel_0 = sl0,
-        alg = "SimpleEuler", interactive_sealevel = true)
-    t_fastiso = time() - t1
-    println("Took $t_fastiso seconds!")
+    sl0 = fill(0.0, Omega.Nx, Omega.Ny)
+    fip = FastIsoProblem(Omega, c, p, t_out, true, Hice, sealevel_0 = sl0,
+        diffeq = (alg = SimpleEuler(), dt = years2seconds(1.0)))
+    solve!(fip)
+    println("Computation took $(fip.out.computation_time) seconds!")
     println("-------------------------------------")
 
-    if use_cuda
-        Omega, p = reinit_structs_cpu(Omega, p)
-    end
-
-    filename = "$(case)_Nx$(Omega.Nx)_Ny$(Omega.Ny)_$(kernel)"
-    jldsave(
-        "../data/test2/$filename.jld2",
-        Omega = Omega, c = c, p = p,
-        results = results,
-        t_fastiso = t_fastiso,
-        H = H_ice,
-    )
-
+    filename = "$(case)_Nx=$(Omega.Nx)_Ny=$(Omega.Ny)_$(kernel)"
+    @save "../data/test2/$filename.jld2" fip Hice
 end
 
 cases = ["disc", "cap"]
-for n in 6:6
+for n in 7:7
     for case in cases
         main(n, case, use_cuda = false)
     end
