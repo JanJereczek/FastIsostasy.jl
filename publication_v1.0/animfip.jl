@@ -1,4 +1,4 @@
-function anim(path::String)
+function anim(path::String, target::String)
 
     @load "$path" fip
     extr = [maximum(abs.(extrema(u))) for u in (fip.out.u + fip.out.ue)]
@@ -13,9 +13,15 @@ function anim(path::String)
     wireframe!(ax, fip.Omega.X, fip.Omega.Y, u, linewidth = 0.05)
     Colorbar(fig[1, 2], sf, label = "Total displacement (m)", height = Relative(0.5))
     zlims!(ax, crange)
-    record(fig, "anims/test.gif", eachindex(fip.out.t), framerate = 24) do k
+    record(fig, "anims/$target.gif", eachindex(fip.out.t), framerate = 24) do k
         kobs[] = k
     end
 end
 
-filenames = ["../data/test1/Nx=64_Ny=64_cpu_interactive_sl=false-dense.jld2"]
+filenames = ["../data/test1/Nx=64_Ny=64_cpu_interactive_sl=false-dense.jld2",
+    "../data/test4/ICE6G/heterogeneous-interactivesl=true-N=128.jld2"]
+
+targets = ["Nx=64_Ny=64_cpu_interactive_sl=false-dense",
+    "test4/heterogeneous-interactivesl=true-N=128"]
+
+anim(filenames[2], targets[2])

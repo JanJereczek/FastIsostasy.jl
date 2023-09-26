@@ -2,22 +2,8 @@ push!(LOAD_PATH, "../")
 using FastIsostasy
 using JLD2, NCDatasets, CairoMakie, Interpolations, DelimitedFiles
 
-function lon360tolon180(lon, X)
-    permidx = lon .> 180
-    lon180 = vcat(lon[permidx] .- 360, lon[not.(permidx)])
-    Hice180 = cat(X[permidx, :, :], X[not.(permidx), :, :], dims=1)
-    return lon180, Hice180
-end
-
 function compute5C()
-    file = "../data/ICE6Gzip/IceT.I6F_C.131QB_VM5a_1deg.nc"
-    ds = NCDataset(file)
-    Hice = copy(ds["stgit"][:, :])
-    t = copy(ds["Time"][:, :])
-    lat = copy(ds["Lat"][:, :])
-    lon = copy(ds["Lon"][:, :])
-    close(ds)
-
+    Hice, t, lat, lon = load_ice6g()
     lon180, Hice180 = lon360tolon180(lon, Hice)
     fig, ax, hm = heatmap(Hice180[:, :, 2], colormap = :ice, colorrange = (1e-8, 4e3),
         lowclip = :transparent)
