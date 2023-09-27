@@ -113,7 +113,7 @@ function dudt_isostasy!(dudt::M, u::M, fip::FastIsoProblem{T, M}, t::T) where
     {T<:AbstractFloat, M<:KernelMatrix{T}}
 
     Omega, P = fip.Omega, fip.tools.prealloc
-    P.rhs .= -fip.c.g .* columnanom_full(fip)
+    P.rhs .= -fip.c.g .* columnanom_full(fip)# .* Omega.K .^ 2
     if fip.neglect_litho_gradients
         biharmonic_u = Omega.biharmonic .* (fip.tools.pfft * u)
         P.rhs -= fip.p.litho_rigidity .* real.( fip.tools.pifft * biharmonic_u )
@@ -129,7 +129,7 @@ function dudt_isostasy!(dudt::M, u::M, fip::FastIsoProblem{T, M}, t::T) where
     # dudt[:, :] .= real.(fip.tools.pifft * ((fip.tools.pfft * rhs) ./
     #     Omega.pseudodiff)) ./ (2 .* fip.p.effective_viscosity)
     dudt .= real.(fip.tools.pifft * ((fip.tools.pfft * (P.rhs ./ 
-        (2 .* fip.p.effective_viscosity)) ) ./ Omega.pseudodiff))
+        (2 .* fip.p.effective_viscosity)) ) ./ Omega.pseudodiff)) # .* Omega.K
     fip.Omega.bc!(dudt, fip.Omega.Nx, fip.Omega.Ny)
     return nothing
 end

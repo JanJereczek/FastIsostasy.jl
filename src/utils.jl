@@ -256,8 +256,8 @@ function get_effective_viscosity(
         end
     end
     effective_compressible_viscosity = effective_viscosity .* compressibility_scaling
-    return seakon_calibration(effective_compressible_viscosity)
-    # return effective_compressible_viscosity
+    # return seakon_calibration(effective_compressible_viscosity)
+    return effective_compressible_viscosity
 end
 
 seakon_calibration(eta) = exp.(log10.(1e21 ./ eta)) .* eta
