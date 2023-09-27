@@ -18,6 +18,11 @@ function columnanom_ice(fip::FastIsoProblem{T, M}) where {T<:AbstractFloat, M<:K
     return fip.c.rho_ice .* (fip.geostate.H_ice - fip.refgeostate.H_ice)
 end
 
+function columnanom_ice!(fip::FastIsoProblem{T, M}) where {T<:AbstractFloat, M<:KernelMatrix{T}}
+    fip.tools.prealloc.ice_column .= fip.c.rho_ice .* (fip.geostate.H_ice - fip.refgeostate.H_ice)
+    return nothing
+end
+
 """
     columnanom_water(fip)
 
@@ -25,6 +30,12 @@ Compute the density-scaled anomaly of the (liquid) water column w.r.t. the refer
 """
 function columnanom_water(fip::FastIsoProblem{T, M}) where {T<:AbstractFloat, M<:KernelMatrix{T}}
     return fip.c.rho_seawater .* (fip.geostate.H_water - fip.refgeostate.H_water)
+end
+
+function columnanom_water!(fip::FastIsoProblem{T, M}) where {T<:AbstractFloat, M<:KernelMatrix{T}}
+    fip.tools.prealloc.water_column .= fip.c.rho_seawater .*
+        (fip.geostate.H_water - fip.refgeostate.H_water)
+    return nothing
 end
 
 """
@@ -36,6 +47,12 @@ function columnanom_mantle(fip::FastIsoProblem{T, M}) where {T<:AbstractFloat, M
     return fip.c.rho_uppermantle .* (fip.geostate.u - fip.refgeostate.u)
 end
 
+function columnanom_mantle!(fip::FastIsoProblem{T, M}) where {T<:AbstractFloat, M<:KernelMatrix{T}}
+    fip.tools.prealloc.mantle_column .= fip.c.rho_uppermantle .*
+        (fip.geostate.u - fip.refgeostate.u)
+    return nothing
+end
+
 """
     columnanom_litho(fip)
 
@@ -43,6 +60,12 @@ Compute the density-scaled anomaly of the lithosphere column w.r.t. the referenc
 """
 function columnanom_litho(fip::FastIsoProblem{T, M}) where {T<:AbstractFloat, M<:KernelMatrix{T}}
     return fip.c.rho_litho .* (fip.geostate.ue - fip.refgeostate.ue)
+end
+
+function columnanom_litho!(fip::FastIsoProblem{T, M}) where {T<:AbstractFloat, M<:KernelMatrix{T}}
+    fip.tools.prealloc.litho_column .= fip.c.rho_litho .*
+        (fip.geostate.ue - fip.refgeostate.ue)
+    return nothing
 end
 
 """
@@ -53,6 +76,12 @@ the reference state.
 """
 function columnanom_load(fip::FastIsoProblem{T, M}) where {T<:AbstractFloat, M<:KernelMatrix{T}}
     return columnanom_ice(fip) + columnanom_water(fip) # + columnanom_sediment(fip)
+end
+
+function columnanom_load!(fip::FastIsoProblem{T, M}) where {T<:AbstractFloat, M<:KernelMatrix{T}}
+    columnanom_ice!(fip)
+    columnanom_water!(fip)
+    return fip.tools.prealloc.ice_column + fip.tools.prealloc.water_column
 end
 
 """
@@ -66,7 +95,13 @@ Correction of the surface distortion is not needed here since rho * A * z / A = 
 function columnanom_full(fip::FastIsoProblem{T, M}) where {T<:AbstractFloat, M<:KernelMatrix{T}}
     # columnanom_mantle() depends on sign of u, which is negative for depression.
     # Therefore, we only need to add the terms below.
-    return columnanom_load(fip) + columnanom_mantle(fip) + columnanom_litho(fip)
+    columnanom_ice!(fip)
+    columnanom_water!(fip)
+    columnanom_mantle!(fip)
+    columnanom_litho!(fip)
+    # return columnanom_load(fip) + columnanom_mantle(fip) + columnanom_litho(fip)
+    return fip.tools.prealloc.ice_column + fip.tools.prealloc.water_column +
+        fip.tools.prealloc.mantle_column + fip.tools.prealloc.litho_column
 end
 
 function mass_anom(fip::FastIsoProblem{T, M}) where {T<:AbstractFloat, M<:KernelMatrix{T}}

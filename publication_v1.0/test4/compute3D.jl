@@ -60,7 +60,7 @@ function main(n)
     # nlb = 3  c.r_equator - lb_vec
     eta_itp = load_laty_3Dvisc()
     lv_3D = cat([eta_itp.(Lon, Lat, rlb[:, :, k]) for k in 1:nlb]..., dims=3)
-    eta_lowerbound = 1e17
+    eta_lowerbound = 1e15
     lv_3D[lv_3D .< eta_lowerbound] .= eta_lowerbound
 
     rsltn = 1000
@@ -117,7 +117,7 @@ function load_litho_thickness_laty()
     return itp
 end
 
-main(7)
+main(6)
 
 
 
