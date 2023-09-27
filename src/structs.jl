@@ -22,10 +22,6 @@ mutable struct PreAllocated{T<:AbstractFloat, M<:KernelMatrix{T}, C<:ComplexMatr
     Myyyy::M
     Mxyx::M
     Mxyxy::M
-    ice_column::M
-    water_column::M
-    litho_column::M
-    mantle_column::M
     fftrhs::C
     ifftrhs::C
 end
@@ -310,6 +306,21 @@ struct RefGeoState{T<:AbstractFloat, M<:KernelMatrix{T}}
     conservation_term::T    # a term for mass conservation
 end
 
+mutable struct ColumnAnomalies{T<:AbstractFloat, M<:KernelMatrix{T}}
+    ice::M
+    water::M
+    sediments::M
+    load::M
+    litho::M
+    mantle::M
+    full::M
+end
+
+function ColumnAnomalies(Omega)
+    zero_columnanoms = [null(Omega) for _ in eachindex(fieldnames(ColumnAnomalies))]
+    return ColumnAnomalies(zero_columnanoms...)
+end
+
 """
     GeoState
 
@@ -336,6 +347,7 @@ mutable struct GeoState{T<:AbstractFloat, M<:KernelMatrix{T}}
     slc::T                  # total sealevel contribution
     countupdates::Int       # count the updates of the geostate
     dt::T                   # update step
+    columnanoms::ColumnAnomalies{T, M}
 end
 
 #########################################################
@@ -422,6 +434,7 @@ mutable struct FastIsoOutputs{T<:AbstractFloat}
     ue::Vector{Matrix{T}}
     geoid::Vector{Matrix{T}}
     sealevel::Vector{Matrix{T}}
+    Hice::Vector{Matrix{T}}
     computation_time::Float64
 end
 
@@ -557,6 +570,7 @@ function FastIsoProblem(
         T(0.0), T(0.0),             # V_den terms
         T(0.0),                     # total sl-contribution & conservation term
         0, years2seconds(10.0),     # countupdates, update step
+        ColumnAnomalies(Omega),
     )
 
     # Extend the vector with a zero at beginning if not already the case
@@ -571,6 +585,22 @@ function FastIsoProblem(
         internal_loadupdate, neglect_litho_gradients, diffeq, verbose, out)
 end
 
+
+function Base.show(io::IO, ::MIME"text/plain", fip::FastIsoProblem)
+    Omega, p = fip.Omega, fip.p
+    println(io, "FastIsoProblem")
+    descriptors = [
+        "Wx, Wy" => [Omega.Wx, Omega.Wy],
+        "dx, dy" => [Omega.dx, Omega.dy],
+        "extrema(effective viscosity)" => extrema(p.effective_viscosity),
+        "extrema(lithospheric thickness)" => extrema(p.litho_thickness),
+    ]
+    padlen = maximum(length(d[1]) for d in descriptors) + 2
+    for (desc, val) in descriptors
+        println(io, rpad(" $(desc): ", padlen), val)
+    end
+end
+
 function remake!(fip::FastIsoProblem)
     fip.geostate.u = null(fip.Omega) #fip.refgeostate.u
     fip.geostate.dudt = null(fip.Omega)
@@ -581,6 +611,7 @@ function remake!(fip::FastIsoProblem)
     fip.geostate.H_ice = fip.tools.Hice(0.0)
     fip.geostate.b = fip.refgeostate.b
     fip.geostate.countupdates = 0
+    fip.geostate.columnanoms = ColumnAnomalies(fip.Omega)
 
     out = init_results(fip.Omega, fip.out.t)
     fip.out.u = out.u

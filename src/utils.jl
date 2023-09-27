@@ -74,6 +74,7 @@ function write_out!(fip::FastIsoProblem, k::Int)
         fip.out.ue[k] .= copy(Array(fip.geostate.ue))
         fip.out.geoid[k] .= copy(Array(fip.geostate.geoid))
         fip.out.sealevel[k] .= copy(Array(fip.geostate.sealevel))
+        fip.out.Hice[k] .= copy(Array(fip.geostate.H_ice))
     end
 end
 
@@ -578,7 +579,9 @@ function init_results(Omega::ComputationDomain{T, M}, t_out::Vector{T}) where
     ue_out = [copy(placeholder) for t in t_out]
     geoid_out = [copy(placeholder) for t in t_out]
     sealevel_out = [copy(placeholder) for t in t_out]
-    return FastIsoOutputs(t_out, u_out, dudt_out, ue_out, geoid_out, sealevel_out, 0.0)
+    Hice_out = [copy(placeholder) for t in t_out]
+    return FastIsoOutputs(t_out, u_out, dudt_out, ue_out, geoid_out,
+        sealevel_out, Hice_out, 0.0)
 end
 
 function init_results(fip::FastIsoProblem, Omega::ComputationDomain{T, M}, t_out::Vector{T}
@@ -590,6 +593,7 @@ function init_results(fip::FastIsoProblem, Omega::ComputationDomain{T, M}, t_out
     fip.out.ue = [copy(placeholder) for t in t_out]
     fip.out.geoid = [copy(placeholder) for t in t_out]
     fip.out.sealevel = [copy(placeholder) for t in t_out]
+    fip.out.Hice = [copy(placeholder) for t in t_out]
     fip.out.computation_time = 0.0
     return nothing
 end

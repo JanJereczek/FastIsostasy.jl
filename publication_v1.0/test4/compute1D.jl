@@ -1,8 +1,9 @@
 push!(LOAD_PATH, "../")
 using FastIsostasy
 using JLD2, NCDatasets, CairoMakie, Interpolations, DelimitedFiles
+include("../helpers.jl")
 
-function compute5C()
+function main(N)
     Hice, t, lat, lon = load_ice6g()
     lon180, Hice180 = lon360tolon180(lon, Hice)
     fig, ax, hm = heatmap(Hice180[:, :, 2], colormap = :ice, colorrange = (1e-8, 4e3),
@@ -43,7 +44,7 @@ function compute5C()
 
     Hitp = linear_interpolation((lon, lat, t), Hice, extrapolation_bc = Flat())
 
-    Omega = ComputationDomain(3500e3, 7)
+    Omega = ComputationDomain(3500e3, 3500e3, N, N)
     c = PhysicalConstants()
     lbmantle = c.r_equator .- [5.721, 5.179] .* 1e6
     lb = vcat(96e3, lbmantle)
@@ -61,11 +62,13 @@ function compute5C()
     deltaH = [Hice_vec[k] - Hice_vec[1] for k in eachindex(t)]
 
     tsec = years2seconds.(t .* 1e3)
-    interactive_sl = true
+    interactive_sl = false
     fip = FastIsoProblem(Omega, c, p, tsec, interactive_sl, tsec, deltaH)
     solve!(fip)
     println("Computation took $(fip.out.computation_time) s")
 
-    @save "../data/test4/ICE6G/homogeneous-interactivesl=$interactive_sl-N="*
+    @save "../data/test4/ICE6G/1D-interactivesl=$interactive_sl-N="*
         "$(Omega.Nx).jld2" t fip Hitp Hice_vec deltaH
 end
+
+main(128)

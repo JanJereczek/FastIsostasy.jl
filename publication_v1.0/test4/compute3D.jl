@@ -39,11 +39,10 @@ function load_laty_3Dvisc()
     return eta_itp
 end
 
-function main(n)
-    Omega = ComputationDomain(3500e3, n)
+function main(N)
+    Omega = ComputationDomain(3500e3, 3500e3, N, N)
     Lon, Lat = Omega.Lon, Omega.Lat
     c = PhysicalConstants(rho_uppermantle = 3.5e3, rho_litho = 2.7e3)
-    # c = PhysicalConstants()
 
     Titp = load_litho_thickness_laty()
     Tlitho = Titp.(Lon, Lat) .* 1e3
@@ -60,7 +59,7 @@ function main(n)
     # nlb = 3  c.r_equator - lb_vec
     eta_itp = load_laty_3Dvisc()
     lv_3D = cat([eta_itp.(Lon, Lat, rlb[:, :, k]) for k in 1:nlb]..., dims=3)
-    eta_lowerbound = 1e15
+    eta_lowerbound = 1e16
     lv_3D[lv_3D .< eta_lowerbound] .= eta_lowerbound
 
     rsltn = 1000
@@ -74,8 +73,8 @@ function main(n)
     end
     Colorbar(fig[1, nlb+2], colorrange = crange, colormap = cmap)
     
-    lb = cat(lb, fill(700e3, Omega.Nx, Omega.Ny), dims=3)
-    lv_3D = cat(lv_3D, fill(1e21, Omega.Nx, Omega.Ny), dims=3)
+    # lb = cat(lb, fill(700e3, Omega.Nx, Omega.Ny), dims=3)
+    # lv_3D = cat(lv_3D, fill(1e21, Omega.Nx, Omega.Ny), dims=3)
     p = LayeredEarth(Omega, layer_boundaries = lb, layer_viscosities = lv_3D)
     axeff = Axis(fig[1, nlb+1], aspect = DataAspect())
     heatmap!(axeff, log10.(p.effective_viscosity), colormap = cmap,
@@ -90,8 +89,13 @@ function main(n)
     Hice_vec, deltaH = vec_dHice(Omega, t, Hitp)
 
     tsec = years2seconds.(t .* 1e3)
-    interactive_sl = true
-    fip = FastIsoProblem(Omega, c, p, tsec, interactive_sl, tsec, deltaH)
+    interactive_sl = false
+    fip = FastIsoProblem(Omega, c, p, tsec, interactive_sl, tsec, deltaH,
+        diffeq = (alg = Tsit5(), reltol = 1e-3))
+    
+    # idx = (-900e3 .< fip.Omega.X .< -500e3) .& (-600e3 .< fip.Omega.Y .< -200e3)
+    # fip.p.effective_viscosity[idx] .*= 0.1
+
     solve!(fip)
     println("Computation took $(fip.out.computation_time) s")
 
@@ -117,7 +121,7 @@ function load_litho_thickness_laty()
     return itp
 end
 
-main(6)
+main(128)
 
 
 

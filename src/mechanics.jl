@@ -113,7 +113,8 @@ function dudt_isostasy!(dudt::M, u::M, fip::FastIsoProblem{T, M}, t::T) where
     {T<:AbstractFloat, M<:KernelMatrix{T}}
 
     Omega, P = fip.Omega, fip.tools.prealloc
-    P.rhs .= -fip.c.g .* columnanom_full(fip)   # .* Omega.K .^ 2
+    columnanom_full!(fip)
+    P.rhs .= -fip.c.g .* fip.geostate.columnanoms.full   # .* Omega.K .^ 2
     if fip.neglect_litho_gradients
         biharmonic_u = Omega.biharmonic .* (fip.tools.pfft * u)
         P.rhs -= fip.p.litho_rigidity .* real.( fip.tools.pifft * biharmonic_u )

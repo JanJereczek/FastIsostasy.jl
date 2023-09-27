@@ -32,7 +32,7 @@ function load_laty_ICE6G(; case = "1D")
         hidedecorations!(ax)
         hm = heatmap!(ulaty[:, :, k], colorrange = (-400, 400), colormap = :PuOr)
         Colorbar(fig[1, 2], hm, height = Relative(0.8), label = "Displacement (m)")
-        save("plots/test4/laty-ICE6G-$case-global-lorange-$(tlaty[k]).png", fig)
+        save("plots/test4/laty/ICE6G-$case-global-lorange-$(tlaty[k]).png", fig)
     end
     itp = linear_interpolation((Lon[:, 1], Lat[1, :], tlaty), ulaty,
         extrapolation_bc = Flat())
