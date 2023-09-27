@@ -5,19 +5,19 @@ using Interpolations, LinearAlgebra, Statistics
 using JLD2, DelimitedFiles
 
 include("helpers/compute.jl")
-include("../publication_v1.0/test3/test3_cases.jl")
+include("../publication_v1.0/test3/cases.jl")
 include("test_benchmarks.jl")
 include("test_dimensions.jl")
 include("test_derivatives.jl")
 
-const SAVE_PLOTS = false
+const SAVE_PLOTS = true
 @testset "FastIsostasy.jl" begin
     check_xy_ij()
     # check_stereographic()
     check_derivatives()
-    #benchmark1()
-    #benchmark1_external_loadupdate()
-    #benchmark2()
+    benchmark1()
+    benchmark1_external_loadupdate()
+    benchmark2()
     benchmark3()
-    #benchmark6()
+    # benchmark6()
 end

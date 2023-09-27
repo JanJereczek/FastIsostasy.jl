@@ -4,7 +4,7 @@ include("laty.jl")
 include("../helpers.jl")
 
 case = "3D"
-N = 128
+N = 64
 @load "../data/test4/ICE6G/$case-interactivesl=true-N=$N.jld2" t fip Hitp Hice_vec deltaH
 make_anims = false
 

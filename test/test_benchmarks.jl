@@ -53,8 +53,8 @@ function benchmark1()
     fip = FastIsoProblem(Omega, c, p, t_out, interactive_sealevel, Hcylinder)
     solve!(fip)
     println("Computation took $(fip.out.computation_time) s")
+    fig = benchmark1_compare(Omega, fip, H, R)
     if SAVE_PLOTS
-        fig = benchmark1_compare(Omega, fip, H, R)
         save("plots/benchmark1/plot.png", fig)
     end
 end
@@ -69,8 +69,8 @@ function benchmark1_gpu()
     println("Computation took $(fip.out.computation_time) s")
     Omega, p = reinit_structs_cpu(Omega, p)
 
+    fig = benchmark1_compare(Omega, fip, H, R)
     if SAVE_PLOTS
-        fig = benchmark1_compare(Omega, fip, H, R)
         save("plots/benchmark1/plot_gpu.png", fig)
     end
 end
@@ -90,8 +90,8 @@ function benchmark1_external_loadupdate()
     end
     println("Computation took $(fip.out.computation_time) s")
 
+    fig = benchmark1_compare(Omega, fip, H, R)
     if SAVE_PLOTS
-        fig = benchmark1_compare(Omega, fip, H, R)
         save("plots/benchmark1/plot_external_loadupdate.png", fig)
     end
 end
@@ -152,7 +152,7 @@ function benchmark2()
             # @test mean(abs.(u_fi .- u_bm)) < 20
             # @test mean(abs.(dudt_fi .- dudt_bm)) < 3
             # @test mean(abs.(n_fi .- n_bm)) < 3
-            # println("$m_u,  $m_dudt, $m_n")
+            println("$m_u,  $m_dudt, $m_n")
         end
         if SAVE_PLOTS
             save("plots/benchmark2/$case.png", fig)

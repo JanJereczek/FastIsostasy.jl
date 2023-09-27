@@ -256,8 +256,8 @@ function get_effective_viscosity(
         end
     end
     effective_compressible_viscosity = effective_viscosity .* compressibility_scaling
-    # return seakon_calibration(effective_compressible_viscosity)
-    return effective_compressible_viscosity
+    return seakon_calibration(effective_compressible_viscosity)
+    # return effective_compressible_viscosity
 end
 
 seakon_calibration(eta) = exp.(log10.(1e21 ./ eta)) .* eta
@@ -651,4 +651,11 @@ function stereo_ice_cap(
     alpha = deg2rad(alpha_deg)
     M = Omega.Theta .< alpha
     return H .* sqrt.( M .* (cos.(Omega.Theta) .- cos(alpha)) ./ (1 - cos(alpha)) )
+end
+
+function zero_alloc!(P)
+    P.rhs .= 0.0
+    P.Mxx .= 0.0
+    P.Myy .= 0.0
+    P.Mxy .= 0.0
 end

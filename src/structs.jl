@@ -7,7 +7,9 @@
 An allias for `Union{Matrix{T}, CuMatrix{T}} where {T<:AbstractFloat}`.
 """
 KernelMatrix{T} = Union{Matrix{T}, CuMatrix{T}} where {T<:AbstractFloat}
-mutable struct PreAllocated{T<:AbstractFloat, M<:KernelMatrix{T}}
+ComplexMatrix{T} = Union{Matrix{C}, CuMatrix{C}} where {T<:AbstractFloat, C<:Complex{T}}
+
+mutable struct PreAllocated{T<:AbstractFloat, M<:KernelMatrix{T}, C<:ComplexMatrix{T}}
     rhs::M
     uxx::M
     uyy::M
@@ -20,6 +22,12 @@ mutable struct PreAllocated{T<:AbstractFloat, M<:KernelMatrix{T}}
     Myyyy::M
     Mxyx::M
     Mxyxy::M
+    ice_column::M
+    water_column::M
+    litho_column::M
+    mantle_column::M
+    fftrhs::C
+    ifftrhs::C
 end
 
 #########################################################
@@ -347,6 +355,8 @@ struct FastIsoTools{T<:AbstractFloat, M<:KernelMatrix{T},
     geoidgreen::M
     pfft::P1
     pifft::AbstractFFTs.ScaledPlan{Complex{T}, P2, T}
+    pfft!::Any
+    pifft!::Any
     Hice::Interpolations.Extrapolation{M, 1, Interpolations.GriddedInterpolation{M, 1, Vector{M},
         Gridded{Linear{Throw{OnGrid}}}, Tuple{Vector{T}}}, Gridded{Linear{Throw{OnGrid}}}, Flat{Nothing}}
     eta::Interpolations.Extrapolation{M, 1, Interpolations.GriddedInterpolation{M, 1, Vector{M},
@@ -375,9 +385,11 @@ function FastIsoTools(
     if Omega.use_cuda
         Xgpu = CuArray(Omega.X)
         p1, p2 = CUFFT.plan_fft(Xgpu), CUFFT.plan_ifft(Xgpu)
+        # pfft!, pifft! = CUFFT.plan_fft!(Xgpu), CUFFT.plan_ifft!(Xgpu)
         # Dx, Dy, Dxx, Dyy, Dxy = convert2CuArray([Dx, Dy, Dxx, Dxy, Dyy])
     else
         p1, p2 = plan_fft(Omega.X), plan_ifft(Omega.X)
+        pfft!, pifft! = plan_fft!(complex.(Omega.X)), plan_ifft!(complex.(Omega.X))
     end
 
     # rhog = p.uppermantle_density .* c.g
@@ -386,9 +398,12 @@ function FastIsoTools(
     eta = linear_interpolation(t_eta_snapshots,
         kernelpromote(eta_snapshots, Omega.arraykernel); extrapolation_bc=Flat())
 
-    prealloc = PreAllocated([null(Omega) for i in eachindex(fieldnames(PreAllocated))]...)
+    realmatrices = [null(Omega) for _ in eachindex(fieldnames(PreAllocated))[1:end-2]]
+    cplxmatrices = [complex.(null(Omega)) for _ in 1:2]
+    prealloc = PreAllocated(realmatrices..., cplxmatrices...)
+    
     return FastIsoTools(Omega.arraykernel(elasticgreen), Omega.arraykernel(geoidgreen),
-        p1, p2, Hice, eta, prealloc)
+        p1, p2, pfft!, pifft!, Hice, eta, prealloc)
 end
 
 null(Omega::ComputationDomain) = copy(Omega.arraykernel(Omega.null))
