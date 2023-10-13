@@ -4,6 +4,7 @@ using LinearAlgebra
 using Statistics: mean, cov
 using Distributions: MvNormal
 using JLD2
+using NCDatasets: NCDataset
 using DelimitedFiles: readdlm
 using Interpolations: linear_interpolation, Flat
 using FFTW: plan_fft, plan_ifft
@@ -73,8 +74,7 @@ export corner_bc!, no_bc
 export update_loadcolumns!, update_elasticresponse!, update_geoid!, update_sealevel!
 
 # geostate.jl
-export columnanom_load, correct_surfacedisctortion, columnanom_full
-export columnanom_ice, columnanom_water
+export columnanom_load, columnanom_full, columnanom_ice, columnanom_water
 
 # inversion.jl
 export InversionConfig, InversionData, InversionProblem, solve, extract_inversion
@@ -83,7 +83,7 @@ export InversionConfig, InversionData, InversionProblem, solve, extract_inversio
 export analytic_solution
 
 # data loaders
-export load_spada2011, load_latychev2023, load_wiens2021
+export load_spada2011, load_latychev_gaussian, load_wiens2021, load_bathymetry
 
 # EnsembleKalmanProcesses
 export get_ϕ_mean_final
