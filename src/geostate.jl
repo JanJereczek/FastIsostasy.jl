@@ -84,14 +84,14 @@ Compute the density-scaled anomaly of the load (ice + liquid water) column w.r.t
 the reference state.
 """
 function columnanom_load(fip::FastIsoProblem{T, M}) where {T<:AbstractFloat, M<:KernelMatrix{T}}
-    return columnanom_ice(fip) + columnanom_water(fip) # + columnanom_sediment(fip)
+    return columnanom_ice(fip) # + columnanom_water(fip) # + columnanom_sediment(fip)
 end
 
 function columnanom_load!(fip::FastIsoProblem{T, M}) where {T<:AbstractFloat, M<:KernelMatrix{T}}
     columnanom_ice!(fip)
     columnanom_water!(fip)
     canoms = fip.geostate.columnanoms
-    canoms.load .= canoms.ice + canoms.water
+    canoms.load .= canoms.ice # + canoms.water
     return nothing
 end
 
@@ -122,17 +122,8 @@ end
 
 function mass_anom(fip::FastIsoProblem{T, M}) where {T<:AbstractFloat, M<:KernelMatrix{T}}
     surface = (fip.Omega.dx * fip.Omega.dy)
-    return correct_surfacedisctortion(surface .* columnanom_full(fip), fip)
-end
-
-function correct_surfacedisctortion(column::M, fip::FastIsoProblem{T, M}
-    ) where {T<:AbstractFloat, M<:KernelMatrix{T}}
-
-    if fip.Omega.projection_correction
-        return column .* fip.Omega.K .^ 2
-    else
-        return column
-    end
+    return surface .* fip.geostate.columnanoms.ice .* fip.Omega.K .^ 2
+    # return surface .* fip.geostate.columnanoms.full .* fip.Omega.K .^ 2
 end
 
 """
@@ -167,7 +158,9 @@ function update_loadcolumns!(fip::FastIsoProblem{T, M}, H_ice::M
         # fip.geostate.H_water .= max.(fip.geostate.sealevel -
         #     (fip.geostate.b + H_ice), 0)
     end
+    ########
     # update sediment thickness
+    ########
     return nothing
 end
 

@@ -89,7 +89,7 @@ function update_diagnostics!(dudt::M, u::M, fip::FastIsoProblem{T, M}, t::T,
     # Only update the geoid and sea level if geostate is interactive.
     # As integration requires smaller time steps than diagnostics,
     # only update geostate every fip.geostate.dt
-    if (t / fip.geostate.dt >= fip.geostate.countupdates)
+    if ((t - fip.out.t[1]) / fip.geostate.dt) >= fip.geostate.countupdates
         # if elastic update placed after geoid, worse match with (Spada et al. 2011)
         update_elasticresponse!(fip)
         if fip.interactive_sealevel
@@ -208,7 +208,7 @@ To use coefficients differing from [^Farrell1972], see [FastIsoTools](@ref).
 """
 function update_elasticresponse!(fip::FastIsoProblem{T, M}
     ) where {T<:AbstractFloat, M<:KernelMatrix{T}}
-    rgh = correct_surfacedisctortion(columnanom_load(fip), fip)
+    rgh = columnanom_load(fip) .* fip.Omega.K .^ 2
     fip.geostate.ue .= samesize_conv(fip.tools.elasticgreen, rgh, fip.Omega, no_bc) #edge_bc
     return nothing
 end

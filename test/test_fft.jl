@@ -15,3 +15,12 @@ p * A
 @btime p*A
 B = rand(N, N)
 @btime $A .= complex.($B)
+
+using DSP
+N = 10
+A = rand(N, N)
+B = rand(N, N)
+C = rand(N, N)
+
+lhs = (conv(A, C .* B) + conv(B, C .* A)) ./ C
+rhs = conv(A, B) + conv(B, A)

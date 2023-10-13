@@ -618,6 +618,7 @@ end
 function init()
     println("Initializing CUDA Stencil")
     @init_parallel_stencil(CUDA, Float64, 2)
+    CUDA.allowscalar(false)
 end
 
 #####################################################

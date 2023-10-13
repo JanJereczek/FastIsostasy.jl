@@ -397,8 +397,8 @@ function FastIsoTools(
     if Omega.use_cuda
         Xgpu = CuArray(Omega.X)
         p1, p2 = CUFFT.plan_fft(Xgpu), CUFFT.plan_ifft(Xgpu)
-        # pfft!, pifft! = CUFFT.plan_fft!(Xgpu), CUFFT.plan_ifft!(Xgpu)
-        # Dx, Dy, Dxx, Dyy, Dxy = convert2CuArray([Dx, Dy, Dxx, Dxy, Dyy])
+        pfft! = CUFFT.plan_fft!(complex.(Omega.X))
+        pifft! = CUFFT.plan_ifft!(complex.(Omega.X))
     else
         p1, p2 = plan_fft(Omega.X), plan_ifft(Omega.X)
         pfft!, pifft! = plan_fft!(complex.(Omega.X)), plan_ifft!(complex.(Omega.X))

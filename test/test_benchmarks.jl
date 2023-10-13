@@ -181,7 +181,7 @@ function benchmark3()
         fig, axs = comparison_figure(1)
         case = cases[m]
         file = seakon_files[m]
-        x_sk, u_sk = load_latychev2023("../testdata/Latychev/$file", -1.0, 3e3)
+        x_sk, u_sk = load_latychev_gaussian("../testdata/Latychev/$file", -1.0, 3e3)
         x_sk .*= 1e3
 
         p = choose_case(case, Omega, c)
