@@ -4,7 +4,7 @@ using CairoMakie
 using JLD2, DelimitedFiles
 include("../test/helpers/plot.jl")
 
-function load_latychev2023(dir::String, x_lb::Real, x_ub::Real)
+function load_latychev_gaussian(dir::String, x_lb::Real, x_ub::Real)
     files = readdir(dir)
     
     x_full = readdlm(joinpath(dir, files[1]), ',')[:, 1]
@@ -65,7 +65,7 @@ function mainplot(n, heterogeneous)
     end
 
     u_fastiso, Omega = get_denseoutput_fastiso(fastiso_files)
-    u_3DGIA = [load_latychev2023("../data/Latychev/$file", idx) for file in seakon_files]
+    u_3DGIA = [load_latychev_gaussian("../data/Latychev/$file", idx) for file in seakon_files]
 
     n1, n2 = size(u_fastiso[1][1])
     slicex, slicey = n1÷2:n1, n2÷2

@@ -13,7 +13,7 @@ function indices_latychev2023_indices(dir::String, x_lb::Real, x_ub::Real)
     return idx, x
 end
 
-function load_latychev2023(dir::String, idx)
+function load_latychev_gaussian(dir::String, idx)
     files = readdir(dir)
     nr = size( readdlm(joinpath(dir, files[1]), ','), 1 )
     u = zeros(nr, length(idx))
@@ -64,7 +64,7 @@ function mainplot(n)
     u_elva = get_denseoutput_fastiso("homogeneous_$suffix.jld2",)
     idx, r = indices_latychev2023_indices("../data/Latychev/$(seakon_files[1])", -1, 3e6)
     r .*= 1e3
-    u_3DGIA = [load_latychev2023("../data/Latychev/$file", idx) for file in seakon_files]
+    u_3DGIA = [load_latychev_gaussian("../data/Latychev/$file", idx) for file in seakon_files]
 
     n1, n2 = size(u_fastiso[1][1])
     slicex, slicey = n1÷2:n1, n2÷2

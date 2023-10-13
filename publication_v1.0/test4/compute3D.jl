@@ -39,10 +39,10 @@ function load_laty_3Dvisc()
     return eta_itp
 end
 
-function main(N)
-    Omega = ComputationDomain(3500e3, 3500e3, N, N)
-    Lon, Lat = Omega.Lon, Omega.Lat
-    c = PhysicalConstants(rho_uppermantle = 3.5e3, rho_litho = 2.7e3)
+function main(N, maxdepth; nlayers = 3, use_cuda = true, interactive_sl = false)
+    Omega = ComputationDomain(3500e3, 3500e3, N, N, use_cuda = use_cuda)
+    Lon, Lat = Array(Omega.Lon), Array(Omega.Lat)
+    c = PhysicalConstants(rho_uppermantle = 3.3e3, rho_litho = 2.7e3)
 
     Titp = load_litho_thickness_laty()
     Tlitho = Titp.(Lon, Lat) .* 1e3
@@ -52,7 +52,10 @@ function main(N)
 
     # lb_vec = [96, 250, 400, 600] .* 1e3
     # lb = cat([fill(lbval, Omega.Nx, Omega.Ny) for lbval in lb_vec]..., dims=3)
-    lb_vec = [250, 400, 600] .* 1e3
+    mindepth = maximum(Tlitho) + 1e3
+    lb_vec = range(mindepth, stop = maxdepth, length = nlayers)
+
+    # lb_vec = [250, 400, 600] .* 1e3
     lb = cat(Tlitho, [fill(lbval, Omega.Nx, Omega.Ny) for lbval in lb_vec]..., dims=3)
     rlb = c.r_equator .- lb
     nlb = size(rlb, 3)
@@ -77,30 +80,30 @@ function main(N)
     # lv_3D = cat(lv_3D, fill(1e21, Omega.Nx, Omega.Ny), dims=3)
     p = LayeredEarth(Omega, layer_boundaries = lb, layer_viscosities = lv_3D)
     axeff = Axis(fig[1, nlb+1], aspect = DataAspect())
-    heatmap!(axeff, log10.(p.effective_viscosity), colormap = cmap,
+    heatmap!(axeff, log10.(Array(p.effective_viscosity)), colormap = cmap,
         colorrange = crange)
     hidedecorations!(axeff)
-    save("plots/test4/viscmap_laty-new.pdf", fig)
+    save("plots/test4/viscmap_laty-maxdepth=$maxdepth.pdf", fig)
 
-    Hice, t, lat, lon = load_ice6g()
-    t .*= -1
-    lon180, Hice180 = lon360tolon180(lon, Hice)
-    Hitp = linear_interpolation((lon180, lat, t), Hice180, extrapolation_bc = Flat())
-    Hice_vec, deltaH = vec_dHice(Omega, t, Hitp)
+    forcing = "ICE6G_D"
+    if forcing == "ICE6G_C"
+        Hice, t, lat, lon = load_ice6g()
+        t .*= -1
+        lon180, Hice180 = lon360tolon180(lon, Hice)
+        Hitp = linear_interpolation((lon180, lat, t), Hice180, extrapolation_bc = Flat())
+    elseif forcing == "ICE6G_D"
+        t, lon, lat, Hice, Hitp = load_ice6gd()
+    end
+    Hice_vec, deltaH = vec_dHice(Omega, Lon, Lat, t, Hitp)
 
     tsec = years2seconds.(t .* 1e3)
-    interactive_sl = false
-    fip = FastIsoProblem(Omega, c, p, tsec, interactive_sl, tsec, deltaH,
-        diffeq = (alg = Tsit5(), reltol = 1e-3))
-    
-    # idx = (-900e3 .< fip.Omega.X .< -500e3) .& (-600e3 .< fip.Omega.Y .< -200e3)
-    # fip.p.effective_viscosity[idx] .*= 0.1
+    fip = FastIsoProblem(Omega, c, p, tsec, interactive_sl, tsec, deltaH, verbose = true)
 
     solve!(fip)
     println("Computation took $(fip.out.computation_time) s")
 
-    @save "../data/test4/ICE6G/3D-interactivesl=$interactive_sl-N="*
-        "$(Omega.Nx).jld2" t fip Hitp Hice_vec deltaH
+    @save "../data/test4/ICE6G/3D-interactivesl=$interactive_sl-maxdepth=$maxdepth"*
+        "-nlayers=$nlayers-$forcing-N=$(Omega.Nx).jld2" t fip Hitp Hice_vec deltaH
 end
 
 function load_litho_thickness_laty()
@@ -121,11 +124,12 @@ function load_litho_thickness_laty()
     return itp
 end
 
-main(128)
+init()
+main(64, 300e3, use_cuda = false, interactive_sl = true)
 
-
-
-
+# for maxdepth in 300:100:600
+#     main(64, maxdepth * 1e3, use_cuda = false)
+# end
 
 
 # eta_ratio_safe = zeros((nlon, nlat, nr))

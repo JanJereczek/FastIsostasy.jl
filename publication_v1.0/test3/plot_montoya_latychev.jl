@@ -17,7 +17,7 @@ function indices_latychev2023_indices(dir::String, x_lb::Real, x_ub::Real)
     return idx, x
 end
 
-function load_latychev2023(dir::String, idx)
+function load_latychev_gaussian(dir::String, idx)
     files = readdir(dir)
     nr = size( readdlm(joinpath(dir, files[1]), ','), 1 )
     u = zeros(nr, length(idx))
@@ -32,7 +32,7 @@ function mainplot()
     lw = 5
 
     idx, r = indices_latychev2023_indices("../data/Latychev/$seakon_file", -1, 3e3)
-    u_3DGIA = load_latychev2023("../data/Latychev/$seakon_file", idx)
+    u_3DGIA = load_latychev_gaussian("../data/Latychev/$seakon_file", idx)
     println(r)
     tplot = vcat(0:1:5, 10:5:30)
 

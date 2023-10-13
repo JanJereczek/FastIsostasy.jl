@@ -3,13 +3,14 @@ using JLD2, NCDatasets, CairoMakie, Interpolations, DelimitedFiles
 include("laty.jl")
 include("../helpers.jl")
 
-case = "3D"
-N = 128
-@load "../data/test4/ICE6G/$case-interactivesl=false-N=$N.jld2" t fip Hitp Hice_vec deltaH
+case = "3D-interactivesl=false-ICE6G_D"
+N = 280
+@load "../data/test4/ICE6G/$case-N=$N.jld2" t fip Hitp Hice_vec deltaH
 make_anims = false
 
 function load_1D_results(N)
-    @load "../data/test4/ICE6G/1D-interactivesl=false-N=$N.jld2" t fip Hitp Hice_vec deltaH
+    @load "../data/test4/ICE6G/1D-interactivesl=false-ICE6G_D"*
+        "-N=$N.jld2" t fip Hitp Hice_vec deltaH
     return t, fip
 end
 t1D, fip1D = load_1D_results(N);
@@ -26,7 +27,7 @@ hm2 = heatmap!(axs[2], @lift(fip.out.u[$kobs]), colormap = :vik, colorrange = (-
 Colorbar(fig[2, 1], hm1, vertical = false, flipaxis = false, width = Relative(0.8))
 Colorbar(fig[2, 2], hm2, vertical = false, flipaxis = false, width = Relative(0.8))
 if make_anims
-    record(fig, "plots/test4/$case-N=$N-ICE6G-cycle-displacement.mp4",
+    record(fig, "plots/test4/$case-N=$N-cycle-displacement.mp4",
         eachindex(t), framerate = 10) do k
         kobs[] = k
     end
@@ -48,13 +49,13 @@ zlims!(axs[2], ulims)
 Colorbar(fig[2, 1], sf1, vertical = false, flipaxis = false, width = Relative(0.8))
 Colorbar(fig[2, 2], sf2, vertical = false, flipaxis = false, width = Relative(0.8))
 if make_anims
-    record(fig, "plots/test4/$case-N=$N-ICE6G-cycle-surface.mp4",
+    record(fig, "plots/test4/$case-N=$N-cycle-surface.mp4",
         eachindex(t), framerate = 10) do k
         kobs[] = k
     end
 end
 
-tlaty, ulaty, Lon, Lat, itp = load_laty_ICE6G(case = case)
+tlaty, ulaty, Lon, Lat, itp = load_laty_ICE6G(case = case[1:2])
 
 elims = (-100, 100)
 mean_error = fill(Inf, length(tlaty))
@@ -63,30 +64,50 @@ mean_error1D = fill(Inf, length(tlaty))
 max_error1D = fill(Inf, length(tlaty))
 ulaty_max = fill(Inf, length(tlaty))
 
+Omega, p = reinit_structs_cpu(fip.Omega, fip.p)
+Lon, Lat = Omega.Lon, Omega.Lat
+X, Y = Omega.X, Omega.Y
+
+ufi3D_vec = Float64[]
+ufi1D_vec = Float64[]
+ulaty_vec = Float64[]
+
+e1D_vec = [zeros(Omega.Nx * Omega.Ny) for _ in eachindex(tlaty)]
+e3D_vec = [zeros(Omega.Nx * Omega.Ny) for _ in eachindex(tlaty)]
+
 for k in eachindex(tlaty)
     k_fastiso = argmin( (t .- tlaty[k]./1e3) .^ 2 )
-    ulatyitp = itp.(fip.Omega.Lon, fip.Omega.Lat, tlaty[k])
+    ulatyitp = itp.(Lon, Lat, tlaty[k])
     ulaty_max[k] = maximum(abs.(ulatyitp))
     ufastiso = fip.out.u[k_fastiso] + fip.out.ue[k_fastiso]
     ufastiso1D = fip1D.out.u[k_fastiso] + fip1D.out.ue[k_fastiso]
 
-    mean_error[k] = mean( abs.(ulatyitp - ufastiso) )
-    max_error[k] = maximum( abs.(ulatyitp - ufastiso) )
-    mean_error1D[k] = mean( abs.(ulatyitp - ufastiso1D) )
-    max_error1D[k] = maximum( abs.(ulatyitp - ufastiso1D) )
+    append!(ufi3D_vec, vec(ufastiso))
+    append!(ufi1D_vec, vec(ufastiso1D))
+    append!(ulaty_vec, vec(ulatyitp))
 
-    tmpfig = Figure(resolution = (1800, 700), fontsize = 30)
-    axs = [Axis(tmpfig[1, j]) for j in 1:3]
-    [hidedecorations!(ax) for ax in axs]
-    hm1 = heatmap!(axs[1], ulatyitp, colorrange = ulims, colormap = :PuOr)
-    hm2 = heatmap!(axs[2], ufastiso, colorrange = ulims, colormap = :PuOr)
-    hm3 = heatmap!(axs[3], ulatyitp - ufastiso, colorrange = elims,
-        colormap = :lighttemperaturemap)
-    Colorbar(tmpfig[2, 1:2], hm1, label = "vertical displacement (m)", vertical = false,
-        width = Relative(0.4))
-    Colorbar(tmpfig[2, 3], hm3, label = L"$u_\mathrm{sk} - u_\mathrm{fi} $ (m)",
-        vertical = false, width = Relative(0.8))
-    save("plots/test4/displacements/$case-N=$N-t=$(tlaty[k]).png", tmpfig)
+    e1D = abs.(ulatyitp - ufastiso1D)
+    e3D = abs.(ulatyitp - ufastiso)
+    e1D_vec[k] .= vec(e1D)
+    e3D_vec[k] .= vec(e3D)
+
+    mean_error[k] = mean(e3D)
+    max_error[k] = maximum(e3D)
+    mean_error1D[k] = mean(e1D)
+    max_error1D[k] = maximum(e1D)
+
+    # tmpfig = Figure(resolution = (1800, 700), fontsize = 30)
+    # axs = [Axis(tmpfig[1, j]) for j in 1:3]
+    # [hidedecorations!(ax) for ax in axs]
+    # hm1 = heatmap!(axs[1], ulatyitp, colorrange = ulims, colormap = :PuOr)
+    # hm2 = heatmap!(axs[2], ufastiso, colorrange = ulims, colormap = :PuOr)
+    # hm3 = heatmap!(axs[3], ulatyitp - ufastiso, colorrange = elims,
+    #     colormap = :lighttemperaturemap)
+    # Colorbar(tmpfig[2, 1:2], hm1, label = "vertical displacement (m)", vertical = false,
+    #     width = Relative(0.4))
+    # Colorbar(tmpfig[2, 3], hm3, label = L"$u_\mathrm{sk} - u_\mathrm{fi} $ (m)",
+    #     vertical = false, width = Relative(0.8))
+    # save("plots/test4/displacements/$case-N=$N-t=$(tlaty[k]).png", tmpfig)
 end
 
 
@@ -119,11 +140,11 @@ ylims!(axs[1], erellims)
 
 k = argmax(max_error)
 k_fastiso = argmin( (t .- tlaty[k]/1e3) .^ 2 )
-ulatyitp = itp.(fip.Omega.Lon, fip.Omega.Lat, tlaty[k])
+ulatyitp = itp.(Lon, Lat, tlaty[k])
 ufastiso = fip.out.u[k_fastiso] + fip.out.ue[k_fastiso]
 [hidedecorations!(ax) for ax in axbottom]
 hm1 = heatmap!(axs[2], ulatyitp, colorrange = ulims, colormap = :PuOr)
-hm2 = heatmap!(axs[3], fip.Omega.X, fip.Omega.Y, ufastiso, colorrange = ulims, colormap = :PuOr)
+hm2 = heatmap!(axs[3], X, Y, ufastiso, colorrange = ulims, colormap = :PuOr)
 hm3 = heatmap!(axs[4], ulatyitp - ufastiso, colorrange = (-100, 100),
     colormap = :lighttemperaturemap)
 # arc!(axs[3], Point2f(-700e3, -400e3), 200e3, -π, π)
@@ -138,6 +159,22 @@ axs[4].title = L"Difference at $t = %$(Int(round(tlaty[k] ./ 1e3)))$ kyr"
 save("plots/test4/$case-N=$N-final.png", fig)
 save("plots/test4/$case-N=$N-final.pdf", fig)
 
+msmax = 3
+ms = msmax .* abs.(ulaty_vec) ./ umax .+ 0.4
+fig, ax, sc = scatter(ulaty_vec, ufi1D_vec, markersize = ms)
+scatter!(ulaty_vec, ufi3D_vec, color = :orange, markersize = ms)
+lines!(ax, -600:50, -600:50, color = :gray10)
+fig
+
+tlaty_vec = vcat([vec(fill(k, Omega.Nx, Omega.Ny)) for k in eachindex(tlaty)]...)
+e1D_mat = vcat(e1D_vec...)
+e3D_mat = vcat(e3D_vec...)
+
+bgap = 0.2
+widthfactor = 2
+fig, ax, bp = boxplot(tlaty_vec .- bgap, e1D_mat, width = widthfactor*bgap)
+boxplot!(ax, tlaty_vec .+ bgap, e3D_mat, width = widthfactor*bgap)
+fig
 
 #=
 viscfig = Figure(resolution = (2000, 1000), fontsize = 30)

@@ -6,7 +6,7 @@ include("../test/helpers/plot.jl")
 
 global include_elastic = true
 
-function load_latychev2023(dir::String, idx)
+function load_latychev_gaussian(dir::String, idx)
     files = readdir(dir)
     nr = size( readdlm(joinpath(dir, files[1]), ','), 1 )
     u = zeros(nr, length(files))
@@ -33,8 +33,8 @@ r = R .* deg2rad.(phi)
 idx = -1 .< r .< 3e6
 r_plot = r[idx]
 
-u_3DGIA = [load_latychev2023("../data/Latychev/E0L1V1", idx),
-    load_latychev2023("../data/Latychev/E0L2V1", idx)]
+u_3DGIA = [load_latychev_gaussian("../data/Latychev/E0L1V1", idx),
+    load_latychev_gaussian("../data/Latychev/E0L2V1", idx)]
 
 n = 7
 N = 2^n

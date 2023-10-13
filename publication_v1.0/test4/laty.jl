@@ -1,9 +1,12 @@
-function load_laty_ICE6G(; case = "1D")
-    if case == "1D"
+function load_laty_ICE6G(; case = "1D", variable="R")
+    if case == "1D_sparse"
         latydir = "../data/Latychev/ICE6G/r1d_ICE6G"
         tlaty = [-120, -26, -21, -16, -11, -6, -2, -1, -0.125, 0, 0.125] .* 1e3
+    elseif case == "1D"
+        latydir = "../data/Latychev/ICE6G/dense/1D/$variable"
+        tlaty = vec(readdlm("../data/Latychev/ICE6G/dense/tt_25.dat"))
     elseif case == "3D"
-        latydir = "../data/Latychev/ICE6G/dense/3D/R"
+        latydir = "../data/Latychev/ICE6G/dense/3D/$variable"
         tlaty = vec(readdlm("../data/Latychev/ICE6G/dense/tt_25.dat"))
     end
     latyfiles = readdir(latydir)
