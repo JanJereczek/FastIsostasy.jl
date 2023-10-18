@@ -136,7 +136,7 @@ function dudt_isostasy!(dudt::M, u::M, fip::FastIsoProblem{T, M}, t::T) where
     fip.tools.pfft! * P.fftrhs
     P.ifftrhs .= P.fftrhs ./ Omega.pseudodiff
     fip.tools.pifft! * P.ifftrhs
-    dudt .= real.(P.ifftrhs)
+    dudt .= real.(P.ifftrhs) .* Omega.K     # Account for distortion of pseudodiff operator
     
     fip.Omega.bc!(dudt, fip.Omega.Nx, fip.Omega.Ny)
     return nothing

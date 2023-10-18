@@ -109,25 +109,6 @@ function get_differential_fourier(Wx::T, Wy::T, Nx::Int, Ny::Int) where {T<:Real
     return pseudodiff_coeffs, harmonic_coeffs, biharmonic_coeffs
 end
 
-function get_differential_fourier(Wx::T, Wy::T, Nx::Int, Ny::Int, Mx::Int, My::Int, K::M
-    ) where {T<:Real, M<:KernelMatrix{T}}
-    mu_x = π / Wx
-    mu_y = π / Wy
-    # kx = vcat(K[Mx:end, My], K[1:Mx-1, My])
-    # ky = vcat(K[Mx, My:end], K[Mx, 1:My-1])
-    # kx = K[:, My]
-    # ky = K[Mx, :]
-    # kxx = kx[fftint(Nx) .+ 1]
-    # kyy = ky[fftint(Ny) .+ 1]
-    x_coeffs = mu_x .* fftint(Nx) # .* (kx ./ maximum(kx))
-    y_coeffs = mu_y .* fftint(Ny) # .* (ky ./ maximum(ky))
-    X_coeffs, Y_coeffs = meshgrid(x_coeffs, y_coeffs)
-    harmonic_coeffs = X_coeffs .^ 2 + Y_coeffs .^ 2
-    pseudodiff_coeffs = sqrt.(harmonic_coeffs)
-    biharmonic_coeffs = harmonic_coeffs .^ 2
-    return pseudodiff_coeffs, harmonic_coeffs, biharmonic_coeffs
-end
-
 function fftint(N::Int)
     N2 = N ÷ 2
     if iseven(N)

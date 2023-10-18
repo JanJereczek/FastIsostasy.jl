@@ -119,8 +119,7 @@ function ComputationDomain(
     end
 
     # Differential operators in Fourier space
-    # pseudodiff, harmonic, biharmonic = get_differential_fourier(Wx, Wy, Nx, Ny)
-    pseudodiff, harmonic, biharmonic = get_differential_fourier(Wx, Wy, Nx, Ny, Mx, My, K)
+    pseudodiff, harmonic, biharmonic = get_differential_fourier(Wx, Wy, Nx, Ny)
 
     # Apply distortion to pseudodiff operator
     normdistort_pseudodiff!(pseudodiff, K, X, Y, Wx, Wy)
