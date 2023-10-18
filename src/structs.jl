@@ -71,7 +71,7 @@ struct ComputationDomain{T<:AbstractFloat, M<:KernelMatrix{T}}
     Lat::M
     Lon::M
     K::M
-    projection_correction::Bool
+    correct_distortion::Bool
     null::M         # a zero matrix of size Nx x Ny
     pseudodiff::M   # pseudodiff operator as matrix (Hadamard product)
     harmonic::M     # harmonic operator as matrix (Hadamard product)
@@ -96,7 +96,7 @@ function ComputationDomain(
     use_cuda::Bool = false,
     lat0::T = T(-90.0),
     lon0::T = T(0.0),
-    projection_correction::Bool = true,
+    correct_distortion::Bool = true,
 ) where {T<:AbstractFloat}
 
     # Geometry
@@ -112,7 +112,7 @@ function ComputationDomain(
     Lat, Lon = stereo2latlon(X, Y, lat0, lon0)
 
     arraykernel = use_cuda ? CuArray : Array
-    if projection_correction
+    if correct_distortion
         K = scalefactor(deg2rad.(Lat), deg2rad.(Lon), deg2rad(lat0), deg2rad(lon0))
     else
         K = fill(T(1), Nx, Ny)
@@ -121,6 +121,10 @@ function ComputationDomain(
     # Differential operators in Fourier space
     # pseudodiff, harmonic, biharmonic = get_differential_fourier(Wx, Wy, Nx, Ny)
     pseudodiff, harmonic, biharmonic = get_differential_fourier(Wx, Wy, Nx, Ny, Mx, My, K)
+
+    # Apply distortion to pseudodiff operator
+    normdistort_pseudodiff!(pseudodiff, K, X, Y, Wx, Wy)
+
     # Avoid division by zero. Tolerance ϵ of the order of the neighboring terms.
     # Tests show that it does not lead to errors wrt analytical or benchmark solutions.
     pseudodiff[1, 1] = 1e-3 * mean([pseudodiff[1,2], pseudodiff[2,1]])
@@ -144,7 +148,7 @@ function ComputationDomain(
     j2 = 2*Ny-1-My
 
     return ComputationDomain(Wx, Wy, Nx, Ny, Mx, My, dx, dy, K .* dx, K .* dy,
-        x, y, X, Y, i1, i2, j1, j2, R, Theta, Lat, Lon, K, projection_correction,
+        x, y, X, Y, i1, i2, j1, j2, R, Theta, Lat, Lon, K, correct_distortion,
         null, pseudodiff, harmonic, biharmonic, use_cuda, arraykernel, bc!)
 end
 
@@ -165,9 +169,9 @@ All constants are given in SI units (kilogram, meter, second).
 """
 Base.@kwdef struct PhysicalConstants{T<:AbstractFloat}
     mE::T = 5.972e24                        # Earth's mass (kg)
-    r_equator::T = 6371e3                  # Earth radius at equator (m)
+    r_equator::T = 6371e3                   # Earth radius at equator (m)
     r_pole::T = 6.357e6                     # Earth radius at pole (m)
-    A_ocean::T = 3.625e14                   # Ocean surface (m) as in Goelzer (2020) before Eq. (9)
+    A_ocean_pd::T = 3.625e14                # Ocean surface (m) as in Goelzer (2020) before Eq. (9)
     g::T = 9.8                              # Mean Earth acceleration at surface (m/s^2)
     G::T = 6.674e-11                        # Gravity constant (m^3 kg^-1 s^-2)
     seconds_per_year::T = SECONDS_PER_YEAR  # (s)
@@ -396,11 +400,11 @@ function FastIsoTools(
     # FFT plans depening on CPU vs. GPU usage
     if Omega.use_cuda
         Xgpu = CuArray(Omega.X)
-        p1, p2 = CUFFT.plan_fft(Xgpu), CUFFT.plan_ifft(Xgpu)
+        pfft, pifft = CUFFT.plan_fft(Xgpu), CUFFT.plan_ifft(Xgpu)
         pfft! = CUFFT.plan_fft!(complex.(Omega.X))
         pifft! = CUFFT.plan_ifft!(complex.(Omega.X))
     else
-        p1, p2 = plan_fft(Omega.X), plan_ifft(Omega.X)
+        pfft, pifft = plan_fft(Omega.X), plan_ifft(Omega.X)
         pfft!, pifft! = plan_fft!(complex.(Omega.X)), plan_ifft!(complex.(Omega.X))
     end
 
@@ -415,7 +419,7 @@ function FastIsoTools(
     prealloc = PreAllocated(realmatrices..., cplxmatrices...)
     
     return FastIsoTools(Omega.arraykernel(elasticgreen), Omega.arraykernel(geoidgreen),
-        p1, p2, pfft!, pifft!, Hice, eta, prealloc)
+        pfft, pifft, pfft!, pifft!, Hice, eta, prealloc)
 end
 
 null(Omega::ComputationDomain) = copy(Omega.arraykernel(Omega.null))

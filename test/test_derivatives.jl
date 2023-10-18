@@ -13,7 +13,7 @@ end
 
 function derivative_stdsetup(use_cuda::Bool)
     W, n, pc = 3000e3, 7, false
-    Omega = ComputationDomain(W, n, projection_correction = pc, use_cuda = use_cuda)
+    Omega = ComputationDomain(W, n, correct_distortion = pc, use_cuda = use_cuda)
     c, p, _, __, Hcylinder, t_out, interactive_sealevel = benchmark1_constants(Omega)
     fip = FastIsoProblem(Omega, c, p, t_out, interactive_sealevel, Hcylinder)
 
@@ -37,14 +37,14 @@ end
 
 #=
 # function check_uneven_pseudodiff()
-Omega = ComputationDomain(3000e3, 7, projection_correction = false)
+Omega = ComputationDomain(3000e3, 7, correct_distortion = false)
 X, Y, K = Omega.X, Omega.Y, Omega.K
 # F = sin.(X) + 4 .* cos.(Y) + (X .* Y) .^ 2
 F = 2 .* X .+ 4 .* Y
 dF = real.(ifft(Omega.pseudodiff .* fft(F)))
 # x = Omega.X[:, Omega.My]
 
-OmegaK = ComputationDomain(3000e3, 7, projection_correction = true)
+OmegaK = ComputationDomain(3000e3, 7, correct_distortion = true)
 X, Y, K = OmegaK.X, OmegaK.Y, OmegaK.K
 # G = sin.(X .* K) + 4 .* cos.(Y .* K) + (X .* K .* Y .* K) .^ 2
 G = 2 .* (X .* K) .+ 4 .* (Y .* K)

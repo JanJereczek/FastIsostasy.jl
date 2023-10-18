@@ -7,7 +7,7 @@ function main(n::Int; use_cuda::Bool = false, interactive_sl::Bool = false,
     dense::Bool = false)
     T = Float64
     W = T(3000e3)               # half-length of the square domain (m)
-    Omega = ComputationDomain(W, n, use_cuda = use_cuda, projection_correction = false)
+    Omega = ComputationDomain(W, n, use_cuda = use_cuda, correct_distortion = false)
     c = PhysicalConstants(rho_litho = 0.0)
     p = LayeredEarth(Omega, layer_viscosities = [1e21], layer_boundaries = [88e3])
 

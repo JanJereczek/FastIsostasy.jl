@@ -36,7 +36,7 @@ We want to render a situation similar to the one depicted below:
 Initializing a [`LayeredEarth`](@ref) with parameters corresponding to this situation automatically computes the conversion from a 3D to a 2D problem. Since we will compare our solution to an analytical one of a flat Earth, we exceptionally switch off the distortion correction. This can be simply executed by running:
 =#
 
-Omega = ComputationDomain(W, n, projection_correction = false)
+Omega = ComputationDomain(W, n, correct_distortion = false)
 c = PhysicalConstants(rho_litho = 0.0)
 lv = [1e19, 1e21]       # viscosity layers (Pa s)
 lb = [88e3, 400e3]      # depth of layer boundaries (m)
