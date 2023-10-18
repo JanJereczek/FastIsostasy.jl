@@ -35,6 +35,7 @@ end
 # Array utils
 #####################################################
 
+not(x::Bool) = !x
 Base.fill(x::Real, fip::FastIsoProblem) = fill(x, fip.Omega)
 Base.fill(x::Real, Omega::ComputationDomain) = Omega.arraykernel(fill(x, Omega.Nx, Omega.Ny))
 
@@ -106,6 +107,18 @@ Convert Euclidean to angular distance along great circle.
 function dist2angulardist(r::Real)
     R = 6371e3     # radius at equator
     return 2 * atan( r / (2 * R) )
+end
+
+"""
+    lon360tolon180(lon, X)
+
+Convert longitude and field from `lon=0:360` to `lon=-180:180`.
+"""
+function lon360tolon180(lon, X)
+    permidx = lon .> 180
+    lon180 = vcat(lon[permidx] .- 360, lon[not.(permidx)])
+    X180 = cat(X[permidx, :, :], X[not.(permidx), :, :], dims=1)
+    return lon180, X180
 end
 
 """

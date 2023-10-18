@@ -69,24 +69,6 @@ function load_laty_3Dvisc()
     return eta_itp
 end
 
-function load_litho_thickness_laty()
-    file = "/home/jan/.julia/dev/FastIsostasy/data/Latychev/ICE6G/dense/LAB.llz"
-    data, head = readdlm(file, header = true)
-    Lon_vec, Lat_vec, T_vec = data[:, 1], data[:, 2], data[:, 3]
-    lon, lat = unique(Lon_vec), unique(Lat_vec)
-    nlon, nlat = length(lon), length(lat)
-    Lon = reshape(Lon_vec, nlon, nlat)
-    Lat = reshape(Lat_vec, nlon, nlat)
-    Tlitho = reshape(T_vec, nlon, nlat)
-    reverse!(Tlitho, dims=2)
-    reverse!(Lat, dims=2)
-    reverse!(lat)
-    heatmap(Tlitho)
-    lon180, Tlitho180 = lon360tolon180(lon, Tlitho)
-    itp = linear_interpolation((lon180, lat), Tlitho180[:, :, 1], extrapolation_bc = Flat())
-    return itp
-end
-
 function load_ice6g()
     file = "../data/ICE6Gzip/IceT.I6F_C.131QB_VM5a_1deg.nc"
     ds = NCDataset(file)
@@ -200,53 +182,73 @@ end
 """
     load_wiens2021(Omega)
 
-Load the viscosity layers estimated in [^Wiens2021] into a 3D array with \$ x, y, z \$
-respectively the first, second and third dimension of the array.
-
-Will be replaced in future by `load_paramfield(publication = "Wiens2021")`.
+Load the viscosity field from [whitehouse-solid-2019] on `Omega::ComputationDomain`
+and return:
+ - `x` the vector of x coordinates,
+ - `y` the vector of y coordinates,
+ - `z` the vector of z coordinates,
+ - `eta` the array containing the log10-viscosities,
+ - `eta_itp` an interpolator of eta over x, y and z.
 """
-function load_wiens2021(Omega::ComputationDomain{T, M}; halfspace_logvisc::Real = 21) where
-    {T<:AbstractFloat, M<:KernelMatrix{T}}
-
-    jld2file = "Wiens2021_Nx=64_Ny=64.jld2"
-    dir = joinpath(@__DIR__, "../testdata/Wiens")
-    # if jld2file in readdir(dir)
-    #     println("Preprocessed JLD2 file already exists. Skipping pre-processing.")
-    # else
-    #     jld2_wiens2021(Omega, jld2file, dir)
-    # end
-    @load "$dir/$jld2file" logvisc3D logvisc_interpolators
-
-    lv = 10.0 .^ cat( [itp.(Omega.X, Omega.Y) for itp in logvisc_interpolators]...,
-        fill(T(halfspace_logvisc), Omega.Nx, Omega.Ny), dims=3)
-    return lv
-end
-
-function jld2_wiens2021(Omega::ComputationDomain, jld2file::String, dir::String)
+function load_wiens2021(Omega::ComputationDomain)
 
     X, Y, Nx, Ny = Omega.X, Omega.Y, Omega.Nx, Omega.Ny
-    x, y = X[:, 1], Y[1, :]
-    rawdata = [readdlm(file) for file in readdir(dir, join = true)]
-    logvisc = [wiens_filter_nan_viscosity(M) for M in rawdata]
-    km2m!(logvisc)
+    dir = "../data/visc_field/Wiens2021"
+    jld2file = "Wiens2021-Nx$Nx-Ny$Ny.jld2"
+    jld2path = joinpath(dir, "../", jld2file)
 
-    z = [100e3, 200e3, 300e3]
-    logvisc3D = zeros(Float64, (Nx, Ny, length(z)))
-    for k in axes(logvisc3D, 3)
-        for i in axes(logvisc3D, 1), j in axes(logvisc3D, 2)
-            logvisc3D[i, j, k] = wiens_get_closest_eta(X[i,j], Y[i,j], logvisc[k])
+    if isfile(jld2path)
+        @load "$jld2path" x y z logvisc3D eta_itp
+    else
+        x, y = X[:, 1], Y[1, :]
+        z = [100e3, 200e3, 300e3]
+
+        # x (km), y (km), visc (log10 Pa s), depth (km), radius (km), lon (deg), lat (deg)
+        println("Loading raw data...")
+        rawdata = [readdlm(file) for file in readdir(dir, join = true)]
+        filtdata = [wiens_filter_nan_viscosity(M) for M in rawdata]
+        km2m!(filtdata)
+        M = [wiens_filter_xy_outsidedomain(m, x, y) for m in filtdata]
+        logvisc3D = zeros(Float64, (Nx, Ny, length(z)))
+        min_dist_idx = zeros(Int, (Nx, Ny))
+
+        samex = (M[1][:, 1] == M[2][:, 1] == M[3][:, 1])
+        samey = (M[1][:, 2] == M[2][:, 2] == M[3][:, 2])
+        if samex & samey
+            xw, yw = M[1][:, 1], M[1][:, 2]
+        else
+            error("Files don't have matching x,y over depth.")
         end
-    end
 
-    logvisc_interpolators = [linear_interpolation( (x, y), logvisc3D[:, :, k],
-        extrapolation_bc = Flat() ) for k in axes(logvisc3D, 3)]
-    jldsave(joinpath(dir, jld2file), logvisc3D = logvisc3D,
-        logvisc_interpolators = logvisc_interpolators)
-    return nothing
+        println("Populating distance array...")
+        for idx in CartesianIndices(min_dist_idx)
+            i, j = Tuple(idx)
+            min_dist_idx[i, j] = argmin( (X[i,j] .- xw) .^ 2 + (Y[i,j] .- yw) .^ 2 )
+        end
+
+        println("Populating viscosity array...")
+        for idx in CartesianIndices(logvisc3D)
+            i, j, k = Tuple(idx)
+            logvisc3D[i, j, k] = M[k][min_dist_idx[i, j], 3]
+        end
+
+        println("Generating interpolator...")
+        eta_itp = linear_interpolation( (x,y,z), logvisc3D, extrapolation_bc = Flat() )
+        @save "$jld2path" x y z logvisc3D eta_itp
+
+    end
+    return (x, y, z), logvisc3D, eta_itp
 end
 
 function wiens_filter_nan_viscosity(M::Matrix{T}) where {T<:AbstractFloat}
     return M[.!isnan.(M[:, 3]), :]
+end
+
+function wiens_filter_xy_outsidedomain(M::Matrix{T}, x, y) where {T<:AbstractFloat}
+    x1, x2 = extrema(x)
+    y1, y2 = extrema(y)
+    idx = (x1 .<= M[:, 1] .<= x2) .& (y1 .<= M[:, 2] .<= y2)
+    return M[idx, :]
 end
 
 function wiens_get_closest_eta(x::T, y::T, M::Matrix{T}) where {T<:AbstractFloat}
@@ -256,8 +258,31 @@ end
 
 function km2m!(V::Vector{Matrix{T}}) where {T<:AbstractFloat}
     for i in eachindex(V)
-        for j in [1, 2, 4]
+        for j in [1, 2, 4, 5]
             V[i][:, j] .*= T(1e3) 
         end
     end
+end
+
+"""
+    load_litho_thickness_laty(Omega)
+
+Load the lithospheric thickness on `Omega::ComputationDomain` and return:
+ - `x` the vector of x coordinates,
+ - `y` the vector of y coordinates,
+ - `Tlitho` the array containing the lithospheric thickness,
+ - `itp` an interpolator of `Tlitho` over `x, y`.
+"""
+function load_litho_thickness_laty()
+    file = "/home/jan/.julia/dev/FastIsostasy/data/Latychev/ICE6G/dense/LAB.llz"
+    data, head = readdlm(file, header = true)
+    Lon_vec, Lat_vec, T_vec = data[:, 1], data[:, 2], data[:, 3]
+    lon, lat = unique(Lon_vec), unique(Lat_vec)
+    nlon, nlat = length(lon), length(lat)
+    Tlitho = reshape(T_vec, nlon, nlat)
+    reverse!(Tlitho, dims=2)
+    reverse!(lat)
+    lon180, Tlitho180 = lon360tolon180(lon, Tlitho)
+    itp = linear_interpolation((lon180, lat), Tlitho180[:, :, 1], extrapolation_bc = Flat())
+    return (lon180, lat), Tlitho, itp
 end
