@@ -2,7 +2,7 @@ push!(LOAD_PATH, "../")
 using FastIsostasy
 using CairoMakie
 using JLD2
-include("helpers/plot.jl")
+include("helpers.jl")
 
 function main(
     n::Int;
