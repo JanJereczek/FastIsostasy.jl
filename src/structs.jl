@@ -121,9 +121,6 @@ function ComputationDomain(
     # Differential operators in Fourier space
     pseudodiff, harmonic, biharmonic = get_differential_fourier(Wx, Wy, Nx, Ny)
 
-    # Apply distortion to pseudodiff operator
-    normdistort_pseudodiff!(pseudodiff, K, X, Y, Wx, Wy)
-
     # Avoid division by zero. Tolerance ϵ of the order of the neighboring terms.
     # Tests show that it does not lead to errors wrt analytical or benchmark solutions.
     pseudodiff[1, 1] = 1e-3 * mean([pseudodiff[1,2], pseudodiff[2,1]])
