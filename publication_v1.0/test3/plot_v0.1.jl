@@ -74,7 +74,7 @@ function mainplot(n)
     labels = [L"t = %$(tvec[k]) kyr $\,$" for k in eachindex(tvec)]
     cmap = cgrad(janjet, length(labels), categorical = true)
     bgap = 0.2
-    bwidth = 1.9 * bgap
+    bwidth = 1.95 * bgap
 
     ytvisible = [true, false, false, true]
     ytlabelsvisible = [true, false, false, true]
@@ -83,7 +83,7 @@ function mainplot(n)
     xtvisible = [false, true, true]
     xtlabelsvisible = [false, true, true]
 
-    fig = Figure(resolution = (3200, 2000), fontsize = 50)
+    fig = Figure(resolution = (3200, 2000), fontsize = 60)
     ii = [3:6, 7:9, 10:12]
     axs = [Axis(fig[ii[i], j],
         yticksvisible = ytvisible[j], yticklabelsvisible = ytlabelsvisible[j],
@@ -112,15 +112,15 @@ function mainplot(n)
             elva_max_error[i] = maximum(abs.(diff_elva)/umax)
             elva_mean_error[i] = mean(abs.(diff_elva)/umax)
         end
-        barplot!(axs[j+8], eachindex(tvec) .- bgap, max_error,
-            width = bwidth, label = L"LV-ELVA max $\,$")
-        barplot!(axs[j+8], eachindex(tvec) .- bgap, mean_error,
-            width = bwidth, label = L"LV-ELVA mean $\,$")
-
-        barplot!(axs[j+8], eachindex(tvec) .+ bgap, elva_max_error,
-            width = bwidth, label = L"ELVA max $\,$", color = :gray75)
-        barplot!(axs[j+8], eachindex(tvec) .+ bgap, elva_mean_error,
-            width = bwidth, label = L"ELVA mean $\,$", color = :gray50)
+        barplot!(axs[j+8], eachindex(tvec) .- bgap, elva_max_error,
+            width = bwidth, label = L"FI1D max $\,$")
+        barplot!(axs[j+8], eachindex(tvec) .- bgap, elva_mean_error,
+            width = bwidth, label = L"FI1D mean $\,$", color = :gray50)
+        
+        barplot!(axs[j+8], eachindex(tvec) .+ bgap, max_error,
+            width = bwidth, label = L"FI3D max $\,$")
+        barplot!(axs[j+8], eachindex(tvec) .+ bgap, mean_error,
+            width = bwidth, label = L"FI3D mean $\,$", color = :gray75)
     end
 
     hlines!(axs[5], [1e3], color = :gray20, label = L"Seakon $\,$", linestyle = :dash,
