@@ -76,7 +76,7 @@ function mainplot(n)
     xtvisible = [false, true, true]
     xtlabelsvisible = [false, true, true]
 
-    fig = Figure(resolution = (1200, 1200), fontsize = 24)
+    fig = Figure(resolution = (1200, 1200), fontsize = 30)
     ii = [3:6, 7:9, 10:12]
     nrows, ncols = 3, length(u_3DGIA)
     axs = [Axis(fig[ii[i], j],
@@ -102,19 +102,19 @@ function mainplot(n)
             mean_error[i] = mean(abs.(diff)/umax)
         end
         barplot!(axs[j+4], eachindex(tvec), max_error,
-            width = bwidth, label = L"LV-ELVA max $\,$")
+            width = bwidth, label = L"FI max $\,$")
         barplot!(axs[j+4], eachindex(tvec), mean_error,
-            width = bwidth, label = L"LV-ELVA mean $\,$")
+            width = bwidth, label = L"FI mean $\,$")
     end
 
     hlines!(axs[3], [1e3], color = :gray20, label = L"Seakon $\,$", linestyle = :dash,
         linewidth = lw, )
-    hlines!(axs[3], [1e3], color = :gray20, label = L"FastIso $\,$",
+    hlines!(axs[3], [1e3], color = :gray20, label = L"FastIsostasy $\,$",
         linewidth = lw)
     Legend(fig[1, 2:end-1], axs[3], nbanks = 2, framevisible = false,
         linepoints = [Point2f(0, 0.5), Point2f(2, 0.5)], patchlabelgap = 40)
     Legend(fig[2, :], axs[1], nbanks = 5, width = Relative(0.95),
-        linepoints = [Point2f(0, 0.5), Point2f(2, 0.5)], patchlabelgap = 40)
+        linepoints = [Point2f(0, 0.5), Point2f(1.2, 0.5)], patchlabelgap = 10)
     Legend(fig[13, 2:end-1], axs[5], nbanks = 4, colgap = 50, patchsize = (30, 30))
 
     latexify(x) = ( x, [L"%$xi $\,$" for xi in x] )
@@ -146,8 +146,9 @@ function mainplot(n)
 
     [ylims!(axs[j], (-300, 50)) for j in 1:ncols]
     [ylims!(axs[j], elims) for j in ncols+1:2*ncols]
-    [ylims!(axs[j], (-0.01, 0.4)) for j in 2*ncols+1:3*ncols]
+    [ylims!(axs[j], (-0.01, 0.2)) for j in 2*ncols+1:3*ncols]
     rowgap!(fig.layout, 20)
+    rowgap!(fig.layout, 2, 40)
 
     figfile = "plots/test3/test3_supplementary_N=$(N)"
     save("$figfile.png", fig)

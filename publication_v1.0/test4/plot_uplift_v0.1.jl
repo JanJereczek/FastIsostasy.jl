@@ -3,50 +3,56 @@ using JLD2, NCDatasets, CairoMakie, Interpolations, DelimitedFiles
 include("laty.jl")
 include("../helpers.jl")
 
-function load_1D_results(N)
-    @load "../data/test4/ICE6G/1D-interactivesl=false-ICE6G_D"*
-        "-N=$N.jld2" t fip Hitp Hice_vec deltaH
-    return t, fip
-end
-
 function load_3D_results(case, N)
     @load "../data/test4/ICE6G/$case-N=$N.jld2" t fip Hitp Hice_vec deltaH
     return t, fip, Hitp, Hice_vec, deltaH
 end
 
-function main(case, N; masktype="lgm")
-    t, fip, Hitp, Hice_vec, deltaH = load_3D_results(case, N)
-    t1D, fip1D = load_1D_results(N);
-    tlaty, _, _, _, itp = load_laty_ICE6G(case = "3D")
-    _, _, _, _, itp1D = load_laty_ICE6G(case = "1D")
-    tice6g, _, _, _, Hice_itp = load_ice6gd()
+case = "3D-interactivesl=false-maxdepth=300000.0-nlayers=3-ICE6G_D"
+N = 350
+t, fip, Hitp, Hice_vec, deltaH = load_3D_results(case, N)
 
-    mean_error = fill(Inf, length(tlaty))
-    max_error = fill(Inf, length(tlaty))
-    mean_error1D = fill(Inf, length(tlaty))
-    max_error1D = fill(Inf, length(tlaty))
-    usk_max = fill(Inf, length(tlaty))
 
-    X, Lon, Lat = Array(fip.Omega.X), Array(fip.Omega.Lon), Array(fip.Omega.Lat)
+cmapH = cgrad([:red4, :firebrick1, :lightsalmon, :white, :cornflowerblue])
+cmapu = cgrad([:magenta, :white, :cyan, :cornflowerblue, :royalblue1, :royalblue3, :midnightblue])
+cmapdudt = cgrad([:grey20, :grey60, :honeydew1, :papayawhip, :khaki1, :sandybrown,
+    :firebrick1, :magenta, :midnightblue, :turquoise1, :turquoise2])
+H_opts = (colormap = cmapH, colorrange = (-1.5e3, 0.5e3))
+u_opts = (colormap = cmapu, colorrange = (-100, 500))
+dudt_opts = (colormap = cmapdudt, colorrange = (-3.5, 10.5))
+Hticks = (-1500:500:500, latexify(-1500:500:500))
+uticks = (-100:100:500, latexify(-100:100:500))
+dudtticks = (-4:2:10, latexify(-4:2:10))
 
-    if masktype == "lgm"
-        Hice = [Hice_itp.(Lon, Lat, tk/1e3) for tk in tlaty]
-        kmax = argmax([mean(Hice[k]) for k in eachindex(Hice)])
-        mask = Hice[kmax] .> 1
-    elseif masktype == "random"
-        pointspercentage = 0.2
-        mask = rand(size(X)...) .> pointspercentage
-    elseif masktype == "none"
-        mask = fill(1, size(X)...) .> 0
-    end
-    nm = sum(mask)
-    maskratio = nm / prod(size(mask))
+Nx, Ny = fip.Omega.Nx, fip.Omega.Ny
+xx, yy = 20:Nx-20, 40:Ny-40
+fig = Figure(resolution = (1800, 700), fontsize = 32)
+axs = [Axis(fig[1, j], aspect = DataAspect()) for j in 1:3]
+[hidedecorations!(ax) for ax in axs]
 
-    ufi3D_vec = Float64[]
-    ufi1D_vec = Float64[]
-    usk_vec = Float64[]
-    usk1D_vec = Float64[]
+klgm = argmin( (seconds2years.(fip.out.t) .+ 26e3) .^ 2 )
+kpi = length(fip.out.t)-2 # argmin( (seconds2years.(fip.out.t) ) .^ 2 )
 
+hm = heatmap!(axs[1], fip.out.Hice[kpi][xx, yy] - fip.out.Hice[klgm][xx, yy]; H_opts...)
+Colorbar(fig[2, 1], hm, vertical = false, flipaxis = false, ticks = Hticks,
+    width = Relative(0.6), label = L"Ice thickness anomaly (m) $\,$")
+
+ulgm = fip.out.u[klgm][xx, yy] + fip.out.ue[klgm][xx, yy]
+upi = fip.out.u[kpi][xx, yy] + fip.out.ue[kpi][xx, yy]
+hm = heatmap!(axs[2], upi - ulgm; u_opts...)
+Colorbar(fig[2, 2], hm, vertical = false, flipaxis = false, ticks = uticks,
+    width = Relative(0.6), label = L"Displacement anomaly (m) $\,$")
+
+dudt_ms = fip.out.dudt[kpi][xx, yy] - fip.out.dudt[klgm][xx, yy]
+dudt = m_per_sec2mm_per_yr.(dudt_ms) ./ 10
+hm = heatmap!(axs[3], dudt; dudt_opts...)
+Colorbar(fig[2, 3], hm, vertical = false, flipaxis = false, ticks = dudtticks,
+    width = Relative(0.6), label = L"Displacement rate $\mathrm{(mm \, yr^{-1})}$")
+
+rowgap!(fig.layout, 5)
+
+fig
+#=
     e1D_vec = [zeros(nm) for _ in eachindex(tlaty)]
     e3D_vec = [zeros(nm) for _ in eachindex(tlaty)]
     elaty1D_vec = [zeros(nm) for _ in eachindex(tlaty)]
@@ -171,16 +177,4 @@ function main(case, N; masktype="lgm")
     return nothing
 end
 
-case = "3D-interactivesl=false-maxdepth=300000.0-nlayers=3-ICE6G_D"
-N = 350
-main(case, 350)
-
-# cases = [
-#     # "3D-interactivesl=false-maxdepth=300000.0-nlayers=3-ICE6G_D",
-#     # "3D-interactivesl=false-maxdepth=400000.0-nlayers=3-ICE6G_D",
-#     # "3D-interactivesl=false-maxdepth=500000.0-nlayers=3-ICE6G_D",
-#     # "3D-interactivesl=false-maxdepth=600000.0-nlayers=3-ICE6G_D",
-#     "3D-interactivesl=false-maxdepth=300000.0-nlayers=3-ICE6G_D"]
-# for case in cases
-#     main(case, 350)
-# end
+=#

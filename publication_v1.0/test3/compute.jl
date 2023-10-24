@@ -15,7 +15,7 @@ function main(
     W = T(3000e3)               # half-length of the square domain (m)
     Omega = ComputationDomain(W, n, use_cuda = use_cuda)
     c = PhysicalConstants()
-    p = choose_case(case, Omega, c)
+    p, _, _ = choose_case(case, Omega)
     
     kernel = use_cuda ? "gpu" : "cpu"
     println("Computing on $kernel and $(Omega.Nx) x $(Omega.Ny) grid...")
@@ -31,7 +31,8 @@ function main(
         densekey = "sparse"
     end
 
-    fip = FastIsoProblem(Omega, c, p, t_out, false, Hice)
+    fip = FastIsoProblem(Omega, c, p, t_out, false, Hice,
+        diffeq = (alg = Tsit5(), reltol = 1e-5))
     solve!(fip)
     println("Took $(fip.out.computation_time) seconds!")
     println("-------------------------------------")
@@ -43,7 +44,7 @@ end
 for n in 7:7
     # ["gaussian_lo_D", "gaussian_hi_D", "no_litho", "ref",
     #     "gaussian_lo_η", "gaussian_hi_η", "homogeneous"]
-    for case in ["homogeneous"]
+    for case in ["gaussian_hi_D", "gaussian_lo_η"]
         main(n, case, use_cuda = false, dense_out = true)
     end
 end

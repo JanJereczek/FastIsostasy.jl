@@ -168,8 +168,8 @@ function main(
         case,
     )
     plotname = "test2/$suffix"
-    save("plots/$(plotname)_v0.2.png", response_fig)
-    save("plots/$(plotname)_v0.2.pdf", response_fig)
+    save("plots/$(plotname)_v0.3.png", response_fig)
+    save("plots/$(plotname)_v0.3.pdf", response_fig)
 end
 
 cases = ["viscous"] # "viscoelastic", 

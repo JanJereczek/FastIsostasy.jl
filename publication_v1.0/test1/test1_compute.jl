@@ -39,9 +39,9 @@ function main(n::Int; use_cuda::Bool = false, interactive_sl::Bool = false,
     @save "../data/test1/$filename.jld2" fip Hice
 end
 
-for use_cuda in [false] # [false, true]
+for use_cuda in [false, true] # [false, true]
     for interactive_sl in [false] # [false, true]
-        for n in 6:6
+        for n in 8:8
             main(n, use_cuda = use_cuda, dense = true)
         end
     end

@@ -4,6 +4,7 @@ using CairoMakie
 using JLD2
 include("../../test/helpers/plot.jl")
 include("../helpers.jl")
+include("cases.jl")
 
 function main(n::Int;  kernel = "cpu")
 
@@ -12,8 +13,8 @@ function main(n::Int;  kernel = "cpu")
     prefixes = ["gaussian_lo_D", "gaussian_hi_D", "gaussian_lo_η", "gaussian_hi_η"]
     nf = length(prefixes)
 
-    rigidity_map = cgrad([:royalblue, :white, :firebrick1])
-    viscosity_map = cgrad([:purple4, :white, :darkorange2])
+    rigidity_map = cgrad([:royalblue, :white, :white, :firebrick1], [0.4, 0.48, 0.52, 0.6])
+    viscosity_map = cgrad([:purple4, :white, :white, :darkorange2], [0.4, 0.48, 0.52, 0.6])
     cmaps = [rigidity_map, rigidity_map, viscosity_map, viscosity_map]
     clims = [(50e3, 250e3), (50e3, 250e3), (20, 22), (20, 22)]
     clabels = [L"Lithospheric thickness $T_0$ (km)",
@@ -26,11 +27,12 @@ function main(n::Int;  kernel = "cpu")
     axs = [Axis(fig[1, j], aspect = DataAspect(),
         xticks = xticks, yticks = yticks) for j in 1:nf]
     for k in 1:nf
+        p, _, lv = choose_case(prefixes[k], Omega)
         @load "../data/test3/$(prefixes[k])_$suffix.jld2" fip
         if k <= 2
-            plotparam = fip.p.litho_thickness
+            plotparam = p.litho_thickness
         elseif k <= 4
-            plotparam = log10.(fip.p.effective_viscosity)
+            plotparam = log10.(lv[:, :, 1])
         end
         heatmap!(axs[k], fip.Omega.X, fip.Omega.Y, plotparam,
             colormap = cmaps[k], colorrange = clims[k])

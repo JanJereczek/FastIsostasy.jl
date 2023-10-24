@@ -1,8 +1,20 @@
 push!(LOAD_PATH, "../")
 using FastIsostasy
 using CairoMakie
-using JLD2
+using JLD2, NCDatasets, Interpolations
 include("../helpers.jl")
+
+
+path_bedmachine = "../data/BedMachine/ANT-16KM_TOPO-BedMachine.nc"
+ds = NCDataset(path_bedmachine)
+xb = Float64.(copy(ds["xc"][:,:]))
+yb = Float64.(copy(ds["yc"][:,:]))
+z_srf = Float64.(copy(ds["z_srf"][:,:]))
+mask = Float64.(copy(ds["mask"][:,:]))
+close(ds)
+
+mask_itp = linear_interpolation((xb, yb), mask)
+z_srf_itp = linear_interpolation((xb, yb), z_srf)
 
 n = 8
 kernel = "cpu"
@@ -12,7 +24,8 @@ suffix = "viscmap_N$N"
 dims, eta, eta_itp = load_wiens2021(Omega)
 dimsT, _, Tlihto_itp = load_litho_thickness_laty()
 Tlitho = Tlihto_itp.(Omega.Lon, Omega.Lat)
-
+antmask = mask_itp.(Omega.X ./ 1e3, Omega.Y ./ 1e3)
+zsrf = z_srf_itp.(Omega.X ./ 1e3, Omega.Y ./ 1e3)
 
 labels = [L"$\textbf{(%$char)}$" for char in ["a", "b", "c", "d"]]
 
@@ -44,7 +57,7 @@ Yposition = [:left, :left, :left, :right]
 
 
 
-fig = Figure(resolution = (1350, 500), fontsize = 20)
+fig = Figure(resolution = (1350, 530), fontsize = 24)
 nrows, ncols = 1, 4
 axs = [Axis(
     fig[i, j],
@@ -61,6 +74,8 @@ axs = [Axis(
     yaxisposition = Yposition[(i-1)*ncols + j],
     aspect = AxisAspect(1),
 ) for j in 1:ncols, i in 1:nrows]
+
+
 
 for k in 1:3
     heatmap!(
@@ -91,6 +106,37 @@ hm = heatmap!(
     colorrange = (50, 250),
 )
 
+
+for k in 1:4
+    contour!(
+        axs[k],
+        Omega.X[:, 1],
+        Omega.Y[1, :],
+        zsrf,
+        levels = [200],
+        color = [:gray50],
+        linewidth = 3,
+    )
+    contour!(
+        axs[k],
+        Omega.X[:, 1],
+        Omega.Y[1, :],
+        zsrf,
+        levels = [20],
+        color = [:black],
+        linewidth = 3,
+    )
+    # contour!(
+    #     axs[k],
+    #     Omega.X[:, 1],
+    #     Omega.Y[1, :],
+    #     antmask .<= 1,
+    #     levels = [0.99],
+    #     color = [:black],
+    #     linewidth = 5,
+    # )
+end
+
 Colorbar(
     fig[2, 1:3],
     colormap = viscmap,
@@ -111,5 +157,6 @@ Colorbar(
     ticks = latexticks(50:50:250),
     flipaxis = false,
 )
-colgap!(fig.layout, 10)
+colgap!(fig.layout, 5)
+rowgap!(fig.layout, 1, 15)
 save("plots/viscmaps/$suffix.pdf", fig)

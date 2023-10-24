@@ -44,7 +44,7 @@ function main(
 
     sl0 = fill(0.0, Omega.Nx, Omega.Ny)
     fip = FastIsoProblem(Omega, c, p, t_out, true, Hice, sealevel_0 = sl0,
-        diffeq = (alg = SimpleEuler(), dt = years2seconds(1.0)))
+        diffeq = (alg = Tsit5(), reltol = 1e-4))
     solve!(fip)
     println("Computation took $(fip.out.computation_time) seconds!")
     println("-------------------------------------")

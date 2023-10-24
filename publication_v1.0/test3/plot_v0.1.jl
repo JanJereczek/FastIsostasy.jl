@@ -83,13 +83,14 @@ function mainplot(n)
     xtvisible = [false, true, true]
     xtlabelsvisible = [false, true, true]
 
-    fig = Figure(resolution = (3200, 2000), fontsize = 60)
+    fig = Figure(resolution = (3200, 2000), fontsize = 58)
     ii = [3:6, 7:9, 10:12]
     axs = [Axis(fig[ii[i], j],
         yticksvisible = ytvisible[j], yticklabelsvisible = ytlabelsvisible[j],
         yaxisposition = yaxpos[j], xticksvisible = xtvisible[i],
         xticklabelsvisible = xtlabelsvisible[i]) for j in eachindex(u_3DGIA), i in 1:3]
 
+    lw = 7
     max_error = fill(Inf, length(tvec))
     mean_error = fill(Inf, length(tvec))
     elva_max_error = fill(0.5, length(tvec))
@@ -99,12 +100,12 @@ function mainplot(n)
         for i in eachindex(u_fastiso[j])
             itp = linear_interpolation(r, u_3DGIA[j][:, i], extrapolation_bc = Flat())
             lines!(axs[j], r, u_3DGIA[j][:, i], color = cmap[i],
-                linewidth = 5, linestyle = :dash)
+                linewidth = lw, linestyle = :dash)
             lines!(axs[j], x, u_fastiso[j][i][slicex, slicey],
-                color = cmap[i], linewidth = 5, label = labels[i])
+                color = cmap[i], linewidth = lw, label = labels[i])
             
             diff = itp.(x) - u_fastiso[j][i][slicex, slicey]
-            lines!(axs[j+4], x, diff, color = cmap[i], linewidth = 5)
+            lines!(axs[j+4], x, diff, color = cmap[i], linewidth = lw)
             max_error[i] = maximum(abs.(diff)/umax)
             mean_error[i] = mean(abs.(diff)/umax)
 
@@ -115,18 +116,18 @@ function mainplot(n)
         barplot!(axs[j+8], eachindex(tvec) .- bgap, elva_max_error,
             width = bwidth, label = L"FI1D max $\,$")
         barplot!(axs[j+8], eachindex(tvec) .- bgap, elva_mean_error,
-            width = bwidth, label = L"FI1D mean $\,$", color = :gray50)
+            width = bwidth, label = L"FI1D mean $\,$", color = :gray75)
         
         barplot!(axs[j+8], eachindex(tvec) .+ bgap, max_error,
             width = bwidth, label = L"FI3D max $\,$")
         barplot!(axs[j+8], eachindex(tvec) .+ bgap, mean_error,
-            width = bwidth, label = L"FI3D mean $\,$", color = :gray75)
+            width = bwidth, label = L"FI3D mean $\,$", color = :gray50)
     end
 
     hlines!(axs[5], [1e3], color = :gray20, label = L"Seakon $\,$", linestyle = :dash,
-        linewidth = 5, )
-    hlines!(axs[5], [1e3], color = :gray20, label = L"FastIso $\,$",
-        linewidth = 5)
+        linewidth = lw, )
+    hlines!(axs[5], [1e3], color = :gray20, label = L"FastIsostasy $\,$",
+        linewidth = lw)
     Legend(fig[1, 2:end-1], axs[5], nbanks = 2, framevisible = false,
         linepoints = [Point2f(0, 0.5), Point2f(2, 0.5)], patchlabelgap = 40)
     Legend(fig[2, 2:end-1], axs[1], nbanks = 8,
