@@ -125,7 +125,7 @@ function load_litho_thickness_laty()
 end
 
 init()
-main(64, 300e3, use_cuda = false, interactive_sl = true)
+main(350, 300e3, use_cuda = true, interactive_sl = false)
 
 # for maxdepth in 300:100:600
 #     main(64, maxdepth * 1e3, use_cuda = false)

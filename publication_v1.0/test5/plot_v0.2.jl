@@ -63,7 +63,7 @@ function main(; n=5)
     # axs[4].xlabel = L"Observable $u(\eta, \: t = 2 \, \mathrm{kyr})$"
     axs[4].xaxisposition = :bottom
     
-    axs[5].xlabel = L"UKI iteration index $\,$"
+    axs[5].xlabel = L"UKI iteration index $m$"
     axs[5].ylabel = L"Total displacemnt error (m) $\,$"
     # axs[5].xaxisposition = :top
     axs[5].yaxisposition = :right
@@ -72,12 +72,12 @@ function main(; n=5)
     axs[5].xticks = latexticks(0:5:15)
     axs[5].yticks = (10 .^ (1:4), [L"$10^{%$e}" for e in 1:4])
 
-    axs[6].xlabel = L"Ground truth $\eta$"
-    axs[6].ylabel = L"Estimation $\eta_n$"
+    axs[6].xlabel = L"Ground truth $\mathrm{log_{10}}(\eta)$"
+    axs[6].ylabel = L"Estimation $\mathrm{log_{10}}(\eta_m)$"
     axs[6].aspect = AxisAspect(1)
     axs[6].yaxisposition = :right
-    axs[6].xticks = latexticks(logetalims[1]+0.5:0.5:logetalims[2])
-    axs[6].yticks = latexticks(logetalims[1]:0.5:logetalims[2]-0.5)
+    axs[6].xticks = latexticks(Union{Float64, Int}[19.5, 20, 20.5, 21])
+    axs[6].yticks = latexticks(Union{Float64, Int}[19.5, 20, 20.5, 21])
     xlims!(axs[6], logetalims)
     ylims!(axs[6], logetalims)
 

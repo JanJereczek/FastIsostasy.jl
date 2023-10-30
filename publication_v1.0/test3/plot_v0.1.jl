@@ -114,22 +114,22 @@ function mainplot(n)
             elva_mean_error[i] = mean(abs.(diff_elva)/umax)
         end
         barplot!(axs[j+8], eachindex(tvec) .- bgap, elva_max_error,
-            width = bwidth, label = L"FI1D max $\,$")
+            width = bwidth, label = L"FI1D max $\,$", color = :dodgerblue1)
         barplot!(axs[j+8], eachindex(tvec) .- bgap, elva_mean_error,
-            width = bwidth, label = L"FI1D mean $\,$", color = :gray75)
+            width = bwidth, label = L"FI1D mean $\,$", color = :dodgerblue3)
         
         barplot!(axs[j+8], eachindex(tvec) .+ bgap, max_error,
-            width = bwidth, label = L"FI3D max $\,$")
+            width = bwidth, label = L"FI3D max $\,$", color = :orange)
         barplot!(axs[j+8], eachindex(tvec) .+ bgap, mean_error,
-            width = bwidth, label = L"FI3D mean $\,$", color = :gray50)
+            width = bwidth, label = L"FI3D mean $\,$", color = :darkorange)
     end
 
     hlines!(axs[5], [1e3], color = :gray20, label = L"Seakon $\,$", linestyle = :dash,
         linewidth = lw, )
-    hlines!(axs[5], [1e3], color = :gray20, label = L"FastIsostasy $\,$",
+    hlines!(axs[5], [1e3], color = :gray20, label = L"FI3D $\,$",
         linewidth = lw)
-    Legend(fig[1, 2:end-1], axs[5], nbanks = 2, framevisible = false,
-        linepoints = [Point2f(0, 0.5), Point2f(2, 0.5)], patchlabelgap = 40)
+    Legend(fig[1, 2:end-1], axs[5], nbanks = 2, framevisible = false, colgap = 40,
+        linepoints = [Point2f(0, 0.5), Point2f(4, 0.5)], patchlabelgap = 80)
     Legend(fig[2, 2:end-1], axs[1], nbanks = 8,
         linepoints = [Point2f(0, 0.5), Point2f(2, 0.5)], patchlabelgap = 40)
         # height = Relative(1.3))
