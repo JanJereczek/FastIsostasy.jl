@@ -3,6 +3,7 @@ module FastIsostasy
 using LinearAlgebra
 using Statistics: mean, cov
 using Distributions: MvNormal
+using .Threads
 
 using JLD2
 using NCDatasets
@@ -62,7 +63,7 @@ export get_r, gauss_distr, samesize_conv
 export uniform_ice_cylinder, stereo_ice_cylinder, stereo_ice_cap
 export quadrature1D, get_quad_coeffs, get_elasticgreen
 export write_out!, remake!, reinit_structs_cpu
-export null
+export null, not
 
 # derivatives.jl
 export get_differential_fourier, fourierderiv
