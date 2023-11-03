@@ -6,7 +6,7 @@ Update the geoid by convoluting the Green's function with the load anom.
 function update_geoid!(fip::FastIsoProblem{T, M}) where {T<:AbstractFloat,
     M<:KernelMatrix{T}}
     fip.geostate.geoid .= samesize_conv(fip.tools.geoidgreen,
-        mass_anom(fip), fip.Omega, no_mean_bc)
+        mass_anom(fip), fip.Omega, corner_bc)
     return nothing
 end
 
@@ -91,7 +91,7 @@ function columnanom_load!(fip::FastIsoProblem{T, M}) where {T<:AbstractFloat, M<
     columnanom_ice!(fip)
     columnanom_water!(fip)
     canoms = fip.geostate.columnanoms
-    canoms.load .= canoms.ice # + canoms.water
+    canoms.load .= canoms.ice + canoms.water
     return nothing
 end
 
@@ -122,8 +122,7 @@ end
 
 function mass_anom(fip::FastIsoProblem{T, M}) where {T<:AbstractFloat, M<:KernelMatrix{T}}
     surface = (fip.Omega.dx * fip.Omega.dy)
-    return surface .* fip.geostate.columnanoms.ice .* fip.Omega.K .^ 2
-    # return surface .* fip.geostate.columnanoms.full .* fip.Omega.K .^ 2
+    return surface .* fip.geostate.columnanoms.full .* fip.Omega.K .^ 2
 end
 
 """
@@ -134,7 +133,7 @@ Return the Green's function used to compute the geoid anomaly as in [^Coulon2021
 function get_geoidgreen(Omega::ComputationDomain{T, M}, c::PhysicalConstants{T}
     ) where {T<:AbstractFloat, M<:KernelMatrix{T}}
     geoidgreen = unbounded_geoidgreen(Omega.R, c)
-    max_geoidgreen = unbounded_geoidgreen(norm([Omega.dx, Omega.dy]), c)  # tolerance = resolution
+    max_geoidgreen = unbounded_geoidgreen(norm([100e3, 100e3]), c)  # tolerance = resolution on 100km
     return min.(geoidgreen, max_geoidgreen)
     # equivalent to: geoidgreen[geoidgreen .> max_geoidgreen] .= max_geoidgreen
 end
@@ -235,7 +234,7 @@ end
 Update the sea-level contribution of ice above floatation as in [^Goelzer2020], eq. (2).
 """
 function update_slc_af!(fip::FastIsoProblem{T, M}) where {T<:AbstractFloat, M<:KernelMatrix{T}}
-    fip.geostate.sle_af = fip.geostate.V_af / fip.c.A_ocean *
+    fip.geostate.sle_af = fip.geostate.V_af / fip.c.A_ocean_pd *
         fip.c.rho_ice / fip.c.rho_seawater
     fip.geostate.slc_af = -( fip.geostate.sle_af - fip.refgeostate.sle_af )
     return nothing
@@ -262,8 +261,8 @@ Update the sea-level contribution associated with the potential ocean volume as
 in [^Goelzer2020], eq. (9).
 """
 function update_slc_pov!(fip::FastIsoProblem{T, M}) where {T<:AbstractFloat, M<:KernelMatrix{T}}
-    current = fip.geostate.V_pov / fip.c.A_ocean
-    reference = fip.refgeostate.V_pov / fip.c.A_ocean
+    current = fip.geostate.V_pov / fip.c.A_ocean_pd
+    reference = fip.refgeostate.V_pov / fip.c.A_ocean_pd
     fip.geostate.slc_pov = -(current - reference)
     return nothing
 end
@@ -288,8 +287,8 @@ Update the sea-level contribution associated with the density correction as
 in [^Goelzer2020], eq. (11).
 """
 function update_slc_den!(fip::FastIsoProblem{T, M}) where {T<:AbstractFloat, M<:KernelMatrix{T}}
-    current = fip.geostate.V_den / fip.c.A_ocean
-    reference = fip.refgeostate.V_den / fip.c.A_ocean
+    current = fip.geostate.V_den / fip.c.A_ocean_pd
+    reference = fip.refgeostate.V_den / fip.c.A_ocean_pd
     fip.geostate.slc_den = -( current - reference )
     return nothing
 end
