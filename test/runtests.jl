@@ -19,5 +19,5 @@ const SAVE_PLOTS = false
     benchmark1_external_loadupdate()
     benchmark2()
     benchmark3()
-    # benchmark6()
+    benchmark5()
 end
