@@ -14,7 +14,7 @@ function main(
     T = Float64
     W = T(3000e3)               # half-length of the square domain (m)
     Omega = ComputationDomain(W, n, use_cuda = use_cuda)
-    c = PhysicalConstants()
+    c = PhysicalConstants(rho_uppermantle = 3.6e3)
     p, _, _ = choose_case(case, Omega)
     
     kernel = use_cuda ? "gpu" : "cpu"
@@ -37,14 +37,14 @@ function main(
     println("Took $(fip.out.computation_time) seconds!")
     println("-------------------------------------")
 
-    filename = "$(case)_$(kernel)_Nx$(Omega.Nx)_Ny$(Omega.Ny)_$densekey"
+    filename = "$(case)_$(kernel)_Nx$(Omega.Nx)_Ny$(Omega.Ny)_$(densekey)_premparams"
     @save "../data/test3/$filename.jld2" fip Hice
 end
 
 for n in 7:7
     # ["gaussian_lo_D", "gaussian_hi_D", "no_litho", "ref",
     #     "gaussian_lo_η", "gaussian_hi_η", "homogeneous"]
-    for case in ["gaussian_hi_D", "gaussian_lo_η"]
+    for case in ["gaussian_lo_η", "no_litho", "ref"]
         main(n, case, use_cuda = false, dense_out = true)
     end
 end

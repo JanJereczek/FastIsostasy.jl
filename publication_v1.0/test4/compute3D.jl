@@ -42,7 +42,8 @@ end
 function main(N, maxdepth; nlayers = 3, use_cuda = true, interactive_sl = false)
     Omega = ComputationDomain(3500e3, 3500e3, N, N, use_cuda = use_cuda)
     Lon, Lat = Array(Omega.Lon), Array(Omega.Lat)
-    c = PhysicalConstants(rho_uppermantle = 3.3e3, rho_litho = 2.7e3)
+    c = PhysicalConstants()
+    # c = PhysicalConstants(rho_uppermantle = 3.3e3, rho_litho = 2.7e3)
 
     Titp = load_litho_thickness_laty()
     Tlitho = Titp.(Lon, Lat) .* 1e3
@@ -103,7 +104,7 @@ function main(N, maxdepth; nlayers = 3, use_cuda = true, interactive_sl = false)
     println("Computation took $(fip.out.computation_time) s")
 
     @save "../data/test4/ICE6G/3D-interactivesl=$interactive_sl-maxdepth=$maxdepth"*
-        "-nlayers=$nlayers-$forcing-N=$(Omega.Nx).jld2" t fip Hitp Hice_vec deltaH
+        "-nlayers=$nlayers-$forcing-N=$(Omega.Nx)-premparams.jld2" t fip Hitp Hice_vec deltaH
 end
 
 function load_litho_thickness_laty()

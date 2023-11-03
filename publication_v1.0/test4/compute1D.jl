@@ -50,15 +50,7 @@ function main(N)
     p = LayeredEarth(Omega, layer_boundaries = lb[1:2], layer_viscosities = lv[1:2])
 
     Lon, Lat = Array(Omega.Lon), Array(Omega.Lat)
-    forcing = "ICE6G_D"
-    if forcing == "ICE6G_C"
-        Hice, t, lat, lon = load_ice6g()
-        t .*= -1
-        lon180, Hice180 = lon360tolon180(lon, Hice)
-        Hitp = linear_interpolation((lon180, lat, t), Hice180, extrapolation_bc = Flat())
-    elseif forcing == "ICE6G_D"
-        t, lon, lat, Hice, Hitp = load_ice6gd()
-    end
+    t, lon, lat, Hice, Hitp = load_ice6gd()
     Hice_vec, deltaH = vec_dHice(Omega, Lon, Lat, t, Hitp)
 
     tsec = years2seconds.(t .* 1e3)
@@ -67,8 +59,8 @@ function main(N)
     solve!(fip)
     println("Computation took $(fip.out.computation_time) s")
 
-    @save "../data/test4/ICE6G/1D-interactivesl=$interactive_sl-$forcing-N="*
-        "$(Omega.Nx).jld2" t fip Hitp Hice_vec deltaH
+    @save "../data/test4/ICE6G/1D-interactivesl=$interactive_sl-N="*
+        "$(Omega.Nx)-premparams.jld2" t fip Hitp Hice_vec deltaH
 end
 
 main(350)

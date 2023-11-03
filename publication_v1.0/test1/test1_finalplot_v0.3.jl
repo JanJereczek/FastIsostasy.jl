@@ -35,11 +35,14 @@ function main()
     # cmap = cgrad(:darkrainbow, length(t_plot), categorical = true)
     analytic_support = vcat(1.0e-14, 10 .^ (-10:0.05:-3), 1.0)
     xoffset = [2, 2, 2, 2, 2, 40]
-    yoffset = [10, 8, 9, 10, -30, 0]
+    yoffset = [9, 7, 9, 11, 11, 0]
 
     ax3 = Axis(fig[1, 1], title = L"(a) $\,$", xlabel = L"$x \: (10^3 \: \mathrm{km})$ ",
-        ylabel = L"$u$ (m)", xticks = (0:0.5e6:2e6, latexify(0:0.5:2)), titlegap = tgap,
-        yticks = latexticks(-300:100:0))
+        ylabel = L"$u$ (m)",
+        xticks = (0:0.5e6:1.5e6, latexify(Union{Float64, Int}[0, 0.5, 1, 1.5])),
+        titlegap = tgap,
+        yticks = latexticks(-300:100:0)
+    )
     maxerror_t = fill(Inf, length(t_plot))
     meanerror_t = fill(Inf, length(t_plot))
     for i in eachindex(t_plot)
@@ -78,10 +81,11 @@ function main()
     ylims!(ax3, (-290, 30))
 
 
-    ax4 = Axis(fig[2, 1], title = L"(b) $\,$", xlabel = L"Time (kyr) $\,$",
+    ax4 = Axis(fig[1, 2], title = L"(b) $\,$", xlabel = L"Time (kyr) $\,$",
         ylabel = L"Absolute error (m) $\,$", titlegap = tgap,
-        xticks = (eachindex(t_plot), latexify(round.(t_plot_yr ./ 1e3, digits = 1))),
-        yticks = latexticks(0:2:10))
+        # xticks = (eachindex(t_plot), latexify(round.(t_plot_yr ./ 1e3, digits = 1))),
+        xticks = (eachindex(t_plot), latexify(Union{Float64, Int}[0.1, 0.5, 1.5, 5, 10, 50])),
+        yticks = latexticks(0:2:10), yaxisposition = :right)
     ylims!(ax4, (0, 10))
     barplot!(ax4, eachindex(t_plot), maxerror_t, label = L"max $\,$")
     barplot!(ax4, eachindex(t_plot), meanerror_t, label = L"mean $\,$")
@@ -110,7 +114,7 @@ function main()
         maxerror[n] = maximum(abs_error)
         meanerror[n] = mean(abs_error)
     end
-    ax5 = Axis(fig[1, 2], title = L"(c) $\,$", xlabel = L"$N = N_{x} = N_{y} $ (1)",
+    ax5 = Axis(fig[2, 1], title = L"(c) $\,$", xlabel = L"$N = N_{x} = N_{y} $ (1)",
         ylabel = L"Absolute error (m)$\,$", xscale = log2, yscale = log10,
         xticks = (2 .^ (4:8), [L"$2^{%$l}$" for l in 4:8]),
         yticks = (10. .^ (-1:1), [L"$10^{%$l}$" for l in -1:1]),
@@ -118,7 +122,6 @@ function main()
         yminorticksvisible = true,
         yminorgridvisible = true,
         titlegap = tgap,
-        yaxisposition = :right,
     )
 
     mmax = linregression(logNvec, log10.(maxerror))
