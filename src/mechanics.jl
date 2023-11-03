@@ -92,13 +92,13 @@ function update_diagnostics!(dudt::M, u::M, fip::FastIsoProblem{T, M}, t::T,
     if ((t - fip.out.t[1]) / fip.geostate.dt) >= fip.geostate.countupdates
         # if elastic update placed after geoid, worse match with (Spada et al. 2011)
         update_elasticresponse!(fip)
+        columnanom_full!(fip)
         if fip.interactive_sealevel
             update_geoid!(fip)
             update_sealevel!(fip)
         end
         fip.geostate.countupdates += 1
     end
-
     update_bedrock!(fip, u)
     dudt_isostasy!(dudt, u, fip, t)
     return nothing
@@ -154,12 +154,12 @@ Assume that mean deformation at corners of domain is 0.
 """
 function corner_bc(u::KernelMatrix{<:AbstractFloat}, Nx::Int, Ny::Int)
     u_bc = copy(u)
-    return corner_bc!(u_bc, Nx, Ny)
+    corner_bc!(u_bc, Nx, Ny)
+    return u_bc
 end
 
 function corner_bc!(u::KernelMatrix{<:AbstractFloat}, Nx::Int, Ny::Int)
     allowscalar() do
-        # u .-= ( view(u,1,1) + view(u,Nx,1) + view(u,1,Ny) + view(u,Nx,Ny) ) / 4
         u .-= ( u[1, 1] + u[Nx, 1] + u[1, Ny] + u[Nx, Ny] ) / 4
     end
     return u
