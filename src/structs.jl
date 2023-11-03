@@ -166,7 +166,7 @@ All constants are given in SI units (kilogram, meter, second).
 Base.@kwdef struct PhysicalConstants{T<:AbstractFloat}
     mE::T = 5.972e24                        # Earth's mass (kg)
     r_equator::T = 6371e3                   # Earth radius at equator (m)
-    r_pole::T = 6.357e6                     # Earth radius at pole (m)
+    r_pole::T = 6357e3                      # Earth radius at pole (m)
     A_ocean_pd::T = 3.625e14                # Ocean surface (m) as in Goelzer (2020) before Eq. (9)
     g::T = 9.8                              # Mean Earth acceleration at surface (m/s^2)
     G::T = 6.674e-11                        # Gravity constant (m^3 kg^-1 s^-2)
@@ -174,8 +174,10 @@ Base.@kwdef struct PhysicalConstants{T<:AbstractFloat}
     rho_ice::T = 0.910e3                    # (kg/m^3)
     rho_water::T = 1e3                      # (kg/m^3)
     rho_seawater::T = 1.023e3               # (kg/m^3)
-    rho_uppermantle::T = 3.7e3              # Mean density of topmost upper mantle (kg m^-3)
-    rho_litho::T = 2.6e3                    # Mean density of lithosphere (kg m^-3)
+    # rho_uppermantle::T = 3.7e3            # Mean density of topmost upper mantle (kg m^-3)
+    # rho_litho::T = 2.6e3                  # Mean density of lithosphere (kg m^-3)
+    rho_uppermantle::T = 3.4e3              # Mean density of topmost upper mantle (kg m^-3)
+    rho_litho::T = 3.2e3                    # Mean density of lithosphere (kg m^-3)
 end
 
 #########################################################
