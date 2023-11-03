@@ -28,8 +28,6 @@ Base.@kwdef struct InversionConfig
     scale_obscov::Real = 10000.0
 end
 
-
-
 """
     InversionData
 
@@ -44,7 +42,6 @@ struct InversionData{T<:AbstractFloat, M<:Matrix{T}}
     nparams::Int        # number of values to estimate
     nobs::Int           # number of observed values = nt * nparams
 end
-
 
 function InversionData(t, U, Hice, config; Htol::Real = 1.0)   # Hwater
     if (length(t) != length(U)) ||
@@ -83,11 +80,12 @@ struct InversionProblem{T<:AbstractFloat, M<:Matrix{T}}
     priors::ParameterDistribution
     ukiobj::EnsembleKalmanProcess{T, Int64, Unscented{T, Int64}, DefaultScheduler{T}}
     error::Vector{T}
+    out::Vector{Vector{T}}
     G_ens::M
 end
 
 function InversionProblem(fip::FastIsoProblem{T, M}, config::InversionConfig,
-    data::InversionData{T, M}) where {T<:AbstractFloat, M<:Matrix{T}}
+    data::InversionData{T, M}; saveevery::Int = 1) where {T<:AbstractFloat, M<:Matrix{T}}
     
     # Generating noisy observations
     μ_y = zeros(data.nobs)
@@ -110,10 +108,12 @@ function InversionProblem(fip::FastIsoProblem{T, M}, config::InversionConfig,
         α_reg = config.α_reg, update_freq = config.update_freq)
     ukiobj = EnsembleKalmanProcess(ynoisy.mean, ynoisy.obs_noise_cov, process)
     error = fill(T(Inf), config.N_iter)
+    out = [fill(Inf, data.nparams) for _ in 1:saveevery:config.N_iter+1]
+
     ϕ_tool = get_ϕ_final(priors, ukiobj)       # Params in physical/constrained space
     G_ens = zeros(T, data.nobs, size(ϕ_tool, 2))
 
-    return InversionProblem(fip, config, data, priors, ukiobj, error, G_ens)
+    return InversionProblem(fip, config, data, priors, ukiobj, error, out, G_ens)
 
 end
 
@@ -138,7 +138,9 @@ inversion as initialized in `paraminv`.
 """
 function solve!(paraminv::InversionProblem{T, M}; verbose::Bool = false) where
     {T<:AbstractFloat, M<:Matrix{T}}
-    
+
+    paraminv.out[1] .= get_ϕ_mean_final(paraminv.priors, paraminv.ukiobj)
+
     for n in 1:paraminv.config.N_iter
 
         # Get params in physical/constrained space
@@ -151,12 +153,17 @@ function solve!(paraminv::InversionProblem{T, M}; verbose::Bool = false) where
             paraminv.G_ens[:, j] = forward_fastiso(ϕ_n[:, j], paraminv)
         end
 
-        if verbose 
+        # @threads for j in axes(ϕ_n, 2)
+        #     paraminv.G_ens[:, j] = forward_fastiso(ϕ_n[:, j], paraminv)
+        # end
+
+        if verbose
             println("Extrema of ensemble displacement matrix: $(extrema(paraminv.G_ens))")
         end
 
         EnsembleKalmanProcesses.update_ensemble!(paraminv.ukiobj, paraminv.G_ens)
         paraminv.error[n] = get_error(paraminv.ukiobj)[end]
+        paraminv.out[n+1] .= get_ϕ_mean_final(paraminv.priors, paraminv.ukiobj)
         print_inversion_evolution(paraminv, n, ϕ_n)
     end
     return nothing
