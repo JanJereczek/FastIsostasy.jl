@@ -1,14 +1,16 @@
 #=
 # Parameter inversion
 
-FastIsostasy relies on simplifications of the full GIA problem and might therefore need a calibration step to match the data, typically obtained from observations or from a "golden-standard" 3D GIA model. By means of an unscented Kalman inversion, one can, for instance, infer the appropriate field of effective mantle viscosity that matches the data best. Whereas this is known to be a tedious step, FastIsostasy is developped to ease the procedure by providing a convenience struct [`InversionProblem`](@ref). We demonstrate this on a low-resolution grid since (1) the underlying unscented Kalman filter requires many simulations and (2) estimating high-resolution viscosity field might lead to overfit the problem. The effective viscosity field we estimate[^Wiens2021] can be loaded by using [`load_wiens2021`](@ref) with appropriate depths of the layer boundaries:
+FastIsostasy relies on simplifications of the full GIA problem and might therefore need a calibration step to match the data, typically obtained from observations or from a "golden-standard" 3D GIA model. By means of an unscented Kalman inversion [huang-unscented-2021, huang-improve-2021](@cite), one can, for instance, infer the appropriate field of effective mantle viscosity that matches the data best. Whereas this is known to be a tedious step, FastIsostasy is developped to ease the procedure by providing a convenience struct [`InversionProblem`](@ref). We demonstrate this on a low-resolution grid since (1) the underlying unscented Kalman filter requires many simulations and (2) estimating high-resolution viscosity field might lead to overfit the problem. The effective viscosity field we estimate[wiens-seismic-2022](@cite) can be loaded by using [`load_dataset`](@ref) with appropriate depths of the layer boundaries:
 =#
 
 using CairoMakie, FastIsostasy
 Omega = ComputationDomain(3000e3, 5)
 c = PhysicalConstants()
-lb = [88e3, 180e3, 280e3, 400e3]
-lv = load_wiens2021(Omega)
+lb = [100e3, 200e3, 300e3]
+_, eta, eta_itp = load_dataset("Wiens2022")
+loglv = cat([eta_itp.(Omega.X, Omega.Y, z) for z in lb]..., dims = 3)
+lv = 10 .^ loglv
 p = LayeredEarth(Omega, layer_boundaries = lb, layer_viscosities = lv)
 
 #=
@@ -36,9 +38,10 @@ function plot_viscfields(paraminv)
     estim_viscosity[paraminv.data.idx] .= 10 .^ get_ϕ_mean_final(paraminv.priors, paraminv.ukiobj)
 
     cmap = cgrad(:jet, rev = true)
-    crange = (20, 21.2)
-    fig = Figure()
+    crange = (19.5, 21.5)
+    fig = Figure(resolution = (1800, 1000), fontsize = 40)
     axs = [Axis(fig[1,i], aspect = DataAspect()) for i in 1:2]
+    [hidedecorations!(ax) for ax in axs]
     heatmap!(axs[1], log10.(true_viscosity), colormap = cmap, colorrange = crange)
     heatmap!(axs[2], log10.(estim_viscosity), colormap = cmap, colorrange = crange)
     Colorbar(fig[2, :], vertical = false, colormap = cmap, colorrange = crange,
