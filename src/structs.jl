@@ -108,7 +108,6 @@ function ComputationDomain(
     X, Y = meshgrid(x, y)
     null = fill(T(0), Nx, Ny)
     R = get_r.(X, Y)
-    Theta = dist2angulardist.(R)
     Lat, Lon = stereo2latlon(X, Y, lat0, lon0)
 
     arraykernel = use_cuda ? CuArray : Array
@@ -117,6 +116,7 @@ function ComputationDomain(
     else
         K = fill(T(1), Nx, Ny)
     end
+    Theta = dist2angulardist.(K .* R)
 
     # Differential operators in Fourier space
     pseudodiff, harmonic, biharmonic = get_differential_fourier(Wx, Wy, Nx, Ny)
@@ -357,7 +357,6 @@ end
 #########################################################
 """
     FastIsoTools(Omega, c, p)
-
 Return a `struct` containing pre-computed tools to perform forward-stepping of the model.
 This includes the Green's functions for the computation of the lithosphere and geoid
 displacement, plans for FFTs, interpolators of the load and the viscosity over time and

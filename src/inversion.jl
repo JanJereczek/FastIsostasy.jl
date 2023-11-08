@@ -78,7 +78,7 @@ struct InversionProblem{T<:AbstractFloat, M<:Matrix{T}}
     config::InversionConfig
     data::InversionData{T, M}
     priors::ParameterDistribution
-    ukiobj::EnsembleKalmanProcess{T, Int64, Unscented{T, Int64}, DefaultScheduler{T}}
+    ukiobj::EnsembleKalmanProcess   # {T, Int64, Unscented{T, Int64}, DefaultScheduler{T}}
     error::Vector{T}
     out::Vector{Vector{T}}
     G_ens::M

@@ -4,6 +4,7 @@ using LinearAlgebra
 using Statistics: mean, cov
 using Distributions: MvNormal
 using .Threads
+using Downloads
 
 using JLD2
 using NCDatasets
@@ -90,8 +91,12 @@ export InversionConfig, InversionData, InversionProblem, solve, extract_inversio
 export analytic_solution
 
 # data loaders
-export load_spada2011, load_latychev_gaussian, load_wiens2021, load_bathymetry
-export load_litho_thickness_laty
+export load_dataset
+export load_etopo2022, load_wiens2022
+export load_lithothickness_pan2022, load_logvisc_pan2022
+export load_ice6gd
+export load_spada2011, spada_cases
+export load_latychev2023_ICE6G  #, load_latychev_gaussian
 
 # EnsembleKalmanProcesses
 export get_ϕ_mean_final

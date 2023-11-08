@@ -1,4 +1,3 @@
-push!(LOAD_PATH, "../")
 using FastIsostasy
 using Test, CairoMakie
 using Interpolations, LinearAlgebra, Statistics
@@ -6,6 +5,7 @@ using JLD2, DelimitedFiles
 
 include("helpers/compute.jl")
 include("../publication_v1.0/test3/cases.jl")
+include("../publication_v1.0/helpers.jl")
 include("test_benchmarks.jl")
 include("test_dimensions.jl")
 include("test_derivatives.jl")
