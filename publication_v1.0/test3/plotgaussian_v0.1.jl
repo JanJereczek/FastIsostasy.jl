@@ -27,8 +27,8 @@ function main(n::Int;  kernel = "cpu")
     axs = [Axis(fig[1, j], aspect = DataAspect(),
         xticks = xticks, yticks = yticks) for j in 1:nf]
     for k in 1:nf
-        p, _, lv = choose_case(prefixes[k], Omega)
         @load "../data/test3/$(prefixes[k])_$suffix.jld2" fip
+        p, _, lv = choose_case(prefixes[k], fip.Omega)
         if k <= 2
             plotparam = p.litho_thickness
         elseif k <= 4

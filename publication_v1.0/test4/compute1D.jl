@@ -50,7 +50,7 @@ function main(N)
     p = LayeredEarth(Omega, layer_boundaries = lb[1:2], layer_viscosities = lv[1:2])
 
     Lon, Lat = Array(Omega.Lon), Array(Omega.Lat)
-    t, lon, lat, Hice, Hitp = load_ice6gd()
+    (lon, lat, t), Hice, Hitp = load_ice6gd()
     Hice_vec, deltaH = vec_dHice(Omega, Lon, Lat, t, Hitp)
 
     tsec = years2seconds.(t .* 1e3)

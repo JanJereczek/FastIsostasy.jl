@@ -73,7 +73,7 @@ function main(; n=5)
     axs[6].yticks = (10 .^ (1:4), [L"$10^{%$e}" for e in 1:4])
 
     l = ["a", "b", "c", "d", "e", "f"]
-    [axs[k].title = L"(%$(l[k]))" for k in eachindex(l)]
+    [axs[k].title = L"(%$(l[k])) $\,$" for k in eachindex(l)]
 
     rowgap!(fig.layout, 20)
     # rowgap!(fig.layout, 1, -100)

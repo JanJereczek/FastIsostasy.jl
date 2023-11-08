@@ -1,6 +1,5 @@
 using FastIsostasy
 using JLD2, NCDatasets, CairoMakie, Interpolations, DelimitedFiles
-include("laty.jl")
 include("../helpers.jl")
 
 function load_1D_results(N)
@@ -18,9 +17,9 @@ end
 function main(case, N; masktype="lgm")
     t, fip, Hitp, Hice_vec, deltaH = load_3D_results(case, N)
     t1D, fip1D = load_1D_results(N);
-    tlaty, _, _, _, itp = load_laty_ICE6G(case = "3D")
-    _, _, _, _, itp1D = load_laty_ICE6G(case = "1D")
-    tice6g, _, _, _, Hice_itp = load_ice6gd()
+    (_, _, tlaty), _, itp = load_latychev2023_ICE6G(case = "3D")
+    (_, _, _), _, itp1D = load_latychev2023_ICE6G(case = "1D")
+    (_, _, _), _, Hice_itp = load_ice6gd()
 
     tlaty = tlaty[vcat(1:11, [13, 15, 16, 17, 18, 20, 22, 24])]
 
@@ -165,7 +164,7 @@ function main(case, N; masktype="lgm")
         flipaxis = false, width = Relative(0.6), ticks = latexticks(-500:250:500))
     Colorbar(fig[10, 7:9], hme, label = L"$u_\mathrm{SK} - u_\mathrm{FI} $ (m)",
         vertical = false, flipaxis = false, width = Relative(0.8), ticks = latexticks(-100:50:100))
-    save("plots/test4/$case-N=$N-mask=$masktype-final_v0.5.png", fig)
+    save("plots/test4/$case-N=$N-mask=$masktype-final_v0.6.png", fig)
     return nothing
 end
 

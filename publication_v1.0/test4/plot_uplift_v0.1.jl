@@ -1,6 +1,5 @@
 using FastIsostasy
 using JLD2, NCDatasets, CairoMakie, Interpolations, DelimitedFiles
-include("laty.jl")
 include("../helpers.jl")
 
 function load_3D_results(case, N)

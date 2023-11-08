@@ -1,3 +1,5 @@
+using LinearAlgebra
+
 function choose_case(case::String, Omega::ComputationDomain)
 
     eta = 1e21

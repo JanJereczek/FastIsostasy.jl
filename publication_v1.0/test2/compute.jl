@@ -13,7 +13,7 @@ function main(
     W = T(3000e3)               # half-length of the square domain (m)
     Omega = ComputationDomain(W, n, use_cuda = use_cuda)
     # c = PhysicalConstants(rho_ice = 0.931e3, rho_uppermantle = 3.3e3)
-    c = PhysicalConstants(rho_ice = 0.931e3, rho_uppermantle = 3.3e3, rho_litho = 2.6e3)
+    c = PhysicalConstants(rho_ice = 0.931e3, rho_litho = 2.8e3)
     # layer_densities = [3.438e3, 3.871e3],
 
     G = 0.50605e11              # shear modulus (Pa)

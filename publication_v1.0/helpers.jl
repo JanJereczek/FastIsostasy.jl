@@ -10,29 +10,6 @@ diagslice(X, N2, N4) = diag(X)[N2:N2+N4]
 janjet = [:gray10, :cornflowerblue, :orange, :red3]
 janjet_small = [:purple4, :royalblue, :cornflowerblue, :orange, :red3]
 
-function load_ice6g()
-    file = "../data/ICE6Gzip/IceT.I6F_C.131QB_VM5a_1deg.nc"
-    ds = NCDataset(file)
-    Hice = copy(ds["stgit"][:, :])
-    t, lat, lon = copy(ds["Time"][:, :]), copy(ds["Lat"][:, :]), copy(ds["Lon"][:, :])
-    close(ds)
-    return Hice, t, lat, lon
-end
-
-function load_ice6gd(; key = "IceT")
-    file = "../data/ICE6G_D/ICE6GD_$key.nc"
-    ds = NCDataset(file)
-    t, lon, lat = copy(ds["Time"][:, :]), copy(ds["Lon"][:, :]), copy(ds["Lat"][:, :])
-    Hice = copy(ds["$key"])
-    close(ds)
-
-    t .*= -1
-    lon180, Hice180 = lon360tolon180(lon, Hice)
-    Hice_itp = linear_interpolation((lon180, lat, t), Hice180, extrapolation_bc = Flat())
-
-    return t, lat, lon, Hice, Hice_itp
-end
-
 function vec_dHice(Omega, Lon, Lat, t, Hitp)
     Hice_vec = [copy(Array(Omega.null)) for _ in t]
     for k in eachindex(t)
@@ -48,4 +25,23 @@ function vec_dHice(Omega, Lon, Lat, t, Hitp)
     end
     deltaH = [Hice_vec[k] - Hice_vec[1] for k in eachindex(t)]
     return Hice_vec, deltaH
+end
+
+function indices_latychev2023_indices(dir::String, x_lb::Real, x_ub::Real)
+    files = readdir(dir)
+    x_full = readdlm(joinpath(dir, files[1]), ',')[:, 1]
+    idx = x_lb .< x_full .< x_ub
+    x = x_full[idx]
+    return idx, x
+end
+
+function load_latychev_gaussian(dir::String, idx)
+    files = readdir(dir)
+    # nr = size( readdlm(joinpath(dir, files[1]), ','), 1 )
+    nr = length(files)
+    u = zeros(sum(idx), nr)
+    for i in eachindex(files)
+        u[:, i] = readdlm(joinpath(dir, files[i]), ',')[idx, 2]
+    end
+    return u
 end
