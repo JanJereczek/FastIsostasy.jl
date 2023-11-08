@@ -1,5 +1,3 @@
-using Interpolations, NLsolve, NCDatasets, JLD2
-
 """
     get_cellsurface(lat::Vector{T}, lon::Vector{T}) where {T<:Float64}
 
@@ -54,25 +52,6 @@ function surfacechange_residual!(Vresidual::Vector, z::Vector, zk::T,
     Vresidual[1] = (z[1] - zk) * mean([A_itp(z[1]), A_itp(zk)]) - deltaV
 end
 
-"""
-    discretize_oceansurface(; dz_support = 0.1, min_sle_anom = -150, max_sle_anom = 70)
-
-Save a `.jld` file containing `z_support = min_sle_anom:dz_support:max_sle_anom` and
-the ocean surface `A_support` corresponding to these GMSL.
-"""
-function discretize_oceansurface(;
-    dz_support::Float64 = 0.1,
-    min_sle_anom::Real = -150,
-    max_sle_anom::Real = 70)
-    lon, lat, bedrock = load_bathymetry()
-    cellsurface = get_cellsurface(lat, lon)
-    z_support = min_sle_anom:dz_support:max_sle_anom
-    A_support = surface_over_depth(z_support, bedrock, cellsurface)
-    jldsave("src/data/OceanSurface_dz=$(round(dz_support, digits=3))m.jld2";
-        z_support, A_support)
-end
-
-# discretize_oceansurface(dz_support = 0.1)
 
 """
     OceanSurfaceChange(; z0 = 0.0)
@@ -96,12 +75,8 @@ mutable struct OceanSurfaceChange
 end
 
 function OceanSurfaceChange(; A_ocean_pd = 3.625e14, z0 = 0.0)
-    filepath = joinpath(@__DIR__, "data/OceanSurface_dz=0.1m.jld2")
-    discretized_oceansurface = jldopen(filepath)
-    z_support = discretized_oceansurface["z_support"]
-    A_support = discretized_oceansurface["A_support"]
-    A_itp_biased = linear_interpolation(z_support, A_support)
-    A_itp(z) = A_ocean_pd / A_itp_biased(0.0) * A_itp_biased(z)
+    z, A, itp = load_oceansurfacefunction()
+    A_itp(z) = A_ocean_pd / itp(0.0) * itp(z)
     return OceanSurfaceChange(A_itp, A_ocean_pd, z0, A_itp(z0))
 end
 
