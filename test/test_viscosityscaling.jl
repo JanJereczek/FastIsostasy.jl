@@ -29,7 +29,7 @@ elseif occursin("scaledviscosity", case)
     lb = [88e3, 180e3, 280e3, 400e3]
     halfspace_logviscosity = fill(21.0, Omega.Nx, Omega.Ny)
 
-    Eta, Eta_mean, z = load_wiens2021(Omega.X, Omega.Y)
+    Eta, Eta_mean, z = load_wiens2022()
     eta_interpolators, eta_mean_interpolator = interpolate_viscosity_xy(
         Omega.X, Omega.Y, Eta, Eta_mean)
     lv = 10.0 .^ cat(
