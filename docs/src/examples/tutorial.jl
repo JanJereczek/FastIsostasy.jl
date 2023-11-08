@@ -31,7 +31,7 @@ The distortion factor `Omega.K` is not only accessible but also accounted for in
 
 We want to render a situation similar to the one depicted below:
 
-![Schematic representation of the three-layer set-up.](assets/sketch_nlayer_model.png)
+![Schematic representation of the three-layer set-up.](../assets/sketch_nlayer_model.png)
 
 Initializing a [`LayeredEarth`](@ref) with parameters corresponding to this situation automatically computes the conversion from a 3D to a 2D problem. Since we will compare our solution to an analytical one of a flat Earth, we exceptionally switch off the distortion correction. This can be simply executed by running:
 =#
@@ -50,7 +50,7 @@ The next section shows how to use the now obtained `p::LayeredEarth` for actual 
 
 ## Simple load and geometry
 
-We now apply a constant load, here a cylinder of ice with radius $$ R = 1000 \, \mathrm{km} $$ and thickness $$H = 1 \, \mathrm{km}$$, over `Omega::ComputationDomain` introduced in [Multi-layer Earth](@ref). To formulate the problem conviniently, we use [`FastIsoProblem`](@ref), a struct containing the variables and options that are necessary to perform the integration over time. We can then simply apply `solve!(fip::FastIsoProblem)` to perform the integration of the ODE. Under the hood, the ODE is obtained from the PDE by applying a Fourier collocation scheme contained in [`dudt_isostasy!`](@ref). The integration is performed according to `FastIsoProblem.diffeq::NamedTuple`, which contains the algorithm and optionally tolerances, maximum iteration number... etc.
+We now apply a constant load, here a cylinder of ice with radius $$ R = 1000 \, \mathrm{km} $$ and thickness $$H = 1 \, \mathrm{km}$$, over `Omega::ComputationDomain` introduced in [`LayeredEarth`](@ref). To formulate the problem conviniently, we use [`FastIsoProblem`](@ref), a struct containing the variables and options that are necessary to perform the integration over time. We can then simply apply `solve!(fip::FastIsoProblem)` to perform the integration of the ODE. Under the hood, the ODE is obtained from the PDE by applying a Fourier collocation scheme contained in [`dudt_isostasy!`](@ref). The integration is performed according to `FastIsoProblem.diffeq::NamedTuple`, which contains the algorithm and optionally tolerances, maximum iteration number... etc.
 =#
 
 using CairoMakie
