@@ -103,8 +103,8 @@ function ComputationDomain(
     Mx, My = Nx ÷ 2, Ny ÷ 2
     dx = 2*Wx / Nx
     dy = 2*Wy / Ny
-    x = collect(-Wx+dx:dx:Wx)
-    y = collect(-Wy+dy:dy:Wy)
+    x = collect(range(-Wx, stop = Wx, length = Nx))
+    y = collect(range(-Wy, stop = Wy, length = Ny))
     X, Y = meshgrid(x, y)
     null = fill(T(0), Nx, Ny)
     R = get_r.(X, Y)
