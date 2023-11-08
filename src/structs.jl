@@ -362,7 +362,7 @@ This includes the Green's functions for the computation of the lithosphere and g
 displacement, plans for FFTs, interpolators of the load and the viscosity over time and
 preallocated arrays.
 """
-struct FastIsoTools{T<:AbstractFloat, M<:KernelMatrix{T},
+struct FastIsoTools{T<:AbstractFloat, M<:KernelMatrix{T}, C<:ComplexMatrix{T},
     P1<:AbstractFFTs.Plan{Complex{T}}, P2<:AbstractFFTs.Plan{Complex{T}}}
     elasticgreen::M
     geoidgreen::M
@@ -374,7 +374,7 @@ struct FastIsoTools{T<:AbstractFloat, M<:KernelMatrix{T},
         Gridded{Linear{Throw{OnGrid}}}, Tuple{Vector{T}}}, Gridded{Linear{Throw{OnGrid}}}, Flat{Nothing}}
     eta::Interpolations.Extrapolation{M, 1, Interpolations.GriddedInterpolation{M, 1, Vector{M},
         Gridded{Linear{Throw{OnGrid}}}, Tuple{Vector{T}}}, Gridded{Linear{Throw{OnGrid}}}, Flat{Nothing}}
-    prealloc::PreAllocated{T, M}
+    prealloc::PreAllocated{T, M, C}
 end
 
 function FastIsoTools(
@@ -450,11 +450,11 @@ Return a struct containing all the other structs needed for the forward integrat
 model over `Omega::ComputationDomain` with parameters `c::PhysicalConstants` and
 `p::LayeredEarth`. The outputs are stored at `t_out::Vector{<:AbstractFloat}`.
 """
-struct FastIsoProblem{T<:AbstractFloat, M<:KernelMatrix{T}}
+struct FastIsoProblem{T<:AbstractFloat, M<:KernelMatrix{T}, C<:ComplexMatrix{T}}
     Omega::ComputationDomain{T, M}
     c::PhysicalConstants{T}
     p::LayeredEarth{T, M}
-    tools::FastIsoTools{T, M}
+    tools::FastIsoTools{T, M, C}
     refgeostate::RefGeoState{T, M}
     geostate::GeoState{T, M}
     interactive_sealevel::Bool

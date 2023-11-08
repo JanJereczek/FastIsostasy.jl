@@ -109,8 +109,8 @@ end
 
 Update the displacement rate `dudt` of the viscous response.
 """
-function dudt_isostasy!(dudt::M, u::M, fip::FastIsoProblem{T, M}, t::T) where
-    {T<:AbstractFloat, M<:KernelMatrix{T}}
+function dudt_isostasy!(dudt::M, u::M, fip::FastIsoProblem{T, M, C}, t::T) where
+    {T<:AbstractFloat, M<:KernelMatrix{T}, C<:ComplexMatrix{T}}
 
     Omega, P = fip.Omega, fip.tools.prealloc
     columnanom_full!(fip)
@@ -127,10 +127,6 @@ function dudt_isostasy!(dudt::M, u::M, fip::FastIsoProblem{T, M}, t::T) where
             P.Mxy, Omega)
         P.rhs += P.Mxxxx + P.Myyyy + 2 .* P.Mxyxy
     end
-    # dudt[:, :] .= real.(fip.tools.pifft * ((fip.tools.pfft * rhs) ./
-    #     Omega.pseudodiff)) ./ (2 .* fip.p.effective_viscosity)
-    # dudt .= real.(fip.tools.pifft * ((fip.tools.pfft * (P.rhs ./ 
-    #     (2 .* fip.p.effective_viscosity)) ) ./ Omega.pseudodiff)) # .* Omega.K
 
     P.fftrhs .= complex.(P.rhs .* Omega.K ./ (2 .* fip.p.effective_viscosity))
     fip.tools.pfft! * P.fftrhs
