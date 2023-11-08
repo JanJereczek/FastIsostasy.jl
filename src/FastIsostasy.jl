@@ -96,7 +96,7 @@ export load_etopo2022, load_wiens2022
 export load_lithothickness_pan2022, load_logvisc_pan2022
 export load_ice6gd
 export load_spada2011, spada_cases
-export load_latychev2023_ICE6G  #, load_latychev_gaussian
+export load_latychev_test3, load_latychev2023_ICE6G
 
 # EnsembleKalmanProcesses
 export get_ϕ_mean_final

@@ -174,30 +174,29 @@ function benchmark3()
     cases = ["gaussian_lo_D", "gaussian_hi_D", "gaussian_lo_η", "gaussian_hi_η",
         "no_litho", "ref"]
     seakon_files = ["E0L1V1", "E0L2V1", "E0L3V2", "E0L3V3", "E0L0V1", "E0L4V4"]
-    mean_tol = [12, 12, 20, 15, 10, 20]
+    mean_tol = [12, 12, 16, 15, 10, 20]
     max_tol = [24, 30, 30, 35, 20, 45]
-    idx, r = indices_latychev2023_indices("../data/Latychev/$(seakon_files[1])", -1, 3e3)
 
     for m in eachindex(cases)
         fig, axs = comparison_figure(1)
         case = cases[m]
         file = seakon_files[m]
-        u_sk = load_latychev_gaussian("../data/Latychev/$file", idx)
+        _, _, usk_itp = load_latychev_test3(case = file)
 
         p, _, _ = choose_case(case, Omega)
         fip = FastIsoProblem(Omega, c, p, t_out, interactive_sealevel, Hcylinder)
         solve!(fip)
 
+        # println("---------------")
         for k in eachindex(t_out)
-            itp = linear_interpolation(r, u_sk[:, k], extrapolation_bc = Flat())
-            u_bm = itp.(x ./ 1e3)
+            u_bm = usk_itp.(x ./ 1e3, seconds2years(t_out[k]))
             u_fi = fip.out.u[k][ii, jj] + fip.out.ue[k][ii, jj]
             update_compfig!(axs, [u_fi], [u_bm], cmap[k])
             emean = mean(abs.(u_fi .- u_bm))
             emax = maximum(abs.(u_fi .- u_bm))
-            println("$emax,  $emean")
-            # @test emean .< mean_tol[m]
-            # @test emax .< max_tol[m]
+            # println("$emax,  $emean")
+            @test emean .< mean_tol[m]
+            @test emax .< max_tol[m]
         end
         if SAVE_PLOTS
             save("plots/benchmark3/$case.png", fig)

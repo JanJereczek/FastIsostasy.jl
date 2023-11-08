@@ -107,6 +107,7 @@ function load_logvisc_pan2022()
     lat = copy(ds["lat"][:])
     r = copy(ds["r"][:])
     logvisc = copy(ds["eta"][:, :, :])
+    close(ds)
     logvisc_itp = linear_interpolation((lon, lat, r), logvisc, extrapolation_bc = Flat())
     println("returning: (lon180, lat, r), eta (in log10 space), interpolator")
     return (lon, lat, r), logvisc, logvisc_itp
@@ -150,6 +151,18 @@ function load_spada2011(case)
         reverse!(X, dims = 1)
     end
     return (theta, t), X, linear_interpolation((theta, t), X)
+end
+
+function load_latychev_test3(; case = "E0L1V1")
+    link = "https://github.com/JanJereczek/IsostasyData/raw/main/model_outputs/"*
+        "SwierczekLatychev-2023/test3/$case.nc"
+    tmp = Downloads.download(link, tempdir() *"/"* basename(link))
+    ds = NCDataset(tmp, "r")
+    r = copy(ds["r"][:])
+    t = copy(ds["t"][:])
+    u = copy(ds["u"][:, :])
+    close(ds)
+    return (r, t), u, linear_interpolation((r, t), u)
 end
 
 function load_latychev2023_ICE6G(; case = "1D", var = "R")
