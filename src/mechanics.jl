@@ -132,7 +132,7 @@ function dudt_isostasy!(dudt::M, u::M, fip::FastIsoProblem{T, M}, t::T) where
     # dudt .= real.(fip.tools.pifft * ((fip.tools.pfft * (P.rhs ./ 
     #     (2 .* fip.p.effective_viscosity)) ) ./ Omega.pseudodiff)) # .* Omega.K
 
-    P.fftrhs .= complex.(P.rhs ./ (2 .* fip.p.effective_viscosity))
+    P.fftrhs .= complex.(P.rhs .* Omega.K ./ (2 .* fip.p.effective_viscosity))
     fip.tools.pfft! * P.fftrhs
     P.ifftrhs .= P.fftrhs ./ Omega.pseudodiff
     fip.tools.pifft! * P.ifftrhs
