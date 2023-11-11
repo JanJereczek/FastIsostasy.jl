@@ -27,8 +27,8 @@ end
 Update the density-scaled anomaly of the (liquid) water column w.r.t. the reference state.
 """
 function columnanom_water!(fip::FastIsoProblem)
-    fip.geostate.columnanoms.water .= fip.c.rho_seawater .* (fip.geostate.H_water -
-        fip.refgeostate.H_water)
+    fip.geostate.columnanoms.water .= fip.c.rho_seawater .* (fip.geostate.sealevel -
+        fip.refgeostate.sealevel)
     return nothing
 end
 
