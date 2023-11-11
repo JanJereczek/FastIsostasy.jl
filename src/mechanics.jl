@@ -81,26 +81,36 @@ function update_diagnostics!(dudt::M, u::M, fip::FastIsoProblem{T, M}, t::T,
 
     # Make sure that integrated viscous displacement satisfies BC.
     fip.Omega.bc!(u, fip.Omega.Nx, fip.Omega.Ny)
-    
+
+    # Update load columns if interpolator available
     if fip.internal_loadupdate
         update_loadcolumns!(fip, fip.tools.Hice(t))
     end
 
+    # Regardless of update method for column, update the anomalies!
+    columnanom_load!(fip)
+
     # Only update the geoid and sea level if geostate is interactive.
     # As integration requires smaller time steps than diagnostics,
     # only update geostate every fip.geostate.dt
-    if ((t - fip.out.t[1]) / fip.geostate.dt) >= fip.geostate.countupdates
+    if ((t - fip.out.t[1]) / fip.geostate.Δt) >= fip.geostate.countupdates
         # if elastic update placed after geoid, worse match with (Spada et al. 2011)
         update_elasticresponse!(fip)
-        columnanom_full!(fip)
+        columnanom_litho!(fip)
         if fip.interactive_sealevel
             update_geoid!(fip)
             update_sealevel!(fip)
+            if fip.adaptive_oceansurface
+                fip.geostate.osc(dV)
+            end
         end
         fip.geostate.countupdates += 1
     end
-    update_bedrock!(fip, u)
+    columnanom_full!(fip)
     dudt_isostasy!(dudt, u, fip, t)
+    columnanom_mantle!(fip)
+    update_bedrock!(fip, u)
+
     return nothing
 end
 
@@ -113,7 +123,6 @@ function dudt_isostasy!(dudt::M, u::M, fip::FastIsoProblem{T, M, C}, t::T) where
     {T<:AbstractFloat, M<:KernelMatrix{T}, C<:ComplexMatrix{T}}
 
     Omega, P = fip.Omega, fip.tools.prealloc
-    columnanom_full!(fip)
     P.rhs .= -fip.c.g .* fip.geostate.columnanoms.full   # .* Omega.K .^ 2
     if fip.neglect_litho_gradients
         biharmonic_u = Omega.biharmonic .* (fip.tools.pfft * u)
@@ -204,8 +213,8 @@ To use coefficients differing from [^Farrell1972], see [FastIsoTools](@ref).
 """
 function update_elasticresponse!(fip::FastIsoProblem{T, M}
     ) where {T<:AbstractFloat, M<:KernelMatrix{T}}
-    rgh = columnanom_load(fip) .* fip.Omega.K .^ 2
-    fip.geostate.ue .= samesize_conv(fip.tools.elasticgreen, rgh, fip.Omega, no_bc) #edge_bc
+    fip.geostate.ue .= samesize_conv(fip.tools.elasticgreen,
+        fip.geostate.columnanoms.load .* fip.Omega.K .^ 2, fip.Omega, edge_bc)
     return nothing
 end
 

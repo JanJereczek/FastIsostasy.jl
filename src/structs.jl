@@ -297,15 +297,15 @@ Return a struct containing the reference [`GeoState`](@ref).
 struct RefGeoState{T<:AbstractFloat, M<:KernelMatrix{T}}
     u::M                    # viscous displacement
     ue::M                   # elastic displacement
-    H_ice::M                # reference height of ice column
-    H_water::M              # reference height of water column
-    b::M                    # reference bedrock position
-    z0::M                   # reference height to allow external sea-level forcing
-    sealevel::M             # reference sealevel field
-    sle_af::T               # reference sl-equivalent of ice volume above floatation
-    V_pov::T                # reference potential ocean volume
-    V_den::T                # reference potential ocean volume associated with V_den
-    conservation_term::T    # a term for mass conservation
+    H_ice::M                # ref height of ice column
+    H_water::M              # ref height of water column
+    b::M                    # ref bedrock position
+    bsl::T                  # ref barystatic sea level
+    z0::M                   # ref height to allow external sea-level forcing
+    sealevel::M             # ref sealevel field
+    V_af::T                 # ref sl-equivalent of ice volume above floatation
+    V_pov::T                # ref potential ocean volume
+    V_den::T                # ref potential ocean volume associated with V_den
 end
 
 mutable struct ColumnAnomalies{T<:AbstractFloat, M<:KernelMatrix{T}}
@@ -337,19 +337,29 @@ mutable struct GeoState{T<:AbstractFloat, M<:KernelMatrix{T}}
     H_ice::M                # current height of ice column
     H_water::M              # current height of water column
     b::M                    # vertical bedrock position
+    bsl::T                  # barystatic sea level
     geoid::M                # current geoid displacement
     sealevel::M             # current sealevel field
-    V_af::T                 # ice volume above floatation
-    sle_af::T               # sl-equivalent of ice volume above floatation
-    slc_af::T               # sl-contribution of Vice above floatation
-    V_pov::T                # current potential ocean volume
-    slc_pov::T              # sea-level contribution associated with V_pov
-    V_den::T                # potential ocean volume associated with density differences
-    slc_den::T              # sea-level contribution associated with V_den
-    slc::T                  # total sealevel contribution
+    V_af::T                 # V contribution from ice above floatation
+    V_pov::T                # V contribution from bedrock adjustment
+    V_den::T                # V contribution from diff between melt- and saltwater density
     countupdates::Int       # count the updates of the geostate
-    dt::T                   # update step
+    Δt::T                   # update step
     columnanoms::ColumnAnomalies{T, M}
+    osc::OceanSurfaceChange
+end
+
+# Initialise GeoState from RefGeoState
+function GeoState(Omega::ComputationDomain{T, M}, ref::RefGeoState{T, M};
+    Δt = years2seconds(10.0)) where {T<:AbstractFloat, M<:KernelMatrix}
+    return GeoState(
+        collect(null(Omega) .> 1),  # init mask with dummy values
+        copy(ref.u), null(Omega), copy(ref.ue),
+        copy(ref.H_ice), copy(ref.H_water), copy(ref.b),
+        copy(ref.bsl), null(Omega), copy(ref.sealevel),
+        copy(ref.V_af), copy(ref.V_pov), copy(ref.V_den),
+        0, Δt, ColumnAnomalies(Omega), OceanSurfaceChange(),
+    )
 end
 
 #########################################################
@@ -537,6 +547,7 @@ function FastIsoProblem(
     H_ice_0::M = null(Omega),
     H_water_0::M = null(Omega),
     b_0::M = null(Omega),
+    bsl_0::T = 0.0,
 ) where {T<:AbstractFloat, M<:KernelMatrix{T}}
 
     if !isa(diffeq.alg, OrdinaryDiffEqAlgorithm) && !isa(diffeq.alg, SimpleEuler)
@@ -549,30 +560,11 @@ function FastIsoProblem(
     refgeostate = RefGeoState(
         u_0, ue_0,                  # viscous and elastic displacement
         H_ice_0, H_water_0, b_0,    # ice & liquid water column
-        z_0,                        # z0 (useful for external sealevel forcing)
+        bsl_0, z_0,                 # z0 (useful for external sealevel forcing)
         sealevel_0,                 # sealevel
-        T(0.0),                     # sle_af
-        T(0.0),                     # V_pov
-        T(0.0),                     # V_den
-        T(0.0),                     # conservation_term
+        T(0.0), T(0.0), T(0.0),     # V_af, V_pov, V_den
     )
-    
-    geostate = GeoState(
-        collect(null(Omega) .> 1),  # mask for grounded ice
-        copy(u_0), copy(dudt_0),    # viscous displacement and associated rate
-        copy(ue_0),                 # elastic displacement
-        tools.Hice(0.0),            # ice column
-        copy(H_water_0),            # water column
-        copy(b_0),                  # bedrock position
-        geoid_0,                    # geoid perturbation
-        copy(sealevel_0),           # reference for external sl-forcing
-        T(0.0), T(0.0), T(0.0),     # V_af terms
-        T(0.0), T(0.0),             # V_pov terms
-        T(0.0), T(0.0),             # V_den terms
-        T(0.0),                     # total sl-contribution & conservation term
-        0, years2seconds(10.0),     # countupdates, update step
-        ColumnAnomalies(Omega),
-    )
+    geostate = GeoState(Omega, refgeostate)
 
     # Extend the vector with a zero at beginning if not already the case
     # Typically needed for post-processing.

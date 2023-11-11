@@ -11,6 +11,7 @@ using NCDatasets
 using DelimitedFiles: readdlm
 
 using Interpolations: linear_interpolation, Flat
+using NLsolve: mcpsolve
 using FFTW: fft, ifft, plan_fft, plan_ifft, plan_fft!, plan_ifft!
 using AbstractFFTs
 using FastGaussQuadrature: gausslegendre
@@ -32,12 +33,12 @@ using Reexport
     SSPRK22, SSPRK33, SSPRK53, SSPRK63, SSPRK73, SSPRK83, SSPRK432, SSPRK43,
     SSPRK932, SSPRK54, SSPRK104, SSPRKMSVS32, SSPRKMSVS43, SSPRK53_2N1, SSPRK53_2N2
 
+include("adaptive_ocean.jl")
 include("structs.jl")
 include("utils.jl")
 include("derivatives.jl")
 include("derivatives_parallel.jl")
 include("integrators.jl")
-include("adaptive_ocean.jl")
 include("geostate.jl")
 include("mechanics.jl")
 include("inversion.jl")
@@ -72,17 +73,19 @@ export update_second_derivatives!, scale_derivatives!, flatbc!
 export dxx!, dyy!, dxy!
 
 # adaptive_ocean.jl
-export OceanSurfaceChange
+export OceanSurfaceChange, update_sealevel!
 
 # geostate.jl
-export columnanom_load, columnanom_full, columnanom_ice, columnanom_water
+export columnanom_load!, columnanom_full!, columnanom_ice!, columnanom_water!
+export columnanom_litho!, columnanom_mantle!
 
 # mechanics.jl
 export dudt_isostasy!, update_diagnostics!
 export simple_euler!, SimpleEuler
 export init, solve!, step!
 export corner_bc!, no_bc
-export update_loadcolumns!, update_elasticresponse!, update_geoid!, update_sealevel!
+export update_loadcolumns!, update_elasticresponse!, update_geoid!
+export total_volume
 
 # inversion.jl
 export InversionConfig, InversionData, InversionProblem, solve, extract_inversion
