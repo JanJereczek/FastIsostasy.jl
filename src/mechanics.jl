@@ -6,7 +6,7 @@
 
 Solve the isostatic adjustment problem defined in `fip::FastIsoProblem`.
 """
-function solve!(fip::FastIsoProblem{T, M}) where {T<:AbstractFloat, M<:KernelMatrix{T}}
+function solve!(fip::FastIsoProblem)
 
     # println(extrema(fip.p.effective_viscosity))
     t1 = time()
@@ -24,6 +24,7 @@ function solve!(fip::FastIsoProblem{T, M}) where {T<:AbstractFloat, M<:KernelMat
     @inbounds for k in eachindex(t_out)[2:end]
         if fip.verbose
             println("Computing until t = $(Int(round(seconds2years(t_out[k])))) years...")
+            # println("Barystatic sea level = $(fip.geostate.bsl)")
         end
         if fip.diffeq.alg != SimpleEuler()
             prob = remake(dummy, u0 = fip.geostate.u, tspan = (t_out[k-1], t_out[k]), p = fip)
@@ -74,8 +75,9 @@ end
 Update all the diagnotisc variables, i.e. all fields of `fip.geostate` apart
 from the displacement, which requires an integrator.
 """
-function update_diagnostics!(dudt::M, u::M, fip::FastIsoProblem{T, M}, t::T,
-    ) where {T<:AbstractFloat, M<:KernelMatrix{T}}
+function update_diagnostics!(dudt::M, u::M, fip::FastIsoProblem{T, L, M, C, FP, IP}, t::T,
+    ) where {T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}, C<:ComplexMatrix{T},
+    FP<:ForwardPlan{T}, IP<:InversePlan{T}}
 
     # Order really matters here!
 
@@ -99,10 +101,7 @@ function update_diagnostics!(dudt::M, u::M, fip::FastIsoProblem{T, M}, t::T,
         columnanom_litho!(fip)
         if fip.interactive_sealevel
             update_geoid!(fip)
-            update_sealevel!(fip)
-            if fip.adaptive_oceansurface
-                fip.geostate.osc(dV)
-            end
+            update_seasurfaceheight!(fip)
         end
         fip.geostate.countupdates += 1
     end
@@ -119,31 +118,27 @@ end
 
 Update the displacement rate `dudt` of the viscous response.
 """
-function dudt_isostasy!(dudt::M, u::M, fip::FastIsoProblem{T, M, C}, t::T) where
-    {T<:AbstractFloat, M<:KernelMatrix{T}, C<:ComplexMatrix{T}}
+function dudt_isostasy!(dudt::M, u::M, fip::FastIsoProblem{T, L, M, C, FP, IP}, t::T) where
+    {T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}, C<:ComplexMatrix{T},
+    FP<:ForwardPlan{T}, IP<:InversePlan{T}}
 
     Omega, P = fip.Omega, fip.tools.prealloc
-    P.rhs .= -fip.c.g .* fip.geostate.columnanoms.full   # .* Omega.K .^ 2
-    if fip.neglect_litho_gradients
-        biharmonic_u = Omega.biharmonic .* (fip.tools.pfft * u)
-        P.rhs -= fip.p.litho_rigidity .* real.( fip.tools.pifft * biharmonic_u )
-    else
-        update_second_derivatives!(P.uxx, P.uyy, P.ux, P.uxy, u, Omega)
-        P.Mxx .= - fip.p.litho_rigidity .* (P.uxx + fip.p.litho_poissonratio .* P.uyy)
-        P.Myy .= - fip.p.litho_rigidity .* (P.uyy + fip.p.litho_poissonratio .* P.uxx)
-        P.Mxy .= - fip.p.litho_rigidity .* (1 - fip.p.litho_poissonratio) .* P.uxy
-        update_second_derivatives!(P.Mxxxx, P.Myyyy, P.Mxyx, P.Mxyxy, P.Mxx, P.Myy,
-            P.Mxy, Omega)
-        P.rhs += P.Mxxxx + P.Myyyy + 2 .* P.Mxyxy
-    end
+    P.rhs .= -fip.c.g .* fip.geostate.columnanoms.full
+    update_second_derivatives!(P.uxx, P.uyy, P.ux, P.uxy, u, Omega)
+    P.Mxx .= - fip.p.litho_rigidity .* (P.uxx + fip.p.litho_poissonratio .* P.uyy)
+    P.Myy .= - fip.p.litho_rigidity .* (P.uyy + fip.p.litho_poissonratio .* P.uxx)
+    P.Mxy .= - fip.p.litho_rigidity .* (1 - fip.p.litho_poissonratio) .* P.uxy
+    update_second_derivatives!(P.Mxxxx, P.Myyyy, P.Mxyx, P.Mxyxy, P.Mxx, P.Myy,
+        P.Mxy, Omega)
+    P.rhs += P.Mxxxx + P.Myyyy + 2 .* P.Mxyxy
 
     P.fftrhs .= complex.(P.rhs .* Omega.K ./ (2 .* fip.p.effective_viscosity))
     fip.tools.pfft! * P.fftrhs
     P.ifftrhs .= P.fftrhs ./ Omega.pseudodiff
     fip.tools.pifft! * P.ifftrhs
-    dudt .= real.(P.ifftrhs) # .* Omega.K     # Account for distortion of pseudodiff operator
+    dudt .= real.(P.ifftrhs)
     
-    fip.Omega.bc!(dudt, fip.Omega.Nx, fip.Omega.Ny)
+    corner_bc!(dudt, fip.Omega.Nx, fip.Omega.Ny)
     return nothing
 end
 
@@ -211,8 +206,9 @@ end
 Update the elastic response by convoluting the Green's function with the load anom.
 To use coefficients differing from [^Farrell1972], see [FastIsoTools](@ref).
 """
-function update_elasticresponse!(fip::FastIsoProblem{T, M}
-    ) where {T<:AbstractFloat, M<:KernelMatrix{T}}
+function update_elasticresponse!(fip::FastIsoProblem{T, L, M, C, FP, IP}) where
+    {T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}, C<:ComplexMatrix{T},
+    FP<:ForwardPlan{T}, IP<:InversePlan{T}}
     fip.geostate.ue .= samesize_conv(fip.tools.elasticgreen,
         fip.geostate.columnanoms.load .* fip.Omega.K .^ 2, fip.Omega, edge_bc)
     return nothing

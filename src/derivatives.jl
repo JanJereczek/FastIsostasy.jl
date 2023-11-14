@@ -1,24 +1,23 @@
-function update_second_derivatives!(uxx::M, uyy::M, ux::M, uxy::M, u::M,
-    Omega::ComputationDomain{T, M}) where
-    {T<:AbstractFloat, M<:KernelMatrix{T}}
+function update_second_derivatives!(uxx, uyy, ux, uxy, u, Omega)
     update_second_derivatives!(uxx, uyy, ux, uxy, u, u, u, Omega)
 end
 
 function update_second_derivatives!(uxx::M, uyy::M, ux::M, uxy::M, u1::M, u2::M, u3::M,
-    Omega::ComputationDomain{T, M}) where {T<:AbstractFloat, M<:Matrix{T}}
+    Omega::ComputationDomain{T, L, M}) where {T<:AbstractFloat, L<:Matrix{T}, M<:Matrix{T}}
     dxx!(uxx, u1, Omega)
     dyy!(uyy, u2, Omega)
     dxy!(ux, uxy, u3, Omega)
 end
 
-function dxx(u::M, Omega::ComputationDomain{T, M}) where {T<:AbstractFloat, M<:Matrix{T}}
+function dxx(u::M, Omega::ComputationDomain{T, L, M}) where
+    {T<:AbstractFloat, L<:Matrix{T}, M<:Matrix{T}}
     du = zeros(T, size(u)...)
     dxx!(du, u, Omega)
     return du
 end
 
-function dxx!(du::M, u::M, Omega::ComputationDomain{T, M}) where
-    {T<:AbstractFloat, M<:Matrix{T}}
+function dxx!(du::M, u::M, Omega::ComputationDomain{T, L, M}) where
+    {T<:AbstractFloat, L<:Matrix{T}, M<:Matrix{T}}
     # @boundscheck (Omega.Nx, Omega.Ny) == size(u) || throw(BoundsError())
     @inbounds for j in axes(du, 2)
         for i in axes(du, 1)[2:Omega.Nx-1]
@@ -30,14 +29,15 @@ function dxx!(du::M, u::M, Omega::ComputationDomain{T, M}) where
     end
 end
 
-function dyy(u::M, Omega::ComputationDomain{T, M}) where {T<:AbstractFloat, M<:Matrix{T}}
+function dyy(u::M, Omega::ComputationDomain{T, L, M}) where
+    {T<:AbstractFloat, L<:Matrix{T}, M<:Matrix{T}}
     du = zeros(T, size(u)...)
     dyy!(du, u, Omega)
     return du
 end
 
-function dyy!(du::M, u::M, Omega::ComputationDomain{T, M}) where
-    {T<:AbstractFloat, M<:Matrix{T}}
+function dyy!(du::M, u::M, Omega::ComputationDomain{T, L, M}) where
+    {T<:AbstractFloat, L<:Matrix{T}, M<:Matrix{T}}
     # @boundscheck (Omega.Nx, Omega.Ny) == size(u) || throw(BoundsError())
     @inbounds for i in axes(du, 1)
         for j in axes(du, 2)[2:Omega.Ny-1]
@@ -49,7 +49,8 @@ function dyy!(du::M, u::M, Omega::ComputationDomain{T, M}) where
     end
 end
 
-function dxy(u::M, Omega::ComputationDomain{T, M}) where {T<:AbstractFloat, M<:Matrix{T}}
+function dxy(u::M, Omega::ComputationDomain{T, L, M}) where
+    {T<:AbstractFloat, L<:Matrix{T}, M<:Matrix{T}}
     ux = zeros(T, size(u)...)
     uxy = zeros(T, size(u)...)
     dx!(ux, u, Omega)
@@ -57,15 +58,14 @@ function dxy(u::M, Omega::ComputationDomain{T, M}) where {T<:AbstractFloat, M<:M
     return uxy
 end
 
-function dxy!(ux::M, uxy::M, u::M, Omega::ComputationDomain{T, M}) where
-    {T<:AbstractFloat, M<:Matrix{T}}
+function dxy!(ux, uxy, u, Omega)
     # @boundscheck (dxy.Nx, dxy.Ny) == size(u) || throw(BoundsError())
     dx!(ux, u, Omega)
     dy!(uxy, ux, Omega)
 end
 
-function dx!(du::M, u::M, Omega::ComputationDomain{T, M}) where
-    {T<:AbstractFloat, M<:Matrix{T}}
+function dx!(du::M, u::M, Omega::ComputationDomain{T, L, M}) where
+    {T<:AbstractFloat, L<:Matrix{T}, M<:Matrix{T}}
     @inbounds for j in axes(du, 2)
         for i in axes(du, 1)[2:Omega.Nx-1]
             du[i,j] = (u[i+1, j] - u[i-1, j]) / (2 * Omega.Dx[i, j])
@@ -75,8 +75,8 @@ function dx!(du::M, u::M, Omega::ComputationDomain{T, M}) where
     end
 end
 
-function dy!(du::M, u::M, Omega::ComputationDomain{T, M}) where
-    {T<:AbstractFloat, M<:Matrix{T}}
+function dy!(du::M, u::M, Omega::ComputationDomain{T, L, M}) where
+    {T<:AbstractFloat, L<:Matrix{T}, M<:Matrix{T}}
     @inbounds for i in axes(du, 1)
         for j in axes(du, 2)[2:Omega.Ny-1]
             du[i, j] = (u[i,j+1] - u[i,j-1]) / (2 * Omega.Dy[i, j])

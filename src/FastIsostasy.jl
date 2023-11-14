@@ -12,7 +12,7 @@ using DelimitedFiles: readdlm
 
 using Interpolations: linear_interpolation, Flat
 using NLsolve: mcpsolve
-using FFTW: fft, ifft, plan_fft, plan_ifft, plan_fft!, plan_ifft!
+using FFTW: fft, ifft, plan_fft!, plan_ifft!, cFFTWPlan
 using AbstractFFTs
 using FastGaussQuadrature: gausslegendre
 using DSP: conv
@@ -49,7 +49,7 @@ include("dataloaders.jl")
 export KernelMatrix
 export ComputationDomain, PhysicalConstants
 export ReferenceEarthModel, LayeredEarth
-export GeoState, RefGeoState
+export CurrentState, ReferenceState
 export FastIsoTools, FastIsoProblem
 
 # utils.jl
@@ -73,11 +73,12 @@ export update_second_derivatives!, scale_derivatives!, flatbc!
 export dxx!, dyy!, dxy!
 
 # adaptive_ocean.jl
-export OceanSurfaceChange, update_sealevel!
+export OceanSurfaceChange, update_seasurfaceheight!
 
 # geostate.jl
 export columnanom_load!, columnanom_full!, columnanom_ice!, columnanom_water!
 export columnanom_litho!, columnanom_mantle!
+export update_V_af!, update_V_den!, update_V_pov!, height_above_floatation
 
 # mechanics.jl
 export dudt_isostasy!, update_diagnostics!
@@ -95,7 +96,7 @@ export analytic_solution
 
 # data loaders
 export load_dataset
-export load_etopo2022, load_wiens2022
+export load_etopo2022, bathymetry, load_wiens2022
 export load_lithothickness_pan2022, load_logvisc_pan2022
 export load_ice6gd
 export load_spada2011, spada_cases

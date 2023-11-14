@@ -44,11 +44,17 @@ function (osc::OceanSurfaceChange{T})(delta_V::T) where {T<:AbstractFloat}
             sol = mcpsolve(scr!, [minimum(osc.z)], [osc.z_k], [osc.z_k]; mcp_opts...)
         end
 
-        if sol.f_converged || sol.x_converged
+        residual = (sol.zero[1] - osc.z_k) * mean([osc.A_itp(sol.zero[1]),
+            osc.A_itp(osc.z_k)]) - delta_V
+
+        # if sol.f_converged || sol.x_converged
+        if residual < 1e-5 * osc.A_pd   # residual must be less than 10 μm sea level
             osc.z_k = sol.zero[1]
             osc.A_k = osc.A_itp(osc.z_k)
         else
-            error("NLsolve did not converge on ocean surface.")
+            osc.z_k += delta_V / osc.A_itp(osc.z_k)
+            osc.A_k = osc.A_itp(osc.z_k)
+            # println("Had to fall back to piecewise constant approx.")
         end
     end
 end

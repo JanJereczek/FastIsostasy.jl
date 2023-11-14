@@ -56,8 +56,8 @@ function matrify(x::Vector{T}, Nx::Int, Ny::Int) where {T<:Real}
     return X
 end
 
-function samesize_conv(X::M, Y::M, Omega::ComputationDomain{T, M}, bc::Function
-    ) where {T<:AbstractFloat, M<:KernelMatrix{T}}
+function samesize_conv(X::M, Y::M, Omega::ComputationDomain{T, L, M}, bc::Function) where
+    {T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}}
     convo = bc(conv(X, Y), 2*Omega.Nx-1, 2*Omega.Ny-1)
     return view(convo, Omega.i1:Omega.i2, Omega.j1:Omega.j2)
 end
@@ -74,7 +74,7 @@ function write_out!(fip::FastIsoProblem, k::Int)
         fip.out.dudt[k] .= copy(Array(fip.geostate.dudt))
         fip.out.ue[k] .= copy(Array(fip.geostate.ue))
         fip.out.geoid[k] .= copy(Array(fip.geostate.geoid))
-        fip.out.sealevel[k] .= copy(Array(fip.geostate.sealevel))
+        fip.out.seasurfaceheight[k] .= copy(Array(fip.geostate.seasurfaceheight))
         fip.out.Hice[k] .= copy(Array(fip.geostate.H_ice))
     end
 end
@@ -552,13 +552,8 @@ function kernelpromote(X::M, arraykernel) where {M<:AbstractArray{T}} where {T<:
     end
 end
 
-function kernelpromote(X::Vector{M}, arraykernel) where {M<:AbstractArray{T}} where {T<:Real}
-    if isa(X[1], arraykernel)
-        return X
-    else
-        return [arraykernel(x) for x in X]
-    end
-end
+kernelpromote(X::Vector, arraykernel) = [arraykernel(x) for x in X]
+
 
 """
     reinit_structs_cpu(Omega, p)
@@ -591,10 +586,10 @@ function init_results(Omega::ComputationDomain{T, M}, t_out::Vector{T}) where
     dudt_out = [copy(placeholder) for t in t_out]
     ue_out = [copy(placeholder) for t in t_out]
     geoid_out = [copy(placeholder) for t in t_out]
-    sealevel_out = [copy(placeholder) for t in t_out]
+    seasurfaceheight_out = [copy(placeholder) for t in t_out]
     Hice_out = [copy(placeholder) for t in t_out]
     return FastIsoOutputs(t_out, u_out, dudt_out, ue_out, geoid_out,
-        sealevel_out, Hice_out, 0.0)
+        seasurfaceheight_out, Hice_out, 0.0)
 end
 
 function init_results(fip::FastIsoProblem, Omega::ComputationDomain{T, M}, t_out::Vector{T}
@@ -605,7 +600,7 @@ function init_results(fip::FastIsoProblem, Omega::ComputationDomain{T, M}, t_out
     fip.out.dudt = [copy(placeholder) for t in t_out]
     fip.out.ue = [copy(placeholder) for t in t_out]
     fip.out.geoid = [copy(placeholder) for t in t_out]
-    fip.out.sealevel = [copy(placeholder) for t in t_out]
+    fip.out.seasurfaceheight = [copy(placeholder) for t in t_out]
     fip.out.Hice = [copy(placeholder) for t in t_out]
     fip.out.computation_time = 0.0
     return nothing

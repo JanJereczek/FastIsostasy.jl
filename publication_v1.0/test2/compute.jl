@@ -44,7 +44,7 @@ function main(
     t_out = years2seconds.([0.0, 1.0, 1e3, 2e3, 5e3, 1e4, 1e5])
 
     sl0 = fill(0.0, Omega.Nx, Omega.Ny)
-    fip = FastIsoProblem(Omega, c, p, t_out, true, Hice, sealevel_0 = sl0,
+    fip = FastIsoProblem(Omega, c, p, t_out, true, Hice, seasurfaceheight_0 = sl0,
         diffeq = (alg = Tsit5(), reltol = 1e-4))
     solve!(fip)
     println("Computation took $(fip.out.computation_time) seconds!")

@@ -23,6 +23,8 @@ function load_dataset(name::String; kwargs...)
     ########################## Param and forcing fields #######################
     if name == "OceanSurfaceFunctionETOPO2022"
         return load_oceansurfacefunction(; kwargs...)
+    elseif name == "BedMachine3"
+        return load_bedmachine3(; kwargs...)
     elseif name == "ICE6G_D"
         return load_ice6gd(; kwargs...)
     elseif name == "Wiens2022"
@@ -48,7 +50,30 @@ function load_oceansurfacefunction()
     link = "https://github.com/JanJereczek/IsostasyData/raw/main/ocean_surface/dz=0.1m.jld2"
     tmp = Downloads.download(link, tempdir() *"/"* basename(link))
     @load "$tmp" z_support A_support
-    return z_support, A_support, linear_interpolation(z_support, A_support)
+    itp = linear_interpolation(z_support, A_support)    # , extrapolation_bc = Line()
+    return z_support, A_support, itp
+end
+
+function load_bedmachine3(; var = "bed", T = Float64)
+    link = "https://github.com/JanJereczek/IsostasyData/raw/main/topography/"*
+        "BedMachineAntarctica-v3-sparse.nc"
+    tmp = Downloads.download(link, tempdir() *"/"* basename(link))
+    ds = NCDataset(tmp, "r")
+    var = T.(ds["$var"][:, :])
+    x, y = T.(ds["x"][:]), T.(ds["y"][:])
+    close(ds)
+    itp = linear_interpolation((x, reverse(y)), reverse(var, dims=2))
+    return (x, y), var, itp
+end
+
+function bathymetry(Omega::ComputationDomain)
+    T = Float32
+    ds = NCDataset(joinpath(@__DIR__, "../data/bathymetry/ETOPO_2022_v1_60s_N90W180_bed.nc"),"r")
+    lon, lat = T.(ds["lon"][:]), T.(ds["lat"][:])
+    z = T.(ds["z"][:, :])
+    close(ds)
+    itp = linear_interpolation((lon, lat), z, extrapolation_bc = Flat())
+    return itp.(Array(Omega.Lon), Array(Omega.Lat))
 end
 
 function load_ice6gd(; var = "IceT")
@@ -62,7 +87,7 @@ function load_ice6gd(; var = "IceT")
 
     t .*= -1
     lon180, Hice180 = lon360tolon180(lon, Hice)
-    Hice_itp = linear_interpolation((lon180, lat, t), Hice180, extrapolation_bc = Flat())
+    Hice_itp = linear_interpolation((lon180, lat, t), Hice180, extrapolation_bc = 0.0)
 
     println("returning: (lon180, lat, t), Hice, interpolator")
     return (lon180, lat, t), Hice, Hice_itp

@@ -125,7 +125,7 @@ function benchmark2()
             Hmax = 1500.0
             H_ice = stereo_ice_cap(Omega, alpha, Hmax)
         end
-        fip = FastIsoProblem(Omega, c, p, t_out, true, H_ice, sealevel_0 = sl0,
+        fip = FastIsoProblem(Omega, c, p, t_out, true, H_ice, seasurfaceheight_0 = sl0,
             diffeq = (alg = Tsit5(), reltol = 1e-4))
         solve!(fip)
         
