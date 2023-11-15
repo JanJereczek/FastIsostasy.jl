@@ -50,8 +50,9 @@ function load_oceansurfacefunction()
     link = "https://github.com/JanJereczek/IsostasyData/raw/main/ocean_surface/dz=0.1m.jld2"
     tmp = Downloads.download(link, tempdir() *"/"* basename(link))
     @load "$tmp" z_support A_support
-    itp = linear_interpolation(z_support, A_support)    # , extrapolation_bc = Line()
-    return z_support, A_support, itp
+    z, A = collect(z_support), collect(A_support)
+    itp = linear_interpolation(z, A)    # , extrapolation_bc = Line()
+    return z, A, itp
 end
 
 function load_bedmachine3(; var = "bed", T = Float64)

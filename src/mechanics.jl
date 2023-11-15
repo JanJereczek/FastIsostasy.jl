@@ -82,7 +82,7 @@ function update_diagnostics!(dudt::M, u::M, fip::FastIsoProblem{T, L, M, C, FP, 
     # Order really matters here!
 
     # Make sure that integrated viscous displacement satisfies BC.
-    fip.Omega.bc!(u, fip.Omega.Nx, fip.Omega.Ny)
+    corner_bc!(u, fip.Omega.Nx, fip.Omega.Ny)
 
     # Update load columns if interpolator available
     if fip.internal_loadupdate
@@ -97,7 +97,7 @@ function update_diagnostics!(dudt::M, u::M, fip::FastIsoProblem{T, L, M, C, FP, 
     # only update geostate every fip.geostate.dt
     if ((t - fip.out.t[1]) / fip.geostate.Δt) >= fip.geostate.countupdates
         # if elastic update placed after geoid, worse match with (Spada et al. 2011)
-        update_elasticresponse!(fip)
+        # update_elasticresponse!(fip)
         columnanom_litho!(fip)
         if fip.interactive_sealevel
             update_geoid!(fip)
@@ -210,7 +210,7 @@ function update_elasticresponse!(fip::FastIsoProblem{T, L, M, C, FP, IP}) where
     {T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}, C<:ComplexMatrix{T},
     FP<:ForwardPlan{T}, IP<:InversePlan{T}}
     fip.geostate.ue .= samesize_conv(fip.tools.elasticgreen,
-        fip.geostate.columnanoms.load .* fip.Omega.K .^ 2, fip.Omega, edge_bc)
+        fip.geostate.columnanoms.load .* fip.Omega.K .^ 2, fip.Omega)
     return nothing
 end
 

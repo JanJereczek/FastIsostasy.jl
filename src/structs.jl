@@ -4,18 +4,37 @@
 """
     KernelMatrix
 
-An allias for `Union{Matrix{T}, CuMatrix{T}} where {T<:AbstractFloat}`.
+Allias for `Union{Matrix{T}, CuMatrix{T}} where {T<:AbstractFloat}`.
 """
 KernelMatrix{T} = Union{Matrix{T}, CuMatrix{T}} where {T<:AbstractFloat}
+
+"""
+    ComplexMatrix
+
+Allias for `Union{Matrix{C}, CuMatrix{C}} where {T<:AbstractFloat, C<:Complex{T}}`.
+"""
 ComplexMatrix{T} = Union{Matrix{C}, CuMatrix{C}} where {T<:AbstractFloat, C<:Complex{T}}
+
+"""
+    ForwardPlan
+
+Allias for in-place precomputed plans from FFTW or CUFFT. Used to compute forward FFT.
+"""
 ForwardPlan{T} = Union{
     cFFTWPlan{Complex{T}, -1, true, 2, Tuple{Int64, Int64}}, 
     CUFFT.cCuFFTPlan{Complex{T}, -1, true, 2}
 } where {T<:AbstractFloat}
+
+"""
+    InversePlan
+
+Allias for in-place precomputed plans from FFTW or CUFFT. Used to compute inverse FFT.
+"""
 InversePlan{T} = Union{
     AbstractFFTs.ScaledPlan{Complex{T}, cFFTWPlan{Complex{T}, 1, true, 2, UnitRange{Int64}}, T},
     AbstractFFTs.ScaledPlan{Complex{T}, CUFFT.cCuFFTPlan{Complex{T}, 1, true, 2}, T}
 } where {T<:AbstractFloat}
+
 mutable struct PreAllocated{T<:AbstractFloat, M<:KernelMatrix{T}, C<:ComplexMatrix{T}}
     rhs::M
     uxx::M
@@ -82,7 +101,6 @@ struct ComputationDomain{T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}}
     correct_distortion::Bool
     null::M                     # a zero matrix of size Nx x Ny
     pseudodiff::M               # pseudodiff operator as matrix (Hadamard product)
-    biharmonic::M               # biharmonic operator as matrix (Hadamard product)
     use_cuda::Bool
     arraykernel::Any            # Array or CuArray depending on chosen hardware
     bc!::Function               # Boundary conditions
@@ -117,7 +135,6 @@ function ComputationDomain(
     R = get_r.(X, Y)
     Lat, Lon = stereo2latlon(X, Y, lat0, lon0)
 
-    arraykernel = use_cuda ? CuArray : Array
     if correct_distortion
         K = scalefactor(deg2rad.(Lat), deg2rad.(Lon), deg2rad(lat0), deg2rad(lon0))
     else
@@ -126,13 +143,14 @@ function ComputationDomain(
     Theta = dist2angulardist.(K .* R)
 
     # Differential operators in Fourier space
-    pseudodiff, _, biharmonic = get_differential_fourier(Wx, Wy, Nx, Ny)
+    pseudodiff, _, _ = get_differential_fourier(Wx, Wy, Nx, Ny)
 
     # Avoid division by zero. Tolerance ϵ of the order of the neighboring terms.
     # Tests show that it does not lead to errors wrt analytical or benchmark solutions.
     pseudodiff[1, 1] = 1e-3 * mean([pseudodiff[1,2], pseudodiff[2,1]])
     
-    null, K, pseudodiff, biharmonic = kernelpromote([null, K, pseudodiff, biharmonic], arraykernel)
+    arraykernel = use_cuda ? CuArray : Array
+    null, K, pseudodiff = kernelpromote([null, K, pseudodiff], arraykernel)
 
     # Precompute indices for samesize_conv()
     if iseven(Nx)
@@ -151,7 +169,7 @@ function ComputationDomain(
 
     return ComputationDomain(Wx, Wy, Nx, Ny, Mx, My, dx, dy, x, y, X, Y, i1, i2, j1, j2,
         R, Theta, Lat, Lon, K, K .* dx, K .* dy, (dx * dy) .* K .^ 2, correct_distortion,
-        null, pseudodiff, biharmonic, use_cuda, arraykernel, bc!)
+        null, pseudodiff, use_cuda, arraykernel, bc!)
 end
 
 #########################################################
@@ -170,20 +188,21 @@ c = PhysicalConstants(rho_ice = 0.93)   # (kg/m^3)
 All constants are given in SI units (kilogram, meter, second).
 """
 Base.@kwdef struct PhysicalConstants{T<:AbstractFloat}
-    mE::T = 5.972e24                        # Earth's mass (kg)
-    r_equator::T = 6371e3                   # Earth radius at equator (m)
-    r_pole::T = 6357e3                      # Earth radius at pole (m)
-    A_ocean_pd::T = 3.625e14                # Ocean surface (m) as in Goelzer (2020) before Eq. (9)
-    g::T = 9.8                              # Mean Earth acceleration at surface (m/s^2)
-    G::T = 6.674e-11                        # Gravity constant (m^3 kg^-1 s^-2)
-    seconds_per_year::T = SECONDS_PER_YEAR  # (s)
-    rho_ice::T = 0.910e3                    # (kg/m^3)
-    rho_water::T = 1e3                      # (kg/m^3)
-    rho_seawater::T = 1.023e3               # (kg/m^3)
+    type = Float64
+    mE::T = type(5.972e24)                        # Earth's mass (kg)
+    r_equator::T = type(6371e3)                   # Earth radius at equator (m)
+    r_pole::T = type(6357e3)                      # Earth radius at pole (m)
+    A_ocean_pd::T = type(3.625e14)                # Ocean surface (m) as in Goelzer (2020) before Eq. (9)
+    g::T = type(9.8)                              # Mean Earth acceleration at surface (m/s^2)
+    G::T = type(6.674e-11)                        # Gravity constant (m^3 kg^-1 s^-2)
+    seconds_per_year::T = type(SECONDS_PER_YEAR)  # (s)
+    rho_ice::T = type(0.910e3)                    # (kg/m^3)
+    rho_water::T = type(1e3)                      # (kg/m^3)
+    rho_seawater::T = type(1.023e3)               # (kg/m^3)
     # rho_uppermantle::T = 3.7e3            # Mean density of topmost upper mantle (kg m^-3)
     # rho_litho::T = 2.6e3                  # Mean density of lithosphere (kg m^-3)
-    rho_uppermantle::T = 3.4e3              # Mean density of topmost upper mantle (kg m^-3)
-    rho_litho::T = 3.2e3                    # Mean density of lithosphere (kg m^-3)
+    rho_uppermantle::T = type(3.4e3)              # Mean density of topmost upper mantle (kg m^-3)
+    rho_litho::T = type(3.2e3)                    # Mean density of lithosphere (kg m^-3)
 end
 
 #########################################################
@@ -230,7 +249,7 @@ lateral variability of each layer on the grid of `Omega::ComputationDomain`.
 """
 mutable struct LayeredEarth{T<:AbstractFloat, M<:KernelMatrix{T}}
     effective_viscosity::M
-    litho_thickness::M
+    litho_thickness::Matrix{T}
     litho_rigidity::M
     litho_poissonratio::T
     mantle_poissonratio::T
@@ -238,30 +257,13 @@ mutable struct LayeredEarth{T<:AbstractFloat, M<:KernelMatrix{T}}
     layer_boundaries::Array{T, 3}
 end
 
-litho_rigidity = 5e24               # (N*m)
-litho_youngmodulus = 6.6e10         # (N/m^2)
-litho_poissonratio = 0.28           # (1)
-mantle_poissonratio = 0.28          # (1)
-layer_densities = [3.3e3]           # (kg/m^3)
-layer_viscosities = [1e19, 1e21]    # (Pa*s) (Bueler 2007, Ivins 2022, Fig 12 WAIS)
-layer_boundaries = [88e3, 400e3]
-# 88 km: beginning of asthenosphere (Bueler 2007).
-# 400 km: beginning of homogenous half-space (Ivins 2022, Fig 12).
-
-# litho_rigidity = 5e24u"N*m"
-# litho_youngmodulus = 6.6e10u"N / m^2"
-# litho_poissonratio = 0.5
-# layer_densities = [3.3e3]u"kg / m^3"
-# layer_viscosities = [1e19, 1e21]u"Pa*s"      # (Bueler 2007, Ivins 2022, Fig 12 WAIS)
-# layer_boundaries = [88e3, 400e3]u"m"
-
 function LayeredEarth(
     Omega::ComputationDomain{T, L, M};
-    layer_boundaries::A = layer_boundaries,
-    layer_viscosities::B = layer_viscosities,
-    litho_youngmodulus::T = litho_youngmodulus,
-    litho_poissonratio::T = litho_poissonratio,
-    mantle_poissonratio::T = mantle_poissonratio,
+    layer_boundaries::A = T.([88e3, 400e3]),    # 88 km: asthenosphere, 400 km: half-space (Bueler 2007).
+    layer_viscosities::B = T.([1e19, 1e21]),    # (Pa*s) (Bueler 2007, Ivins 2022, Fig 12 WAIS)
+    litho_youngmodulus::T = T(6.6e10),         # (N/m^2)
+    litho_poissonratio::T = T(0.28),
+    mantle_poissonratio::T = T(0.28),
 ) where {
     T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T},
     A<:Union{Vector{T}, Array{T, 3}},
@@ -282,8 +284,8 @@ function LayeredEarth(
     effective_viscosity = get_effective_viscosity(
         Omega, layer_viscosities, layers_thickness, mantle_poissonratio)
 
-    litho_thickness, litho_rigidity, effective_viscosity = kernelpromote(
-        [litho_thickness, litho_rigidity, effective_viscosity], Omega.arraykernel)
+    litho_rigidity, effective_viscosity = kernelpromote(
+        [litho_rigidity, effective_viscosity], Omega.arraykernel)
     return LayeredEarth(
         effective_viscosity,
         litho_thickness, litho_rigidity, litho_poissonratio,
@@ -349,14 +351,14 @@ mutable struct CurrentState{T<:AbstractFloat, M<:KernelMatrix{T}} <: GeoState
     V_pov::T                # V contribution from bedrock adjustment
     V_den::T                # V contribution from diff between melt- and saltwater density
     maskgrounded::KernelMatrix{<:Bool} # mask for grounded ice
-    osc::OceanSurfaceChange
+    osc::OceanSurfaceChange{T}
     countupdates::Int       # count the updates of the geostate
     Δt::T                   # update step
 end
 
 # Initialise CurrentState from ReferenceState
 function CurrentState(Omega::ComputationDomain{T, L, M}, ref::ReferenceState{T, M};
-    Δt = years2seconds(10.0)) where {T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix}
+    Δt = years2seconds(10.0)) where {T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}}
     return CurrentState(
         copy(ref.u), null(Omega), copy(ref.ue),     # u, dudt, ue
         copy(ref.H_ice), copy(ref.H_water),         # H_ice, H_water
@@ -391,11 +393,6 @@ struct FastIsoTools{T<:AbstractFloat, M<:KernelMatrix{T}, C<:ComplexMatrix{T},
     prealloc::PreAllocated{T, M, C}
 end
 
-# CUDA.CUFFT.cCuFFTPlan{ComplexF64, -1, true, 2}
-# AbstractFFTs.ScaledPlan{ComplexF64, CUDA.CUFFT.cCuFFTPlan{ComplexF64, 1, true, 2}, Float64}
-# FFTW.cFFTWPlan{ComplexF64, -1, true, 2, Tuple{Int64, Int64}}
-# AbstractFFTs.ScaledPlan{ComplexF64, FFTW.cFFTWPlan{ComplexF64, 1, true, 2, UnitRange{Int64}}, Float64}
-
 function FastIsoTools(
     Omega::ComputationDomain{T, L, M},
     c::PhysicalConstants{T},
@@ -411,7 +408,7 @@ function FastIsoTools(
     greenintegrand_function = build_greenintegrand(distance, greenintegrand_coeffs)
     quad_support, quad_coeffs = get_quad_coeffs(T, quad_precision)
     elasticgreen = get_elasticgreen(Omega, greenintegrand_function, quad_support, quad_coeffs)
-    geoidgreen = get_geoidgreen(Omega, c)
+    geoidgreen = T.(get_geoidgreen(Omega, c))
 
     # FFT plans depening on CPU vs. GPU usage
     if Omega.use_cuda
@@ -436,7 +433,7 @@ function FastIsoTools(
         pfft!, pifft!, Hice, eta, prealloc)
 end
 
-null(Omega::ComputationDomain) = copy(Omega.arraykernel(Omega.null))
+null(Omega::ComputationDomain) = copy(Omega.null)
 
 """
     FastIsoOutputs()
@@ -550,7 +547,7 @@ function FastIsoProblem(
     ue_0::KernelMatrix{T} = null(Omega),
     seasurfaceheight_0::KernelMatrix{T} = null(Omega),
     b_0::KernelMatrix{T} = null(Omega),
-    bsl_0::T = 0.0,
+    bsl_0::T = T(0.0),
 ) where {T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}}
 
     if !isa(diffeq.alg, OrdinaryDiffEqAlgorithm) && !isa(diffeq.alg, SimpleEuler)

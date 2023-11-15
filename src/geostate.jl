@@ -5,7 +5,7 @@ Update the geoid by convoluting the Green's function with the load anom.
 """
 function update_geoid!(fip::FastIsoProblem)
     fip.geostate.geoid .= samesize_conv(fip.tools.geoidgreen,
-        mass_anom(fip), fip.Omega, corner_bc)
+        mass_anom(fip), fip.Omega)
     return nothing
 end
 

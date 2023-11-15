@@ -62,6 +62,13 @@ function samesize_conv(X::M, Y::M, Omega::ComputationDomain{T, L, M}, bc::Functi
     return view(convo, Omega.i1:Omega.i2, Omega.j1:Omega.j2)
 end
 
+function samesize_conv(X::M, Y::M, Omega::ComputationDomain{T, L, M}) where
+    {T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}}
+    convo = conv(X, Y)
+    corner_bc!(convo, 2*Omega.Nx-1, 2*Omega.Ny-1)
+    return view(convo, Omega.i1:Omega.i2, Omega.j1:Omega.j2)
+end
+
 """
     write_out!(fip::FastIsoProblem)
 
@@ -104,8 +111,8 @@ end
 
 Convert Euclidean to angular distance along great circle.
 """
-function dist2angulardist(r::Real)
-    R = 6371e3     # radius at equator
+function dist2angulardist(r::T) where {T<:AbstractFloat}
+    R = T(6371e3)       # radius at equator
     return 2 * atan( r / (2 * R) )
 end
 
@@ -251,7 +258,7 @@ function get_effective_viscosity(
     mantle_poissonratio::T,
 ) where {T<:AbstractFloat, M<:KernelMatrix{T}}
 
-    incompressible_poissonratio = 0.5
+    incompressible_poissonratio = T(0.5)
     compressibility_scaling = (1 + incompressible_poissonratio) / (1 + mantle_poissonratio)
 
     # Recursion has to start with half space = n-th layer:
@@ -274,7 +281,9 @@ function get_effective_viscosity(
     # return effective_compressible_viscosity
 end
 
-seakon_calibration(eta) = exp.(log10.(1e21 ./ eta)) .* eta
+function seakon_calibration(eta::Matrix{T}) where {T<:AbstractFloat}
+    return exp.(log10.(T(1e21) ./ eta)) .* eta
+end
 
 """
     three_layer_scaling(Omega::ComputationDomain, kappa::T, visc_ratio::T,
@@ -292,7 +301,7 @@ function three_layer_scaling(
 
     # kappa is the wavenumber of the harmonic load. (see Cathles 1975, p.43)
     # we assume this is related to the size of the domain!
-    kappa = π / mean([Omega.Wx, Omega.Wy])
+    kappa = T(π) / mean([Omega.Wx, Omega.Wy])
 
     C = cosh.(channel_thickness .* kappa)
     S = sinh.(channel_thickness .* kappa)
