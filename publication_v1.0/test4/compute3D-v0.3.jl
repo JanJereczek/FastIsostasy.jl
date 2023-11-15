@@ -5,7 +5,7 @@ include("../helpers.jl")
 #=
 init()
 
-N = 64
+N = 350
 maxdepth = 500e3
 nlayers = 3
 use_cuda = true
@@ -42,14 +42,14 @@ function main(N, maxdepth, interactive_sl; nlayers = 3, use_cuda = false)
     lv_3D = 10 .^ cat([logeta_itp.(Lon, Lat, rlb[:, :, k]) for k in 1:nlb]..., dims=3)
     eta_lowerbound = 1e16
     lv_3D[lv_3D .< eta_lowerbound] .= eta_lowerbound
-    p = LayeredEarth(Omega, layer_boundaries = lb, layer_viscosities = lv_3D)
+    p = LayeredEarth(Omega, layer_viscosities = lv_3D, layer_boundaries = lb)
 
     (lon, lat, t), Hice, Hitp = load_ice6gd()
     Hice_vec = [Hitp.(Array(Omega.Lon), Array(Omega.Lat), tt) for tt in t]
     tsec = years2seconds.(t .* 1e3)
 
-    fip = FastIsoProblem(Omega, c, p, tsec, interactive_sl, tsec, Hice_vec, verbose = true,
-        b_0 = bathymetry(Omega))
+    fip = FastIsoProblem(Omega, c, p, tsec, interactive_sl, tsec,
+        Hice_vec, verbose = true, b_0 = bathymetry(Omega))
 
     solve!(fip)
     println("Computation took $(fip.out.computation_time) s")
