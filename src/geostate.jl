@@ -119,7 +119,7 @@ end
 function watercolumn(H_ice, maskgrounded, b, seasurfaceheight, c)
     # return not.(maskgrounded) .* max.(seasurfaceheight - b, 0)
     rsl = max.(seasurfaceheight - b, 0)
-    return (H_ice == 0) .* rsl + not.(maskgrounded) .* (H_ice .> 0) .* (rsl -
+    return (H_ice .<= 1) .* rsl + not.(maskgrounded) .* (H_ice .> 0) .* (rsl -
         (H_ice .* c.rho_ice / c.rho_seawater))
 end
 
@@ -182,7 +182,9 @@ function update_bsl!(fip::FastIsoProblem)
 end
 
 total_volume(fip::FastIsoProblem) = fip.geostate.V_af * fip.c.rho_ice /
-    fip.c.rho_seawater + fip.geostate.V_den + fip.geostate.V_pov
+    fip.c.rho_seawater + fip.geostate.V_den # + fip.geostate.V_pov
+
+# V_pov should not be there because of Earth roughly incompressible
 
 """
     update_V_af!(fip::FastIsoProblem)
