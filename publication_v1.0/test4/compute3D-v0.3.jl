@@ -69,6 +69,6 @@ function main(N, maxdepth, interactive_sl; nlayers = 3, use_cuda = false)
 end
 
 init()
-for isl in [false]
+for isl in [true]
     main(150, 300e3, isl, use_cuda = true)
 end

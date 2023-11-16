@@ -568,15 +568,14 @@ function FastIsoProblem(
     H_ice_0 = tools.Hice(t_out[1])
     u_0, ue_0, seasurfaceheight_0, b_0, H_ice_0 = kernelpromote([u_0, ue_0,
         seasurfaceheight_0, b_0, H_ice_0], Omega.arraykernel)
-    maskgrounded = height_above_floatation(H_ice_0, b_0, seasurfaceheight_0,
-        c.rho_seawater, c.rho_ice) .> 0
-    if interactive_sealevel
-        H_ice_0 .*= maskgrounded
-    end
+    maskgrounded = height_above_floatation(H_ice_0, b_0, seasurfaceheight_0, c) .> 0
+    # if interactive_sealevel
+    #     H_ice_0 .*= maskgrounded
+    # end
     if !Omega.use_cuda
         maskgrounded = collect(maskgrounded)    # use Matrix{Bool} rather than BitMatrix
     end
-    H_water_0 = watercolumn(maskgrounded, b_0, seasurfaceheight_0)
+    H_water_0 = watercolumn(H_ice_0, maskgrounded, b_0, seasurfaceheight_0, c)
 
     refgeostate = ReferenceState(
         u_0, ue_0,

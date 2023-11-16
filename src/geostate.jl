@@ -4,7 +4,7 @@
 Update the geoid by convoluting the Green's function with the load anom.
 """
 function update_geoid!(fip::FastIsoProblem)
-    fip.geostate.geoid .= samesize_conv(fip.tools.geoidgreen, mass_anom(fip), fip.Omega)
+    fip.geostate.geoid .= samesize_conv(fip.tools.geoidgreen, solidmass_anom(fip), fip.Omega)
     return nothing
 end
 
@@ -70,7 +70,7 @@ Update the density-scaled anomaly of the load (ice + liquid water) column w.r.t.
 the reference state.
 """
 function columnanom_load!(fip::FastIsoProblem)
-    fip.geostate.columnanoms.load .= columnanom_ice(fip) # + columnanom_water(fip)
+    fip.geostate.columnanoms.load .= columnanom_ice(fip) + columnanom_water(fip)
     return nothing
 end
 
@@ -88,8 +88,8 @@ function columnanom_full!(fip::FastIsoProblem)
     return nothing
 end
 
-function mass_anom(fip::FastIsoProblem)
-    return fip.Omega.A .* fip.geostate.columnanoms.full
+function solidmass_anom(fip::FastIsoProblem)
+    return fip.Omega.A .* (fip.geostate.columnanoms.full - columnanom_water(fip))
 end
 
 """
@@ -105,15 +105,22 @@ function update_loadcolumns!(fip::FastIsoProblem{T, L, M, C, FP, IP}, H_ice::M) 
     # fip.geostate.H_sed .= H_sed
     if fip.interactive_sealevel
         update_mask_grounded!(fip)
-        fip.geostate.H_ice .*= fip.geostate.maskgrounded
-        fip.geostate.H_water .= watercolumn(fip.geostate.maskgrounded, fip.geostate.b,
-            fip.geostate.seasurfaceheight)
+        # fip.geostate.H_ice .*= fip.geostate.maskgrounded
+        fip.geostate.H_water .= watercolumn(fip)
     end
     return nothing
 end
 
-function watercolumn(maskgrounded, b, seasurfaceheight)
-    return not.(maskgrounded) .* max.(seasurfaceheight - b, 0)
+function watercolumn(fip)
+    gs = fip.geostate
+    return watercolumn(gs.H_ice, gs.maskgrounded, gs.b, gs.seasurfaceheight, fip.c)
+end
+
+function watercolumn(H_ice, maskgrounded, b, seasurfaceheight, c)
+    # return not.(maskgrounded) .* max.(seasurfaceheight - b, 0)
+    rsl = max.(seasurfaceheight - b, 0)
+    return (H_ice == 0) .* rsl + not.(maskgrounded) .* (H_ice .> 0) .* (rsl -
+        (H_ice .* c.rho_ice / c.rho_seawater))
 end
 
 function update_mask_grounded!(fip::FastIsoProblem)
@@ -121,13 +128,12 @@ function update_mask_grounded!(fip::FastIsoProblem)
 end
 
 function height_above_floatation(state::GeoState, c::PhysicalConstants)
-    return height_above_floatation(state.H_ice, state.b, state.seasurfaceheight,
-        c.rho_seawater, c.rho_ice)
+    return height_above_floatation(state.H_ice, state.b, state.seasurfaceheight, c)
 end
 
-function height_above_floatation(H_ice, b, seasurfaceheight, rho_seawater, rho_ice)
+function height_above_floatation(H_ice, b, seasurfaceheight, c)
     # return H_ice + min.(b, 0) .* (rho_seawater / rho_ice)
-    return H_ice + min.(b - seasurfaceheight, 0) .* (rho_seawater / rho_ice)
+    return H_ice + min.(b - seasurfaceheight, 0) .* (c.rho_seawater / c.rho_ice)
 end
 
 function update_bedrock!(fip::FastIsoProblem{T, L, M, C, FP, IP}, u::M) where
@@ -150,7 +156,7 @@ Coulon et al. (2021), Figure 1.
 function update_seasurfaceheight!(fip::FastIsoProblem)
     update_bsl!(fip)
     gs = fip.geostate
-    gs.seasurfaceheight .= fip.refgeostate.seasurfaceheight .+ gs.geoid .+ gs.bsl
+    gs.seasurfaceheight .= fip.refgeostate.seasurfaceheight .+ gs.geoid # .+ gs.bsl
     return nothing
 end
 
