@@ -9,8 +9,8 @@ global SECONDS_PER_YEAR = 60^2 * 24 * 365.25
 
 Convert input time `t` from years to seconds.
 """
-function years2seconds(t::Real)
-    return t * SECONDS_PER_YEAR
+function years2seconds(t::T) where {T<:AbstractFloat}
+    return t * T(SECONDS_PER_YEAR)
 end
 
 """
@@ -18,8 +18,8 @@ end
 
 Convert input time `t` from seconds to years.
 """
-function seconds2years(t::Real)
-    return t / SECONDS_PER_YEAR
+function seconds2years(t::T) where {T<:AbstractFloat}
+    return t / T(SECONDS_PER_YEAR)
 end
 
 """
@@ -80,10 +80,65 @@ function write_out!(fip::FastIsoProblem, k::Int)
         fip.out.u[k] .= copy(Array(fip.geostate.u))
         fip.out.dudt[k] .= copy(Array(fip.geostate.dudt))
         fip.out.ue[k] .= copy(Array(fip.geostate.ue))
+        fip.out.b[k] .= copy(Array(fip.geostate.b))
+        # fip.out.bsl[k] .= copy(fip.geostate.bsl)
         fip.out.geoid[k] .= copy(Array(fip.geostate.geoid))
         fip.out.seasurfaceheight[k] .= copy(Array(fip.geostate.seasurfaceheight))
+        fip.out.maskgrounded[k] .= copy(Array(fip.geostate.maskgrounded))
         fip.out.Hice[k] .= copy(Array(fip.geostate.H_ice))
+        fip.out.Hwater[k] .= copy(Array(fip.geostate.H_water))
+        fip.out.canomfull[k] .= copy(Array(fip.geostate.columnanoms.full))
+        fip.out.canomload[k] .= copy(Array(fip.geostate.columnanoms.load))
+        fip.out.canomlitho[k] .= copy(Array(fip.geostate.columnanoms.litho))
+        fip.out.canommantle[k] .= copy(Array(fip.geostate.columnanoms.mantle))
     end
+end
+
+macro Name(arg)
+    string(arg)
+end
+
+function savefip(filename, fip; T = Float32)
+
+    ds = NCDataset(filename, "c")
+    x, y, t = T.(fip.Omega.x), T.(fip.Omega.y), T.(fip.out.t)
+    defDim(ds, "x", length(x))
+    defDim(ds, "y", length(y))
+    defDim(ds, "t", length(t))
+    ncx = defVar(ds, "x", T, ("x",))
+    ncy = defVar(ds, "y", T, ("y",))
+    nct = defVar(ds, "t", T, ("t",))
+    ncx[:] = x
+    ncy[:] = y
+    nct[:] = seconds2years.(t)
+    append3D2nc!(ds, T, fip.out.u, "u")
+    append3D2nc!(ds, T, fip.out.dudt, "dudt")
+    append3D2nc!(ds, T, fip.out.ue, "ue")
+    append3D2nc!(ds, T, fip.out.b, "b")
+    append3D2nc!(ds, T, fip.out.geoid, "geoid")
+    append3D2nc!(ds, T, fip.out.seasurfaceheight, "seasurfaceheight")
+    append3D2nc!(ds, T, fip.out.maskgrounded, "maskgrounded")
+    append3D2nc!(ds, T, fip.out.Hice, "Hice")
+    append3D2nc!(ds, T, fip.out.Hwater, "Hwater")
+    append3D2nc!(ds, T, fip.out.canomfull, "canomfull")
+    append3D2nc!(ds, T, fip.out.canomload, "canomload")
+    append3D2nc!(ds, T, fip.out.canomlitho, "canomlitho")
+    append3D2nc!(ds, T, fip.out.canommantle, "canommantle")
+    close(ds)
+    
+end
+
+function append3D2nc!(ds, T, Z, var::String)
+    Z = cat(Z..., dims = 3)
+    ncZ = defVar(ds, var, T, ("x", "y", "t"))
+    ncZ[:, :, :] = T.(Z)
+    return nothing
+end
+
+function append1D2nc!(ds, T, Z, var::String)
+    ncZ = defVar(ds, var, T, ("t"))
+    ncZ[:] = T.(Z)
+    return nothing
 end
 
 #####################################################
@@ -587,18 +642,26 @@ end
 
 Initialize some `Vector{<:KernelMatrix}` where results shall be later stored.
 """
-function init_results(Omega::ComputationDomain{T, M}, t_out::Vector{T}) where
-    {T<:AbstractFloat, M<:KernelMatrix{T}}
+function init_results(Omega::ComputationDomain{T, L, M}, t_out::Vector{T}) where
+    {T<:AbstractFloat, L, M<:KernelMatrix{T}}
     # initialize with placeholders
     placeholder = Array(null(Omega))
-    u_out = [copy(placeholder) for t in t_out]
-    dudt_out = [copy(placeholder) for t in t_out]
-    ue_out = [copy(placeholder) for t in t_out]
-    geoid_out = [copy(placeholder) for t in t_out]
-    seasurfaceheight_out = [copy(placeholder) for t in t_out]
-    Hice_out = [copy(placeholder) for t in t_out]
-    return FastIsoOutputs(t_out, u_out, dudt_out, ue_out, geoid_out,
-        seasurfaceheight_out, Hice_out, 0.0)
+    u = [copy(placeholder) for t in t_out]
+    dudt = [copy(placeholder) for t in t_out]
+    ue = [copy(placeholder) for t in t_out]
+    b = [copy(placeholder) for t in t_out]
+    bsl = zeros(T, length(t_out))
+    geoid = [copy(placeholder) for t in t_out]
+    seasurfaceheight = [copy(placeholder) for t in t_out]
+    maskgrounded = [copy(placeholder) for t in t_out]
+    Hice = [copy(placeholder) for t in t_out]
+    Hwater = [copy(placeholder) for t in t_out]
+    canomfull = [copy(placeholder) for t in t_out]
+    canomload = [copy(placeholder) for t in t_out]
+    canomlitho = [copy(placeholder) for t in t_out]
+    canommantle = [copy(placeholder) for t in t_out]
+    return FastIsoOutputs(t_out, u, dudt, ue, b, geoid, seasurfaceheight, maskgrounded,
+        Hice, Hwater, canomfull, canomload, canomlitho, canommantle, 0.0)
 end
 
 function init_results(fip::FastIsoProblem, Omega::ComputationDomain{T, M}, t_out::Vector{T}

@@ -447,9 +447,16 @@ mutable struct FastIsoOutputs{T<:AbstractFloat, M<:Matrix{T}}
     u::Vector{M}
     dudt::Vector{M}
     ue::Vector{M}
+    b::Vector{M}
     geoid::Vector{M}
     seasurfaceheight::Vector{M}
+    maskgrounded::Vector{M}
     Hice::Vector{M}
+    Hwater::Vector{M}
+    canomfull::Vector{M}
+    canomload::Vector{M}
+    canomlitho::Vector{M}
+    canommantle::Vector{M}
     computation_time::Float64
 end
 
@@ -558,11 +565,14 @@ function FastIsoProblem(
         t_eta_snapshots, eta_snapshots)
 
     # Initialise the reference state
-    H_ice_0 = Hice_snapshots[1]
+    H_ice_0 = tools.Hice(t_out[1])
     u_0, ue_0, seasurfaceheight_0, b_0, H_ice_0 = kernelpromote([u_0, ue_0,
         seasurfaceheight_0, b_0, H_ice_0], Omega.arraykernel)
     maskgrounded = height_above_floatation(H_ice_0, b_0, seasurfaceheight_0,
         c.rho_seawater, c.rho_ice) .> 0
+    if interactive_sealevel
+        H_ice_0 .*= maskgrounded
+    end
     if !Omega.use_cuda
         maskgrounded = collect(maskgrounded)    # use Matrix{Bool} rather than BitMatrix
     end

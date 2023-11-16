@@ -29,6 +29,7 @@ function solve!(fip::FastIsoProblem)
         if fip.diffeq.alg != SimpleEuler()
             prob = remake(dummy, u0 = fip.geostate.u, tspan = (t_out[k-1], t_out[k]), p = fip)
             sol = solve(prob, fip.diffeq.alg, reltol=fip.diffeq.reltol)
+            # Optionally use something like KenCarp47(linsolve = KrylovJL_GMRES()) 
             fip.geostate.dudt = sol(t_out[k], Val{1})
         else
             @inbounds for t in t_out[k-1]:fip.diffeq.dt:t_out[k]
@@ -97,7 +98,7 @@ function update_diagnostics!(dudt::M, u::M, fip::FastIsoProblem{T, L, M, C, FP, 
     # only update geostate every fip.geostate.dt
     if ((t - fip.out.t[1]) / fip.geostate.Δt) >= fip.geostate.countupdates
         # if elastic update placed after geoid, worse match with (Spada et al. 2011)
-        # update_elasticresponse!(fip)
+        update_elasticresponse!(fip)
         columnanom_litho!(fip)
         if fip.interactive_sealevel
             update_geoid!(fip)

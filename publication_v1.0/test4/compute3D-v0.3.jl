@@ -1,3 +1,4 @@
+push!(LOAD_PATH, "../")
 using FastIsostasy
 using JLD2, NCDatasets, CairoMakie, Interpolations, DelimitedFiles
 include("../helpers.jl")
@@ -5,11 +6,11 @@ include("../helpers.jl")
 #=
 init()
 
-N = 350
+N = 150
 maxdepth = 500e3
 nlayers = 3
 use_cuda = true
-interactive_sl = false
+interactive_sl = true
 
 u = Omega.arraykernel(copy(fip.out.u[1]))
 dudt = Omega.arraykernel(copy(fip.out.u[1]))
@@ -40,6 +41,13 @@ function main(N, maxdepth, interactive_sl; nlayers = 3, use_cuda = false)
 
     (_, _, _), _, logeta_itp = load_logvisc_pan2022()
     lv_3D = 10 .^ cat([logeta_itp.(Lon, Lat, rlb[:, :, k]) for k in 1:nlb]..., dims=3)
+    #=
+    if viscinterp == "log"
+        lv_3D = 10 .^ cat([logeta_itp.(Lon, Lat, rlb[:, :, k]) for k in 1:nlb]..., dims=3)
+    elseif viscinterp == "exp"
+        lv_3D = 10 .^ cat([logeta_itp.(Lon, Lat, rlb[:, :, k]) for k in 1:nlb]..., dims=3)
+    end
+    =#
     eta_lowerbound = 1e16
     lv_3D[lv_3D .< eta_lowerbound] .= eta_lowerbound
     p = LayeredEarth(Omega, layer_viscosities = lv_3D, layer_boundaries = lb)
@@ -54,9 +62,13 @@ function main(N, maxdepth, interactive_sl; nlayers = 3, use_cuda = false)
     solve!(fip)
     println("Computation took $(fip.out.computation_time) s")
 
-    @save "../data/test4/ICE6G/3D-interactivesl=$interactive_sl-maxdepth=$maxdepth"*
-        "N=$(Omega.Nx).jld2" t fip Hitp Hice_vec
+    path = "../data/test4/ICE6G/3D-interactivesl=$interactive_sl-maxdepth=$maxdepth-"*
+        "N=$(Omega.Nx)"
+    @save "$path.jld2" t fip Hitp Hice_vec
+    savefip("$path.nc", fip)
 end
 
 init()
-main(350, 500e3, false, use_cuda = true)
+for isl in [false]
+    main(150, 300e3, isl, use_cuda = true)
+end

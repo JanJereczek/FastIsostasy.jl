@@ -4,8 +4,7 @@
 Update the geoid by convoluting the Green's function with the load anom.
 """
 function update_geoid!(fip::FastIsoProblem)
-    fip.geostate.geoid .= samesize_conv(fip.tools.geoidgreen,
-        mass_anom(fip), fip.Omega)
+    fip.geostate.geoid .= samesize_conv(fip.tools.geoidgreen, mass_anom(fip), fip.Omega)
     return nothing
 end
 
@@ -71,7 +70,7 @@ Update the density-scaled anomaly of the load (ice + liquid water) column w.r.t.
 the reference state.
 """
 function columnanom_load!(fip::FastIsoProblem)
-    fip.geostate.columnanoms.load .= columnanom_ice(fip) + columnanom_water(fip)
+    fip.geostate.columnanoms.load .= columnanom_ice(fip) # + columnanom_water(fip)
     return nothing
 end
 
@@ -103,19 +102,18 @@ function update_loadcolumns!(fip::FastIsoProblem{T, L, M, C, FP, IP}, H_ice::M) 
     FP<:ForwardPlan{T}, IP<:InversePlan{T}}
 
     fip.geostate.H_ice .= H_ice
+    # fip.geostate.H_sed .= H_sed
     if fip.interactive_sealevel
         update_mask_grounded!(fip)
+        fip.geostate.H_ice .*= fip.geostate.maskgrounded
         fip.geostate.H_water .= watercolumn(fip.geostate.maskgrounded, fip.geostate.b,
             fip.geostate.seasurfaceheight)
     end
-    ########
-    # update sediment thickness
-    ########
     return nothing
 end
 
 function watercolumn(maskgrounded, b, seasurfaceheight)
-    return not.(maskgrounded) .* (b .< seasurfaceheight) .* (seasurfaceheight - b)
+    return not.(maskgrounded) .* max.(seasurfaceheight - b, 0)
 end
 
 function update_mask_grounded!(fip::FastIsoProblem)
@@ -128,14 +126,15 @@ function height_above_floatation(state::GeoState, c::PhysicalConstants)
 end
 
 function height_above_floatation(H_ice, b, seasurfaceheight, rho_seawater, rho_ice)
-    return H_ice .+ min.(b - seasurfaceheight, 0) .* (rho_seawater / rho_ice)
+    # return H_ice + min.(b, 0) .* (rho_seawater / rho_ice)
+    return H_ice + min.(b - seasurfaceheight, 0) .* (rho_seawater / rho_ice)
 end
 
 function update_bedrock!(fip::FastIsoProblem{T, L, M, C, FP, IP}, u::M) where
     {T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}, C<:ComplexMatrix{T},
     FP<:ForwardPlan{T}, IP<:InversePlan{T}}
     fip.geostate.u .= u
-    fip.geostate.b .= fip.refgeostate.b .+ fip.geostate.ue .+ fip.geostate.u
+    fip.geostate.b .= fip.refgeostate.b + fip.geostate.ue + fip.geostate.u
     return nothing
 end
 
@@ -201,7 +200,7 @@ Note: we do not use eq. (8) as it is only a special case of eq. (14) that does n
 allow a correct representation of external sea-level forcings.
 """
 function update_V_pov!(fip::FastIsoProblem)
-    fip.geostate.V_pov = sum( max.(fip.refgeostate.b .- fip.geostate.b, 0) .* fip.Omega.A )
+    fip.geostate.V_pov = sum( max.(fip.refgeostate.b - fip.geostate.b, 0) .* fip.Omega.A )
     return nothing
 end
 

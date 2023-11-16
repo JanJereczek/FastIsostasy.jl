@@ -24,6 +24,7 @@ using EnsembleKalmanProcesses.ParameterDistributions
 using SpecialFunctions: besselj0, besselj1
 using DynamicalSystemsBase: CoupledODEs, trajectory
 using ParallelStencil
+using LinearSolve: KrylovJL_GMRES
 
 using Reexport
 @reexport using Interpolations
@@ -31,7 +32,8 @@ using Reexport
     OwrenZen3, OwrenZen4, OwrenZen5, Tsit5, DP5, RKO65, TanYam7, DP8,
     Feagin10, Feagin12, Feagin14, TsitPap8, Vern6, Vern7, Vern8, Vern9,
     SSPRK22, SSPRK33, SSPRK53, SSPRK63, SSPRK73, SSPRK83, SSPRK432, SSPRK43,
-    SSPRK932, SSPRK54, SSPRK104, SSPRKMSVS32, SSPRKMSVS43, SSPRK53_2N1, SSPRK53_2N2
+    SSPRK932, SSPRK54, SSPRK104, SSPRKMSVS32, SSPRKMSVS43, SSPRK53_2N1, SSPRK53_2N2,
+    KenCarp47
 
 include("adaptive_ocean.jl")
 include("structs.jl")
@@ -64,7 +66,7 @@ export maxwelltime_scaling!, compute_shearmodulus
 export get_r, gauss_distr, samesize_conv
 export uniform_ice_cylinder, stereo_ice_cylinder, stereo_ice_cap
 export quadrature1D, get_quad_coeffs, get_elasticgreen
-export write_out!, remake!, reinit_structs_cpu
+export write_out!, remake!, reinit_structs_cpu, savefip
 export null, not
 
 # derivatives.jl
