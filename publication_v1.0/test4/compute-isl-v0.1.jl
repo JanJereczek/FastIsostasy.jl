@@ -56,13 +56,16 @@ function main(N, maxdepth, interactive_sl; nlayers = 3, use_cuda = false)
     Hice_vec = [Hitp.(Array(Omega.Lon), Array(Omega.Lat), tt) for tt in t]
     tsec = years2seconds.(t .* 1e3)
 
-    fip = FastIsoProblem(Omega, c, p, tsec, interactive_sl, tsec,
-        Hice_vec, verbose = true, b_0 = bathymetry(Omega))
+    _, _, bsl_itp = load_bsl()
+
+    fip = FastIsoProblem(Omega, c, p, tsec, interactive_sl, tsec, Hice_vec,
+        verbose = true, b_0 = bathymetry(Omega), internal_bsl_update = false,
+        bsl_itp = bsl_itp)
 
     solve!(fip)
     println("Computation took $(fip.out.computation_time) s")
 
-    path = "../data/test4/ICE6G/3D-interactivesl=$interactive_sl-maxdepth=$maxdepth-"*
+    path = "../data/test4/ICE6G/3D-interactivesl=$interactive_sl-bsl=external-"*
         "N=$(Omega.Nx)"
     @save "$path.jld2" t fip Hitp Hice_vec
     savefip("$path.nc", fip)
@@ -70,5 +73,5 @@ end
 
 init()
 for isl in [true]
-    main(150, 300e3, isl, use_cuda = true)
+    main(128, 300e3, isl, use_cuda = true)
 end

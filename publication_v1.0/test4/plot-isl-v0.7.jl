@@ -20,8 +20,10 @@ end
 
 function main(N; masktype="lgm")
 
-    case_f = "3D-interactivesl=false-maxdepth=300000.0"
-    case_i = "3D-interactivesl=true-maxdepth=300000.0"
+    # case_f = "3D-interactivesl=false-maxdepth=300000.0"
+    # case_i = "3D-interactivesl=true-maxdepth=300000.0"
+    case_f = "3D-interactivesl=false-bsl=external"
+    case_i = "3D-interactivesl=true-bsl=external"
     tf, fip_f = load_3D_results(case_f, N)
     t, fip = load_3D_results(case_i, N)
     (_, _, tlaty), _, itp = load_latychev2023_ICE6G(case = "3D")
@@ -90,14 +92,14 @@ function main(N; masktype="lgm")
     ms = msmax .* (abs.(usk_vec) ./ umax) .^ 1.5 .+ 0.4
     # rand_idx = rand(length(usk_vec)) .< pointspercentage
     scatter!(axs[1], usk_vec, ufi_f_vec,
-        markersize = ms, label = L"FI3D $\,$")
+        markersize = ms, label = L"FI fixed mask (FM) $\,$")
     scatter!(axs[1], usk_vec, usk1D_vec,
         markersize = ms, label = L"SK1D $\,$", color = sk1D_color)
     scatter!(axs[1], usk_vec, ufi3D_vec,
-        markersize = ms, label = L"FI3D interactive $\,$")
+        markersize = ms, label = L"FI active mask (AM) $\,$")
     lines!(axs[1], -600:50, -600:50, color = :gray10, label = label = L"identity $\,$")
     axs[1].xlabel = L"$u_\mathrm{SK3D}$ (m)"
-    axs[1].ylabel = L"$u_\mathrm{m}$ (m)"
+    axs[1].ylabel = L"$u_\mathrm{FI3D}$ (m)"
     axs[1].xticks = latexticks(-600:100:100)
     axs[1].yticks = latexticks(-600:100:100)
     xlims!(axs[1], (-600, 20))
@@ -109,9 +111,9 @@ function main(N; masktype="lgm")
     bgap = bwidth * 0.9
     
     barplot!(axs[2], eachindex(tlaty) .- bgap, FI_fmax ./ umax,
-        width = bwidth, label = L"max FI $\,$", color = :dodgerblue1)
+        width = bwidth, label = L"max FI FM $\,$", color = :dodgerblue1)
     barplot!(axs[2], eachindex(tlaty) .- bgap, FI_fmean ./ umax,
-        width = bwidth, label = L"mean FI $\,$", color = :dodgerblue3)
+        width = bwidth, label = L"mean FI FM$\,$", color = :dodgerblue3)
 
     barplot!(axs[2], eachindex(tlaty), SK1Dmax ./ umax,
         width = bwidth, label = L"max SK1D $\,$", color = :gray60)
@@ -119,9 +121,9 @@ function main(N; masktype="lgm")
         width = bwidth, label = L"mean SK1D $\,$", color = :gray40)
         
     barplot!(axs[2], eachindex(tlaty) .+ bgap, FI3Dmax ./ umax,
-        width = bwidth, label = L"max FI3D $\,$", color = :orange)
+        width = bwidth, label = L"max FI3D AM $\,$", color = :orange)
     barplot!(axs[2], eachindex(tlaty) .+ bgap, FI3Dmean ./ umax,
-        width = bwidth, label = L"mean FI3D $\,$", color = :darkorange)
+        width = bwidth, label = L"mean FI3D AM $\,$", color = :darkorange)
 
     axs[2].xlabel = L"Time (kyr) $\,$"
     axs[2].ylabel = L"$e$ (1)"
@@ -149,8 +151,8 @@ function main(N; masktype="lgm")
     contour!(axs[4], mask; levels = [0.5], color = :gray10)
     contour!(axs[5], mask; levels = [0.5], color = :gray10)
     axs[3].title = L"(c) SK3D, $t = %$(Int(round(tlaty[k] ./ 1e3)))$ kyr"
-    axs[4].title = L"(d) FI, $t = %$(Int(round(tlaty[k] ./ 1e3)))$ kyr"
-    axs[5].title = L"(e) (SK3D - FI), $t = %$(Int(round(tlaty[k] ./ 1e3)))$ kyr"
+    axs[4].title = L"(d) FI FM, $t = %$(Int(round(tlaty[k] ./ 1e3)))$ kyr"
+    axs[5].title = L"(e) (SK3D - FI FM), $t = %$(Int(round(tlaty[k] ./ 1e3)))$ kyr"
 
     k = argmax(FI3Dmax)
     k_fastiso = argmin( (t .- tlaty[k]/1e3) .^ 2 )
@@ -163,8 +165,8 @@ function main(N; masktype="lgm")
     contour!(axs[7], mask; levels = [0.5], color = :gray10)
     contour!(axs[8], mask; levels = [0.5], color = :gray10)
     axs[6].title = L"(f) SK3D, $t = %$(Int(round(tlaty[k] ./ 1e3)))$ kyr"
-    axs[7].title = L"(g) FI3D, $t = %$(Int(round(tlaty[k] ./ 1e3)))$ kyr"
-    axs[8].title = L"(h) (SK3D - FI3D), $t = %$(Int(round(tlaty[k] ./ 1e3)))$ kyr"
+    axs[7].title = L"(g) FI AM, $t = %$(Int(round(tlaty[k] ./ 1e3)))$ kyr"
+    axs[8].title = L"(h) (SK3D - FI AM), $t = %$(Int(round(tlaty[k] ./ 1e3)))$ kyr"
 
     [hidedecorations!(ax) for ax in axbottom]
     Colorbar(fig[10, 2:5], hmu, label = L"Vertical displacement (m) $\,$", vertical = false,
@@ -176,7 +178,7 @@ function main(N; masktype="lgm")
 end
 
 
-N = 150
+N = 128
 main(N)
 
 # convertfip()
