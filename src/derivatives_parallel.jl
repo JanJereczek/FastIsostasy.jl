@@ -1,3 +1,4 @@
+# See derivatives.jl for multiple dispatch
 function update_second_derivatives!(uxx::M, uyy::M, ux::M, uxy::M, u1::M, u2::M, u3::M,
     Omega::ComputationDomain{T, L, M}) where {T<:AbstractFloat, L<:Matrix{T}, M<:CuMatrix{T}}
     dxx!(uxx, u1, Omega.Dx, Omega.Nx, Omega.Ny)

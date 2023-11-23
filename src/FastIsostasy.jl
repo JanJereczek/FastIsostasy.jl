@@ -48,7 +48,6 @@ include("analytic_solutions.jl")
 include("dataloaders.jl")
 
 # structs.jl
-export KernelMatrix
 export ComputationDomain, PhysicalConstants
 export ReferenceEarthModel, LayeredEarth
 export CurrentState, ReferenceState
@@ -56,42 +55,33 @@ export FastIsoTools, FastIsoProblem
 
 # utils.jl
 export years2seconds, seconds2years, m_per_sec2mm_per_yr
-export dist2angulardist, latlon2stereo, stereo2latlon
-export matrify, kernelpromote, reinit_structs_cpu, meshgrid
-export lon360tolon180
+export latlon2stereo, stereo2latlon, lon360tolon180
+export reinit_structs_cpu, meshgrid
 
-export loginterp_viscosity, get_rigidity, load_prem
-export maxwelltime_scaling!, compute_shearmodulus
-
-export get_r, gauss_distr, samesize_conv
+export get_r, gauss_distr, generate_gaussian_field, samesize_conv, blur
 export uniform_ice_cylinder, stereo_ice_cylinder, stereo_ice_cap
-export quadrature1D, get_quad_coeffs, get_elasticgreen
-export write_out!, remake!, reinit_structs_cpu, savefip
-export null, not
-
-# derivatives.jl
-export get_differential_fourier, fourierderiv
-export update_second_derivatives!, scale_derivatives!, flatbc!
-export dxx!, dyy!, dxy!
+export write_out!, remake!, savefip, null, not
 
 # adaptive_ocean.jl
-export OceanSurfaceChange, update_seasurfaceheight!
+export OceanSurfaceChange
 
 # geostate.jl
+export update_loadcolumns!, update_elasticresponse!, update_geoid!
 export columnanom_load!, columnanom_full!, columnanom_ice!, columnanom_water!
-export columnanom_litho!, columnanom_mantle!
+export columnanom_litho!, columnanom_mantle!, update_seasurfaceheight!, total_volume
 export update_V_af!, update_V_den!, update_V_pov!, height_above_floatation
 
 # mechanics.jl
-export dudt_isostasy!, update_diagnostics!
+export init, solve!, step!, dudt_isostasy!, update_diagnostics!
+export corner_bc!, edge_bc!
+export maxwelltime_scaling!, compute_shearmodulus, get_rigidity, load_prem
+
+# integrators.jl
 export simple_euler!, SimpleEuler
-export init, solve!, step!
-export corner_bc!, no_bc
-export update_loadcolumns!, update_elasticresponse!, update_geoid!
-export total_volume
 
 # inversion.jl
 export InversionConfig, InversionData, InversionProblem, solve, extract_inversion
+export get_ϕ_mean_final     # from EnsembleKalmanProcesses.jl
 
 # analytic solutions
 export analytic_solution
@@ -103,8 +93,5 @@ export load_lithothickness_pan2022, load_logvisc_pan2022
 export load_ice6gd
 export load_spada2011, spada_cases
 export load_latychev_test3, load_latychev2023_ICE6G
-
-# EnsembleKalmanProcesses
-export get_ϕ_mean_final
 
 end

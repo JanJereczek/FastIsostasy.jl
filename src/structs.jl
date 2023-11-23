@@ -1,19 +1,9 @@
 #########################################################
 # Convenience
 #########################################################
-"""
-    KernelMatrix
-
-Allias for `Union{Matrix{T}, CuMatrix{T}} where {T<:AbstractFloat}`.
-"""
 KernelMatrix{T} = Union{Matrix{T}, CuMatrix{T}} where {T<:AbstractFloat}
-
-"""
-    ComplexMatrix
-
-Allias for `Union{Matrix{C}, CuMatrix{C}} where {T<:AbstractFloat, C<:Complex{T}}`.
-"""
 ComplexMatrix{T} = Union{Matrix{C}, CuMatrix{C}} where {T<:AbstractFloat, C<:Complex{T}}
+BoolMatrix{T} = Union{Matrix{Bool}, CuMatrix{Bool}}
 
 """
     ForwardPlan
@@ -152,20 +142,8 @@ function ComputationDomain(
     arraykernel = use_cuda ? CuArray : Array
     null, K, pseudodiff = kernelpromote([null, K, pseudodiff], arraykernel)
 
-    # Precompute indices for samesize_conv()
-    if iseven(Nx)
-        i1 = Mx
-    else
-        i1 = Mx+1
-    end
-    i2 = 2*Nx-1-Mx
-
-    if iseven(Ny)
-        j1 = My
-    else
-        j1 = My+1
-    end
-    j2 = 2*Ny-1-My
+    i1, i2 = samesize_conv_indices(Nx, Mx)
+    j1, j2 = samesize_conv_indices(Ny, My)
 
     return ComputationDomain(Wx, Wy, Nx, Ny, Mx, My, dx, dy, x, y, X, Y, i1, i2, j1, j2,
         R, Theta, Lat, Lon, K, K .* dx, K .* dy, (dx * dy) .* K .^ 2, correct_distortion,
@@ -206,7 +184,7 @@ Base.@kwdef struct PhysicalConstants{T<:AbstractFloat}
 end
 
 #########################################################
-# Multi-layer Earth
+# Earth model
 #########################################################
 """
     ReferenceEarthModel
@@ -315,7 +293,9 @@ struct ReferenceState{T<:AbstractFloat, M<:KernelMatrix{T}} <: GeoState
     V_af::T                 # ref sl-equivalent of ice volume above floatation
     V_pov::T                # ref potential ocean volume
     V_den::T                # ref potential ocean volume associated with V_den
-    maskgrounded::KernelMatrix{<:Bool} # mask for grounded ice
+    maskgrounded::KernelMatrix{<:Bool}  # mask for grounded ice
+    maskocean::KernelMatrix{<:Bool}     # mask for ocean
+    maskactive::KernelMatrix{<:Bool}
 end
 
 mutable struct ColumnAnomalies{T<:AbstractFloat, M<:KernelMatrix{T}}
@@ -340,6 +320,7 @@ mutable struct CurrentState{T<:AbstractFloat, M<:KernelMatrix{T}} <: GeoState
     u::M                    # viscous displacement
     dudt::M                 # viscous displacement rate
     ue::M                   # elastic displacement
+    ucorner::T              # corner displacement of the domain
     H_ice::M                # current height of ice column
     H_water::M              # current height of water column
     columnanoms::ColumnAnomalies{T, M}
@@ -350,7 +331,8 @@ mutable struct CurrentState{T<:AbstractFloat, M<:KernelMatrix{T}} <: GeoState
     V_af::T                 # V contribution from ice above floatation
     V_pov::T                # V contribution from bedrock adjustment
     V_den::T                # V contribution from diff between melt- and saltwater density
-    maskgrounded::KernelMatrix{<:Bool} # mask for grounded ice
+    maskgrounded::KernelMatrix{<:Bool}  # mask for grounded ice
+    maskocean::KernelMatrix{<:Bool}     # mask for ocean
     osc::OceanSurfaceChange{T}
     countupdates::Int       # count the updates of the geostate
     Δt::T                   # update step
@@ -360,13 +342,13 @@ end
 function CurrentState(Omega::ComputationDomain{T, L, M}, ref::ReferenceState{T, M};
     Δt = years2seconds(10.0)) where {T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}}
     return CurrentState(
-        copy(ref.u), null(Omega), copy(ref.ue),     # u, dudt, ue
-        copy(ref.H_ice), copy(ref.H_water),         # H_ice, H_water
-        ColumnAnomalies(Omega), copy(ref.b),        # columnanoms, b
-        copy(ref.bsl), null(Omega), copy(ref.seasurfaceheight),  # b, bsl, seasurfaceheight
-        copy(ref.V_af), copy(ref.V_pov), copy(ref.V_den),       # V_af, V_pov, V_den
-        copy(ref.maskgrounded), OceanSurfaceChange(z0 = ref.bsl),
-        0, Δt,
+        copy(ref.u), null(Omega), copy(ref.ue), T(0.0),
+        copy(ref.H_ice), copy(ref.H_water),
+        ColumnAnomalies(Omega), copy(ref.b),
+        copy(ref.bsl), null(Omega), copy(ref.seasurfaceheight),
+        copy(ref.V_af), copy(ref.V_pov), copy(ref.V_den),
+        copy(ref.maskgrounded), copy(ref.maskocean),
+        OceanSurfaceChange(z0 = ref.bsl), 0, Δt,
     )
 end
 
@@ -433,8 +415,6 @@ function FastIsoTools(
         pfft!, pifft!, Hice, eta, prealloc)
 end
 
-null(Omega::ComputationDomain) = copy(Omega.null)
-
 """
     FastIsoOutputs()
 
@@ -460,7 +440,21 @@ mutable struct FastIsoOutputs{T<:AbstractFloat, M<:Matrix{T}}
     computation_time::Float64
 end
 
-struct SimpleEuler end
+"""
+    Options
+
+Return a struct containing the options relative to solving a [`FastIsoProblem`](@ref).
+"""
+Base.@kwdef struct Options
+    interactive_sealevel::Bool = false
+    internal_loadupdate::Bool = true
+    internal_bsl_update::Bool = true
+    bsl_itp::Any = linear_interpolation([-Inf, Inf], [0.0, 0.0])
+    diffeq::NamedTuple = (alg = Tsit5(), reltol = 1e-3)
+    dt_diagnositcs::Real = 10.0
+    verbose::Bool = false
+    dense_output::Bool = false
+end
 
 """
     FastIsoProblem(Omega, c, p, t_out, interactive_sealevel)
@@ -477,14 +471,16 @@ struct FastIsoProblem{T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}, C<:Com
     c::PhysicalConstants{T}
     p::LayeredEarth{T, M}
     tools::FastIsoTools{T, M, C, FP, IP}
-    refgeostate::ReferenceState{T, M}
-    geostate::CurrentState{T, M}
+    ref::ReferenceState{T, M}
+    now::CurrentState{T, M}
     interactive_sealevel::Bool
     internal_loadupdate::Bool
     neglect_litho_gradients::Bool
     diffeq::NamedTuple
     verbose::Bool
     out::FastIsoOutputs{T, L}
+    internal_bsl_update::Bool
+    bsl_itp::Any
 end
 
 function FastIsoProblem(
@@ -555,10 +551,23 @@ function FastIsoProblem(
     seasurfaceheight_0::KernelMatrix{T} = null(Omega),
     b_0::KernelMatrix{T} = null(Omega),
     bsl_0::T = T(0.0),
+    internal_bsl_update::Bool = true,
+    bsl_itp = nothing,
+    maskactive::BoolMatrix = kernelcollect(Omega.K .< Inf, Omega),
 ) where {T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}}
 
     if !isa(diffeq.alg, OrdinaryDiffEqAlgorithm) && !isa(diffeq.alg, SimpleEuler)
         error("Provided algorithm for solving ODE is not supported.")
+    end
+
+    if interactive_sealevel & (sum(maskactive) > 0.6 * Omega.Nx * Omega.Ny)
+        error("Mask defining regions of active load must not cover more than 60%"*
+            " of the cells when using an interactive sea level.")
+    end
+
+    if not(internal_bsl_update) & isnothing(bsl_itp)
+        error("If the update of the barystatic sea level is external, an interpolator"*
+            " for it needs to be provided.")
     end
 
     tools = FastIsoTools(Omega, c, t_Hice_snapshots, Hice_snapshots,
@@ -566,29 +575,27 @@ function FastIsoProblem(
 
     # Initialise the reference state
     H_ice_0 = tools.Hice(t_out[1])
-    u_0, ue_0, seasurfaceheight_0, b_0, H_ice_0 = kernelpromote([u_0, ue_0,
-        seasurfaceheight_0, b_0, H_ice_0], Omega.arraykernel)
-    maskgrounded = height_above_floatation(H_ice_0, b_0, seasurfaceheight_0, c) .> 0
-    # if interactive_sealevel
-    #     H_ice_0 .*= maskgrounded
-    # end
-    if !Omega.use_cuda
-        maskgrounded = collect(maskgrounded)    # use Matrix{Bool} rather than BitMatrix
+    u_0, ue_0, seasurfaceheight_0, b_0, H_ice_0, maskactive = kernelpromote([u_0, ue_0,
+        seasurfaceheight_0, b_0, H_ice_0, maskactive], Omega.arraykernel)
+
+    if Omega.use_cuda
+        maskgrounded = get_maskgrounded(H_ice_0, b_0, seasurfaceheight_0, c)
+        maskocean = get_maskocean(seasurfaceheight_0, b_0, maskgrounded)
+    else
+        maskgrounded = collect(get_maskgrounded(H_ice_0, b_0, seasurfaceheight_0, c))
+        maskocean = collect(get_maskocean(seasurfaceheight_0, b_0, maskgrounded))
     end
+
     H_water_0 = watercolumn(H_ice_0, maskgrounded, b_0, seasurfaceheight_0, c)
 
-    refgeostate = ReferenceState(
-        u_0, ue_0,
-        H_ice_0, H_water_0,
-        b_0, bsl_0, seasurfaceheight_0,
-        T(0.0), T(0.0), T(0.0),     # V_af, V_pov, V_den
-        maskgrounded,
-    )
-    geostate = CurrentState(Omega, refgeostate)
+    ref = ReferenceState(u_0, ue_0, H_ice_0, H_water_0, b_0, bsl_0, seasurfaceheight_0,
+        T(0.0), T(0.0), T(0.0), maskgrounded, maskocean, maskactive)
+    now = CurrentState(Omega, ref)
     out = init_results(Omega, t_out)
     
-    return FastIsoProblem(Omega, c, p, tools, refgeostate, geostate, interactive_sealevel,
-        internal_loadupdate, neglect_litho_gradients, diffeq, verbose, out)
+    return FastIsoProblem(Omega, c, p, tools, ref, now, interactive_sealevel,
+        internal_loadupdate, neglect_litho_gradients, diffeq, verbose, out,
+        internal_bsl_update, bsl_itp)
 end
 
 
@@ -608,16 +615,16 @@ function Base.show(io::IO, ::MIME"text/plain", fip::FastIsoProblem)
 end
 
 function remake!(fip::FastIsoProblem)
-    fip.geostate.u = null(fip.Omega) #fip.refgeostate.u
-    fip.geostate.dudt = null(fip.Omega)
-    fip.geostate.ue = null(fip.Omega) #fip.refgeostate.ue
-    fip.geostate.geoid = null(fip.Omega)
-    fip.geostate.seasurfaceheight = null(fip.Omega) #fip.refgeostate.seasurfaceheight
-    fip.geostate.H_water = null(fip.Omega) #fip.refgeostate.H_water
-    fip.geostate.H_ice = fip.tools.Hice(0.0)
-    fip.geostate.b = fip.refgeostate.b
-    fip.geostate.countupdates = 0
-    fip.geostate.columnanoms = ColumnAnomalies(fip.Omega)
+    fip.now.u = null(fip.Omega) #fip.ref.u
+    fip.now.dudt = null(fip.Omega)
+    fip.now.ue = null(fip.Omega) #fip.ref.ue
+    fip.now.geoid = null(fip.Omega)
+    fip.now.seasurfaceheight = null(fip.Omega) #fip.ref.seasurfaceheight
+    fip.now.H_water = null(fip.Omega) #fip.ref.H_water
+    fip.now.H_ice = fip.tools.Hice(0.0)
+    fip.now.b = fip.ref.b
+    fip.now.countupdates = 0
+    fip.now.columnanoms = ColumnAnomalies(fip.Omega)
 
     out = init_results(fip.Omega, fip.out.t)
     fip.out.u = out.u

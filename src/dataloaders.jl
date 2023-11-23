@@ -227,4 +227,37 @@ function load_latychev2023_ICE6G(; case = "1D", var = "R")
     return (lon, lat, tlaty), X, itp
 end
 
+#############################################################
+# Green coefficients for elastic displacement
+#############################################################
 
+"""
+    get_greenintegrand_coeffs(T)
+
+Return the load response coefficients with type `T`.
+Reference: Deformation of the Earth by surface Loads, Farell 1972, table A3.
+"""
+function get_greenintegrand_coeffs(T::Type;
+    file = joinpath(@__DIR__, "input/elasticgreencoeffs_farrell1972.jld2"))
+    data = jldopen(file)
+    # rm is column 1 converted to meters (and some extra factor)
+    # GE /(10^12 rm) is vertical displacement in meters (applied load is 1kg)
+    # GE corresponds to column 2
+    return T.(data["rm"]), T.(data["GE"])
+end
+
+#############################################################
+# Preliminary Reference Earth Model
+#############################################################
+
+"""
+    load_prem()
+
+Load Preliminary Reference Earth Model (PREM) from Dzewonski and Anderson (1981).
+"""
+function load_prem()
+    # radius, depth, density, Vpv, Vph, Vsv, Vsh, eta, Q-mu, Q-kappa
+    M = readdlm(joinpath(@__DIR__, "input/PREM_1s.csv"), ',')[:, 1:7]
+    M .*= 1e3
+    return ReferenceEarthModel([M[:, j] for j in axes(M, 2)]...)
+end

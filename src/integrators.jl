@@ -1,3 +1,5 @@
+struct SimpleEuler end
+
 """
     simple_euler!()
 
@@ -12,11 +14,11 @@ end
 
 function explicit_rk4!(fip::FastIsoProblem{T, M}, f::Function, dt::T, t::T) where
     {T<:AbstractFloat, M<:KernelMatrix{T}}
-    k1 = dt .* f(fip.geostate.dudt, fip.geostate.u, fip, t)
-    k2 = dt .* f(fip.geostate.dudt, fip.geostate.u .+ k1/2, fip, t + dt/2)
-    k3 = dt .* f(fip.geostate.dudt, fip.geostate.u .+ k2/2, fip, t + dt/2)
-    k4 = dt .* f(fip.geostate.dudt, fip.geostate.u .+ k2, fip, t + dt)
-    fip.geostate.u .+= (k1 + 2*k2 + 2*k3 + k4)/6
+    k1 = dt .* f(fip.now.dudt, fip.now.u, fip, t)
+    k2 = dt .* f(fip.now.dudt, fip.now.u .+ k1/2, fip, t + dt/2)
+    k3 = dt .* f(fip.now.dudt, fip.now.u .+ k2/2, fip, t + dt/2)
+    k4 = dt .* f(fip.now.dudt, fip.now.u .+ k2, fip, t + dt)
+    fip.now.u .+= (k1 + 2*k2 + 2*k3 + k4)/6
     return nothing
 end
 

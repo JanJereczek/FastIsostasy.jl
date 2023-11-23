@@ -18,7 +18,7 @@ function generate_uniform_disc_load(
     c::PhysicalConstants,
     R::Real,
     H::Real,
-) where {T<:AbstractFloat, M<:KernelMatrix{T}}
+) where {T<:AbstractFloat, M<:Matrix{T}}
     mask = mask_disc(Omega.X, Omega.Y, R)
     return - mask .* (c.rho_ice * c.g * H)
 end
@@ -26,24 +26,6 @@ end
 ################################################
 # Generate binary parameter fields for test 3
 ################################################
-
-function generate_gaussian_field(
-    Omega::ComputationDomain{T, M},
-    z_background::T,
-    xy_peak::Vector{T},
-    z_peak::T,
-    sigma::KernelMatrix{T},
-) where {T<:AbstractFloat, M<:KernelMatrix{T}}
-    if Omega.Nx == Omega.Ny
-        N = Omega.Nx
-    else
-        error("Automated generation of Gaussian parameter fields only supported for" *
-            "square domains.")
-    end
-    G = gauss_distr( Omega.X, Omega.Y, xy_peak, sigma )
-    G = G ./ maximum(G) .* z_peak
-    return fill(z_background, N, N) + G
-end
 
 function slice_along_x(Omega::ComputationDomain)
     Nx, Ny = Omega.Nx, Omega.Ny

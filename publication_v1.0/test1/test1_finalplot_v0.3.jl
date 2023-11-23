@@ -33,7 +33,6 @@ function main()
     cmap = cgrad(janjet, length(t_plot), categorical = true)
 
     # cmap = cgrad(:darkrainbow, length(t_plot), categorical = true)
-    analytic_support = vcat(1.0e-14, 10 .^ (-10:0.05:-3), 1.0)
     xoffset = [2, 2, 2, 2, 2, 40]
     yoffset = [9, 7, 9, 11, 11, 0]
 
@@ -47,7 +46,7 @@ function main()
     meanerror_t = fill(Inf, length(t_plot))
     for i in eachindex(t_plot)
         t = t_plot[i]
-        analytic_solution_r(r) = analytic_solution(r, t, c, p, H, R, analytic_support)
+        analytic_solution_r(r) = analytic_solution(r, t, c, p, H, R)
         u_analytic = analytic_solution_r.( sqrt.( x .^ 2 + y .^ 2 ) )
         k = argmin( (t_out .- t) .^ 2 )
         u_numeric = fip.out.u[k][ii, jj]
@@ -105,7 +104,7 @@ function main()
 
         ii, jj = slice_along_x(Omega)
         x, y = Omega.X[ii, jj], Omega.Y[ii, jj]
-        analytic_solution_r(r) = analytic_solution(r, t_end, c, p, H, R, analytic_support)
+        analytic_solution_r(r) = analytic_solution(r, t_end, c, p, H, R)
         u_analytic = analytic_solution_r.( sqrt.( x .^ 2 + y .^ 2 ) )
         u_numeric = fip.out.u[end][ii, jj]
         abs_error = abs.(u_analytic - u_numeric)

@@ -10,8 +10,9 @@ function load_3D_results(case, N)
 end
 
 function convertfip()
-    N = 150
-    case = "3D-interactivesl=true-maxdepth=300000.0"
+    N = 128
+    # case = "3D-interactivesl=true-maxdepth=300000.0"
+    case = "3D-interactivesl=true-bsl=external"
     path = joinpath(@__DIR__, "../../data/test4/ICE6G/$case-N=$N.jld2")
     @load "$path" fip
     ncpath = joinpath(@__DIR__, "../../data/test4/ICE6G/$case-N=$N.nc")
@@ -173,7 +174,7 @@ function main(N; masktype="lgm")
         flipaxis = false, width = Relative(0.6), ticks = latexticks(-500:250:500))
     Colorbar(fig[10, 7:9], hme, label = L"$u_\mathrm{SK} - u_\mathrm{FI} $ (m)",
         vertical = false, flipaxis = false, width = Relative(0.8), ticks = latexticks(-100:50:100))
-    save("plots/test4/$case_i-N=$N-mask=$masktype-final_v0.7.png", fig)
+    save("plots/test4/isl_v0.1.png", fig)
     return nothing
 end
 

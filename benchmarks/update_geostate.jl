@@ -21,5 +21,5 @@ end
 # nV = 1000
 # dV = V_antarctica / nV
 # for i in 1:nV
-#     fip.geostate.osc(-dV)
+#     fip.now.osc(-dV)
 # end

@@ -36,8 +36,7 @@ function benchmark1_compare(Omega, fip, H, R)
     cmap = cgrad(:jet, length(fip.out.t), categorical = true)
     for k in eachindex(fip.out.t)
         t = fip.out.t[k]
-        analytic_solution_r(r) = analytic_solution(r, t, fip.c, fip.p,
-            H, R, analytic_support)
+        analytic_solution_r(r) = analytic_solution(r, t, fip.c, fip.p, H, R)
         u_analytic = analytic_solution_r.( get_r.(x, y) )
         @test mean(abs.(fip.out.u[k][ii, jj] .- u_analytic)) < 6
         @test maximum(abs.(fip.out.u[k][ii, jj] .- u_analytic)) < 8
@@ -80,7 +79,7 @@ function benchmark1_external_loadupdate()
     c, p, R, H, Hcylinder, t_out, interactive_sealevel = benchmark1_constants(Omega)
     fip = FastIsoProblem(Omega, c, p, t_out, interactive_sealevel, Hcylinder)
 
-    update_diagnostics!(fip.geostate.dudt, fip.geostate.u, fip, 0.0)
+    update_diagnostics!(fip.now.dudt, fip.now.u, fip, 0.0)
     write_out!(fip, 1)
     ode = init(fip)
     @inbounds for k in eachindex(fip.out.t)[2:end]

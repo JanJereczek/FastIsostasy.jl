@@ -89,11 +89,8 @@ ii, jj = Omega.Mx:Omega.Nx, Omega.My
 x = Omega.X[ii, jj]
 r = Omega.R[ii, jj]
 
-## A support vector for computing the analytical solution
-vsupport = vcat(1.0e-14, 10 .^ (-10:0.05:-3), 1.0)
-
 for k in eachindex(t_out)
-    analytic_solution_r(r) = analytic_solution(r, t_out[k], c, p, H, R, vsupport)
+    analytic_solution_r(r) = analytic_solution(r, t_out[k], c, p, H, R)
     u_analytic = analytic_solution_r.(r)
     u_numeric = fip.out.u[k][ii, jj]
     lines!(ax, x, u_analytic, color = cmap[k], linewidth = 5,
@@ -135,7 +132,7 @@ p = LayeredEarth(Omega)
 Hice = uniform_ice_cylinder(Omega, R, H)
 fip = FastIsoProblem(Omega, c, p, t_out, interactive_sealevel, Hice)
 
-update_diagnostics!(fip.geostate.dudt, fip.geostate.u, fip, 0.0)
+update_diagnostics!(fip.now.dudt, fip.now.u, fip, 0.0)
 write_out!(fip, 1)
 ode = init(fip)
 @inbounds for k in eachindex(fip.out.t)[2:end]

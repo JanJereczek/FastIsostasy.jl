@@ -18,7 +18,6 @@ end
 
 function dxx!(du::M, u::M, Omega::ComputationDomain{T, L, M}) where
     {T<:AbstractFloat, L<:Matrix{T}, M<:Matrix{T}}
-    # @boundscheck (Omega.Nx, Omega.Ny) == size(u) || throw(BoundsError())
     @inbounds for j in axes(du, 2)
         for i in axes(du, 1)[2:Omega.Nx-1]
             du[i, j] = (u[i+1, j] - 2*u[i, j] + u[i-1, j]) / (Omega.Dx[i, j] ^ 2)
@@ -38,7 +37,6 @@ end
 
 function dyy!(du::M, u::M, Omega::ComputationDomain{T, L, M}) where
     {T<:AbstractFloat, L<:Matrix{T}, M<:Matrix{T}}
-    # @boundscheck (Omega.Nx, Omega.Ny) == size(u) || throw(BoundsError())
     @inbounds for i in axes(du, 1)
         for j in axes(du, 2)[2:Omega.Ny-1]
             du[i, j] = (u[i, j+1] - 2*u[i, j] + u[i, j-1]) / (Omega.Dy[i, j] ^ 2)
@@ -59,7 +57,6 @@ function dxy(u::M, Omega::ComputationDomain{T, L, M}) where
 end
 
 function dxy!(ux, uxy, u, Omega)
-    # @boundscheck (dxy.Nx, dxy.Ny) == size(u) || throw(BoundsError())
     dx!(ux, u, Omega)
     dy!(uxy, ux, Omega)
 end

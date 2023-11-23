@@ -40,6 +40,21 @@ Base.fill(x::Real, fip::FastIsoProblem) = fill(x, fip.Omega)
 Base.fill(x::Real, Omega::ComputationDomain) = Omega.arraykernel(fill(x, Omega.Nx, Omega.Ny))
 
 """
+    samesize_conv_indices(N, M)
+
+Get the start and end indices required for a [`samesize_conv`](@ref)
+"""
+function samesize_conv_indices(N, M)
+    if iseven(N)
+        j1 = M
+    else
+        j1 = M+1
+    end
+    j2 = 2*N-1-M
+    return j1, j2
+end
+
+"""
     matrify(x, Nx, Ny)
 
 Generate a vector of constant matrices from a vector of constants.
@@ -65,7 +80,14 @@ end
 function samesize_conv(X::M, Y::M, Omega::ComputationDomain{T, L, M}) where
     {T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}}
     convo = conv(X, Y)
-    corner_bc!(convo, 2*Omega.Nx-1, 2*Omega.Ny-1)
+    corner_bc!(convo, 2*Omega.Nx-1, 2*Omega.Ny-1, 0.0)
+    return view(convo, Omega.i1:Omega.i2, Omega.j1:Omega.j2)
+end
+
+function samesize_conv(X::L, Y::L, Omega::ComputationDomain{T, L, M}) where
+    {T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}}
+    convo = conv(X, Y)
+    corner_bc!(convo, 2*Omega.Nx-1, 2*Omega.Ny-1, 0.0)
     return view(convo, Omega.i1:Omega.i2, Omega.j1:Omega.j2)
 end
 
@@ -77,25 +99,21 @@ If the load is updated externally, the user is responsible for writing results.
 """
 function write_out!(fip::FastIsoProblem, k::Int)
     if fip.internal_loadupdate
-        fip.out.u[k] .= copy(Array(fip.geostate.u))
-        fip.out.dudt[k] .= copy(Array(fip.geostate.dudt))
-        fip.out.ue[k] .= copy(Array(fip.geostate.ue))
-        fip.out.b[k] .= copy(Array(fip.geostate.b))
-        # fip.out.bsl[k] .= copy(fip.geostate.bsl)
-        fip.out.geoid[k] .= copy(Array(fip.geostate.geoid))
-        fip.out.seasurfaceheight[k] .= copy(Array(fip.geostate.seasurfaceheight))
-        fip.out.maskgrounded[k] .= copy(Array(fip.geostate.maskgrounded))
-        fip.out.Hice[k] .= copy(Array(fip.geostate.H_ice))
-        fip.out.Hwater[k] .= copy(Array(fip.geostate.H_water))
-        fip.out.canomfull[k] .= copy(Array(fip.geostate.columnanoms.full))
-        fip.out.canomload[k] .= copy(Array(fip.geostate.columnanoms.load))
-        fip.out.canomlitho[k] .= copy(Array(fip.geostate.columnanoms.litho))
-        fip.out.canommantle[k] .= copy(Array(fip.geostate.columnanoms.mantle))
+        fip.out.u[k] .= copy(Array(fip.now.u))
+        fip.out.dudt[k] .= copy(Array(fip.now.dudt))
+        fip.out.ue[k] .= copy(Array(fip.now.ue))
+        fip.out.b[k] .= copy(Array(fip.now.b))
+        # fip.out.bsl[k] .= copy(fip.now.bsl)
+        fip.out.geoid[k] .= copy(Array(fip.now.geoid))
+        fip.out.seasurfaceheight[k] .= copy(Array(fip.now.seasurfaceheight))
+        fip.out.maskgrounded[k] .= copy(Array(fip.now.maskgrounded))
+        fip.out.Hice[k] .= copy(Array(fip.now.H_ice))
+        fip.out.Hwater[k] .= copy(Array(fip.now.H_water))
+        fip.out.canomfull[k] .= copy(Array(fip.now.columnanoms.full))
+        fip.out.canomload[k] .= copy(Array(fip.now.columnanoms.load))
+        fip.out.canomlitho[k] .= copy(Array(fip.now.columnanoms.litho))
+        fip.out.canommantle[k] .= copy(Array(fip.now.columnanoms.mantle))
     end
-end
-
-macro Name(arg)
-    string(arg)
 end
 
 function savefip(filename, fip; T = Float32)
@@ -267,6 +285,7 @@ end
 #####################################################
 # Math utils
 #####################################################
+
 """
     gauss_distr(X::KernelMatrix{T}, Y::KernelMatrix{T},
         mu::Vector{<:Real}, sigma::Matrix{<:Real})
@@ -287,236 +306,34 @@ function gauss_distr(X::M, Y::M, mu::Vector{T}, sigma::Matrix{T}) where
     return G
 end
 
-"""
-    get_rigidity(t::T, E::T, nu::T) where {T<:AbstractFloat}
-
-Compute rigidity `D` based on thickness `t`, Young modulus `E` and Poisson ration `nu`.
-"""
-function get_rigidity(t::T, E::T, nu::T) where {T<:AbstractFloat}
-    return (E * t^3) / (12 * (1 - nu^2))
-end
-
-"""
-    get_effective_viscosity(
-        layer_viscosities::Vector{KernelMatrix{T}},
-        layers_thickness::Vector{T},
-        Omega::ComputationDomain{T, M},
-    ) where {T<:AbstractFloat}
-
-Compute equivalent viscosity for multilayer model by recursively applying
-the formula for a halfspace and a channel from Lingle and Clark (1975).
-"""
-function get_effective_viscosity(
+function generate_gaussian_field(
     Omega::ComputationDomain{T, M},
-    layer_viscosities::Array{T, 3},
-    layers_thickness::Array{T, 3},
-    mantle_poissonratio::T,
-) where {T<:AbstractFloat, M<:KernelMatrix{T}}
-
-    incompressible_poissonratio = T(0.5)
-    compressibility_scaling = (1 + incompressible_poissonratio) / (1 + mantle_poissonratio)
-
-    # Recursion has to start with half space = n-th layer:
-    effective_viscosity = layer_viscosities[:, :, end]
-    if size(layer_viscosities, 3) > 1
-        @inbounds for i in axes(layer_viscosities, 3)[1:end-1]
-            channel_viscosity = layer_viscosities[:, :, end - i]
-            channel_thickness = layers_thickness[:, :, end - i + 1]
-            viscosity_ratio = channel_viscosity ./ effective_viscosity
-            viscosity_scaling = three_layer_scaling(
-                Omega,
-                viscosity_ratio,
-                channel_thickness,
-            )
-            effective_viscosity .*= viscosity_scaling
-        end
-    end
-    effective_compressible_viscosity = effective_viscosity .* compressibility_scaling
-    return seakon_calibration(effective_compressible_viscosity)
-    # return effective_compressible_viscosity
-end
-
-function seakon_calibration(eta::Matrix{T}) where {T<:AbstractFloat}
-    return exp.(log10.(T(1e21) ./ eta)) .* eta
-end
-
-"""
-    three_layer_scaling(Omega::ComputationDomain, kappa::T, visc_ratio::T,
-        channel_thickness::T)
-
-Return the viscosity scaling for a three-layer model and based on a the wave
-number `kappa`, the `visc_ratio` and the `channel_thickness`.
-Reference: Bueler et al. 2007, below equation 15.
-"""
-function three_layer_scaling(
-    Omega::ComputationDomain{T, M},
-    visc_ratio::Matrix{T},
-    channel_thickness::Matrix{T},
-) where {T<:AbstractFloat, M<:KernelMatrix{T}}
-
-    # kappa is the wavenumber of the harmonic load. (see Cathles 1975, p.43)
-    # we assume this is related to the size of the domain!
-    kappa = T(π) / mean([Omega.Wx, Omega.Wy])
-
-    C = cosh.(channel_thickness .* kappa)
-    S = sinh.(channel_thickness .* kappa)
-
-    num1 = 2 .* visc_ratio .* C .* S
-    num2 = (1 .- visc_ratio .^ 2) .* channel_thickness .^ 2 .* kappa .^ 2
-    num3 = visc_ratio .^ 2 .* S .^ 2 + C .^ 2
-
-    denum1 = (visc_ratio .+ 1 ./ visc_ratio) .* C .* S
-    denum2 = (visc_ratio .- 1 ./ visc_ratio) .* channel_thickness .* kappa
-    denum3 = S .^ 2 + C .^ 2
-    
-    return (num1 + num2 + num3) ./ (denum1 + denum2 + denum3)
-end
-
-"""
-    loginterp_viscosity(tvec, layer_viscosities, layers_thickness, pseudodiff)
-
-Compute a log-interpolator of the equivalent viscosity from provided viscosity
-fields `layer_viscosities` at time stamps `tvec`.
-"""
-function loginterp_viscosity(
-    tvec::AbstractVector{T},
-    layer_viscosities::Array{T, 4},
-    layers_thickness::Array{T, 3},
-    pseudodiff::KernelMatrix{T},
-    mantle_poissonratio::T,
-) where {T<:AbstractFloat}
-    n1, n2, n3, nt = size(layer_viscosities)
-    log_eqviscosity = fill(zeros(nt), n1, n2)
-
-    [log_eqviscosity[k] .= log10.(get_effective_viscosity(
-        layer_viscosities[:, :, :, k],
-        layers_thickness,
-        pseudodiff,
-        mantle_poissonratio::T,
-    )) for k in 1:nt]
-
-    log_interp = linear_interpolation(tvec, log_eqviscosity)
-    visc_interp(t) = 10 .^ log_interp(t)
-    return visc_interp
-end
-
-#####################################################
-# Load utils
-#####################################################
-
-"""
-    load_prem()
-
-Load Preliminary Reference Earth Model (PREM) from Dzewonski and Anderson (1981).
-"""
-function load_prem()
-    # radius, depth, density, Vpv, Vph, Vsv, Vsh, eta, Q-mu, Q-kappa
-    M = readdlm(joinpath(@__DIR__, "input/PREM_1s.csv"), ',')[:, 1:7]
-    M .*= 1e3
-    return ReferenceEarthModel([M[:, j] for j in axes(M, 2)]...)
-end
-
-# function preprocess_prem(prem::ReferenceEarthModel)
-#     ub = 6330e3
-#     lb = 5770e3
-#     idx = lb .< prem.radius .< ub
-#     return mean(prem.density[idx])
-# end
-
-function equilazation_layer()
-
-end
-
-"""
-    get_greenintegrand_coeffs(T)
-
-Return the load response coefficients with type `T`.
-Reference: Deformation of the Earth by surface Loads, Farell 1972, table A3.
-"""
-function get_greenintegrand_coeffs(T::Type;
-    file=joinpath(@__DIR__, "input/elasticgreencoeffs_farrell1972.jld2"))
-    data = jldopen(file)
-    # rm is column 1 converted to meters (and some extra factor)
-    # GE /(10^12 rm) is vertical displacement in meters (applied load is 1kg)
-    # GE corresponds to column 2
-    return T.(data["rm"]), T.(data["GE"])
-end
-
-"""
-    build_greenintegrand(distance::Vector{T}, 
-        greenintegrand_coeffs::Vector{T}) where {T<:AbstractFloat}
-
-Compute the integrands of the Green's function resulting from a load at a given
-`distance` and based on provided `greenintegrand_coeffs`.
-Reference: Deformation of the Earth by surface Loads, Farell 1972, table A3.
-"""
-function build_greenintegrand(
-    distance::Vector{T},
-    greenintegrand_coeffs::Vector{T},
-) where {T<:AbstractFloat}
-
-    greenintegrand_interp = linear_interpolation(distance, greenintegrand_coeffs)
-    compute_greenintegrand_entry_r(r::T) = get_loadgreen(
-        r, distance, greenintegrand_coeffs, greenintegrand_interp)
-    greenintegrand_function(x::T, y::T) = compute_greenintegrand_entry_r( get_r(x, y) )
-    return greenintegrand_function
-end
-
-"""
-    get_loadgreen(r::T, rm::Vector{T}, greenintegrand_coeffs::Vector{T},     
-        interp_greenintegrand_::Interpolations.Extrapolation) where {T<:AbstractFloat}
-
-Compute the integrands of the Green's function resulting from a load at a given
-`distance` and based on provided `greenintegrand_coeffs`.
-Reference: Deformation of the Earth by surface Loads, Farell 1972, table A3.
-"""
-function get_loadgreen(
-    r::T,
-    rm::Vector{T},
-    greenintegrand_coeffs::Vector{T},
-    interp_greenintegrand_::Interpolations.Extrapolation,
-) where {T<:AbstractFloat}
-
-    if r < 0.01
-        return greenintegrand_coeffs[1] / ( rm[2] * T(1e12) )
-    elseif r > rm[end]
-        return T(0.0)
+    z_background::T,
+    xy_peak::Vector{T},
+    z_peak::T,
+    sigma::Matrix{T},
+) where {T<:AbstractFloat, M<:Matrix{T}}
+    if Omega.Nx == Omega.Ny
+        N = Omega.Nx
     else
-        return interp_greenintegrand_(r) / ( r * T(1e12) )
+        error("Automated generation of Gaussian parameter fields only supported for" *
+            "square domains.")
     end
+    G = gauss_distr( Omega.X, Omega.Y, xy_peak, sigma )
+    G = G ./ maximum(G) .* z_peak
+    return fill(z_background, N, N) + G
 end
 
-"""
-    get_elasticgreen(Omega, quad_support, quad_coeffs)
-
-Integrate load response over field by using 2D quadrature with specified
-support points and associated coefficients.
-"""
-function get_elasticgreen(
-    Omega::ComputationDomain{T, M},
-    greenintegrand_function::Function,
-    quad_support::Vector{T},
-    quad_coeffs::Vector{T},
-) where {T<:AbstractFloat, M<:KernelMatrix{T}}
-
-    dx, dy = Omega.dx, Omega.dy
-    elasticgreen = fill(T(0), Omega.Nx, Omega.Ny)
-
-    @inbounds for i = 1:Omega.Nx, j = 1:Omega.Ny
-        p = i - Omega.Mx - 1
-        q = j - Omega.My - 1
-        elasticgreen[j, i] = quadrature2D(
-            greenintegrand_function,
-            quad_support,
-            quad_coeffs,
-            p*dx,
-            (p+1)*dx,
-            q*dy,
-            (q+1)*dy,
-        )
+function blur(X::AbstractMatrix, Omega::ComputationDomain, level::Real)
+    if not(0 <= level <= 1)
+        error("Blurring level must be a value between 0 and 1.")
     end
-    return Omega.arraykernel(elasticgreen)
+    T = eltype(X)
+    sigma = diagm([(level * Omega.Wx)^2, (level * Omega.Wy)^2])
+    kernel = T.(generate_gaussian_field(Omega, 0.0, [0.0, 0.0], 1.0, sigma))
+    return copy(samesize_conv(Omega.arraykernel(kernel), Omega.arraykernel(X), Omega))
 end
+
 
 #####################################################
 # Quadrature utils
@@ -603,6 +420,16 @@ end
 # Kernel utils
 #####################################################
 
+null(Omega::ComputationDomain) = copy(Omega.null)
+
+function kernelcollect(X, Omega)
+    if not(Omega.use_cuda)
+        return collect(X)
+    else
+        return X
+    end
+end
+
 """
     kernelpromote(X, arraykernel)
 
@@ -677,9 +504,11 @@ function init_results(fip::FastIsoProblem, Omega::ComputationDomain{T, M}, t_out
     fip.out.computation_time = 0.0
     return nothing
 end
+
 #####################################################
 # BC utils
 #####################################################
+
 function periodic_extension(M::Matrix{T}, Nx::Int, Ny::Int) where {T<:AbstractFloat}
     M_periodic = zeropad_extension(M, Nx, Ny)
     M_periodic[1, 2:end-1] .= M[end, :]
@@ -704,6 +533,7 @@ end
 #####################################################
 # Example utils
 #####################################################
+
 function mask_disc(X::KernelMatrix{T}, Y::KernelMatrix{T}, R::T;
     center::Vector{<:Real}) where {T<:AbstractFloat}
     return mask_disc(sqrt.((X .- center[1]) .^ 2 + (Y .- center[2]) .^ 2), R)
@@ -736,11 +566,4 @@ function stereo_ice_cap(
     alpha = deg2rad(alpha_deg)
     M = Omega.Theta .< alpha
     return H .* sqrt.( M .* (cos.(Omega.Theta) .- cos(alpha)) ./ (1 - cos(alpha)) )
-end
-
-function zero_alloc!(P)
-    P.rhs .= 0.0
-    P.Mxx .= 0.0
-    P.Myy .= 0.0
-    P.Mxy .= 0.0
 end
