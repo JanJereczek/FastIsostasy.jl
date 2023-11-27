@@ -2,7 +2,7 @@ using FastIsostasy
 using JLD2, NCDatasets, CairoMakie, Interpolations, DelimitedFiles
 include("../helpers.jl")
 
-function main(N, maxdepth; nlayers = 3, use_cuda = false, interactive_sl = false)
+function main(N, maxdepth; nlayers = 3, use_cuda = false)
     Omega = ComputationDomain(3300e3, 3300e3, N, N, use_cuda = use_cuda)
     Lon, Lat = Array(Omega.Lon), Array(Omega.Lat)
     c = PhysicalConstants()
@@ -27,7 +27,7 @@ function main(N, maxdepth; nlayers = 3, use_cuda = false, interactive_sl = false
 
     (x, y), b, bitp = load_dataset("BedMachine3")
     (x, y), geoid, geoiditp = load_dataset("BedMachine3", var = "geoid")
-    fip = FastIsoProblem(Omega, c, p, tsec, interactive_sl, tsec, Hice_vec, verbose = true,
+    fip = FastIsoProblem(Omega, c, p, tsec, tsec, Hice_vec, verbose = true,
         b_0 = Omega.arraykernel(bitp.(Array(Omega.X), Array(Omega.Y))),
         seasurfaceheight_0 = Omega.arraykernel(geoiditp.(Array(Omega.X), Array(Omega.Y))),
         H_ice_0 = Hice_vec[1],
@@ -36,9 +36,9 @@ function main(N, maxdepth; nlayers = 3, use_cuda = false, interactive_sl = false
     solve!(fip)
     println("Computation took $(fip.out.computation_time) s")
 
-    @save "../data/test4/ICE6G/3D-interactivesl=$interactive_sl-maxdepth=$maxdepth"*
+    @save "../data/test4/ICE6G/3D-maxdepth=$maxdepth"*
         "-nlayers=$nlayers-N=$(Omega.Nx)-premparams.jld2" t fip Hitp Hice_vec
 end
 
 init()
-[main(64, 300e3, interactive_sl = isl) for isl in [false, true]]
+main(64, 300e3)

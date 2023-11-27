@@ -15,7 +15,6 @@ using NLsolve: mcpsolve
 using FFTW: fft, ifft, plan_fft!, plan_ifft!, cFFTWPlan
 using AbstractFFTs
 using FastGaussQuadrature: gausslegendre
-using DSP: conv
 using CUDA: CuArray, CuMatrix, CUFFT, allowscalar
 using OrdinaryDiffEq: ODEProblem, solve, remake, OrdinaryDiffEqAlgorithm
 using EnsembleKalmanProcesses
@@ -35,6 +34,8 @@ using Reexport
     SSPRK932, SSPRK54, SSPRK104, SSPRKMSVS32, SSPRKMSVS43, SSPRK53_2N1, SSPRK53_2N2,
     KenCarp47
 
+include("convenience_types.jl")
+include("convolution.jl")
 include("adaptive_ocean.jl")
 include("structs.jl")
 include("utils.jl")
@@ -47,16 +48,19 @@ include("inversion.jl")
 include("analytic_solutions.jl")
 include("dataloaders.jl")
 
+# convolution.jl
+export InplaceConvolution
+
 # structs.jl
 export ComputationDomain, PhysicalConstants
-export ReferenceEarthModel, LayeredEarth
+export ReferenceEarthModel, LayeredEarth, SolverOptions
 export CurrentState, ReferenceState
 export FastIsoTools, FastIsoProblem
 
 # utils.jl
 export years2seconds, seconds2years, m_per_sec2mm_per_yr
 export latlon2stereo, stereo2latlon, lon360tolon180
-export reinit_structs_cpu, meshgrid
+export reinit_structs_cpu, meshgrid, kernelcollect
 
 export get_r, gauss_distr, generate_gaussian_field, samesize_conv, blur
 export uniform_ice_cylinder, stereo_ice_cylinder, stereo_ice_cap
@@ -67,7 +71,7 @@ export OceanSurfaceChange
 
 # geostate.jl
 export update_loadcolumns!, update_elasticresponse!, update_geoid!
-export columnanom_load!, columnanom_full!, columnanom_ice!, columnanom_water!
+export columnanom_load!, columnanom_full!, columnanom_ice, columnanom_water
 export columnanom_litho!, columnanom_mantle!, update_seasurfaceheight!, total_volume
 export update_V_af!, update_V_den!, update_V_pov!, height_above_floatation
 

@@ -8,7 +8,7 @@ Solve the isostatic adjustment problem defined in `fip::FastIsoProblem`.
 """
 function solve!(fip::FastIsoProblem)
 
-    if !(fip.internal_loadupdate)
+    if !(fip.opts.internal_loadupdate)
         error("`solve!` does not support external updating of the load. Use `step!` instead.")
     end
     t1 = time()
@@ -21,20 +21,25 @@ function solve!(fip::FastIsoProblem)
     # Initialize dummy ODEProblem and perform integration.
     dummy = ODEProblem(update_diagnostics!, fip.now.u, (0.0, 1.0), fip)
     @inbounds for k in eachindex(t_out)[2:end]
-        if fip.verbose
+        
+        fip.now.k = k - 1
+        if fip.opts.verbose
             println("Computing until t = $(Int(round(seconds2years(t_out[k])))) years...")
         end
-        if fip.diffeq.alg != SimpleEuler()
+
+        if fip.opts.diffeq.alg != SimpleEuler()
             prob = remake(dummy, u0 = fip.now.u, tspan = (t_out[k-1], t_out[k]), p = fip)
-            sol = solve(prob, fip.diffeq.alg, reltol=fip.diffeq.reltol)
+            sol = solve(prob, fip.opts.diffeq.alg, reltol=fip.opts.diffeq.reltol)
             fip.now.dudt = sol(t_out[k], Val{1})
         else
-            @inbounds for t in t_out[k-1]:fip.diffeq.dt:t_out[k]
+            @inbounds for t in t_out[k-1]:fip.opts.diffeq.dt:t_out[k]
                 update_diagnostics!(fip.now.dudt, fip.now.u, fip, t)
-                simple_euler!(fip.now.u, fip.now.dudt, fip.diffeq.dt)
+                simple_euler!(fip.now.u, fip.now.dudt, fip.opts.diffeq.dt)
             end
         end
         write_out!(fip, k)
+        fip.now.countupdates = 0    # reset to update sl at beginning of next solve()
+
     end
 
     fip.out.computation_time += time()-t1
@@ -46,7 +51,7 @@ end
 
 Initialize an `ode::CoupledODEs`, aimed to be used in [`step!`](@ref).
 """
-init(fip::FastIsoProblem) = CoupledODEs(update_diagnostics!, fip.now.u, fip; fip.diffeq)
+init(fip::FastIsoProblem) = CoupledODEs(update_diagnostics!, fip.now.u, fip; fip.opts.diffeq)
 
 """
     step!(fip)
@@ -79,10 +84,11 @@ function update_diagnostics!(dudt::M, u::M, fip::FastIsoProblem{T, L, M, C, FP, 
     # Order really matters here!
 
     # Make sure that integrated viscous displacement satisfies BC.
-    corner_bc!(u, fip.Omega.Nx, fip.Omega.Ny, fip.now.ucorner)
+    # corner_bc!(u, fip.Omega.Nx, fip.Omega.Ny, fip.now.ucorner)
+    apply_bc!(u, fip.Omega.bc_matrix, fip.Omega.nbc)
 
     # Update load columns if interpolator available
-    if fip.internal_loadupdate
+    if fip.opts.internal_loadupdate
         update_loadcolumns!(fip, fip.tools.Hice(t))
     end
 
@@ -92,15 +98,16 @@ function update_diagnostics!(dudt::M, u::M, fip::FastIsoProblem{T, L, M, C, FP, 
     # Only update the geoid and sea level if now is interactive.
     # As integration requires smaller time steps than diagnostics,
     # only update geostate every fip.now.dt
-    if ((t - fip.out.t[1]) / fip.now.Δt) >= fip.now.countupdates
+    if (((t - fip.out.t[fip.now.k]) / fip.opts.dt_sl) >= fip.now.countupdates) ||
+        t ≈ fip.out.t[fip.now.k + 1]
         # if elastic update placed after geoid, worse match with (Spada et al. 2011)
         update_elasticresponse!(fip)
         columnanom_litho!(fip)
-        if fip.interactive_sealevel
-            if fip.internal_bsl_update
+        if fip.opts.interactive_sealevel
+            if fip.opts.internal_bsl_update
                 update_bsl!(fip)
             else
-                fip.now.bsl = fip.bsl_itp(seconds2years(t))
+                fip.now.bsl = fip.tools.bsl(seconds2years(t))
             end
             update_geoid!(fip)
             update_seasurfaceheight!(fip)
@@ -145,13 +152,24 @@ function dudt_isostasy!(dudt::M, u::M, fip::FastIsoProblem{T, L, M, C, FP, IP}, 
     fip.tools.pifft! * P.ifftrhs
     dudt .= real.(P.ifftrhs)
     
-    corner_bc!(dudt, fip.Omega.Nx, fip.Omega.Ny, 0.0)
+    # corner_bc!(dudt, fip.Omega.Nx, fip.Omega.Ny, 0.0)
+    apply_bc!(dudt, fip.Omega.bc_matrix, fip.Omega.nbc)
+
     return nothing
 end
 
 #####################################################
 # BCs
 #####################################################
+
+"""
+    apply_bc!(u::M, bcm::M, nbc::T)
+A generic function to update `u` such that the boundary conditions are respected
+on average, which is the only way to impose them for Fourier collocation.
+"""
+function apply_bc!(u::M, bcm::M, nbc::T) where {T <: AbstractFloat, M<:KernelMatrix{T}}
+    u .-= sum(u .* bcm) / nbc
+end
 
 """
     corner_bc!(u, Nx, Ny, offset)
@@ -196,8 +214,8 @@ To use coefficients differing from [^Farrell1972], see [FastIsoTools](@ref).
 function update_elasticresponse!(fip::FastIsoProblem{T, L, M, C, FP, IP}) where
     {T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}, C<:ComplexMatrix{T},
     FP<:ForwardPlan{T}, IP<:InversePlan{T}}
-    fip.now.ue .= samesize_conv(fip.tools.elasticgreen,
-        fip.now.columnanoms.load .* fip.Omega.K .^ 2, fip.Omega)
+    fip.now.ue .= samesize_conv(fip.now.columnanoms.load .* fip.Omega.K .^ 2,
+        fip.tools.elasticconvo, fip.Omega)
     return nothing
 end
 

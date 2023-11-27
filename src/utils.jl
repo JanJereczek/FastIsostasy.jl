@@ -39,6 +39,12 @@ not(x::Bool) = !x
 Base.fill(x::Real, fip::FastIsoProblem) = fill(x, fip.Omega)
 Base.fill(x::Real, Omega::ComputationDomain) = Omega.arraykernel(fill(x, Omega.Nx, Omega.Ny))
 
+function corner_matrix(T, Nx, Ny)
+    M = zeros(T, Nx, Ny)
+    M[1, 1], M[1, Nx], M[Ny, 1], M[Nx, Ny] = T.([1, 1, 1, 1])
+    return M
+end
+
 """
     samesize_conv_indices(N, M)
 
@@ -71,25 +77,34 @@ function matrify(x::Vector{T}, Nx::Int, Ny::Int) where {T<:Real}
     return X
 end
 
-function samesize_conv(X::M, Y::M, Omega::ComputationDomain{T, L, M}, bc::Function) where
-    {T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}}
-    convo = bc(conv(X, Y), 2*Omega.Nx-1, 2*Omega.Ny-1)
+# function samesize_conv(X::M, Y::M, Omega::ComputationDomain{T, L, M}, bc::Function) where
+#     {T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}}
+#     convo = bc(conv(X, Y), 2*Omega.Nx-1, 2*Omega.Ny-1)
+#     return view(convo, Omega.i1:Omega.i2, Omega.j1:Omega.j2)
+# end
+
+# function samesize_conv(X::M, Y::M, Omega::ComputationDomain{T, L, M}) where
+#     {T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}}
+#     convo = conv(X, Y)
+#     # corner_bc!(convo, 2*Omega.Nx-1, 2*Omega.Ny-1, 0.0)
+#     apply_bc!(convo, Omega.extended_bc_matrix, Omega.extended_nbc)
+#     return view(convo, Omega.i1:Omega.i2, Omega.j1:Omega.j2)
+# end
+
+function samesize_conv(X::M, ipc::InplaceConvolution{T, C, FP, IP},
+    Omega::ComputationDomain{T, L, M}) where {T<:AbstractFloat, L<:Matrix{T},
+    M<:KernelMatrix{T}, C<:ComplexMatrix{T}, FP<:ForwardPlan{T}, IP<:InversePlan{T}}
+    convo = ipc(X)
+    apply_bc!(convo, Omega.extended_bc_matrix, Omega.extended_nbc)
     return view(convo, Omega.i1:Omega.i2, Omega.j1:Omega.j2)
 end
 
-function samesize_conv(X::M, Y::M, Omega::ComputationDomain{T, L, M}) where
-    {T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}}
-    convo = conv(X, Y)
-    corner_bc!(convo, 2*Omega.Nx-1, 2*Omega.Ny-1, 0.0)
-    return view(convo, Omega.i1:Omega.i2, Omega.j1:Omega.j2)
-end
-
-function samesize_conv(X::L, Y::L, Omega::ComputationDomain{T, L, M}) where
-    {T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}}
-    convo = conv(X, Y)
-    corner_bc!(convo, 2*Omega.Nx-1, 2*Omega.Ny-1, 0.0)
-    return view(convo, Omega.i1:Omega.i2, Omega.j1:Omega.j2)
-end
+# function samesize_conv(X::CuMatrix{T}, Y::CuMatrix{T}, Omega::ComputationDomain{T, L, M}) where
+#     {T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}}
+#     convo = conv(X, Y)
+#     corner_bc!(convo, 2*Omega.Nx-1, 2*Omega.Ny-1, 0.0)
+#     return view(convo, Omega.i1:Omega.i2, Omega.j1:Omega.j2)
+# end
 
 """
     write_out!(fip::FastIsoProblem)
@@ -98,7 +113,7 @@ Write results in output vectors if the load is updated internally.
 If the load is updated externally, the user is responsible for writing results.
 """
 function write_out!(fip::FastIsoProblem, k::Int)
-    if fip.internal_loadupdate
+    if fip.opts.internal_loadupdate
         fip.out.u[k] .= copy(Array(fip.now.u))
         fip.out.dudt[k] .= copy(Array(fip.now.dudt))
         fip.out.ue[k] .= copy(Array(fip.now.ue))
@@ -464,44 +479,32 @@ function reinit_structs_cpu(Omega::ComputationDomain{T, M}, p::LayeredEarth{T, M
     return Omega_cpu, p_cpu
 end
 
-"""
-    init_results()
-
-Initialize some `Vector{<:KernelMatrix}` where results shall be later stored.
-"""
-function init_results(Omega::ComputationDomain{T, L, M}, t_out::Vector{T}) where
-    {T<:AbstractFloat, L, M<:KernelMatrix{T}}
-    # initialize with placeholders
-    placeholder = Array(null(Omega))
-    u = [copy(placeholder) for t in t_out]
-    dudt = [copy(placeholder) for t in t_out]
-    ue = [copy(placeholder) for t in t_out]
-    b = [copy(placeholder) for t in t_out]
-    bsl = zeros(T, length(t_out))
-    geoid = [copy(placeholder) for t in t_out]
-    seasurfaceheight = [copy(placeholder) for t in t_out]
-    maskgrounded = [copy(placeholder) for t in t_out]
-    Hice = [copy(placeholder) for t in t_out]
-    Hwater = [copy(placeholder) for t in t_out]
-    canomfull = [copy(placeholder) for t in t_out]
-    canomload = [copy(placeholder) for t in t_out]
-    canomlitho = [copy(placeholder) for t in t_out]
-    canommantle = [copy(placeholder) for t in t_out]
-    return FastIsoOutputs(t_out, u, dudt, ue, b, geoid, seasurfaceheight, maskgrounded,
-        Hice, Hwater, canomfull, canomload, canomlitho, canommantle, 0.0)
+function choose_fft_plans(X, use_cuda)
+    if use_cuda
+        pfft! = CUFFT.plan_fft!(complex.(X))
+        pifft! = CUFFT.plan_ifft!(complex.(X))
+    else
+        pfft! = plan_fft!(complex.(X))
+        pifft! = plan_ifft!(complex.(X))
+    end
+    return pfft!, pifft!
 end
 
-function init_results(fip::FastIsoProblem, Omega::ComputationDomain{T, M}, t_out::Vector{T}
-    ) where {T<:AbstractFloat, M<:KernelMatrix{T}}
-    # initialize with placeholders
-    placeholder = Array(null(Omega))
-    fip.out.u = [copy(placeholder) for t in t_out]
-    fip.out.dudt = [copy(placeholder) for t in t_out]
-    fip.out.ue = [copy(placeholder) for t in t_out]
-    fip.out.geoid = [copy(placeholder) for t in t_out]
-    fip.out.seasurfaceheight = [copy(placeholder) for t in t_out]
-    fip.out.Hice = [copy(placeholder) for t in t_out]
-    fip.out.computation_time = 0.0
+function remake!(fip::FastIsoProblem)
+    fip.now.u = null(fip.Omega) #fip.ref.u
+    fip.now.dudt = null(fip.Omega)
+    fip.now.ue = null(fip.Omega) #fip.ref.ue
+    fip.now.geoid = null(fip.Omega)
+    fip.now.seasurfaceheight = null(fip.Omega) #fip.ref.seasurfaceheight
+    fip.now.H_water = null(fip.Omega) #fip.ref.H_water
+    fip.now.H_ice = fip.tools.Hice(0.0)
+    fip.now.b = fip.ref.b
+    fip.now.countupdates = 0
+    fip.now.columnanoms = ColumnAnomalies(fip.Omega)
+
+    out = init_results(fip.Omega, fip.out.t)
+    fip.out.u = out.u
+    fip.out.ue = out.ue
     return nothing
 end
 

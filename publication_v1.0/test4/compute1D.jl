@@ -54,12 +54,11 @@ function main(N)
     Hice_vec, deltaH = vec_dHice(Omega, Lon, Lat, t, Hitp)
 
     tsec = years2seconds.(t .* 1e3)
-    interactive_sl = false
-    fip = FastIsoProblem(Omega, c, p, tsec, interactive_sl, tsec, deltaH)
+    fip = FastIsoProblem(Omega, c, p, tsec, tsec, deltaH)
     solve!(fip)
     println("Computation took $(fip.out.computation_time) s")
 
-    @save "../data/test4/ICE6G/1D-interactivesl=$interactive_sl-N="*
+    @save "../data/test4/ICE6G/1D-N="*
         "$(Omega.Nx)-premparams.jld2" t fip Hitp Hice_vec deltaH
 end
 

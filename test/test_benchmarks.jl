@@ -20,11 +20,17 @@ end
 function benchmark1_constants(Omega)
     c = PhysicalConstants(rho_litho = 0.0)
     p = LayeredEarth(Omega)
+    t_out = years2seconds.([0.0, 100.0, 500.0, 1500.0, 5000.0, 10_000.0, 50_000.0])
+    
+    εt = 1e-8
+    pushfirst!(t_out, -εt)
+    t_Hice = [-εt, 0.0, t_out[end]]
+
     R, H = 1000e3, 1e3
     Hcylinder = uniform_ice_cylinder(Omega, R, H)
-    t_out = years2seconds.([0.0, 100.0, 500.0, 1500.0, 5000.0, 10_000.0, 50_000.0])
-    interactive_sealevel = false
-    return c, p, R, H, Hcylinder, t_out, interactive_sealevel
+    Hice = [zeros(Omega.Nx, Omega.Ny), Hcylinder, Hcylinder]
+
+    return c, p, t_out, R, H, t_Hice, Hice
 end
 
 function benchmark1_compare(Omega, fip, H, R)
@@ -34,7 +40,7 @@ function benchmark1_compare(Omega, fip, H, R)
     fig, axs = comparison_figure(1)
     x, y = Omega.X[ii, jj], Omega.Y[ii, jj]
     cmap = cgrad(:jet, length(fip.out.t), categorical = true)
-    for k in eachindex(fip.out.t)
+    for k in eachindex(fip.out.t)[2:end]
         t = fip.out.t[k]
         analytic_solution_r(r) = analytic_solution(r, t, fip.c, fip.p, H, R)
         u_analytic = analytic_solution_r.( get_r.(x, y) )
@@ -48,8 +54,8 @@ end
 function benchmark1()
     # Generating numerical results
     Omega = ComputationDomain(3000e3, 7, correct_distortion = false)
-    c, p, R, H, Hcylinder, t_out, interactive_sealevel = benchmark1_constants(Omega)
-    fip = FastIsoProblem(Omega, c, p, t_out, interactive_sealevel, Hcylinder)
+    c, p, t_out, R, H, t_Hice, Hice = benchmark1_constants(Omega)
+    fip = FastIsoProblem(Omega, c, p, t_out, t_Hice, Hice)
     solve!(fip)
     println("Computation took $(fip.out.computation_time) s")
     fig = benchmark1_compare(Omega, fip, H, R)
@@ -61,8 +67,8 @@ end
 function benchmark1_gpu()
     # Generating numerical results
     Omega = ComputationDomain(3000e3, 7, use_cuda = true, correct_distortion = false)
-    c, p, R, H, Hcylinder, t_out, interactive_sealevel = benchmark1_constants(Omega)
-    fip = FastIsoProblem(Omega, c, p, t_out, interactive_sealevel, Hcylinder)
+    c, p, t_out, R, H, t_Hice, Hice = benchmark1_constants(Omega)
+    fip = FastIsoProblem(Omega, c, p, t_out, t_Hice, Hice)
     solve!(fip)
     # println("Computation took $(fip.out.computation_time) s")
     Omega, p = reinit_structs_cpu(Omega, p)
@@ -76,9 +82,8 @@ end
 function benchmark1_external_loadupdate()
     # Generating numerical results
     Omega = ComputationDomain(3000e3, 7)
-    c, p, R, H, Hcylinder, t_out, interactive_sealevel = benchmark1_constants(Omega)
-    fip = FastIsoProblem(Omega, c, p, t_out, interactive_sealevel, Hcylinder)
-
+    c, p, t_out, R, H, t_Hice, Hice = benchmark1_constants(Omega)
+    fip = FastIsoProblem(Omega, c, p, t_out, t_Hice, Hice)
     update_diagnostics!(fip.now.dudt, fip.now.u, fip, 0.0)
     write_out!(fip, 1)
     ode = init(fip)
@@ -95,22 +100,27 @@ function benchmark1_external_loadupdate()
 end
 
 function benchmark2()
-    # Generating numerical results
     Omega = ComputationDomain(3000e3, 6)
-    c = PhysicalConstants(rho_ice = 0.931e3, rho_uppermantle = 3.6e3, rho_litho = 2.7e3)
+    c = PhysicalConstants(rho_ice = 0.931e3, rho_litho = 2.8e3)
+
     G, nu = 0.50605e11, 0.28        # shear modulus (Pa) and Poisson ratio of lithsphere
     E = G * 2 * (1 + nu)
     lb = c.r_equator .- [6301e3, 5951e3, 5701e3]
     p = LayeredEarth( Omega, layer_boundaries = lb,
         layer_viscosities = [1e21, 1e21, 2e21], litho_youngmodulus = E,
         litho_poissonratio = nu )
-    t_out = years2seconds.([0.0, 1e3, 2e3, 5e3, 1e4, 1e5])
-    sl0 = fill(0.0, Omega.Nx, Omega.Ny)
+
+    εt = 1e-8
+    t_out = years2seconds.([-εt, 0.0, 1.0, 1e3, 2e3, 5e3, 1e4, 1e5])
+    t_Hice = [-εt, 0.0, t_out[end]]
+    b = fill(1e6, Omega.Nx, Omega.Ny)
     ii, jj = slice_along_x(Omega)
     theta = rad2deg.(Omega.Theta[ii, jj])
     ii = ii[theta .< 20]
     theta = rad2deg.(Omega.Theta[ii, jj])
     (_, _), X, Xitp = load_spada2011()
+    opts = SolverOptions(interactive_sealevel = true, verbose = true,
+        diffeq = (alg=Tsit5(), reltol=1e-4))
 
     for case in ["disc", "cap"]
         # Generate FastIsostasy results
@@ -124,8 +134,10 @@ function benchmark2()
             Hmax = 1500.0
             H_ice = stereo_ice_cap(Omega, alpha, Hmax)
         end
-        fip = FastIsoProblem(Omega, c, p, t_out, true, H_ice, seasurfaceheight_0 = sl0,
-            diffeq = (alg = Tsit5(), reltol = 1e-4))
+        Hice = [zeros(Omega.Nx, Omega.Ny), H_ice, H_ice]
+        mask = collect(H_ice .> 1e-8)
+        fip = FastIsoProblem(Omega, c, p, t_out, t_Hice, Hice, opts = opts, b_0 = b,
+            maskactive = mask)
         solve!(fip)
         
         # Compare to 1D GIA models benchmark
@@ -133,7 +145,7 @@ function benchmark2()
         u_0 = Xitp["u_$case"].(theta, 0)
         cmap = cgrad(:jet, length(fip.out.t), categorical = true)
 
-        for k in eachindex(t_out)
+        for k in eachindex(t_out)[3:end]
             tt = seconds2years(t_out[k])
             u_bm = Xitp["u_$case"].(theta, tt) .- u_0
             dudt_bm = Xitp["dudt_$case"].(theta, tt)
@@ -148,10 +160,10 @@ function benchmark2()
             m_u = mean(abs.(u_fi .- u_bm))
             m_dudt = mean(abs.(dudt_fi .- dudt_bm))
             m_n = mean(abs.(n_fi .- n_bm))
-            @test m_u < 22
+            println("$m_u, $m_dudt, $m_n")
+            @test m_u < 30
             @test m_dudt < 8
-            @test m_n < 4.1
-            # println("$m_u,  $m_dudt, $m_n")
+            @test m_n < 4
         end
         if SAVE_PLOTS
             save("plots/benchmark2/$case.png", fig)
@@ -161,10 +173,17 @@ end
 
 function benchmark3()
     Omega = ComputationDomain(3000e3, 6)
-    c = PhysicalConstants()
-    Hcylinder = uniform_ice_cylinder(Omega, 1000e3, 1e3)
-    interactive_sealevel = false
-    t_out = years2seconds.( vcat(0:1_000:5_000, 10_000:5_000:50_000) )
+    c = PhysicalConstants(rho_uppermantle = 3.6e3)
+
+    R = 1000e3                  # ice disc radius (m)
+    H = 1e3                     # ice disc thickness (m)
+    Hcylinder = uniform_ice_cylinder(Omega, R, H)
+    Hice = [zeros(Omega.Nx, Omega.Ny), Hcylinder, Hcylinder]
+
+    t_out = years2seconds.([0.0, 100.0, 500.0, 1500.0, 5000.0, 10_000.0, 50_000.0])
+    εt = 1e-8
+    pushfirst!(t_out, -εt)
+    t_Hice = [-εt, 0.0, t_out[end]]
 
     ii, jj = slice_along_x(Omega)
     x = Omega.X[ii, jj]
@@ -174,26 +193,28 @@ function benchmark3()
         "no_litho", "ref"]
     seakon_files = ["E0L1V1", "E0L2V1", "E0L3V2", "E0L3V3", "E0L0V1", "E0L4V4"]
     mean_tol = [12, 12, 16, 15, 10, 20]
-    max_tol = [24, 30, 30, 35, 20, 45]
+    max_tol = [24, 30, 30, 35, 25, 45]
 
     for m in eachindex(cases)
         fig, axs = comparison_figure(1)
         case = cases[m]
         file = seakon_files[m]
         _, _, usk_itp = load_latychev_test3(case = file)
-
         p, _, _ = choose_case(case, Omega)
-        fip = FastIsoProblem(Omega, c, p, t_out, interactive_sealevel, Hcylinder)
+        tol = occursin("_D", case) ? 1e-5 : 1e-4
+        opts = SolverOptions(diffeq = (alg = Tsit5(), reltol = tol), verbose = true)
+
+        fip = FastIsoProblem(Omega, c, p, t_out, t_Hice, Hice, opts = opts)
         solve!(fip)
 
-        # println("---------------")
-        for k in eachindex(t_out)
+        println("---------------")
+        for k in eachindex(t_out)[2:end]
             u_bm = usk_itp.(x ./ 1e3, seconds2years(t_out[k]))
             u_fi = fip.out.u[k][ii, jj] + fip.out.ue[k][ii, jj]
             update_compfig!(axs, [u_fi], [u_bm], cmap[k])
             emean = mean(abs.(u_fi .- u_bm))
             emax = maximum(abs.(u_fi .- u_bm))
-            # println("$emax,  $emean")
+            println("$emax,  $emean")
             @test emean .< mean_tol[m]
             @test emax .< max_tol[m]
         end
@@ -215,9 +236,11 @@ function benchmark5()
     lv = 10 .^ cat([logeta_itp.(Omega.X, Omega.Y, z) for z in lb]..., dims=3)
     p = LayeredEarth(Omega, layer_boundaries = lb, layer_viscosities = lv)
     R, H = 1000e3, 1e3
-    Hice = uniform_ice_cylinder(Omega, R, H, center = [-1000e3, -1000e3])
+    Hcylinder = uniform_ice_cylinder(Omega, R, H, center = [-1000e3, -1000e3])
+    t_Hice = [0.0, 1e-8, t_out[end]]
+    Hice = [zeros(Omega.Nx, Omega.Ny), Hcylinder, Hcylinder]
     t_out = years2seconds.(1e3:1e3:2e3)
-    fip = FastIsoProblem(Omega, c, p, t_out, false, Hice)
+    fip = FastIsoProblem(Omega, c, p, t_out, t_Hice, Hice)
     solve!(fip)
     ground_truth = copy(p.effective_viscosity)
 

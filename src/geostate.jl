@@ -4,7 +4,7 @@
 Update the geoid by convoluting the Green's function with the load anom.
 """
 function update_geoid!(fip::FastIsoProblem)
-    fip.now.geoid .= samesize_conv(fip.tools.geoidgreen, mass_anom(fip), fip.Omega)
+    fip.now.geoid .= samesize_conv(mass_anom(fip), fip.tools.geoidconvo, fip.Omega)
     return nothing
 end
 
@@ -13,11 +13,11 @@ end
 
 Return the Green's function used to compute the geoid anomaly as in [^Coulon2021].
 """
-function get_geoidgreen(Omega::ComputationDomain{T, M}, c::PhysicalConstants{T}
-    ) where {T<:AbstractFloat, M<:KernelMatrix{T}}
+function get_geoidgreen(Omega::ComputationDomain{T, L, M}, c::PhysicalConstants{T}
+    ) where {T<:AbstractFloat, L, M<:KernelMatrix{T}}
     geoidgreen = unbounded_geoidgreen(Omega.R, c)
     max_geoidgreen = unbounded_geoidgreen(norm([100e3, 100e3]), c)  # tolerance = resolution on 100km
-    return min.(geoidgreen, max_geoidgreen)
+    return Omega.arraykernel(min.(geoidgreen, max_geoidgreen))
     # equivalent to: geoidgreen[geoidgreen .> max_geoidgreen] .= max_geoidgreen
 end
 
@@ -71,7 +71,7 @@ function update_loadcolumns!(fip::FastIsoProblem{T, L, M, C, FP, IP}, H_ice::M) 
 
     fip.now.H_ice .= H_ice
     # fip.now.H_sed .= H_sed
-    if fip.interactive_sealevel
+    if fip.opts.interactive_sealevel
         update_maskgrounded!(fip)
         update_maskocean!(fip)
         fip.now.H_water .= watercolumn(fip)

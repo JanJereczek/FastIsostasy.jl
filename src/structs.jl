@@ -1,30 +1,6 @@
 #########################################################
-# Convenience
+# Prealloc
 #########################################################
-KernelMatrix{T} = Union{Matrix{T}, CuMatrix{T}} where {T<:AbstractFloat}
-ComplexMatrix{T} = Union{Matrix{C}, CuMatrix{C}} where {T<:AbstractFloat, C<:Complex{T}}
-BoolMatrix{T} = Union{Matrix{Bool}, CuMatrix{Bool}}
-
-"""
-    ForwardPlan
-
-Allias for in-place precomputed plans from FFTW or CUFFT. Used to compute forward FFT.
-"""
-ForwardPlan{T} = Union{
-    cFFTWPlan{Complex{T}, -1, true, 2, Tuple{Int64, Int64}}, 
-    CUFFT.cCuFFTPlan{Complex{T}, -1, true, 2}
-} where {T<:AbstractFloat}
-
-"""
-    InversePlan
-
-Allias for in-place precomputed plans from FFTW or CUFFT. Used to compute inverse FFT.
-"""
-InversePlan{T} = Union{
-    AbstractFFTs.ScaledPlan{Complex{T}, cFFTWPlan{Complex{T}, 1, true, 2, UnitRange{Int64}}, T},
-    AbstractFFTs.ScaledPlan{Complex{T}, CUFFT.cCuFFTPlan{Complex{T}, 1, true, 2}, T}
-} where {T<:AbstractFloat}
-
 mutable struct PreAllocated{T<:AbstractFloat, M<:KernelMatrix{T}, C<:ComplexMatrix{T}}
     rhs::M
     uxx::M
@@ -93,7 +69,10 @@ struct ComputationDomain{T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}}
     pseudodiff::M               # pseudodiff operator as matrix (Hadamard product)
     use_cuda::Bool
     arraykernel::Any            # Array or CuArray depending on chosen hardware
-    bc!::Function               # Boundary conditions
+    bc_matrix::M
+    nbc::T
+    extended_bc_matrix::M
+    extended_nbc::T
 end
 
 function ComputationDomain(W::T, n::Int; kwargs...) where {T<:AbstractFloat}
@@ -107,7 +86,6 @@ function ComputationDomain(
     Wy::T,
     Nx::Int,
     Ny::Int;
-    bc!::Function = corner_bc!,
     use_cuda::Bool = false,
     lat0::T = T(-90.0),
     lon0::T = T(0.0),
@@ -145,9 +123,15 @@ function ComputationDomain(
     i1, i2 = samesize_conv_indices(Nx, Mx)
     j1, j2 = samesize_conv_indices(Ny, My)
 
+    bc_matrix = arraykernel(corner_matrix(T, Nx, Ny))
+    nbc = sum(bc_matrix)
+    extended_bc_matrix = arraykernel(corner_matrix(T, 2*Nx-1, 2*Ny-1))
+    extended_nbc = sum(bc_matrix)
+
     return ComputationDomain(Wx, Wy, Nx, Ny, Mx, My, dx, dy, x, y, X, Y, i1, i2, j1, j2,
         R, Theta, Lat, Lon, K, K .* dx, K .* dy, (dx * dy) .* K .^ 2, correct_distortion,
-        null, pseudodiff, use_cuda, arraykernel, bc!)
+        null, pseudodiff, use_cuda, arraykernel, bc_matrix, nbc, extended_bc_matrix,
+        extended_nbc)
 end
 
 #########################################################
@@ -335,12 +319,12 @@ mutable struct CurrentState{T<:AbstractFloat, M<:KernelMatrix{T}} <: GeoState
     maskocean::KernelMatrix{<:Bool}     # mask for ocean
     osc::OceanSurfaceChange{T}
     countupdates::Int       # count the updates of the geostate
-    Δt::T                   # update step
+    k::Int                  # index of the t_out segment
 end
 
 # Initialise CurrentState from ReferenceState
-function CurrentState(Omega::ComputationDomain{T, L, M}, ref::ReferenceState{T, M};
-    Δt = years2seconds(10.0)) where {T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}}
+function CurrentState(Omega::ComputationDomain{T, L, M}, ref::ReferenceState{T, M}) where
+    {T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}}
     return CurrentState(
         copy(ref.u), null(Omega), copy(ref.ue), T(0.0),
         copy(ref.H_ice), copy(ref.H_water),
@@ -348,12 +332,12 @@ function CurrentState(Omega::ComputationDomain{T, L, M}, ref::ReferenceState{T, 
         copy(ref.bsl), null(Omega), copy(ref.seasurfaceheight),
         copy(ref.V_af), copy(ref.V_pov), copy(ref.V_den),
         copy(ref.maskgrounded), copy(ref.maskocean),
-        OceanSurfaceChange(z0 = ref.bsl), 0, Δt,
+        OceanSurfaceChange(z0 = ref.bsl), 0, 1,
     )
 end
 
 #########################################################
-# FastIsostasy
+# Tools
 #########################################################
 """
     FastIsoTools(Omega, c, p)
@@ -364,14 +348,14 @@ preallocated arrays.
 """
 struct FastIsoTools{T<:AbstractFloat, M<:KernelMatrix{T}, C<:ComplexMatrix{T},
     FP<:ForwardPlan{T}, IP<:InversePlan{T}}
-    elasticgreen::M
-    geoidgreen::M
+    elasticconvo::InplaceConvolution{T, C, FP, IP}
+    geoidconvo::InplaceConvolution{T, C, FP, IP}
     pfft!::FP
     pifft!::IP
     Hice::Interpolations.Extrapolation{M, 1, Interpolations.GriddedInterpolation{M, 1, Vector{M},
-        Gridded{Linear{Throw{OnGrid}}}, Tuple{Vector{T}}}, Gridded{Linear{Throw{OnGrid}}}, Flat{Nothing}}
-    eta::Interpolations.Extrapolation{M, 1, Interpolations.GriddedInterpolation{M, 1, Vector{M},
-        Gridded{Linear{Throw{OnGrid}}}, Tuple{Vector{T}}}, Gridded{Linear{Throw{OnGrid}}}, Flat{Nothing}}
+        Gridded{Linear{Throw{OnGrid}}}, Tuple{Vector{T}}}, Gridded{Linear{Throw{OnGrid}}}, <:Any}
+    bsl::Interpolations.Extrapolation{T, 1, Interpolations.GriddedInterpolation{T, 1, Vector{T},
+        Gridded{Linear{Throw{OnGrid}}}, Tuple{Vector{T}}}, Gridded{Linear{Throw{OnGrid}}}, <:Any}
     prealloc::PreAllocated{T, M, C}
 end
 
@@ -380,49 +364,48 @@ function FastIsoTools(
     c::PhysicalConstants{T},
     t_Hice_snapshots::Vector{T},
     Hice_snapshots::Vector{<:KernelMatrix{T}},
-    t_eta_snapshots::Vector{T},
-    eta_snapshots::Vector{<:KernelMatrix{T}};
-    quad_precision::Int = 4,
+    bsl_itp; quad_precision::Int = 4,
 ) where {T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}}
 
-    # Elastic response variables
+    # Build in-place convolution to compute elastic response
     distance, greenintegrand_coeffs = get_greenintegrand_coeffs(T)
     greenintegrand_function = build_greenintegrand(distance, greenintegrand_coeffs)
     quad_support, quad_coeffs = get_quad_coeffs(T, quad_precision)
     elasticgreen = get_elasticgreen(Omega, greenintegrand_function, quad_support, quad_coeffs)
-    geoidgreen = T.(get_geoidgreen(Omega, c))
+    elasticconvo = InplaceConvolution(elasticgreen, Omega.use_cuda)
+
+    # Build in-place convolution to compute geoid response
+    geoidgreen = get_geoidgreen(Omega, c)
+    geoidconvo = InplaceConvolution(geoidgreen, Omega.use_cuda)
 
     # FFT plans depening on CPU vs. GPU usage
-    if Omega.use_cuda
-        pfft! = CUFFT.plan_fft!(complex.(Omega.K))
-        pifft! = CUFFT.plan_ifft!(complex.(Omega.K))
-    else
-        pfft! = plan_fft!(complex.(Omega.K))
-        pifft! = plan_ifft!(complex.(Omega.K))
-    end
+    pfft!, pifft! = choose_fft_plans(Omega.K, Omega.use_cuda)
 
     # rhog = p.uppermantle_density .* c.g
     Hice = linear_interpolation( t_Hice_snapshots,
         kernelpromote(Hice_snapshots, Omega.arraykernel); extrapolation_bc=Flat())
-    eta = linear_interpolation(t_eta_snapshots,
-        kernelpromote(eta_snapshots, Omega.arraykernel); extrapolation_bc=Flat())
 
     realmatrices = [null(Omega) for _ in eachindex(fieldnames(PreAllocated))[1:end-2]]
     cplxmatrices = [complex.(null(Omega)) for _ in 1:2]
     prealloc = PreAllocated(realmatrices..., cplxmatrices...)
     
-    return FastIsoTools(Omega.arraykernel(elasticgreen), Omega.arraykernel(geoidgreen),
-        pfft!, pifft!, Hice, eta, prealloc)
+    return FastIsoTools(elasticconvo, geoidconvo, pfft!, pifft!, Hice, bsl_itp, prealloc)
 end
 
+#########################################################
+# Outputs
+#########################################################
+
+abstract type Outputs end
+
 """
-    FastIsoOutputs()
+    DenseOutputs()
 
 Return a struct containing the fields of viscous displacement, viscous displacement rate,
 elastic displacement, geoid displacement, sea level and the computation time resulting
 from solving a [`FastIsoProblem`](@ref).
 """
-mutable struct FastIsoOutputs{T<:AbstractFloat, M<:Matrix{T}}
+mutable struct DenseOutputs{T<:AbstractFloat, M<:Matrix{T}} <: Outputs
     t::Vector{T}
     u::Vector{M}
     dudt::Vector{M}
@@ -440,26 +423,78 @@ mutable struct FastIsoOutputs{T<:AbstractFloat, M<:Matrix{T}}
     computation_time::Float64
 end
 
+function DenseOutputs(Omega::ComputationDomain{T, L, M}, t_out::Vector{T}) where
+    {T<:AbstractFloat, L, M<:KernelMatrix{T}}
+    # initialize with placeholders
+    placeholder = Array(null(Omega))
+    u = [copy(placeholder) for t in t_out]
+    dudt = [copy(placeholder) for t in t_out]
+    ue = [copy(placeholder) for t in t_out]
+    b = [copy(placeholder) for t in t_out]
+    bsl = zeros(T, length(t_out))
+    geoid = [copy(placeholder) for t in t_out]
+    seasurfaceheight = [copy(placeholder) for t in t_out]
+    maskgrounded = [copy(placeholder) for t in t_out]
+    Hice = [copy(placeholder) for t in t_out]
+    Hwater = [copy(placeholder) for t in t_out]
+    canomfull = [copy(placeholder) for t in t_out]
+    canomload = [copy(placeholder) for t in t_out]
+    canomlitho = [copy(placeholder) for t in t_out]
+    canommantle = [copy(placeholder) for t in t_out]
+    return DenseOutputs(t_out, u, dudt, ue, b, geoid, seasurfaceheight, maskgrounded,
+        Hice, Hwater, canomfull, canomload, canomlitho, canommantle, 0.0)
+end
+
+mutable struct SparseOutputs{T<:AbstractFloat, M<:Matrix{T}} <: Outputs
+    t::Vector{T}
+    utot::Vector{M}
+    b::Vector{M}
+    seasurfaceheight::Vector{M}
+    maskgrounded::Vector{M}
+    Hice::Vector{M}
+    computation_time::Float64
+end
+
+function SparseOutputs(Omega::ComputationDomain{T, L, M}, t_out::Vector{T}) where
+    {T<:AbstractFloat, L, M<:KernelMatrix{T}}
+    # initialize with placeholders
+    placeholder = Array(null(Omega))
+    utot = [copy(placeholder) for t in t_out]
+    b = [copy(placeholder) for t in t_out]
+    seasurfaceheight = [copy(placeholder) for t in t_out]
+    maskgrounded = [copy(placeholder) for t in t_out]
+    Hice = [copy(placeholder) for t in t_out]
+    return DenseOutputs(t_out, utot, b, seasurfaceheight, maskgrounded, Hice, 0.0)
+end
+
+#########################################################
+# Options
+#########################################################
+
 """
     Options
 
 Return a struct containing the options relative to solving a [`FastIsoProblem`](@ref).
 """
-Base.@kwdef struct Options
+Base.@kwdef struct SolverOptions
     interactive_sealevel::Bool = false
     internal_loadupdate::Bool = true
     internal_bsl_update::Bool = true
-    bsl_itp::Any = linear_interpolation([-Inf, Inf], [0.0, 0.0])
+    bsl_itp::Any = linear_interpolation([-Inf, Inf], [0.0, 0.0], extrapolation_bc = Flat())
     diffeq::NamedTuple = (alg = Tsit5(), reltol = 1e-3)
-    dt_diagnositcs::Real = 10.0
+    dt_sl::Real = years2seconds(10.0)
     verbose::Bool = false
-    dense_output::Bool = false
+    dense_output::Bool = true
 end
 
+#########################################################
+# Problem definition
+#########################################################
+
 """
-    FastIsoProblem(Omega, c, p, t_out, interactive_sealevel)
-    FastIsoProblem(Omega, c, p, t_out, interactive_sealevel, Hice)
-    FastIsoProblem(Omega, c, p, t_out, interactive_sealevel, t_Hice, Hice)
+    FastIsoProblem(Omega, c, p, t_out)
+    FastIsoProblem(Omega, c, p, t_out, Hice)
+    FastIsoProblem(Omega, c, p, t_out, t_Hice, Hice)
 
 Return a struct containing all the other structs needed for the forward integration of the
 model over `Omega::ComputationDomain` with parameters `c::PhysicalConstants` and
@@ -470,32 +505,24 @@ struct FastIsoProblem{T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}, C<:Com
     Omega::ComputationDomain{T, L, M}
     c::PhysicalConstants{T}
     p::LayeredEarth{T, M}
+    opts::SolverOptions
     tools::FastIsoTools{T, M, C, FP, IP}
     ref::ReferenceState{T, M}
     now::CurrentState{T, M}
-    interactive_sealevel::Bool
-    internal_loadupdate::Bool
-    neglect_litho_gradients::Bool
-    diffeq::NamedTuple
-    verbose::Bool
-    out::FastIsoOutputs{T, L}
-    internal_bsl_update::Bool
-    bsl_itp::Any
+    out::DenseOutputs{T, L}
 end
 
 function FastIsoProblem(
     Omega::ComputationDomain{T, L, M},
     c::PhysicalConstants{T},
     p::LayeredEarth{T, M},
-    t_out::Vector{<:Real},
-    interactive_sealevel::Bool;
+    t_out::Vector{<:Real};
     kwargs...,
 ) where {T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}}
     # Creating some placeholders in case of an external update of the load.
     t_Hice_snapshots = [extrema(t_out)...]
     Hice_snapshots = [null(Omega), null(Omega)]
-    return FastIsoProblem(Omega, c, p, t_out, interactive_sealevel,
-        t_Hice_snapshots, Hice_snapshots, internal_loadupdate = false; kwargs...)
+    return FastIsoProblem(Omega, c, p, t_out, t_Hice_snapshots, Hice_snapshots; kwargs...)
 end
 
 function FastIsoProblem(
@@ -503,15 +530,13 @@ function FastIsoProblem(
     c::PhysicalConstants{T},
     p::LayeredEarth{T, M},
     t_out::Vector{<:Real},
-    interactive_sealevel::Bool,
     Hice::KernelMatrix{T};
     kwargs...,
 ) where {T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}}
     # Constant interpolator in case viscosity is fixed over time.
     t_Hice_snapshots = [extrema(t_out)...]
     Hice_snapshots = [Hice, Hice]
-    return FastIsoProblem(Omega, c, p, t_out, interactive_sealevel,
-        t_Hice_snapshots, Hice_snapshots, internal_loadupdate = true; kwargs...)
+    return FastIsoProblem(Omega, c, p, t_out, t_Hice_snapshots, Hice_snapshots; kwargs...)
 end
 
 function FastIsoProblem(
@@ -519,64 +544,32 @@ function FastIsoProblem(
     c::PhysicalConstants{T},
     p::LayeredEarth{T, M},
     t_out::Vector{<:Real},
-    interactive_sealevel::Bool,
     t_Hice_snapshots::Vector{T},
     Hice_snapshots::Vector{<:KernelMatrix{T}};
-    kwargs...,
-) where {T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}}
-    # Constant interpolator in case viscosity is fixed over time.
-    t_eta_snapshots = [extrema(t_out)...]
-    eta_snapshots = [p.effective_viscosity, p.effective_viscosity]
-    return FastIsoProblem(Omega, c, p, t_out, interactive_sealevel,
-        t_Hice_snapshots, Hice_snapshots, t_eta_snapshots, eta_snapshots,
-        internal_loadupdate = true; kwargs...)
-end
-
-function FastIsoProblem(
-    Omega::ComputationDomain{T, L, M},
-    c::PhysicalConstants{T},
-    p::LayeredEarth{T, M},
-    t_out::Vector{<:Real},
-    interactive_sealevel::Bool,
-    t_Hice_snapshots::Vector{T},
-    Hice_snapshots::Vector{<:KernelMatrix{T}},
-    t_eta_snapshots::Vector{T},
-    eta_snapshots::Vector{<:KernelMatrix{T}};
-    diffeq::NamedTuple = (alg = Tsit5(), reltol = 1e-3),
-    verbose::Bool = false,
-    internal_loadupdate::Bool = true,
-    neglect_litho_gradients::Bool = false,
+    opts::SolverOptions = SolverOptions(),
     u_0::KernelMatrix{T} = null(Omega),
     ue_0::KernelMatrix{T} = null(Omega),
     seasurfaceheight_0::KernelMatrix{T} = null(Omega),
     b_0::KernelMatrix{T} = null(Omega),
-    bsl_0::T = T(0.0),
-    internal_bsl_update::Bool = true,
-    bsl_itp = nothing,
+    bsl_itp = linear_interpolation([extrema(t_out)...], [0.0, 0.0]),
     maskactive::BoolMatrix = kernelcollect(Omega.K .< Inf, Omega),
 ) where {T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}}
 
-    if !isa(diffeq.alg, OrdinaryDiffEqAlgorithm) && !isa(diffeq.alg, SimpleEuler)
+    if !isa(opts.diffeq.alg, OrdinaryDiffEqAlgorithm) && !isa(opts.diffeq.alg, SimpleEuler)
         error("Provided algorithm for solving ODE is not supported.")
     end
 
-    if interactive_sealevel & (sum(maskactive) > 0.6 * Omega.Nx * Omega.Ny)
+    if opts.interactive_sealevel & (sum(maskactive) > 0.6 * Omega.Nx * Omega.Ny)
         error("Mask defining regions of active load must not cover more than 60%"*
             " of the cells when using an interactive sea level.")
     end
 
-    if not(internal_bsl_update) & isnothing(bsl_itp)
-        error("If the update of the barystatic sea level is external, an interpolator"*
-            " for it needs to be provided.")
-    end
-
-    tools = FastIsoTools(Omega, c, t_Hice_snapshots, Hice_snapshots,
-        t_eta_snapshots, eta_snapshots)
+    tools = FastIsoTools(Omega, c, t_Hice_snapshots, Hice_snapshots, bsl_itp)
 
     # Initialise the reference state
-    H_ice_0 = tools.Hice(t_out[1])
-    u_0, ue_0, seasurfaceheight_0, b_0, H_ice_0, maskactive = kernelpromote([u_0, ue_0,
-        seasurfaceheight_0, b_0, H_ice_0, maskactive], Omega.arraykernel)
+    H_ice_0, bsl_0 = tools.Hice(t_out[1]), tools.bsl(t_out[1])
+    u_0, ue_0, seasurfaceheight_0, b_0, H_ice_0 = kernelpromote([u_0, ue_0,
+        seasurfaceheight_0, b_0, H_ice_0], Omega.arraykernel)
 
     if Omega.use_cuda
         maskgrounded = get_maskgrounded(H_ice_0, b_0, seasurfaceheight_0, c)
@@ -587,15 +580,17 @@ function FastIsoProblem(
     end
 
     H_water_0 = watercolumn(H_ice_0, maskgrounded, b_0, seasurfaceheight_0, c)
-
     ref = ReferenceState(u_0, ue_0, H_ice_0, H_water_0, b_0, bsl_0, seasurfaceheight_0,
-        T(0.0), T(0.0), T(0.0), maskgrounded, maskocean, maskactive)
+        T(0.0), T(0.0), T(0.0), maskgrounded, maskocean, Omega.arraykernel(maskactive))
     now = CurrentState(Omega, ref)
-    out = init_results(Omega, t_out)
+
+    if opts.dense_output
+        out = DenseOutputs(Omega, t_out)
+    else
+        out = SparseOutputs(Omega, t_out)
+    end
     
-    return FastIsoProblem(Omega, c, p, tools, ref, now, interactive_sealevel,
-        internal_loadupdate, neglect_litho_gradients, diffeq, verbose, out,
-        internal_bsl_update, bsl_itp)
+    return FastIsoProblem(Omega, c, p, opts, tools, ref, now, out)
 end
 
 
@@ -612,22 +607,4 @@ function Base.show(io::IO, ::MIME"text/plain", fip::FastIsoProblem)
     for (desc, val) in descriptors
         println(io, rpad(" $(desc): ", padlen), val)
     end
-end
-
-function remake!(fip::FastIsoProblem)
-    fip.now.u = null(fip.Omega) #fip.ref.u
-    fip.now.dudt = null(fip.Omega)
-    fip.now.ue = null(fip.Omega) #fip.ref.ue
-    fip.now.geoid = null(fip.Omega)
-    fip.now.seasurfaceheight = null(fip.Omega) #fip.ref.seasurfaceheight
-    fip.now.H_water = null(fip.Omega) #fip.ref.H_water
-    fip.now.H_ice = fip.tools.Hice(0.0)
-    fip.now.b = fip.ref.b
-    fip.now.countupdates = 0
-    fip.now.columnanoms = ColumnAnomalies(fip.Omega)
-
-    out = init_results(fip.Omega, fip.out.t)
-    fip.out.u = out.u
-    fip.out.ue = out.ue
-    return nothing
 end

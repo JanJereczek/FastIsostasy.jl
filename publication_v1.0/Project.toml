@@ -1,5 +1,6 @@
 [deps]
 CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
+Cthulhu = "f68482b8-f384-11e8-15f7-abe071a5a75f"
 DelimitedFiles = "8bb1440f-4735-579b-a4ab-409b98df4dab"
 ImageFiltering = "6a3955dd-da59-5b1f-98d4-e7296123deb5"
 Interpolations = "a98d9a8b-a2ab-59e6-89dd-64a1c18fca59"

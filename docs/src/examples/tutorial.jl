@@ -59,8 +59,7 @@ R = 1000e3                  # ice disc radius (m)
 H = 1e3                     # ice disc thickness (m)
 Hice = uniform_ice_cylinder(Omega, R, H)
 t_out = years2seconds.([0.0, 200.0, 600.0, 2000.0, 5000.0, 10_000.0, 50_000.0])
-interactive_sealevel = false
-fip = FastIsoProblem(Omega, c, p, t_out, interactive_sealevel, Hice)
+fip = FastIsoProblem(Omega, c, p, t_out, Hice)
 solve!(fip)
 
 function plot3D(fip, k_idx)
@@ -111,7 +110,7 @@ n = 8
 Omega = ComputationDomain(W, n, use_cuda = true)
 p = LayeredEarth(Omega, layer_viscosities = lv, layer_boundaries = lb)
 Hice = uniform_ice_cylinder(Omega, R, H)
-fip = FastIsoProblem(Omega, c, p, t_out, interactive_sealevel, Hice)
+fip = FastIsoProblem(Omega, c, p, t_out, Hice)
 solve!(fip)
 plot3D(fip, [lastindex(t_out) ÷ 2, lastindex(t_out)])
 
@@ -130,7 +129,7 @@ As any high-level function, [`solve!`](@ref) has some limitations. An ice-sheet 
 Omega = ComputationDomain(3000e3, 6)
 p = LayeredEarth(Omega)
 Hice = uniform_ice_cylinder(Omega, R, H)
-fip = FastIsoProblem(Omega, c, p, t_out, interactive_sealevel, Hice)
+fip = FastIsoProblem(Omega, c, p, t_out, Hice)
 
 update_diagnostics!(fip.now.dudt, fip.now.u, fip, 0.0)
 write_out!(fip, 1)

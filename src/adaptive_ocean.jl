@@ -26,8 +26,6 @@ mutable struct OceanSurfaceChange{T<:AbstractFloat}
     A_pd::T
     residual::T
 end
-# ::{T, 1, Interpolations.Extrapolation{T, 1, Interpolations.GriddedInterpolation{T, 1, Vector{T},
-# Gridded{Linear{Throw{OnGrid}}}, Tuple{Vector{T}}}, Gridded{Linear{Throw{OnGrid}}}, Throw{Nothing}}}
 
 function OceanSurfaceChange(; T = Float64, A_ocean_pd = T(3.625e14), z0 = T(0.0))
     z, A, itp = load_oceansurfacefunction()
