@@ -77,7 +77,6 @@ export update_V_af!, update_V_den!, update_V_pov!, height_above_floatation
 
 # mechanics.jl
 export init, solve!, step!, dudt_isostasy!, update_diagnostics!
-export corner_bc!, edge_bc!
 export maxwelltime_scaling!, compute_shearmodulus, get_rigidity, load_prem
 
 # integrators.jl

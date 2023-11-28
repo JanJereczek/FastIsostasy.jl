@@ -3,13 +3,14 @@
 ## Basic structs
 
 ```@docs
-KernelMatrix
 ComputationDomain
 PhysicalConstants
 LayeredEarth
 ReferenceState
 CurrentState
 FastIsoTools
+SolverOptions
+OceanSurfaceChange
 FastIsoProblem
 ```
 
@@ -39,4 +40,5 @@ solve!(::InversionProblem)
 load_dataset
 reinit_structs_cpu
 write_out!
+savefip
 ```

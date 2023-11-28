@@ -12,6 +12,7 @@ function simple_anim(path::String, target::String)
     u = @lift(fip.out.u[$kobs] + fip.out.ue[$kobs])
 
     fig = Figure(resolution = (1200, 900), fontsize = 30)
+    with_theme(fig, theme_dark())
     ax = Axis3(fig[1, 1], title = @lift("t = $(round(seconds2years(fip.out.t[$kobs]))) yr") )
     hidedecorations!(ax)
     sf = surface!(ax, fip.Omega.X, fip.Omega.Y, u, colormap = :PuOr, colorrange = crange)
@@ -58,7 +59,7 @@ function anim(path::String, target::String)
     H = @lift(dH[$kobs])
     # z = @lift( (fip.out.b[$kobs] + fip.out.Hice[$kobs]) .* grmask[$kobs])
     ssh = @lift(fip.out.seasurfaceheight[$kobs] .* flmask[$kobs])
-    ttl = @lift("t = $(round(seconds2years(fip.out.t[$kobs]))) yr")
+    ttl = @lift("Time t = $(round(seconds2years(fip.out.t[$kobs]))) yr")
 
     xyticks = (-3e6:1e6:3e6, latexify(-3:1:3))
     zticks = [(-2e3:1e3:2e3, latexify(-2:1:2)), (-6e2:2e2:6e2, latexify(-6:2:6))]
@@ -70,14 +71,14 @@ function anim(path::String, target::String)
     sf1 = surface!(axs[1], Omega.X, Omega.Y, H, colormap = :balance, colorrange = Hlim)
     sf2 = surface!(axs[2], Omega.X, Omega.Y, u, colormap = :PuOr, colorrange = ulim)
     # wireframe!(axs[2], Omega.X, Omega.Y, u, linewidth = 0.05)
-    Colorbar(fig[2, 1], sf1, label = "Ice thickness (m)", vertical = false,
+    Colorbar(fig[2, 1], sf1, label = "Ice thickness anomaly (m)", vertical = false,
         width = Relative(0.5))
     Colorbar(fig[2, 2], sf2, label = "Bedrock displacement (m)", vertical = false,
         width = Relative(0.5))
     zlims!(axs[1], Hlim)
     zlims!(axs[2], ulim)
 
-    record(fig, "anims/$target.gif", eachindex(fip.out.t), framerate = 18) do k
+    record(fig, "anims/$target.gif", eachindex(fip.out.t)[1:1:end], framerate = 18) do k
         kobs[] = k
     end
 end
@@ -93,6 +94,8 @@ simple_anim(filenames[2], targets[2])
 =#
 
 # Example 2
-filename = "../data/test4/ICE6G/3D-interactivesl=true-bsl=external-N=128.jld2"
-target = "test4/isl-ice6g-N=128"
-anim(filename, target)
+N = 350
+filename = "../data/test4/ICE6G/3D-interactivesl=true-bsl=external-N=$N.jld2"
+target = "test4/isl-ice6g-N=$N"
+anim() = anim(filename, target)
+with_theme(anim, theme_dark())

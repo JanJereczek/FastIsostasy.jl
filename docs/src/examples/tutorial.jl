@@ -53,13 +53,16 @@ The next section shows how to use the now obtained `p::LayeredEarth` for actual 
 We now apply a constant load, here a cylinder of ice with radius $$ R = 1000 \, \mathrm{km} $$ and thickness $$H = 1 \, \mathrm{km}$$, over `Omega::ComputationDomain` introduced in [`LayeredEarth`](@ref). To formulate the problem conviniently, we use [`FastIsoProblem`](@ref), a struct containing the variables and options that are necessary to perform the integration over time. We can then simply apply `solve!(fip::FastIsoProblem)` to perform the integration of the ODE. Under the hood, the ODE is obtained from the PDE by applying a Fourier collocation scheme contained in [`dudt_isostasy!`](@ref). The integration is performed according to `FastIsoProblem.diffeq::NamedTuple`, which contains the algorithm and optionally tolerances, maximum iteration number... etc.
 =#
 
-using CairoMakie
-
 R = 1000e3                  # ice disc radius (m)
 H = 1e3                     # ice disc thickness (m)
-Hice = uniform_ice_cylinder(Omega, R, H)
+Hcylinder = uniform_ice_cylinder(Omega, R, H)
+Hice = [zeros(Omega.Nx, Omega.Ny), Hcylinder, Hcylinder]
+
 t_out = years2seconds.([0.0, 200.0, 600.0, 2000.0, 5000.0, 10_000.0, 50_000.0])
-fip = FastIsoProblem(Omega, c, p, t_out, Hice)
+εt = 1e-8
+pushfirst!(t_out, -εt)
+t_Hice = [-εt, 0.0, t_out[end]]
+fip = FastIsoProblem(Omega, c, p, t_out, t_Hice, Hice)
 solve!(fip)
 
 function plot3D(fip, k_idx)
@@ -75,7 +78,7 @@ function plot3D(fip, k_idx)
     end
     return fig
 end
-plot3D(fip, [lastindex(t_out) ÷ 2, lastindex(t_out)])
+fig = plot3D(fip, [lastindex(t_out) ÷ 2, lastindex(t_out)])
 
 #=
 ... and here goes the total displacement at $$t = 50 \, \mathrm{kyr}$$. You can now access the elastic and viscous displacement at time `t_out[k]` by respectively calling `fip.out.ue[k]` and `fip.out.u[k]`. For the present case, the latter can be compared to an analytic solution that is known for this particular case. Let's look at the accuracy of our numerical scheme over time by running following plotting commands:
@@ -103,16 +106,14 @@ fig
 #=
 ## GPU support
 
-For about $$n > 7$$, the previous example can be computed even faster by using GPU parallelism. It could not represent less work from the user's perspective, as it boils down to calling [`ComputationDomain`](@ref) with an extra keyword argument and passing it to a `::LayeredEarth` with the viscosity and depth values defined earlier:
+For about $$n \geq 7$$, the present example can be computed even faster by using GPU parallelism. It could not represent less work from the user's perspective, as it boils down to calling [`ComputationDomain`](@ref) with an extra keyword argument and passing it to a `::LayeredEarth` with the viscosity and depth values defined earlier:
 =#
 
-n = 8
 Omega = ComputationDomain(W, n, use_cuda = true)
 p = LayeredEarth(Omega, layer_viscosities = lv, layer_boundaries = lb)
-Hice = uniform_ice_cylinder(Omega, R, H)
-fip = FastIsoProblem(Omega, c, p, t_out, Hice)
+fip = FastIsoProblem(Omega, c, p, t_out, t_Hice, Hice)
 solve!(fip)
-plot3D(fip, [lastindex(t_out) ÷ 2, lastindex(t_out)])
+fig = plot3D(fip, [lastindex(t_out) ÷ 2, lastindex(t_out)])
 
 #=
 That's it, nothing more! For postprocessing, consider using [`reinit_structs_cpu`](@ref).
@@ -126,10 +127,9 @@ That's it, nothing more! For postprocessing, consider using [`reinit_structs_cpu
 As any high-level function, [`solve!`](@ref) has some limitations. An ice-sheet modeller typically wants to embed FastIsostasy within a time-stepping loop. This can be easily done by getting familiar with some intermediate-level functions like [`init`](@ref), [`step!`](@ref) and [`write_out!`](@ref):
 =#
 
-Omega = ComputationDomain(3000e3, 6)
+Omega = ComputationDomain(3000e3, n)
 p = LayeredEarth(Omega)
-Hice = uniform_ice_cylinder(Omega, R, H)
-fip = FastIsoProblem(Omega, c, p, t_out, Hice)
+fip = FastIsoProblem(Omega, c, p, t_out, t_Hice, Hice)
 
 update_diagnostics!(fip.now.dudt, fip.now.u, fip, 0.0)
 write_out!(fip, 1)
@@ -138,7 +138,7 @@ ode = init(fip)
     step!(fip, ode, (fip.out.t[k-1], fip.out.t[k]))
     write_out!(fip, k)
 end
-plot3D(fip, [lastindex(t_out) ÷ 2, lastindex(t_out)])
+fig = plot3D(fip, [lastindex(t_out) ÷ 2, lastindex(t_out)])
 
 #=
 !!! info "Coupling to julia Ice-Sheet model"

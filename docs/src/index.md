@@ -2,7 +2,7 @@
 
 ❄ *Fast and friendly glacial isostatic adjustment on CPU and GPU.*
 
-![GlacialCycle](docs/src/assets/isl-ice6g-N=128.gif)
+![GlacialCycle](assets/isl-ice6g-N=350.gif)
 
 FastIsostasy is a friendly and flexible model that regionally computes the glacial isostatic adjustment (GIA) with laterally-variable mantle viscosity and lithospheric thickness. It is mainly adressed to ice-sheet modellers who seek for (1) a good representation of solid-Earth mechanics at virtually zero computational cost, (2) an approximation of the sea-level equation and (3) ready-to-use inversion tools to calibrate the model parameters to data. The simple interface of FastIsostasy allows to flexibly solve GIA problems within few lines of code. It is fully open-source under MIT license and was succesfully benchmarked against analytical, 1D GIA and 3D GIA model solutions.
 
@@ -33,7 +33,6 @@ FastIsostasy.jl was written thanks to the sheer amount of work that people inves
 - [Interpolations.jl](https://github.com/JuliaMath/Interpolations.jl)
 - [OrdinaryDiffEq.jl](https://github.com/SciML/OrdinaryDiffEq.jl)
 - [DynamicalSystemsBase.jl](https://github.com/JuliaDynamics/DynamicalSystemsBase.jl)
-- [DSP.jl](https://github.com/JuliaDSP/DSP.jl)
 - [KalmanEnsembleProcesses.jl](https://github.com/CliMA/EnsembleKalmanProcesses.jl)
 - [SpecialFunctions.jl](https://github.com/JuliaMath/SpecialFunctions.jl)
 - [FastGaussQuadrature.jl](https://github.com/JuliaApproximation/FastGaussQuadrature.jl)

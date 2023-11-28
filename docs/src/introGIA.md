@@ -1,8 +1,6 @@
 # Quick intro to GIA
 
-The evolution of cryosphere components leads to changes in the vertical load applied upon the solid Earth, namely through changes of the ice, liquid water and sediment columns. Glacial isostatic adjustment (GIA) denotes the mechanical response of the solid Earth, which is characterized by its vertical and horizontal displacement. GIA models usually encompass related processes, such as the resulting changes in sea-surface height and the migration of shorelines.
-
-The magnitude and time scale of GIA depends on the applied load and on solid-Earth parameters, i.e. the mantle viscosity, the lithosphere thickness and their respective density. These parameters display a radial and sometimes also a lateral variability, further jointly denoted by parameter "heterogeneity". For further details, please refer to [wiens-seismic-2022](@cite) and [ivins-antarctic-2022](@cite).
+Glacial isostatic adjustment (GIA) denotes the crustal displacement that results from changes in the ice, liquid water and sediment columns, as well as associated changes in Earth's gravity and rotation axis, ultimately impacting the sea level. The magnitude and time scale of the deformational response depends on the applied load and on solid-Earth parameters, i.e. the mantle viscosity, the lithosphere thickness and their respective density. These parameters display a radial and sometimes also a lateral variability, further jointly denoted by parameter "heterogeneity". For further details, please refer to [wiens-seismic-2022](@cite) and [ivins-antarctic-2022](@cite).
 
 ## Why do we care?
 

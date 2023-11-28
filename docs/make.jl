@@ -46,7 +46,7 @@ makedocs(
     pages = PAGES,
     doctest = CI,
     draft = false,
-    plugins=[bib],
+    plugins = [bib],
     checkdocs = :none,
     warnonly = true,
 )

@@ -212,7 +212,7 @@ function load_latychev2023_ICE6G(; case = "1D", var = "R")
             nlon, nlat)
     end
 
-    gllatlon_file = "../data/Latychev/ICE6G/gl256_LatLon"
+    gllatlon_file = joinpath(@__DIR__, "../data/Latychev/ICE6G/gl256_LatLon")
     LonLat, header = readdlm(gllatlon_file, header = true)
     Lon = reshape(LonLat[:, 1], nlon, nlat)
     Lat = reshape(LonLat[:, 2], nlon, nlat)
