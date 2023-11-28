@@ -110,12 +110,12 @@ function main(
 )
 
     N = 2^n
-    suffix = "Nx=$(N)_Ny=$(N)_$(kernel)"
+    suffix = "Nx=$(N)_Ny=$(N)"
     filename = "disc_$suffix"
     @load "../data/test2/$filename.jld2" fip
     fipdisc = deepcopy(fip)
 
-    filename = "cap_Nx=$(N)_Ny=$(N)_$(kernel)"
+    filename = "cap_Nx=$(N)_Ny=$(N)"
     @load "../data/test2/$filename.jld2" fip
     fipcap = deepcopy(fip)
 
@@ -168,9 +168,9 @@ function main(
     save("plots/$(plotname)_v0.4.pdf", response_fig)
 end
 
-cases = ["viscous"] # "viscoelastic", 
+cases = ["viscous"] # "viscoelastic"
 for case in cases
     for n in 7:7
-        main(case, n, kernel = "cpu")
+        main(case, n)
     end
 end

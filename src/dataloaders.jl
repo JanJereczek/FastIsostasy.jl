@@ -23,6 +23,8 @@ function load_dataset(name::String; kwargs...)
     ########################## Param and forcing fields #######################
     if name == "OceanSurfaceFunctionETOPO2022"
         return load_oceansurfacefunction(; kwargs...)
+    elseif name == "BedMachine3"
+        return load_bedmachine3(; kwargs...)
     elseif name == "ICE6G_D"
         return load_ice6gd(; kwargs...)
     elseif name == "Wiens2022"
@@ -48,7 +50,31 @@ function load_oceansurfacefunction()
     link = "https://github.com/JanJereczek/IsostasyData/raw/main/ocean_surface/dz=0.1m.jld2"
     tmp = Downloads.download(link, tempdir() *"/"* basename(link))
     @load "$tmp" z_support A_support
-    return z_support, A_support, linear_interpolation(z_support, A_support)
+    z, A = collect(z_support), collect(A_support)
+    itp = linear_interpolation(z, A)    # , extrapolation_bc = Line()
+    return z, A, itp
+end
+
+function load_bedmachine3(; var = "bed", T = Float64)
+    link = "https://github.com/JanJereczek/IsostasyData/raw/main/topography/"*
+        "BedMachineAntarctica-v3-sparse.nc"
+    tmp = Downloads.download(link, tempdir() *"/"* basename(link))
+    ds = NCDataset(tmp, "r")
+    var = T.(ds["$var"][:, :])
+    x, y = T.(ds["x"][:]), T.(ds["y"][:])
+    close(ds)
+    itp = linear_interpolation((x, reverse(y)), reverse(var, dims=2))
+    return (x, y), var, itp
+end
+
+function bathymetry(Omega::ComputationDomain)
+    T = Float32
+    ds = NCDataset(joinpath(@__DIR__, "../data/bathymetry/ETOPO_2022_v1_60s_N90W180_bed.nc"),"r")
+    lon, lat = T.(ds["lon"][:]), T.(ds["lat"][:])
+    z = T.(ds["z"][:, :])
+    close(ds)
+    itp = linear_interpolation((lon, lat), z, extrapolation_bc = Flat())
+    return itp.(Array(Omega.Lon), Array(Omega.Lat))
 end
 
 function load_ice6gd(; var = "IceT")
@@ -62,7 +88,7 @@ function load_ice6gd(; var = "IceT")
 
     t .*= -1
     lon180, Hice180 = lon360tolon180(lon, Hice)
-    Hice_itp = linear_interpolation((lon180, lat, t), Hice180, extrapolation_bc = Flat())
+    Hice_itp = linear_interpolation((lon180, lat, t), Hice180, extrapolation_bc = 0.0)
 
     println("returning: (lon180, lat, t), Hice, interpolator")
     return (lon180, lat, t), Hice, Hice_itp
@@ -201,4 +227,37 @@ function load_latychev2023_ICE6G(; case = "1D", var = "R")
     return (lon, lat, tlaty), X, itp
 end
 
+#############################################################
+# Green coefficients for elastic displacement
+#############################################################
 
+"""
+    get_greenintegrand_coeffs(T)
+
+Return the load response coefficients with type `T`.
+Reference: Deformation of the Earth by surface Loads, Farell 1972, table A3.
+"""
+function get_greenintegrand_coeffs(T::Type;
+    file = joinpath(@__DIR__, "input/elasticgreencoeffs_farrell1972.jld2"))
+    data = jldopen(file)
+    # rm is column 1 converted to meters (and some extra factor)
+    # GE /(10^12 rm) is vertical displacement in meters (applied load is 1kg)
+    # GE corresponds to column 2
+    return T.(data["rm"]), T.(data["GE"])
+end
+
+#############################################################
+# Preliminary Reference Earth Model
+#############################################################
+
+"""
+    load_prem()
+
+Load Preliminary Reference Earth Model (PREM) from Dzewonski and Anderson (1981).
+"""
+function load_prem()
+    # radius, depth, density, Vpv, Vph, Vsv, Vsh, eta, Q-mu, Q-kappa
+    M = readdlm(joinpath(@__DIR__, "input/PREM_1s.csv"), ',')[:, 1:7]
+    M .*= 1e3
+    return ReferenceEarthModel([M[:, j] for j in axes(M, 2)]...)
+end

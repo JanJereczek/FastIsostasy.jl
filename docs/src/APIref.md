@@ -7,8 +7,8 @@ KernelMatrix
 ComputationDomain
 PhysicalConstants
 LayeredEarth
-RefGeoState
-GeoState
+ReferenceState
+CurrentState
 FastIsoTools
 FastIsoProblem
 ```

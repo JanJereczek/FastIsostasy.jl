@@ -7,7 +7,6 @@ N = 700
 maxdepth = 300e3
 nlayers = 3
 use_cuda = false
-interactive_sl = false
 Omega = ComputationDomain(3500e3, 3500e3, N, N, use_cuda = use_cuda)
 c = PhysicalConstants()
 

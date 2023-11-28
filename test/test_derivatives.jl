@@ -14,8 +14,8 @@ end
 function derivative_stdsetup(use_cuda::Bool)
     W, n, pc = 3000e3, 7, false
     Omega = ComputationDomain(W, n, correct_distortion = pc, use_cuda = use_cuda)
-    c, p, _, __, Hcylinder, t_out, interactive_sealevel = benchmark1_constants(Omega)
-    fip = FastIsoProblem(Omega, c, p, t_out, interactive_sealevel, Hcylinder)
+    c, p, _, __, Hcylinder, t_out = benchmark1_constants(Omega)
+    fip = FastIsoProblem(Omega, c, p, t_out, Hcylinder)
 
     u = copy(Omega.X .^ 2 .* Omega.Y .^ 2)
     uxx = 2 .* Omega.Y .^ 2

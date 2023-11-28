@@ -45,3 +45,63 @@ function load_latychev_gaussian(dir::String, idx)
     end
     return u
 end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+function load_bsl()
+    file = "../data/ICE6Gzip/IceT.I6F_C.131QB_VM5a_1deg.nc"
+    ds = NCDataset("$file", "r")
+    lon_360, lat, tpaleo = copy(ds["Lon"][:]), copy(ds["Lat"][:]), copy(ds["Time"][:])
+    Hice_360 = copy(ds["stgit"][:, :, :])
+    close(ds)
+    lon, Hice = lon360tolon180(lon_360, Hice_360)
+    t = -tpaleo .* 1e3
+
+    z = interp_etopo(lat, lon)
+    Hice_af = [haf(Hice[:, :, k], z) for k in eachindex(t)]
+    cellsurface = get_cellsurface(lat, lon)
+    dV_af = [sum((Hice_af[k] - Hice_af[1]) .* cellsurface) for k in eachindex(t)]
+    Ao = 3.625e14
+    sl = -dV_af ./ Ao
+    return t, sl, linear_interpolation(t, sl, extrapolation_bc = Flat())
+end
+
+
+function interp_etopo(lat, lon)
+    file = "../data/bathymetry/ETOPO_2022_v1_60s_N90W180_bed.nc"
+    ds = NCDataset("$file", "r")
+    lon_etopo, lat_etopo = copy(ds["lon"][:]), copy(ds["lat"][:])
+    z = copy(ds["z"][:, :])
+    close(ds)
+    itp = linear_interpolation((lon_etopo, lat_etopo), z)
+    Lon, Lat = meshgrid(lon, lat)
+    return itp.(Lon, Lat)
+end
+haf(H, b) = H + min.(b, 0) .* (1028 / 910)
+
+function get_cellsurface(lat::Vector{T}, lon::Vector{T}) where {T<:AbstractFloat}
+    R = 6371e3                     # Earth radius at equator (m)
+    k = 1 ./ cos.( deg2rad.(lat) )
+    dphi = mean([mean(diff(lat)), mean(diff(lon))])
+    meridionallength_cell = deg2rad(dphi) * R
+    azimutallength_cell = meridionallength_cell ./ k
+    cellsurface = fill(meridionallength_cell, length(lon)) * azimutallength_cell'
+    return cellsurface
+end

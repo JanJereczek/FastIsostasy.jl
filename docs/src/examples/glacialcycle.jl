@@ -72,9 +72,8 @@ niceheatmap(Hitp.(Lon, Lat, -26) - Hitp.(Lon, Lat, 0))
 Finally, defining and solving the resulting [`FastIsoProblem`] is done by running:
 =#
 
-interactive_sealevel = false
 tsec = years2seconds.(t .* 1e3)
-fip = FastIsoProblem(Omega, c, p, tsec, interactive_sealevel, tsec, dHice)
+fip = FastIsoProblem(Omega, c, p, tsec, tsec, dHice)
 solve!(fip)     # gives fip.out.computation_time = 53 s
 
 #=

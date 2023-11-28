@@ -1,23 +1,24 @@
-################################################
-# Analytic solution for constant viscosity
-################################################
-function analytic_solution(
-    r::T,
-    t::T,
-    c::PhysicalConstants,
-    p::LayeredEarth,
-    H0::T,
-    R0::T,
-    domains::Vector{T};
-    n_quad_support=5::Int,
-) where {T<:AbstractFloat}
+"""
+    analytic_solution(r, t, c, p, H0, R0, domains; n_quad_support)
+
+Return the analytic solution of the bedrock displacement resulting from a
+cylindrical ice load with radius `R0` and height `H0` on a flat Earth represented
+by an elastic plate overlaying a viscous half space. Parameters are provided in
+`c, p`. The points at which the solution is computed are specified by the distance `r`
+to the center of the domain. The time at which the solution is computed is specified
+by `t`.
+"""
+function analytic_solution(r::T, t::T, c::PhysicalConstants, p::LayeredEarth,
+    H0::T, R0::T; n_quad_support=5::Int) where {T<:AbstractFloat}
+
+    support = vcat(1e-14, 10 .^ (-10:0.05:-3), 1.0)     # support vector for quadrature
     scaling = c.rho_ice * c.g * H0 * R0
     if t == T(Inf)
         equilibrium_integrand_r(kappa) = equilibrium_integrand(kappa, r, c, p, R0)
-        return scaling .* looped_quadrature1D( equilibrium_integrand_r, domains, n_quad_support )
+        return scaling .* looped_quadrature1D( equilibrium_integrand_r, support, n_quad_support )
     else
         transient_integrand_r(kappa) = analytic_integrand(kappa, r, t, c, p, R0)
-        return scaling .* looped_quadrature1D( transient_integrand_r, domains, n_quad_support )
+        return scaling .* looped_quadrature1D( transient_integrand_r, support, n_quad_support )
     end
 end
 
