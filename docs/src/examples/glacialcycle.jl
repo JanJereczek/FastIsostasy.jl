@@ -52,7 +52,7 @@ nlb = size(rlb, 3)
 lv_3D = 10 .^ cat([logeta_itp.(Lon, Lat, rlb[:, :, k]) for k in 1:nlb]..., dims=3);
 
 #=
-To prevent extreme values of the viscosity, we require it to be larger than a minimal value, fixed to be $10^{16} \, \mathrm{Pa \, s}. We subsequently generate a [`LayeredEarth`](@ref) that embeds all the information that has been loaded so far:
+To prevent extreme values of the viscosity, we require it to be larger than a minimal value, fixed to be $$ 10^{16} \, \mathrm{Pa \, s} $$. We subsequently generate a [`LayeredEarth`](@ref) that embeds all the information that has been loaded so far:
 =#
 
 eta_lowerbound = 1e16
@@ -69,7 +69,7 @@ dHice = [Hitp.(Lon, Lat, tk) - Hitp.(Lon, Lat, minimum(t)) for tk in t]
 niceheatmap(Hitp.(Lon, Lat, -26) - Hitp.(Lon, Lat, 0))
 
 #=
-Finally, defining and solving the resulting [`FastIsoProblem`] is done by running:
+Finally, defining and solving the resulting [`FastIsoProblem`](@ref) is done by running:
 =#
 
 tsec = years2seconds.(t .* 1e3)
@@ -77,7 +77,7 @@ fip = FastIsoProblem(Omega, c, p, tsec, tsec, dHice)
 solve!(fip)     # gives fip.out.computation_time = 53 s
 
 #=
-The computation time of this last step is of less than a minute on a modern i7 (Intel i7-10750H CPU @ 2.60GHz). Yes, less than a minute for a glacial cycle with 50 km resolution! We visualise three snapshots of displacements that roughly correspond to LGM, the end of the meltwater pulse 1A and the present-day:
+The computation time of this last step is less than a minute on a modern i7 (Intel i7-10750H CPU @ 2.60GHz). and for a resolution of 50 km resolution! We visualise three snapshots of displacements that roughly correspond to LGM, the end of the meltwater pulse 1A and the present-day:
 =#
 
 tplot = [-26, -12, 0]
@@ -94,5 +94,5 @@ Colorbar(fig[1, 4], height = Relative(0.6); opts...)
 fig
 
 #=
-The displayed fields are displacement anomalies w.r.t. to the last interglacial, defined as the reference for the ice thickness anomalies. These computations are performed on a finer grid and compared to the output of a 3D GIA model in (Swierczek-Jereczek et al. in prep.), showing a great agreement with a model that takes about 100,000 times more computation.
+The displayed fields are displacement anomalies w.r.t. to the last interglacial, defined as the reference for the ice thickness anomalies. In (Swierczek-Jereczek et al. in prep.), these computations are performed on a finer grid, with an interactive sea level, and show great agreement with a 3D GIA model that runs between 10,000-100,000 slower (however at with advantage of obtaining a global and richer output).
 =#

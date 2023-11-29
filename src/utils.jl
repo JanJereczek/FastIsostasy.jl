@@ -131,6 +131,10 @@ function write_out!(fip::FastIsoProblem, k::Int)
     end
 end
 
+"""
+    savefip(filename, fip; T = Float32)
+Save the output of `fip::FastIsoProblem` as NetCDF file under `filename`.
+"""
 function savefip(filename, fip; T = Float32)
 
     ds = NCDataset(filename, "c")
@@ -502,7 +506,7 @@ function remake!(fip::FastIsoProblem)
     fip.now.countupdates = 0
     fip.now.columnanoms = ColumnAnomalies(fip.Omega)
 
-    out = init_results(fip.Omega, fip.out.t)
+    out = DenseOutputs(fip.Omega, fip.out.t)
     fip.out.u = out.u
     fip.out.ue = out.ue
     return nothing

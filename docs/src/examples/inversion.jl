@@ -12,17 +12,21 @@ _, eta, eta_itp = load_dataset("Wiens2022")
 loglv = cat([eta_itp.(Omega.X, Omega.Y, z) for z in lb]..., dims = 3)
 lv = 10 .^ loglv
 p = LayeredEarth(Omega, layer_boundaries = lb, layer_viscosities = lv)
+heatmap(p.effective_viscosity)
 
 #=
 To make this problem more exciting, we shift the center of the ice load to $$ (-1000, -1000) \: \mathrm{km} $$ where the viscosity field displays a less uniform structure. For the sake of simplicity, the data to fit is obtained from a FastIsostasy simulation with the ground-truth viscosity field.
 =#
 
 R, H = 1000e3, 1e3
-Hice = uniform_ice_cylinder(Omega, R, H, center = [-1000e3, -1000e3])
-t_out = years2seconds.(1e3:1e3:2e3)
+Hcylinder = uniform_ice_cylinder(Omega, R, H, center = [-1000e3, -1000e3])
+Hice = [zeros(Omega.Nx, Omega.Ny), Hcylinder, Hcylinder]
+t_out = years2seconds.(collect(1e3:1e3:2e3))
+pushfirst!(t_out, t_out[1]-1e-8)
+t_Hice = copy(t_out)
 
 true_viscosity = copy(p.effective_viscosity)
-fip = FastIsoProblem(Omega, c, p, t_out, false, Hice)
+fip = FastIsoProblem(Omega, c, p, t_out, t_Hice, Hice)
 solve!(fip)
 
 #=
@@ -30,12 +34,14 @@ Now that we have the displacement field, we can recover the viscosity field from
 =#
 
 config = InversionConfig(N_iter = 15)
-data = InversionData(copy(fip.out.t[2:end]), copy(fip.out.u[2:end]), copy([Hice, Hice]), config)
+data = InversionData(copy(fip.out.t[2:end]), copy(fip.out.u[2:end]), copy(Hice[2:end]),
+    config)
 paraminv = InversionProblem(deepcopy(fip), config, data)
 
 function plot_viscfields(paraminv)
     estim_viscosity = copy(true_viscosity)
-    estim_viscosity[paraminv.data.idx] .= 10 .^ get_ϕ_mean_final(paraminv.priors, paraminv.ukiobj)
+    estim_viscosity[paraminv.data.idx] .= 10 .^ get_ϕ_mean_final(
+        paraminv.priors, paraminv.ukiobj)
 
     cmap = cgrad(:jet, rev = true)
     crange = (19.5, 21.5)
