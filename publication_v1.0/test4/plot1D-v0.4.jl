@@ -9,7 +9,7 @@ Omega = ComputationDomain(3500e3, 3500e3, 350, 350, use_cuda=false)
 Lon, Lat = Omega.Lon, Omega.Lat
 Hice = [Hitp.(Lon, Lat, tk/1e3) for tk in tlaty]
 kmax = argmax([mean(Hice[k]) for k in eachindex(Hice)])
-mask = Hice[kmax] .> 1
+mask = (Hice[kmax] .> 1) .|| (Omega.R .< 500e3)
 
 elims = (-100, 100)
 mean_error = fill(Inf, length(tlaty))
@@ -74,13 +74,13 @@ k = argmax(max_error)
 k_fastiso = argmin( (t .- tlaty[k]/1e3) .^ 2 )
 ulatyitp = itp.(Lon, Lat, tlaty[k])
 ufastiso = fip.out.u[k_fastiso] + fip.out.ue[k_fastiso]
-heatmap!(axs[3], ulatyitp; u_opts...)
-heatmap!(axs[4], ufastiso; u_opts...)
+heatmap!(axs[3], ufastiso; u_opts...)
+heatmap!(axs[4], ulatyitp; u_opts...)
 heatmap!(axs[5], ulatyitp - ufastiso; e_opts...)
 contour!(axs[3], mask; levels = [0.5], color = :gray10)
 contour!(axs[4], mask; levels = [0.5], color = :gray10)
 contour!(axs[5], mask; levels = [0.5], color = :gray10)
-axs[3].title = L"(c) SK1D, $t = %$(Int(round(tlaty[k] ./ 1e3)))$ kyr"
-axs[4].title = L"(d) FI1D, $t = %$(Int(round(tlaty[k] ./ 1e3)))$ kyr"
+axs[3].title = L"(d) FI1D, $t = %$(Int(round(tlaty[k] ./ 1e3)))$ kyr"
+axs[4].title = L"(c) SK1D, $t = %$(Int(round(tlaty[k] ./ 1e3)))$ kyr"
 axs[5].title = L"(e) (SK1D - FI1D), $t = %$(Int(round(tlaty[k] ./ 1e3)))$ kyr"
 save("plots/test4/1D_v0.4.png", fig)

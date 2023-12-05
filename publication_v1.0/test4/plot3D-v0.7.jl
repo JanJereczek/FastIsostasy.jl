@@ -36,7 +36,7 @@ function main(case, N; masktype="lgm")
 
     Hice = [Hice_itp.(Lon, Lat, tk/1e3) for tk in tlaty]
     kmax = argmax([mean(Hice[k]) for k in eachindex(Hice)])
-    mask = Hice[kmax] .> 1
+    mask = (Hice[kmax] .> 1) .|| (Omega.R .< 500e3)
     nm = sum(mask)
     maskratio = nm / prod(size(mask))
 
@@ -102,19 +102,19 @@ function main(case, N; masktype="lgm")
     bgap = bwidth * 0.9
     
     barplot!(axs[2], eachindex(tlaty) .- bgap, FI1Dmax ./ umax,
-        width = bwidth, label = L"max FI1D $\,$", color = :dodgerblue1)
+        width = bwidth, label = L"FI1D max $\,$", color = :dodgerblue1)
     barplot!(axs[2], eachindex(tlaty) .- bgap, FI1Dmean ./ umax,
-        width = bwidth, label = L"mean FI1D $\,$", color = :dodgerblue3)
+        width = bwidth, label = L"FI1D mean $\,$", color = :dodgerblue3)
 
     barplot!(axs[2], eachindex(tlaty), SK1Dmax ./ umax,
-        width = bwidth, label = L"max SK1D $\,$", color = :gray60)
+        width = bwidth, label = L"SK1D max $\,$", color = :gray60)
     barplot!(axs[2], eachindex(tlaty), SK1Dmean ./ umax,
-        width = bwidth, label = L"mean SK1D $\,$", color = :gray40)
+        width = bwidth, label = L"SK1D mean $\,$", color = :gray40)
         
     barplot!(axs[2], eachindex(tlaty) .+ bgap, FI3Dmax ./ umax,
-        width = bwidth, label = L"max FI3D $\,$", color = :orange)
+        width = bwidth, label = L"FI3D max $\,$", color = :orange)
     barplot!(axs[2], eachindex(tlaty) .+ bgap, FI3Dmean ./ umax,
-        width = bwidth, label = L"mean FI3D $\,$", color = :darkorange)
+        width = bwidth, label = L"FI3D mean $\,$", color = :darkorange)
 
     axs[2].xlabel = L"Time (kyr) $\,$"
     axs[2].ylabel = L"$e$ (1)"
@@ -135,28 +135,28 @@ function main(case, N; masktype="lgm")
     k_fastiso = argmin( (t .- tlaty[k]/1e3) .^ 2 )
     uskitp = itp.(Lon, Lat, tlaty[k])
     ufastiso = fip1D.out.u[k_fastiso] + fip1D.out.ue[k_fastiso]
-    heatmap!(axs[3], uskitp; u_opts...)
-    heatmap!(axs[4], ufastiso; u_opts...)
+    heatmap!(axs[3], ufastiso; u_opts...)
+    heatmap!(axs[4], uskitp; u_opts...)
     heatmap!(axs[5], uskitp - ufastiso; e_opts...)
     contour!(axs[3], mask; levels = [0.5], color = :gray10)
     contour!(axs[4], mask; levels = [0.5], color = :gray10)
     contour!(axs[5], mask; levels = [0.5], color = :gray10)
-    axs[3].title = L"(c) SK3D, $t = %$(Int(round(tlaty[k] ./ 1e3)))$ kyr"
-    axs[4].title = L"(d) FI1D, $t = %$(Int(round(tlaty[k] ./ 1e3)))$ kyr"
+    axs[3].title = L"(d) FI1D, $t = %$(Int(round(tlaty[k] ./ 1e3)))$ kyr"
+    axs[4].title = L"(c) SK3D, $t = %$(Int(round(tlaty[k] ./ 1e3)))$ kyr"
     axs[5].title = L"(e) (SK3D - FI1D), $t = %$(Int(round(tlaty[k] ./ 1e3)))$ kyr"
 
     k = argmax(FI3Dmax)
     k_fastiso = argmin( (t .- tlaty[k]/1e3) .^ 2 )
     uskitp = itp.(Lon, Lat, tlaty[k])
     ufastiso = fip.out.u[k_fastiso] + fip.out.ue[k_fastiso]
-    hmu = heatmap!(axs[6], uskitp; u_opts...)
-    heatmap!(axs[7], ufastiso; u_opts...)
+    heatmap!(axs[6], ufastiso; u_opts...)
+    hmu = heatmap!(axs[7], uskitp; u_opts...)
     hme = heatmap!(axs[8], uskitp - ufastiso; e_opts...)
     contour!(axs[6], mask; levels = [0.5], color = :gray10)
     contour!(axs[7], mask; levels = [0.5], color = :gray10)
     contour!(axs[8], mask; levels = [0.5], color = :gray10)
-    axs[6].title = L"(f) SK3D, $t = %$(Int(round(tlaty[k] ./ 1e3)))$ kyr"
-    axs[7].title = L"(g) FI3D, $t = %$(Int(round(tlaty[k] ./ 1e3)))$ kyr"
+    axs[6].title = L"(g) FI3D, $t = %$(Int(round(tlaty[k] ./ 1e3)))$ kyr"
+    axs[7].title = L"(f) SK3D, $t = %$(Int(round(tlaty[k] ./ 1e3)))$ kyr"
     axs[8].title = L"(h) (SK3D - FI3D), $t = %$(Int(round(tlaty[k] ./ 1e3)))$ kyr"
 
     [hidedecorations!(ax) for ax in axbottom]
