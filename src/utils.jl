@@ -41,7 +41,7 @@ Base.fill(x::Real, Omega::ComputationDomain) = Omega.arraykernel(fill(x, Omega.N
 
 function corner_matrix(T, Nx, Ny)
     M = zeros(T, Nx, Ny)
-    M[1, 1], M[1, Nx], M[Ny, 1], M[Nx, Ny] = T.([1, 1, 1, 1])
+    M[1, 1], M[Nx, 1], M[1, Ny], M[Nx, Ny] = T.([1, 1, 1, 1])
     return M
 end
 
