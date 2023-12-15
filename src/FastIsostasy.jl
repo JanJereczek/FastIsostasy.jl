@@ -23,7 +23,6 @@ using EnsembleKalmanProcesses.ParameterDistributions
 using SpecialFunctions: besselj0, besselj1
 using DynamicalSystemsBase: CoupledODEs, trajectory
 using ParallelStencil
-using LinearSolve: KrylovJL_GMRES
 
 using Reexport
 @reexport using Interpolations
