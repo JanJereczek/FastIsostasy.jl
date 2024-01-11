@@ -96,7 +96,9 @@ function samesize_conv(X::M, ipc::InplaceConvolution{T, C, FP, IP},
     M<:KernelMatrix{T}, C<:ComplexMatrix{T}, FP<:ForwardPlan{T}, IP<:InversePlan{T}}
     convo = ipc(X)
     apply_bc!(convo, Omega.extended_bc_matrix, Omega.extended_nbc)
-    return view(convo, Omega.i1:Omega.i2, Omega.j1:Omega.j2)
+    return view(convo,
+        Omega.i1+Omega.convo_offset:Omega.i2+Omega.convo_offset,
+        Omega.j1-Omega.convo_offset:Omega.j2-Omega.convo_offset)
 end
 
 # function samesize_conv(X::CuMatrix{T}, Y::CuMatrix{T}, Omega::ComputationDomain{T, L, M}) where
