@@ -56,6 +56,7 @@ struct ComputationDomain{T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}}
     i2::Int
     j1::Int
     j2::Int
+    convo_offset::Int
     R::L                        # euclidean distance from center
     Theta::L                    # colatitude
     Lat::L
@@ -124,13 +125,14 @@ function ComputationDomain(
 
     i1, i2 = samesize_conv_indices(Nx, Mx)
     j1, j2 = samesize_conv_indices(Ny, My)
+    convo_offset = (Ny - Nx) ÷ 2
 
     bc_matrix = arraykernel(corner_matrix(T, Nx, Ny))
     nbc = sum(bc_matrix)
     extended_bc_matrix = arraykernel(corner_matrix(T, 2*Nx-1, 2*Ny-1))
     extended_nbc = sum(bc_matrix)
 
-    return ComputationDomain(Wx, Wy, Nx, Ny, Mx, My, dx, dy, x, y, X, Y, i1, i2, j1, j2,
+    return ComputationDomain(Wx, Wy, Nx, Ny, Mx, My, dx, dy, x, y, X, Y, i1, i2, j1, j2, convo_offset,
         R, Theta, Lat, Lon, K, K .* dx, K .* dy, (dx * dy) .* K .^ 2, correct_distortion,
         null, pseudodiff, use_cuda, arraykernel, bc_matrix, nbc, extended_bc_matrix,
         extended_nbc)
