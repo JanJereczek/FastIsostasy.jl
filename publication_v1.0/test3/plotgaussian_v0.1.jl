@@ -1,4 +1,3 @@
-push!(LOAD_PATH, "../")
 using FastIsostasy
 using CairoMakie
 using JLD2

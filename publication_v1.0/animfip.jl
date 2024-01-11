@@ -1,4 +1,3 @@
-push!(LOAD_PATH, "../")
 using FastIsostasy, JLD2, CairoMakie
 include("helpers.jl")
 

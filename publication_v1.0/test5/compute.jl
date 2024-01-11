@@ -1,4 +1,3 @@
-push!(LOAD_PATH, "../")
 using FastIsostasy, JLD2
 include("../../test/helpers/compute.jl")
 

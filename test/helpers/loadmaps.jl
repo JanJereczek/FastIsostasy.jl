@@ -1,4 +1,3 @@
-push!(LOAD_PATH, "../")
 using NCDatasets
 using JLD2
 using FastIsostasy

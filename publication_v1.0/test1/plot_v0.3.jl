@@ -1,4 +1,3 @@
-push!(LOAD_PATH, "../")
 using FastIsostasy
 using CairoMakie, SpecialFunctions, JLD2, LinearAlgebra
 include("../../test/helpers/compute.jl")

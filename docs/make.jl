@@ -7,7 +7,6 @@ using DocumenterCitations
 ENV["JULIA_DEBUG"] = "Documenter"
 
 # Packages specific to these docs
-push!(LOAD_PATH, "../")
 using FastIsostasy
 
 bib = CitationBibliography(
