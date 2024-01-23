@@ -158,7 +158,7 @@ Base.@kwdef struct PhysicalConstants{T<:AbstractFloat}
     mE::T = type(5.972e24)                        # Earth's mass (kg)
     r_equator::T = type(6371e3)                   # Earth radius at equator (m)
     r_pole::T = type(6357e3)                      # Earth radius at pole (m)
-    A_ocean_pd::T = type(3.625e14)                # Ocean surface (m) as in Goelzer (2020) before Eq. (9)
+    A_ocean_pd::T = type(3.625e14)                # Ocean surface (m^2) as in Goelzer (2020) before Eq. (9)
     g::T = type(9.8)                              # Mean Earth acceleration at surface (m/s^2)
     G::T = type(6.674e-11)                        # Gravity constant (m^3 kg^-1 s^-2)
     seconds_per_year::T = type(SECONDS_PER_YEAR)  # (s)

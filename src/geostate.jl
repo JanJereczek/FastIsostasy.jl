@@ -57,7 +57,7 @@ end
 
 function mass_anom(fip::FastIsoProblem)
     return fip.Omega.A .* (fip.now.columnanoms.full -
-        (fip.c.rho_seawater .* fip.now.bsl .* fip.now.maskocean .* fip.ref.maskactive ) )
+        fip.c.rho_seawater .* fip.now.bsl .* fip.now.maskocean .* fip.ref.maskactive )
 end
 
 """
@@ -80,8 +80,8 @@ function update_loadcolumns!(fip::FastIsoProblem{T, L, M, C, FP, IP}, H_ice::M) 
 end
 
 function watercolumn(fip)
-    gs = fip.now
-    return watercolumn(gs.H_ice, gs.maskgrounded, gs.b, gs.seasurfaceheight, fip.c)
+    now = fip.now
+    return watercolumn(now.H_ice, now.maskgrounded, now.b, now.seasurfaceheight, fip.c)
 end
 
 function watercolumn(H_ice, maskgrounded, b, seasurfaceheight, c)
@@ -91,15 +91,15 @@ function watercolumn(H_ice, maskgrounded, b, seasurfaceheight, c)
 end
 
 function update_maskgrounded!(fip::FastIsoProblem)
-    gs = fip.now
+    now = fip.now
     if fip.Omega.use_cuda
-        fip.now.maskgrounded .= get_maskgrounded(
-            gs.H_ice, gs.b, gs.seasurfaceheight, fip.c)
+        now.maskgrounded .= get_maskgrounded(now, fip.c)
     else
-        fip.now.maskgrounded .= collect(
-            get_maskgrounded(gs.H_ice, gs.b, gs.seasurfaceheight, fip.c))
+        fip.now.maskgrounded .= collect(get_maskgrounded(now, fip.c))
     end
 end
+
+get_maskgrounded(state, c) = height_above_floatation(state, c) .> 0
 
 function get_maskgrounded(H_ice, b, seasurfaceheight, c)
     return height_above_floatation(H_ice, b, seasurfaceheight, c) .> 0
@@ -115,11 +115,11 @@ function height_above_floatation(H_ice, b, seasurfaceheight, c)
 end
 
 function update_maskocean!(fip)
-    gs = fip.now
+    now = fip.now
     if fip.Omega.use_cuda
-        gs.maskocean .= get_maskocean(gs.seasurfaceheight, gs.b, gs.maskgrounded)
+        now.maskocean .= get_maskocean(now.seasurfaceheight, now.b, now.maskgrounded)
     else
-        gs.maskocean .= collect(get_maskocean(gs.seasurfaceheight, gs.b, gs.maskgrounded))
+        now.maskocean .= collect(get_maskocean(now.seasurfaceheight, now.b, now.maskgrounded))
     end
 end
 
@@ -143,8 +143,8 @@ Here, the constant term is used to impose a zero geoid perturbation in the far f
 thank for mass conservation and is embedded in convolution operation.
 """
 function update_seasurfaceheight!(fip::FastIsoProblem)
-    gs = fip.now
-    gs.seasurfaceheight .= fip.ref.seasurfaceheight .+ gs.geoid .+ gs.bsl
+    now = fip.now
+    now.seasurfaceheight .= fip.ref.seasurfaceheight .+ now.geoid .+ now.bsl
     return nothing
 end
 
