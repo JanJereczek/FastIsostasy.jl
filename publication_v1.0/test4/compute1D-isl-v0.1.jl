@@ -16,8 +16,14 @@ function main(N, maxdepth, isl; nlayers = 3, use_cuda = false)
     opts = SolverOptions(interactive_sealevel = isl, verbose = true, internal_bsl_update = false)
 
     # Load ice thickness and deduce (active load) mask from it.
-    (lon, lat, t), Hice, Hitp = load_ice6gd()
+    (_, _, t), _, Hitp = load_ice6gd()
     Hice_vec = [Hitp.(Array(Omega.Lon), Array(Omega.Lat), tt) for tt in t]
+    # South pole gives 0 because of projection. Correct by mean smoothing.
+    H_soutpole = [mean(H[173:4:177, 173:4:177]) for H in Hice_vec]
+    for k in eachindex(Hice_vec)
+        Hice_vec[k][174:176, 174:176] .= H_soutpole[k]
+    end
+
     if isl
         k_lgm = argmax([mean(Hice_vec[k]) for k in eachindex(Hice_vec)])
         sharp_lgm_mask = Float64.(Hice_vec[k_lgm] .> 1e-3)
@@ -46,7 +52,7 @@ function main(N, maxdepth, isl; nlayers = 3, use_cuda = false)
     solve!(fip)
     println("Computation took $(fip.out.computation_time) s")
 
-    path = "../data/test4/ICE6G/1D-interactivesl=$isl-bsl=external-"*
+    path = "../data/test4/ICE6G/newconv-1D-interactivesl=$isl-bsl=external-"*
         "N=$(Omega.Nx)"
     @save "$path.jld2" t fip Hitp Hice_vec
     savefip("$path.nc", fip)
