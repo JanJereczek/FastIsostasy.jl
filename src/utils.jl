@@ -91,6 +91,20 @@ end
 #     return view(convo, Omega.i1:Omega.i2, Omega.j1:Omega.j2)
 # end
 
+# Just a helper for blur! Not performant but we only blur at preprocessing
+# so we do not care :)
+function samesize_conv(X::M, Y::M, Omega::ComputationDomain) where
+    {T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}}
+    (; i1, i2, j1, j2) = Omega
+    ipc = InplaceConvolution(X, false)
+    return samesize_conv(Y, ipc, Omega.i1, Omega.i2, Omega.j1, Omega.j2, Omega.convo_offset)
+end
+function samesize_conv(X, ipc, i1, i2, j1, j2, convo_offset)
+    convo = ipc(X)
+    return view(convo, i1+convo_offset:i2+convo_offset, j1-convo_offset:j2-convo_offset)
+end
+
+# Performant version for time loop
 function samesize_conv(X::M, ipc::InplaceConvolution{T, C, FP, IP},
     Omega::ComputationDomain{T, L, M}) where {T<:AbstractFloat, L<:Matrix{T},
     M<:KernelMatrix{T}, C<:ComplexMatrix{T}, FP<:ForwardPlan{T}, IP<:InversePlan{T}}
@@ -100,6 +114,7 @@ function samesize_conv(X::M, ipc::InplaceConvolution{T, C, FP, IP},
         Omega.i1+Omega.convo_offset:Omega.i2+Omega.convo_offset,
         Omega.j1-Omega.convo_offset:Omega.j2-Omega.convo_offset)
 end
+
 
 # function samesize_conv(X::CuMatrix{T}, Y::CuMatrix{T}, Omega::ComputationDomain{T, L, M}) where
 #     {T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}}
@@ -352,7 +367,8 @@ function blur(X::AbstractMatrix, Omega::ComputationDomain, level::Real)
     T = eltype(X)
     sigma = diagm([(level * Omega.Wx)^2, (level * Omega.Wy)^2])
     kernel = T.(generate_gaussian_field(Omega, 0.0, [0.0, 0.0], 1.0, sigma))
-    return copy(samesize_conv(Omega.arraykernel(kernel), Omega.arraykernel(X), Omega))
+    # return copy(samesize_conv(Omega.arraykernel(kernel), Omega.arraykernel(X), Omega))
+    return samesize_conv(kernel, X, Omega)
 end
 
 
