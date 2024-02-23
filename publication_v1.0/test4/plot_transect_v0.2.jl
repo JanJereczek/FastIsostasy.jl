@@ -20,11 +20,10 @@ function main(transect)
     ssh = copy(ds["seasurfaceheight"][:, :, :])
     geoid = copy(ds["geoid"][:, :, :])
     maskgrounded = copy(ds["maskgrounded"][:, :, :])
-    Hice_gapped = copy(ds["Hice"][:, :, :])
+    Hice = copy(ds["Hice"][:, :, :])
     Hwater = copy(ds["Hwater"][:, :, :])
     close(ds)
-    Hice = copy(Hice_gapped)
-    H_soutpole = [mean(Hice_gapped[173:4:177, 173:4:177, k]) for k in axes(Hice_gapped, 3)]
+    H_soutpole = [mean(Hice[173:4:177, 173:4:177, k]) for k in axes(Hice, 3)]
     for i in 174:176, j in 174:176
         Hice[i, j, :] .= H_soutpole
         maskgrounded[i, j, :] .= 1f0
