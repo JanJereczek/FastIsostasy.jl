@@ -17,7 +17,7 @@ function main(N)
     # Hsum = [sum(Hice[:, :, k]) for k in eachindex(t)]
 
     # Hlim = (1e-8, 4e3)
-    # fig = Figure(resolution = (1600, 1000), fontsize = 24)
+    # fig = Figure(size = (1600, 1000), fontsize = 24)
     # ax1 = Axis(fig[1:3, 1], aspect = DataAspect())
     # ax2 = Axis(fig[4, 1])
     # hidedecorations!(ax1)

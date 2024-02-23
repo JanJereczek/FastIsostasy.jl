@@ -10,7 +10,7 @@ maxdepth, nlayers, N = 500e3, 3, 64
 fip0 = load_results(maxdepth, nlayers, N, false)
 fip1 = load_results(maxdepth, nlayers, N, true)
 
-fig = Figure(resolution = (1800, 800))
+fig = Figure(size = (1800, 800))
 axs = [Axis(fig[1, j], aspect = DataAspect()) for j in 1:3]
 [hidedecorations!(ax) for ax in axs]
 uopts = (colormap = :PuOr, colorrange = (-400, 400))
@@ -33,7 +33,7 @@ save("../plots/test4/comparesl-N=$N-maxdepth=$maxdepth-nlayers=$nlayers")
 
 tplot = -30e3
 k = argmin( (seconds2years.(fip1.out.t) .- tplot) .^ 2 )
-fig = Figure(resolution = (1800, 800))
+fig = Figure(size = (1800, 800))
 axs = [Axis(fig[1, j], aspect = DataAspect()) for j in 1:3]
 [hidedecorations!(ax) for ax in axs]
 uopts = (colormap = :PuOr, colorrange = (-50, 50))

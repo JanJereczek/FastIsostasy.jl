@@ -64,7 +64,7 @@ ylabels = [
 Xposition = [:bottom, :bottom, :bottom, :bottom]
 Yposition = [:left, :left, :left, :right]
 
-fig = Figure(resolution = (1350, 530), fontsize = 24)
+fig = Figure(size = (1350, 530), fontsize = 24)
 nrows, ncols = 1, 4
 axs = [Axis(
     fig[i, j],

@@ -1,6 +1,4 @@
-using FastIsostasy
-using CairoMakie
-using JLD2
+using FastIsostasy, CairoMakie, JLD2
 include("../../test/helpers/compute.jl")
 include("../../test/helpers/plot.jl")
 include("../helpers.jl")
@@ -14,6 +12,7 @@ function slice_spada(
     xlabels,
     ylabels,
     case,
+    Hcap,
 ) where {T<:AbstractFloat}
 
     ncases = length(vars)
@@ -24,11 +23,11 @@ function slice_spada(
     X["u_cap"] .-= X["u_cap"][:, 1]
 
     lw = 5
-    fig = Figure(size=(1200, 1220), fontsize = 40)
+    fig = Figure(size=(1200, 1400), fontsize = 40)
     nrows, ncols = 3, 2
-    rows = [1:5, 6:10, 11:15]
+    # rows = [1:5, 6:10, 11:15]
     axs = [Axis(
-        fig[rows[i], j],
+        fig[i, j],
         title = labels[(i-1)*ncols + j],
         xlabel = xlabels[(i-1)*ncols + j],
         ylabel = ylabels[(i-1)*ncols + j],
@@ -47,15 +46,15 @@ function slice_spada(
     # Just for the legend
     hlines!(axs[3], [1e10], color = :gray20, label = L"FastIsostasy $\,$", linewidth = lw)
     hlines!(axs[3], [1e10], color = :gray20, linestyle = :dash, linewidth = lw,
-        label = L"(Spada et al. 2011) $\,$")
+        label = L"Spada et al. (2011) $\,$")
 
+    n1, n2 = size(vars[1][1])
+    slicex, slicey = n1÷2:n1, n2÷2
+    theta_fi = rad2deg.( Omega.Theta[slicex, slicey] )
     for i in 1:ncases
         U = vars[i]
         nt = length(U)
         kk = keys[i]
-        n1, n2 = size(U[1])
-        slicex, slicey = n1÷2:n1, n2÷2
-        theta_fi = rad2deg.( Omega.Theta[slicex, slicey] )
 
         for j in axes(X[kk], 2)
             lines!(axs[i], theta[kk], X[kk][:, j],
@@ -68,14 +67,14 @@ function slice_spada(
             tkyr = Int(round( seconds2years(t) / 1e3 ))
             if i == 1
                 lines!(axs[i], theta_fi, U[k][slicex, slicey],
-                    color = colors[l], label = L"$t = %$tkyr $ kyr", linewidth = lw)
+                    color = colors[l], label = L"$%$tkyr \, \mathrm{kyr}$ ", linewidth = lw)
             else
                 lines!(axs[i], theta_fi, U[k][slicex, slicey],
                     color = colors[l], linewidth = lw)
             end
         end
         if i <= 1*ncols
-            ylims!(axs[i], (-420, 50))
+            ylims!(axs[i], (-420, 150))
         elseif i <= 2*ncols
             ylims!(axs[i], (-90, 10))
         elseif i <= 3*ncols
@@ -84,16 +83,31 @@ function slice_spada(
         xlims!(axs[i], (0, 15))
     end
 
-    fig[16, :] = Legend(fig, axs[1], " ", framevisible = false, nbanks = 3, colgap = 30,
+    Hcapslice = Hcap[slicex, slicey]
+    Hlolim = zeros(length(Hcapslice))
+    band!(axs[1], theta_fi, Hlolim, Hcapslice ./ 10, color = :skyblue1)
+    poly!(axs[2], Point2f[(0, 0), (10, 0), (10, 1e2), (0, 1e2)], color = :skyblue1)
+
+    poly!(axs[3], Point2f[(0, 1e3), (10, 1e3), (10, 2e3), (0, 2e3)], color = :skyblue1,
+        strokecolor = :skyblue1, strokewidth = 3, label = L"Ice (height is 1:10)$\,$")
+    
+    fig[4, :] = Legend(fig, axs[1], " ", framevisible = false, nbanks = 6, colgap = 30,
         height = 5)
-    fig[17:18, :] = Legend(fig, axs[3], " ", framevisible = false, nbanks = 3, colgap = 50,
+    fig[5, :] = Legend(fig, axs[3], " ", framevisible = false, nbanks = 3, colgap = 40,
         linepoints = [Point2f(-1, 0.5), Point2f(1, 0.5)])
+    
     # axislegend(axs[1], position = :rb)
     rowgap!(fig.layout, 5)
-    rowgap!(fig.layout, 15, 30)
+    rowgap!(fig.layout, 3, 10)
     colgap!(fig.layout, 20)
 
-    axs[1].yticks = latexticks(-400:100:0)
+    rowsize!(fig.layout, 1, Relative(0.3))
+    rowsize!(fig.layout, 2, Relative(0.3))
+    rowsize!(fig.layout, 3, Relative(0.3))
+    rowsize!(fig.layout, 4, Relative(0.05))
+    rowsize!(fig.layout, 5, Relative(0.05))
+
+    axs[1].yticks = latexticks(-400:100:100)
     axs[3].yticks = latexticks(-80:20:0)
     axs[5].yticks = latexticks(0:20:40)
 
@@ -117,6 +131,7 @@ function main(
     filename = "cap_Nx=$(N)_Ny=$(N)"
     @load "../data/test2/$filename.jld2" fip
     fipcap = deepcopy(fip)
+    Hcap = fip.out.Hice[end]
 
     plotvars = [
         fipcap.out.u,
@@ -161,10 +176,11 @@ function main(
         plotvars,
         labels, xlabels, ylabels,
         case,
+        Hcap,
     )
     plotname = "test2/$suffix"
-    save("plots/$(plotname)_v0.4.png", response_fig)
-    save("plots/$(plotname)_v0.4.pdf", response_fig)
+    save("plots/$(plotname)_v0.5.png", response_fig)
+    save("plots/$(plotname)_v0.5.pdf", response_fig)
 end
 
 cases = ["viscous"] # "viscoelastic"

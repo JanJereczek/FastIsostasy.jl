@@ -25,7 +25,7 @@ dudtticks = (-4:2:10, latexify(-4:2:10))
 
 Nx, Ny = fip.Omega.Nx, fip.Omega.Ny
 xx, yy = 20:Nx-20, 40:Ny-40
-fig = Figure(resolution = (1800, 700), fontsize = 32)
+fig = Figure(size = (1800, 700), fontsize = 32)
 axs = [Axis(fig[1, j], aspect = DataAspect()) for j in 1:3]
 [hidedecorations!(ax) for ax in axs]
 
@@ -87,7 +87,7 @@ fig
     e3D_mat = vcat(e3D_vec...)
     elaty1D_mat = vcat(elaty1D_vec...)
 
-    fig = Figure(resolution = (2150, 2300), fontsize = 40)
+    fig = Figure(size = (2150, 2300), fontsize = 40)
     ax_uu = Axis(fig[1:3, 1:3], aspect = DataAspect())
     ax_et = Axis(fig[1:3, 4:9], xticklabelrotation = π/2)
     axbottom = [Axis(fig[i, j], aspect = DataAspect()) for j in [1:3, 4:6, 7:9],

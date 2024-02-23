@@ -20,7 +20,7 @@ function main()
     ftsize = 54
     lwidth = 7
     msize = 35
-    fig = Figure(resolution = (1800, 1800), fontsize = ftsize)
+    fig = Figure(size = (1800, 1800), fontsize = ftsize)
 
     tgap = 20.0
     ii, jj = slice_along_x(Omega)

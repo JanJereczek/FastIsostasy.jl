@@ -18,7 +18,7 @@ end
 hA0vec = Vvec ./ osc.A_pd
 
 lw = 5
-fig = Figure(resolution = (1200, 500), fontsize = 32)
+fig = Figure(size = (1200, 500), fontsize = 32)
 ax = Axis(fig[1:6,1],
     xlabel = L"SLC (m)$\,$",
     ylabel = L"A(SLC) ($\times 10^{14} \: \mathrm{m}^2$)",

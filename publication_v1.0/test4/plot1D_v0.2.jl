@@ -29,7 +29,7 @@ for k in eachindex(tlaty)
     append!(usk1D_vec, vec(ulatyitp[mask]))
 end
 
-fig = Figure(resolution = (2150, 1500), fontsize = 40)
+fig = Figure(size = (2150, 1500), fontsize = 40)
 
 ax_uu = Axis(fig[1:3, 1:3], aspect = DataAspect())
 ax_et = Axis(fig[1:3, 4:9], xticklabelrotation = π/2)
@@ -89,7 +89,7 @@ save("plots/test4/1D_v0.3.png", fig)
 function anim_load()
     Hlim = (1e-8, 4e3)
     kobs = Observable(1)
-    fig = Figure(resolution = (1600, 1000), fontsize = 30)
+    fig = Figure(size = (1600, 1000), fontsize = 30)
     axs = [Axis(fig[1, j], title = @lift("t = $(t[$kobs]) ka"),
         aspect = DataAspect()) for j in 1:2]
     [hidedecorations!(ax) for ax in axs]
@@ -107,7 +107,7 @@ function anim_response()
     dHlims = (-2600, 2600)
     ulims = (-500, 500)
     kobs = Observable(1)
-    fig = Figure(resolution = (1600, 1000), fontsize = 30)
+    fig = Figure(size = (1600, 1000), fontsize = 30)
     vars = [deltaH, fip.out.u .+ fip.out.ue]
     axs = [Axis3(fig[1, j], title = @lift("t = $(t[$kobs]) ka,"*
     "  range = $(round.(extrema(vars[j][$kobs])))")) for j in 1:2]

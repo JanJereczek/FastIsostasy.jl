@@ -10,7 +10,7 @@ function simple_anim(path::String, target::String)
     kobs = Observable(1)
     u = @lift(fip.out.u[$kobs] + fip.out.ue[$kobs])
 
-    fig = Figure(resolution = (1200, 900), fontsize = 30)
+    fig = Figure(size = (1200, 900), fontsize = 30)
     with_theme(fig, theme_dark())
     ax = Axis3(fig[1, 1], title = @lift("t = $(round(seconds2years(fip.out.t[$kobs]))) yr") )
     hidedecorations!(ax)
@@ -62,7 +62,7 @@ function anim(path::String, target::String)
 
     xyticks = (-3e6:1e6:3e6, latexify(-3:1:3))
     zticks = [(-2e3:1e3:2e3, latexify(-2:1:2)), (-6e2:2e2:6e2, latexify(-6:2:6))]
-    fig = Figure(resolution = (1900, 900), fontsize = 30)
+    fig = Figure(size = (1900, 900), fontsize = 30)
     axs = [Axis3(fig[1, j], title = ttl, xticks = xyticks, yticks = xyticks,
         zticks = zticks[j]) for j in 1:2]
     colgap!(fig.layout, 5)

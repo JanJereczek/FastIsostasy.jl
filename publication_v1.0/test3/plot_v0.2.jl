@@ -56,7 +56,7 @@ function mainplot(n)
     xtvisible = [false, true, true]
     xtlabelsvisible = [false, true, true]
 
-    fig = Figure(resolution = (3200, 2000), fontsize = 58)
+    fig = Figure(size = (3200, 2000), fontsize = 58)
     ii = [3:6, 7:9, 10:12]
     axs = [Axis(fig[ii[i], j],
         yticksvisible = ytvisible[j], yticklabelsvisible = ytlabelsvisible[j],

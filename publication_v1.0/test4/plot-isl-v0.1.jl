@@ -79,7 +79,7 @@ function main(N; masktype="lgm")
         SK1Dmax[k] = maximum(elaty1D)
     end
 
-    fig = Figure(resolution = (2150, 2300), fontsize = 40)
+    fig = Figure(size = (2150, 2300), fontsize = 40)
     ax_uu = Axis(fig[1:3, 1:3], aspect = DataAspect())
     ax_et = Axis(fig[1:3, 4:9], xticklabelrotation = π/2)
     axbottom = [Axis(fig[i, j], aspect = DataAspect()) for j in [1:3, 4:6, 7:9],

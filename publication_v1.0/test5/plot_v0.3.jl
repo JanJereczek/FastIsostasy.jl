@@ -5,7 +5,7 @@ function main(; n=5)
     @load "../data/test5/n=$n.jld2" fip paraminv init_viscosity final_viscosity
 
     u = fip.out.u[end] + fip.out.ue[end]
-    fig = Figure(resolution = (1200, 1900), fontsize = 40)
+    fig = Figure(size = (1200, 1900), fontsize = 40)
     axs = [Axis(fig[i, j], aspect = DataAspect()) for j in 1:2, i in [2:4, 5:7, 8:10]]
     [ax.aspect = DataAspect() for ax in axs[1:4]]
     [hidedecorations!(ax) for ax in axs[1:4]]

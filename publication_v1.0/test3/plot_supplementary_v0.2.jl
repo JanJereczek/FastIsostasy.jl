@@ -57,7 +57,7 @@ function mainplot(n)
     xtvisible = [false, true, true]
     xtlabelsvisible = [false, true, true]
 
-    fig = Figure(resolution = (1000, 1200), fontsize = 30)
+    fig = Figure(size = (1000, 1200), fontsize = 30)
     ii = [3:6, 7:9, 10:12]
     nrows, ncols = 3, length(u_3DGIA)
     axs = [Axis(fig[ii[i], j],

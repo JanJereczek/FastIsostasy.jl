@@ -29,7 +29,7 @@ for k in eachindex(tlaty)
     append!(usk1D_vec, vec(ulatyitp[mask]))
 end
 
-fig = Figure(resolution = (2150, 1500), fontsize = 40)
+fig = Figure(size = (2150, 1500), fontsize = 40)
 
 ax_uu = Axis(fig[1:3, 1:3], aspect = DataAspect())
 ax_et = Axis(fig[1:3, 4:9], xticklabelrotation = π/2)

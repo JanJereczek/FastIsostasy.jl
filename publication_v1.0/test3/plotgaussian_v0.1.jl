@@ -22,7 +22,7 @@ function main(n::Int;  kernel = "cpu")
     xticks = (-3e6:1e6:3e6, num2latexstring.(-3:3))
     yticks = (-3e6:1e6:3e6, num2latexstring.(-3:3))
 
-    fig = Figure(resolution = (1200, 500), fontsize = 24)
+    fig = Figure(size = (1200, 500), fontsize = 24)
     axs = [Axis(fig[1, j], aspect = DataAspect(),
         xticks = xticks, yticks = yticks) for j in 1:nf]
     for k in 1:nf
