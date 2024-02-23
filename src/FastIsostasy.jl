@@ -89,7 +89,7 @@ export get_ϕ_mean_final     # from EnsembleKalmanProcesses.jl
 export analytic_solution
 
 # data loaders
-export load_dataset
+export load_dataset, get_greenintegrand_coeffs
 export load_etopo2022, bathymetry, load_wiens2022
 export load_lithothickness_pan2022, load_logvisc_pan2022
 export load_ice6gd

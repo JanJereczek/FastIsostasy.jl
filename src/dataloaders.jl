@@ -1,3 +1,5 @@
+const isos_data = "https://github.com/JanJereczek/isostasy_data"
+
 """
     load_dataset(name) → (dims), field, interpolator
 
@@ -47,7 +49,7 @@ end
 # Parameter fields
 #############################################################
 function load_oceansurfacefunction()
-    link = "https://github.com/JanJereczek/IsostasyData/raw/main/ocean_surface/dz=0.1m.jld2"
+    link = "$isos_data/raw/main/ocean_surface/dz=0.1m.jld2"
     tmp = Downloads.download(link, tempdir() *"/"* basename(link))
     @load "$tmp" z_support A_support
     z, A = collect(z_support), collect(A_support)
@@ -56,8 +58,7 @@ function load_oceansurfacefunction()
 end
 
 function load_bedmachine3(; var = "bed", T = Float64)
-    link = "https://github.com/JanJereczek/IsostasyData/raw/main/topography/"*
-        "BedMachineAntarctica-v3-sparse.nc"
+    link = "$isos_data/raw/main/topography/BedMachineAntarctica-v3-sparse.nc"
     tmp = Downloads.download(link, tempdir() *"/"* basename(link))
     ds = NCDataset(tmp, "r")
     var = T.(ds["$var"][:, :])
@@ -78,7 +79,7 @@ function bathymetry(Omega::ComputationDomain)
 end
 
 function load_ice6gd(; var = "IceT")
-    link = "https://github.com/JanJereczek/IsostasyData/raw/main/ice_history/"*
+    link = "$isos_data/raw/main/ice_history/"*
         "ICE6G_D/ICE6GD_$var.nc"
     tmp = Downloads.download(link, tempdir() *"/"* basename(link))
     ds = NCDataset(tmp, "r")
@@ -95,8 +96,7 @@ function load_ice6gd(; var = "IceT")
 end
 
 function load_wiens2022(; extrapolation_bc = Throw())
-    link = "https://github.com/JanJereczek/IsostasyData/raw/main/parameter_fields/"*
-        "viscosity/wiens2022.nc"
+    link = "$isos_data/raw/main/parameter_fields/viscosity/wiens2022.nc"
     tmp = Downloads.download(link, tempdir() *"/"* basename(link))
     ds = NCDataset(tmp, "r")
     x, y, z = copy(ds["x"][:]), copy(ds["y"][:]), copy(ds["z"][:])
@@ -108,8 +108,7 @@ function load_wiens2022(; extrapolation_bc = Throw())
 end
 
 function load_lithothickness_pan2022()
-    link = "https://raw.githubusercontent.com/JanJereczek/IsostasyData/main/"*
-        "parameter_fields/lithothickness/pan2022.llz"
+    link = "$isos_data/raw/main/parameter_fields/lithothickness/pan2022.llz"
     tmp = Downloads.download(link, tempdir() *"/"* basename(link))
     data, head = readdlm(tmp, header = true)
     Lon_vec, Lat_vec, T_vec = data[:, 1], data[:, 2], data[:, 3]
@@ -126,7 +125,7 @@ function load_lithothickness_pan2022()
 end
 
 function load_logvisc_pan2022()
-    link = "https://github.com/JanJereczek/IsostasyData/raw/main/parameter_fields/viscosity/pan2022.nc"
+    link = "$isos_data/raw/main/parameter_fields/viscosity/pan2022.nc"
     tmp = Downloads.download(link, tempdir() *"/"* basename(link))
     ds = NCDataset(tmp, "r")
     lon = copy(ds["lon"][:])
@@ -169,8 +168,7 @@ end
 
 function load_spada2011(case)
     theta, t = spada_dims()
-    link = "https://github.com/JanJereczek/IsostasyData/raw/main/model_outputs/"*
-        "Spada-2011/$case.jld2"
+    link = "$isos_data/raw/main/model_outputs/Spada-2011/$case.jld2"
     tmp = Downloads.download(link, tempdir() *"/"* basename(link))
     @load "$tmp" X
     if occursin("n_", case)
@@ -180,8 +178,7 @@ function load_spada2011(case)
 end
 
 function load_latychev_test3(; case = "E0L1V1")
-    link = "https://github.com/JanJereczek/IsostasyData/raw/main/model_outputs/"*
-        "SwierczekLatychev-2023/test3/$case.nc"
+    link = "$isos_data/raw/main/model_outputs/SwierczekLatychev-2023/test3/$case.nc"
     tmp = Downloads.download(link, tempdir() *"/"* basename(link))
     ds = NCDataset(tmp, "r")
     r = copy(ds["r"][:])
@@ -237,9 +234,17 @@ end
 Return the load response coefficients with type `T`.
 Reference: Deformation of the Earth by surface Loads, Farell 1972, table A3.
 """
-function get_greenintegrand_coeffs(T::Type;
-    file = joinpath(@__DIR__, "input/elasticgreencoeffs_farrell1972.jld2"))
-    data = jldopen(file)
+function get_greenintegrand_coeffs(T::Type; file_is_remote = true,
+    remote_path = "$isos_data/raw/main/tools/green_elastic/elasticgreencoeffs_farrell1972.jld2",
+    local_path = nothing)
+
+    if file_is_remote
+        tmp = Downloads.download(remote_path, tempdir() *"/"* basename(remote_path))
+    else
+        tmp = local_path
+    end
+    data = jldopen(tmp)
+    
     # rm is column 1 converted to meters (and some extra factor)
     # GE /(10^12 rm) is vertical displacement in meters (applied load is 1kg)
     # GE corresponds to column 2
