@@ -49,8 +49,8 @@ end
 # Parameter fields
 #############################################################
 function load_oceansurfacefunction()
-    link = "$isos_data/raw/main/ocean_surface/dz=0.1m.jld2"
-    tmp = Downloads.download(link, tempdir() *"/"* basename(link))
+    link = "$isos_data/raw/main/tools/ocean_surface/dz=0.1m.jld2"
+    tmp = Downloads.download(link)
     @load "$tmp" z_support A_support
     z, A = collect(z_support), collect(A_support)
     itp = linear_interpolation(z, A)    # , extrapolation_bc = Line()
@@ -79,8 +79,7 @@ function bathymetry(Omega::ComputationDomain)
 end
 
 function load_ice6gd(; var = "IceT")
-    link = "$isos_data/raw/main/ice_history/"*
-        "ICE6G_D/ICE6GD_$var.nc"
+    link = "$isos_data/raw/main/ice_history/ICE6G_D/ICE6GD_$var.nc"
     tmp = Downloads.download(link, tempdir() *"/"* basename(link))
     ds = NCDataset(tmp, "r")
     t, lon, lat = copy(ds["Time"][:]), copy(ds["Lon"][:]), copy(ds["Lat"][:])
@@ -244,7 +243,7 @@ function get_greenintegrand_coeffs(T::Type; file_is_remote = true,
         tmp = local_path
     end
     data = jldopen(tmp)
-    
+
     # rm is column 1 converted to meters (and some extra factor)
     # GE /(10^12 rm) is vertical displacement in meters (applied load is 1kg)
     # GE corresponds to column 2
