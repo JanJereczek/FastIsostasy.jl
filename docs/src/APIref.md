@@ -21,7 +21,7 @@ solve!(::FastIsoProblem)
 init
 step!
 update_diagnostics!
-dudt_isostasy!
+lv_elva!
 update_elasticresponse!
 ```
 
