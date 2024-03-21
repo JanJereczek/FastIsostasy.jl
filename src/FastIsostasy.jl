@@ -46,6 +46,7 @@ include("mechanics.jl")
 include("inversion.jl")
 include("analytic_solutions.jl")
 include("dataloaders.jl")
+include("elra.jl")
 
 # convolution.jl
 export InplaceConvolution
@@ -61,9 +62,9 @@ export years2seconds, seconds2years, m_per_sec2mm_per_yr
 export latlon2stereo, stereo2latlon, lon360tolon180
 export reinit_structs_cpu, meshgrid, kernelcollect
 
-export get_r, gauss_distr, generate_gaussian_field, samesize_conv, blur
+export get_r, gauss_distr, generate_gaussian_field, samesize_conv, samesize_conv!, blur
 export uniform_ice_cylinder, stereo_ice_cylinder, stereo_ice_cap
-export write_out!, remake!, savefip, null, not
+export write_out!, remake!, savefip, null, not, cudainfo
 
 # adaptive_ocean.jl
 export OceanSurfaceChange
@@ -75,8 +76,11 @@ export columnanom_litho!, columnanom_mantle!, update_seasurfaceheight!, total_vo
 export update_V_af!, update_V_den!, update_V_pov!, height_above_floatation
 
 # mechanics.jl
-export init, solve!, step!, dudt_isostasy!, update_diagnostics!
+export init, solve!, step!, lv_elva!, update_diagnostics!
 export maxwelltime_scaling!, compute_shearmodulus, get_rigidity, load_prem
+export get_flexural_lengthscale, get_kei, calc_kei_value, calc_viscous_green
+export update_deformation_rhs!
+export build_greenintegrand, get_quad_coeffs, get_elasticgreen, get_geoidgreen
 
 # integrators.jl
 export simple_euler!, SimpleEuler
