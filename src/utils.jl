@@ -115,6 +115,16 @@ function samesize_conv(X::M, ipc::InplaceConvolution{T, C, FP, IP},
         Omega.j1-Omega.convo_offset:Omega.j2-Omega.convo_offset)
 end
 
+function samesize_conv!(inout::M, convo_out::M, X::M,
+    ipc::InplaceConvolution{T, C, FP, IP},
+    Omega::ComputationDomain{T, L, M}) where {T<:AbstractFloat, L<:Matrix{T},
+    M<:KernelMatrix{T}, C<:ComplexMatrix{T}, FP<:ForwardPlan{T}, IP<:InversePlan{T}}
+    ipc(convo_out, X)
+    inout .= view(convo_out,
+        Omega.i1+Omega.convo_offset:Omega.i2+Omega.convo_offset,
+        Omega.j1-Omega.convo_offset:Omega.j2-Omega.convo_offset)
+    apply_bc!(inout, Omega.bc_matrix, Omega.nbc)
+end
 
 # function samesize_conv(X::CuMatrix{T}, Y::CuMatrix{T}, Omega::ComputationDomain{T, L, M}) where
 #     {T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}}
@@ -178,20 +188,30 @@ function savefip(filename, fip; T = Float32)
     append3D2nc!(ds, T, fip.out.canomload, "canomload")
     append3D2nc!(ds, T, fip.out.canomlitho, "canomlitho")
     append3D2nc!(ds, T, fip.out.canommantle, "canommantle")
-    close(ds)
+
+    append2D2nc!(ds, T, log10.(fip.out.eta_eff), "log10 effective viscosity")
+    append2D2nc!(ds, T, fip.out.maskactive, "active mask")
     
+    close(ds)
+
+end
+
+function append1D2nc!(ds, T, Z, var::String)
+    ncZ = defVar(ds, var, T, ("t"))
+    ncZ[:] = T.(Z)
+    return nothing
+end
+
+function append2D2nc!(ds, T, Z, var::String)
+    ncZ = defVar(ds, var, T, ("x", "y"))
+    ncZ[:, :] = T.(Z)
+    return nothing
 end
 
 function append3D2nc!(ds, T, Z, var::String)
     Z = cat(Z..., dims = 3)
     ncZ = defVar(ds, var, T, ("x", "y", "t"))
     ncZ[:, :, :] = T.(Z)
-    return nothing
-end
-
-function append1D2nc!(ds, T, Z, var::String)
-    ncZ = defVar(ds, var, T, ("t"))
-    ncZ[:] = T.(Z)
     return nothing
 end
 
@@ -367,6 +387,7 @@ function blur(X::AbstractMatrix, Omega::ComputationDomain, level::Real)
     T = eltype(X)
     sigma = diagm([(level * Omega.Wx)^2, (level * Omega.Wy)^2])
     kernel = T.(generate_gaussian_field(Omega, 0.0, [0.0, 0.0], 1.0, sigma))
+    kernel ./= sum(kernel)
     # return copy(samesize_conv(Omega.arraykernel(kernel), Omega.arraykernel(X), Omega))
     return samesize_conv(kernel, X, Omega)
 end
