@@ -1,4 +1,4 @@
-using NCDatasets, DelimitedFiles, CairoMakie, LinearAlgebra
+using NCDatasets, DelimitedFiles, LinearAlgebra
 include("../../test/helpers/compute.jl")
 
 function load_topo(file, nlon, nlat)
@@ -10,14 +10,17 @@ function load_topo(file, nlon, nlat)
 end
 
 function load_latychev_topo(; case = "3D")
+    dir = @__DIR__
+
     if case == "1D"
-        file = "../data/Latychev/Topography/Topo_REF/T_000"
+        file = "$dir/../../data/Latychev/Topography/Topo_REF/T_000"
     elseif case == "3D"
-        file = "../data/Latychev/Topography/Topo_SMD/T_000"
+        file = "$dir/../../data/Latychev/Topography/Topo_SMD/T_000"
     else
         error("Provided case does not exist.")
     end
-    lonlat256, _ = readdlm("../data/Latychev/ICE6G/gl256_LatLon", header = true)
+    
+    lonlat256, _ = readdlm("$dir/../../data/Latychev/ICE6G/gl256_LatLon", header = true)
     lon256 = reshape(lonlat256[:, 1], 512, 256)
     dlon256 = mean(diff(lon256[:, 1]))
     dlon512 = dlon256/2
@@ -29,6 +32,7 @@ function load_latychev_topo(; case = "3D")
     return (lon, lat), topo, itp
 end
 
+# using CairoMakie
 # nlon, nlat = 1024, 512
 # lon = -180:dlon512:180-dlon512
 # lat = -90+dlon512/2:dlon512:90-dlon512/2
