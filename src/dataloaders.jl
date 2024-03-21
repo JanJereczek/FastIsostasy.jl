@@ -22,8 +22,11 @@ Following options are available for model results:
  - "LatychevICE6G"
 """
 function load_dataset(name::String; kwargs...)
+    ############################## Masks ######################################
+    if name == "Antarctic3RegionMask"
+        return load_antarctic_3regionmask()
     ########################## Param and forcing fields #######################
-    if name == "OceanSurfaceFunctionETOPO2022"
+    elseif name == "OceanSurfaceFunctionETOPO2022"
         return load_oceansurfacefunction(; kwargs...)
     elseif name == "BedMachine3"
         return load_bedmachine3(; kwargs...)
@@ -43,6 +46,25 @@ function load_dataset(name::String; kwargs...)
     elseif name == "LatychevICE6G"
         return load_laty_ICE6G(; kwargs...)
     end
+end
+
+
+
+#############################################################
+# Mask
+#############################################################
+
+function load_antarctic_3regionmask()
+    link = "$isos_data/raw/main/tools/masks/ANT-16KM_BASINS-nasa.nc"
+    tmp = Downloads.download(link, tempdir() *"/"* basename(link))
+    ds = NCDataset(tmp, "r")
+    x = copy(ds["xc"][:])
+    y = copy(ds["yc"][:])
+    mask = copy(ds["mask_regions"][:, :])
+    close(ds)
+
+    mask_itp = linear_interpolation((x, y), mask, extrapolation_bc = Flat())
+    return (x, y), mask, mask_itp
 end
 
 #############################################################
@@ -95,7 +117,7 @@ function load_ice6gd(; var = "IceT")
 end
 
 function load_wiens2022(; extrapolation_bc = Throw())
-    link = "$isos_data/raw/main/parameter_fields/viscosity/wiens2022.nc"
+    link = "$isos_data/raw/main/earth_structure/viscosity/wiens2022.nc"
     tmp = Downloads.download(link, tempdir() *"/"* basename(link))
     ds = NCDataset(tmp, "r")
     x, y, z = copy(ds["x"][:]), copy(ds["y"][:]), copy(ds["z"][:])
@@ -107,7 +129,7 @@ function load_wiens2022(; extrapolation_bc = Throw())
 end
 
 function load_lithothickness_pan2022()
-    link = "$isos_data/raw/main/parameter_fields/lithothickness/pan2022.llz"
+    link = "$isos_data/raw/main/earth_structure/lithothickness/pan2022.llz"
     tmp = Downloads.download(link, tempdir() *"/"* basename(link))
     data, head = readdlm(tmp, header = true)
     Lon_vec, Lat_vec, T_vec = data[:, 1], data[:, 2], data[:, 3]
@@ -124,7 +146,7 @@ function load_lithothickness_pan2022()
 end
 
 function load_logvisc_pan2022()
-    link = "$isos_data/raw/main/parameter_fields/viscosity/pan2022.nc"
+    link = "$isos_data/raw/main/earth_structure/viscosity/pan2022.nc"
     tmp = Downloads.download(link, tempdir() *"/"* basename(link))
     ds = NCDataset(tmp, "r")
     lon = copy(ds["lon"][:])
@@ -136,6 +158,20 @@ function load_logvisc_pan2022()
     println("returning: (lon180, lat, r), eta (in log10 space), interpolator")
     return (lon, lat, r), logvisc, logvisc_itp
 end
+
+# Preliminary Reference Earth Model
+"""
+    load_prem()
+
+Load Preliminary Reference Earth Model (PREM) from Dzewonski and Anderson (1981).
+"""
+function load_prem()
+    # radius, depth, density, Vpv, Vph, Vsv, Vsh, eta, Q-mu, Q-kappa
+    M = readdlm(joinpath(@__DIR__, "input/PREM_1s.csv"), ',')[:, 1:7]
+    M .*= 1e3
+    return ReferenceEarthModel([M[:, j] for j in axes(M, 2)]...)
+end
+
 
 #############################################################
 # Model outputs
@@ -250,18 +286,17 @@ function get_greenintegrand_coeffs(T::Type; file_is_remote = true,
     return T.(data["rm"]), T.(data["GE"])
 end
 
-#############################################################
-# Preliminary Reference Earth Model
-#############################################################
 
 """
-    load_prem()
+    get_greenintegrand_coeffs(T)
 
-Load Preliminary Reference Earth Model (PREM) from Dzewonski and Anderson (1981).
+Return the load response coefficients with type `T`.
+Reference: Deformation of the Earth by surface Loads, Farell 1972, table A3.
 """
-function load_prem()
-    # radius, depth, density, Vpv, Vph, Vsv, Vsh, eta, Q-mu, Q-kappa
-    M = readdlm(joinpath(@__DIR__, "input/PREM_1s.csv"), ',')[:, 1:7]
-    M .*= 1e3
-    return ReferenceEarthModel([M[:, j] for j in axes(M, 2)]...)
+function load_viscous_kelvin_function(T::Type)
+    remote_path = "$isos_data/raw/main/tools/green_viscous/tabulated_kelvin_function_elra.txt"
+    tmp = Downloads.download(remote_path, tempdir() *"/"* basename(remote_path))
+    data = T.(readdlm(tmp, ','))
+    return data[:, 1], data[:, 2]   # rn, kei
 end
+
