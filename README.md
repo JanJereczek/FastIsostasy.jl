@@ -27,3 +27,7 @@ The animation above depicts:
 - The bedrock displacement resulting from it.
 
 This computation is performed with $N_{x} = N_{y} = 350$. On a modern GPU of intermediate performance, the computation is a matter of minutes and only requires few lines of code. For more details, see the [docs](https://janjereczek.github.io/FastIsostasy.jl/dev/).
+
+## Publications
+
+For more information on the model devlopment and validation, please check out our [preprint](https://egusphere.copernicus.org/preprints/2023/egusphere-2023-2869/#discussion).
