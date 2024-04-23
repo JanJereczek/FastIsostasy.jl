@@ -436,6 +436,7 @@ from solving a [`FastIsoProblem`](@ref).
 """
 mutable struct DenseOutputs{T<:AbstractFloat, M<:Matrix{T}} <: Outputs
     t::Vector{T}
+    bsl::Vector{T}
     u::Vector{M}
     dudt::Vector{M}
     ue::Vector{M}
@@ -472,7 +473,7 @@ function DenseOutputs(Omega::ComputationDomain{T, L, M}, t_out::Vector{T}, eta_e
     canomload = [copy(placeholder) for t in t_out]
     canomlitho = [copy(placeholder) for t in t_out]
     canommantle = [copy(placeholder) for t in t_out]
-    return DenseOutputs(t_out, u, dudt, ue, b, geoid, seasurfaceheight, maskgrounded,
+    return DenseOutputs(t_out, similar(t_out), u, dudt, ue, b, geoid, seasurfaceheight, maskgrounded,
         Hice, Hwater, canomfull, canomload, canomlitho, canommantle, 0.0, eta_eff, maskactive)
 end
 

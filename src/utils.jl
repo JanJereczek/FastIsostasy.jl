@@ -141,11 +141,11 @@ If the load is updated externally, the user is responsible for writing results.
 """
 function write_out!(fip::FastIsoProblem, k::Int)
     if fip.opts.internal_loadupdate
+        fip.out.bsl[k] = fip.now.bsl
         fip.out.u[k] .= copy(Array(fip.now.u))
         fip.out.dudt[k] .= copy(Array(fip.now.dudt))
         fip.out.ue[k] .= copy(Array(fip.now.ue))
         fip.out.b[k] .= copy(Array(fip.now.b))
-        # fip.out.bsl[k] .= copy(fip.now.bsl)
         fip.out.geoid[k] .= copy(Array(fip.now.geoid))
         fip.out.seasurfaceheight[k] .= copy(Array(fip.now.seasurfaceheight))
         fip.out.maskgrounded[k] .= copy(Array(fip.now.maskgrounded))
@@ -175,6 +175,12 @@ function savefip(filename, fip; T = Float32)
     ncx[:] = x
     ncy[:] = y
     nct[:] = seconds2years.(t)
+
+    append1D2nc!(ds, T, fip.out.bsl, "bsl")
+
+    append2D2nc!(ds, T, log10.(fip.out.eta_eff), "log10 effective viscosity")
+    append2D2nc!(ds, T, fip.out.maskactive, "active mask")
+
     append3D2nc!(ds, T, fip.out.u, "u")
     append3D2nc!(ds, T, fip.out.dudt, "dudt")
     append3D2nc!(ds, T, fip.out.ue, "ue")
@@ -188,16 +194,13 @@ function savefip(filename, fip; T = Float32)
     append3D2nc!(ds, T, fip.out.canomload, "canomload")
     append3D2nc!(ds, T, fip.out.canomlitho, "canomlitho")
     append3D2nc!(ds, T, fip.out.canommantle, "canommantle")
-
-    append2D2nc!(ds, T, log10.(fip.out.eta_eff), "log10 effective viscosity")
-    append2D2nc!(ds, T, fip.out.maskactive, "active mask")
     
     close(ds)
 
 end
 
 function append1D2nc!(ds, T, Z, var::String)
-    ncZ = defVar(ds, var, T, ("t"))
+    ncZ = defVar(ds, var, T, ("t",))
     ncZ[:] = T.(Z)
     return nothing
 end
@@ -545,7 +548,7 @@ function remake!(fip::FastIsoProblem)
     fip.now.countupdates = 0
     fip.now.columnanoms = ColumnAnomalies(fip.Omega)
 
-    out = DenseOutputs(fip.Omega, fip.out.t)
+    out = SparseOutputs(fip.Omega, fip.out.t)
     fip.out.u = out.u
     fip.out.ue = out.ue
     return nothing
