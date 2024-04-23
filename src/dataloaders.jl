@@ -75,7 +75,7 @@ function load_oceansurfacefunction()
     tmp = Downloads.download(link)
     @load "$tmp" z_support A_support
     z, A = collect(z_support), collect(A_support)
-    itp = linear_interpolation(z, A)    # , extrapolation_bc = Line()
+    itp = linear_interpolation(z, A, extrapolation_bc = Flat())    # 
     return z, A, itp
 end
 
