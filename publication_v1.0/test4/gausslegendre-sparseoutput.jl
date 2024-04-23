@@ -1,7 +1,10 @@
 using FastIsostasy, NCDatasets, DelimitedFiles, CairoMakie, JLD2
 
-const DIR = "../data/test4/ICE6G"
-const FILE = "newconv-1D-interactivesl=true-bsl=external-N=350"
+init()
+dir = @__DIR__
+DIR = "$dir/../../data/test4/ICE6G"
+# const FILE = "newconv-1D-interactivesl=true-bsl=external-N=350"
+FILE = "1D-interactivesl=true-maskbsl=true-N=350"
 
 function load_nc()
     ds = NCDataset("$DIR/$FILE.nc")
@@ -36,11 +39,6 @@ function argsmallest(A::AbstractArray{T,N}, n::Integer) where {T,N}
     return CartesianIndices(A)[ind]
 end
 
-function load_omega()
-    @load "$DIR/$FILE.jld2" fip
-    return Float32.(fip.Omega.Lon), Float32.(fip.Omega.Lat)
-end
-
 function save2txt(filename, ks)
     ds = NCDataset(filename)
     u, b, ssh, h = copy(ds["u"][:, :, ks]), copy(ds["b"][:, :, ks]),
@@ -50,7 +48,7 @@ function save2txt(filename, ks)
     for k in eachindex(t)
         data = hcat(vec(Lon), vec(Colat), vec(u[:, :, k]), vec(b[:, :, k]), vec(ssh[:, :, k]),
             vec(h[:, :, k]))
-        open("t=$(t[k]).txt", "w") do io
+        open("$DIR/gauss-legendre/t=$(t[k]).txt", "w") do io
             writedlm(io, data)
         end
     end
@@ -76,7 +74,8 @@ function main()
 
     t, u, b, ssh, Hice = load_nc()
     nt = length(t)
-    Lon, Lat = load_omega()
+    Omega = ComputationDomain(3500e3, 3500e3, 350, 350)
+    Lon, Lat = Omega.Lon, Omega.Lat
     Lon[Lon .< 0] = 360 .+ Lon[Lon .< 0]
     maxlat = maximum(Lat)
     j1 = findfirst(lat .< maxlat)
@@ -104,7 +103,7 @@ function main()
         end
     end
 
-    ds = NCDataset("$DIR/GaussLegendre-$FILE.nc", "c")
+    ds = NCDataset("$DIR/gauss-legendre/$FILE.nc", "c")
     defDim(ds, "lon", length(lon))
     defDim(ds, "colat", nlatsparse)
     defDim(ds, "t", nt)
@@ -126,4 +125,4 @@ main()
 
 ks = [64, 74, 82, 90, 98]   # -20, -15, -13, -11, -9
 ks = [82, 98]
-save2txt("$DIR/GaussLegendre-$FILE.nc", ks)
+save2txt("$DIR/gauss-legendre/$FILE.nc", ks)

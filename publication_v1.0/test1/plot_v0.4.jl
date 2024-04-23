@@ -10,12 +10,18 @@ function linregression(x, y)
     return inv(X' * X) * X' * y
 end
 
+function get_runtime(filename)
+    @load "$filename" fip
+    return fip.out.computation_time
+end
+
 function main()
 
     H, R = 1e3, 1000e3
     N = 256
-    filename = "Nx=$(N)_Ny=$(N)_cpu_interactive_sl=false-dense"
-    @load "../data/test1/$filename.jld2" fip Hice
+    filename = "Nx=$(N)_Ny=$(N)_cpu"
+    dir = "$(@__DIR__)/../../data/test1"
+    @load "$dir/$filename.jld2" fip
     Omega, c, p, t_out = fip.Omega, fip.c, fip.p, fip.out.t
 
     ftsize = 54
@@ -29,7 +35,7 @@ function main()
 
     t_plot_yr = [100.0, 500.0, 1500.0, 5000.0, 10_000.0, 50_000.0]
     t_plot = years2seconds.(t_plot_yr)
-    # colors = [:gray80, :gray65, :gray50, :gray35, :gray20, :gray5]
+    # colors = [(:gray70, 0.5), :gray65, :gray50, :gray35, :gray20, :gray5]
     cmap = cgrad(janjet, length(t_plot), categorical = true)
 
     # cmap = cgrad(:darkrainbow, length(t_plot), categorical = true)
@@ -45,11 +51,13 @@ function main()
     maxerror_t = fill(Inf, length(t_plot))
     meanerror_t = fill(Inf, length(t_plot))
     
-    poly!(ax3, Point2f[(0, 0), (1e6, 0), (1e6, 1e2), (0, 1e2)], color = :skyblue1,
-    label = L"Ice $\,$")
+    poly!(ax3, Point2f[(0, 0), (1e6, 0), (1e6, 4e1), (0, 4e1)], color = :skyblue1,
+        label = L"ice (height $\,$")
+    poly!(ax3, Point2f[(1e10, 1e10), (1e10, 1e10), (1e10, 1e10), (1e10, 1e10)],
+        color = :transparent, label = L"scaled 1:25) $\,$")
     poly!(ax3, Point2f[(1.2e6, -500), (1.5e6, -500),
-        (1.5e6, 500), (1.2e6, 500)], color = :gray80,
-        label = L"Forebulge $\,$")
+        (1.5e6, 500), (1.2e6, 500)], color = (:gray70, 0.5),
+        label = L"forebulge $\,$")
 
     cft = 0.9
     tft = 0.8
@@ -85,10 +93,10 @@ function main()
     lines!(ax3, x, fill(1e8, length(x)), label = L"analytic $\,$", color = :gray20,
         linewidth = lwidth, linestyle = Linestyle([0.5, 1.0, 1.5, 2.5]))
 
-    axislegend(ax3, position = :rb, width = 320,
+    axislegend(ax3, position = :rb, width = 340,
         linepoints = [Point2f(0, 0.5), Point2f(1.5, 0.5)], patchlabelgap = 20, labelsize = cft*ftsize)
     xlims!(ax3, (0, 1.8e6))
-    ylims!(ax3, (-310, 110))
+    ylims!(ax3, (-310, 50))
 
 
     ax4 = Axis(fig[1, 2], title = L"(b) $\,$", xlabel = L"Time (kyr) $\,$",
@@ -109,8 +117,8 @@ function main()
     t_end = years2seconds(t_plot[end])
     for n in eachindex(Nvec)
         Ni = Nvec[n]
-        fname = "Nx=$(Ni)_Ny=$(Ni)_cpu_interactive_sl=false-dense"
-        @load "../data/test1/$fname.jld2" fip
+        fname = "Nx=$(Ni)_Ny=$(Ni)_cpu"
+        @load "$dir/$fname.jld2" fip
         Omega, c, p, t_out = fip.Omega, fip.c, fip.p, fip.out.t
 
         ii, jj = slice_along_x(Omega)
@@ -170,11 +178,9 @@ function main()
         kernel = kernels[k]
         for j in eachindex(Nvec)
             N = Nvec[j]
-            fname = "Nx=$(N)_Ny=$(N)_$(kernel)_interactive_sl=false-dense"
-            @load "../data/test1/$fname.jld2" fip
-
-            runtime[k][j] = fip.out.computation_time
-            delta_x[k][j] = 2*fip.Omega.Wx * 1e-3 / N
+            fname = "Nx=$(N)_Ny=$(N)_$(kernel)"
+            runtime[k][j] = get_runtime("../data/test1/$fname.jld2")
+            delta_x[k][j] = NaN
         end
         scatterlines!(ax6, Nvec, runtime[k], label = L"%$kernel $\,$", linewidth = lwidth, markersize = msize)
     end

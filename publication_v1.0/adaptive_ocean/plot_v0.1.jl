@@ -1,5 +1,5 @@
 using FastIsostasy, CairoMakie
-include("../helpers.jl")
+include("../helpers_plot.jl")
 
 osc = OceanSurfaceChange()
 z = -150:0.1:70
@@ -13,15 +13,15 @@ zvec = zeros(nV)
 osc = OceanSurfaceChange()
 for i in 1:nV
     osc(-dV)
-    zvec[i] = osc.zk
+    zvec[i] = osc.z_k
 end
 hA0vec = Vvec ./ osc.A_pd
 
 lw = 5
 fig = Figure(size = (1200, 500), fontsize = 32)
 ax = Axis(fig[1:6,1],
-    xlabel = L"SLC (m)$\,$",
-    ylabel = L"A(SLC) ($\times 10^{14} \: \mathrm{m}^2$)",
+    xlabel = L"$s$ (m)",
+    ylabel = L"$A^\mathrm{o}(s)$ ($ 10^{14} \: \mathrm{m}^2$)",
     xticks = latexticks(-150:50:100),
     yticks = ((3.4:0.1:3.8) .* 1e14, latexify(3.4:0.1:3.8)),
 )
@@ -32,8 +32,8 @@ lines!(ax, z, srf, linewidth = lw, color = :orange)
 ax2col = :red #:gray60
 ax = Axis(fig[1:6, 2],
     yaxisposition = :right,
-    xlabel = L"$\Delta V$ ($\times 10^{16} \: \mathrm{m}^3$)",
-    ylabel = L"SLC (m) $\,$",
+    xlabel = L"$\Delta V$ ($10^{16} \: \mathrm{m}^3$)",
+    ylabel = L"$s$ (m)",
     xticks = ( (-4:1:0) .* 1e16, latexify(-4:1:0)),
     yticks = latexticks(-120:20:0))
 lines!(ax, Vvec, hA0vec, linewidth = lw, label = L"Fixed boundaries $\,$")

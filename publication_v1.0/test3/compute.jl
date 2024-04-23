@@ -44,7 +44,7 @@ end
 cases = ["gaussian_lo_D", "gaussian_hi_D", "gaussian_lo_η", "gaussian_hi_η", "no_litho",
     "ref", "homogeneous"]
 for n in 7:7
-    for case in cases[7:7]
+    for case in cases[1:4]
         main(n, case, dense_out = true)
     end
 end

@@ -3,8 +3,8 @@ using JLD2, NCDatasets, CairoMakie, Interpolations, DelimitedFiles
 include("../helpers_computation.jl")
 include("../helpers_plot.jl")
 
-function load_elva_displacement(N, isl)
-    ds = NCDataset("../data/test4/ICE6G/1D-interactivesl=$isl-maskbsl=true-N=$N.nc", "r")
+function load_elva_displacement(N)
+    ds = NCDataset("../data/test4/ICE6G/1D-interactivesl=true-maskbsl=true-N=$N.nc", "r")
     u = ds["u"][:, :, :] + ds["ue"][:, :, :]
     close(ds)
     return u
@@ -16,11 +16,11 @@ function load_lvelva_displacement(N)
     u = ds["u"][:, :, :] + ds["ue"][:, :, :]
     mask = ds["active mask"][:, :]
     Hice = ds["Hice"][:, :, :]
-    return t, u, mask, Hice
+    return t, u, Bool.(mask), Hice
 end
 
-function load_elra_displacement(case, N)
-    ds = NCDataset("../data/test4/ICE6G/$case-interactivesl=false-bsl=external-N=$N.nc", "r")
+function load_elra_displacement(N)
+    ds = NCDataset("../data/test4/ICE6G/elra-interactivesl=true-maskbsl=true-N=$N.nc", "r")
     u = ds["u"][:, :, :] + ds["ue"][:, :, :]
     close(ds)
     return u
@@ -28,9 +28,8 @@ end
 
 function main(case, N)
     t, u_lvelva, mask, Hice = load_lvelva_displacement(N)
-    u_elva = load_elva_displacement(N, true)
-    # u_elva_isl = load_elva_displacement(N, true)
-    u_elra = load_elra_displacement("elra", N)
+    u_elva = load_elva_displacement(N)
+    u_elra = load_elra_displacement(N)
     (_, _, tlaty), _, itp = load_latychev2023_ICE6G(case = "3D")
     (_, _, _), _, itp1D = load_latychev2023_ICE6G(case = "1D")
 
@@ -38,7 +37,6 @@ function main(case, N)
     Lon, Lat = Omega.Lon, Omega.Lat
     klgm = argmax([mean(H) for H in eachslice(Hice, dims = 3)])
     lgm = ((Hice[:, :, klgm] .> 1) .|| (Omega.R .< 500e3)) .&& (Omega.Y .> -2_400e3)
-    mask = mask .> 0.5
     tlaty = tlaty[vcat(1:11, [13, 15, 16, 17, 18, 20, 22, 24])]
 
     elra_mean = fill(Inf, length(tlaty))
@@ -198,7 +196,7 @@ function main(case, N)
 
     axs[3].title = L"(c) ELVA, $t = %$(Int(round(tlaty[k] ./ 1e3)))$ kyr"
     axs[4].title = L"(d) SK3D, $t = %$(Int(round(tlaty[k] ./ 1e3)))$ kyr"
-    axs[5].title = L"(e) (SK3D $-$ ELVA)"
+    axs[5].title = L"(e) (SK3D $-$ ELVA), $t = %$(Int(round(tlaty[k] ./ 1e3)))$ kyr"
 
     k = argmax(lvelva_max)
     k_fastiso = argmin( (t .- tlaty[k]) .^ 2 )
@@ -218,7 +216,7 @@ function main(case, N)
 
     axs[6].title = L"(f) LV-ELVA, $t = %$(Int(round(tlaty[k] ./ 1e3)))$ kyr"
     axs[7].title = L"(g) SK3D, $t = %$(Int(round(tlaty[k] ./ 1e3)))$ kyr"
-    axs[8].title = L"(h) (SK3D $-$ LV-ELVA)"
+    axs[8].title = L"(h) (SK3D $-$ LV-ELVA), $t = %$(Int(round(tlaty[k] ./ 1e3)))$ kyr"
 
     [hidedecorations!(ax) for ax in axbottom]
     Colorbar(fig[10, 1:3], hmu, label = L"Vertical displacement (m) $\,$", vertical = false,
@@ -233,7 +231,7 @@ function main(case, N)
     elem_2 = LineElement(color = :gray50, linewidth = 4)
     Legend(fig[10, 4:6],
         [elem_0, elem_0, elem_1, elem_2],
-        ["", "", L"Boundary of active region $\,$", L"LGM extent of AIS $\,$"],
+        ["", "", L"Boundary of active mask $\,$", L"LGM extent of AIS $\,$"],
         patchsize = (35, 35), rowgap = 10, framevisible = false)
 
     rowgap!(fig.layout, 9, -30.0)

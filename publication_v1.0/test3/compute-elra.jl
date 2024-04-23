@@ -11,7 +11,7 @@ function main(n::Int)
     W = T(3000e3)               # half-length of the square domain (m)
     Omega = ComputationDomain(W, n)
     c = PhysicalConstants(rho_uppermantle = 3.6e3)
-    p = LayeredEarth(Omega, tau = years2seconds(3e3), layer_boundaries = [150e3, 600e3])
+    p = LayeredEarth(Omega, tau = years2seconds(3e3), layer_boundaries = [100e3, 600e3])
     t_out = years2seconds.( vcat(0.0:1_000:5_000, 10_000:5_000:50_000) )
 
     R = T(1000e3)               # ice disc radius (m)
@@ -32,6 +32,7 @@ function main(n::Int)
     filename = "elra_Nx$(Omega.Nx)_Ny$(Omega.Ny)"
     path = "$dir/../../data/test3/$filename"
     @save "$path.jld2" fip
+    savefip("$path.nc", fip)
 end
 
 main(7)

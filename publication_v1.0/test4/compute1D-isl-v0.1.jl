@@ -38,7 +38,7 @@ function main(N, isl; use_cuda = false, mask_bsl = true)
     bathy_0 = Omega.arraykernel(topo_itp.(Omega.Lon, Omega.Lat))
 
     # Load barystatic sea level (not global one, since we are interested in SH)
-    (lonlaty, latlaty, tlaty), sl, sl_itp = load_latychev2023_ICE6G(case = "3D", var = "SL")
+    (lonlaty, latlaty, tlaty), _, sl_itp = load_latychev2023_ICE6G(case = "3D", var = "SL")
     Lon, Lat = meshgrid(lonlaty, latlaty[1:40])
     southpole_msl_vec = [mean(sl_itp.(Lon, Lat, t)) for t in tlaty]
     if mask_bsl
@@ -57,16 +57,15 @@ function main(N, isl; use_cuda = false, mask_bsl = true)
     println("Computation took $(fip.out.computation_time) s")
 
     dir = @__DIR__
-    path = "$dir/../../data/test4/ICE6G/1D-interactivesl=$isl-maskbsl=$mask_bsl-"*
+    path = "$dir/../../data/test4/ICE6G/elva-interactivesl=$isl-maskbsl=$mask_bsl-"*
         "N=$(Omega.Nx)"
     println("Saving to $path.nc")
     savefip("$path.nc", fip)
 end
 
 init()
-for isl in [true, false]
-    main(350, isl, use_cuda = true)
-end
+main(350, true, use_cuda = true)
+
 
 
 

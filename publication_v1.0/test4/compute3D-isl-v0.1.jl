@@ -64,12 +64,13 @@ function main(N, maxdepth, isl; nlayers = 3, use_cuda = false, mask_bsl = true)
     dir = @__DIR__
     path = "$dir/../../data/test4/ICE6G/3D-interactivesl=$isl-maskbsl=$mask_bsl-"*
         "N=$(Omega.Nx)"
-    # @save "$path.jld2" t fip Hitp Hice_vec
-    savefip("$path.nc", fip)
+    @save "$path.jld2" t fip Hitp Hice_vec
+    # savefip("$path.nc", fip)
 end
 
 init()
 for isl in [true]
+    # main(350, 300e3, isl, use_cuda = true, mask_bsl = true)
     main(350, 300e3, isl, use_cuda = true, mask_bsl = true)
 end
 

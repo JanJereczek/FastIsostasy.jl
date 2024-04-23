@@ -76,16 +76,19 @@ function slice_spada(
         nt = length(U)
         kk = keys[i]
 
-        
-        for j in axes(X[kk], 2)
-            lines!(axs[i], theta[kk], X[kk][:, j],
-                color = colors[j], linestyle = :dash, linewidth = lw)
-        end
-
         for l in eachindex(t_plot)
+
+            lines!(axs[i], theta[kk], X[kk][:, l], color = colors[l], linestyle = :dash,
+                linewidth = lw)
+
             t = t_plot[l]
             k = argmin( (t_vec .- t) .^ 2 )
             tkyr = Int(round( seconds2years(t) / 1e3 ))
+            # itp = linear_interpolation(theta[kk], X[kk][:, l], extrapolation_bc=Flat())
+            # uspada = itp.(theta_fi)
+
+            itp = linear_interpolation(theta_fi, U[k][slicex, slicey], extrapolation_bc=Throw())
+            ufi = itp.(theta[kk])
             if i == 1
                 lines!(axs[i], theta_fi, U[k][slicex, slicey],
                     color = colors[l], label = L"$%$tkyr \, \mathrm{kyr}$ ", linewidth = lw)
@@ -93,6 +96,13 @@ function slice_spada(
                 lines!(axs[i], theta_fi, U[k][slicex, slicey],
                     color = colors[l], linewidth = lw)
             end
+
+            # mean_error[l] = mean(abs.(U[k][slicex, slicey] - uspada))
+            # max_error[l] = maximum(abs.(U[k][slicex, slicey] - uspada))
+
+            mean_error[l] = mean(abs.(ufi - X[kk][:, l]))
+            max_error[l] = maximum(abs.(ufi - X[kk][:, l]))
+
             # if i <= 2
             #     Uelra = addvars[i]
             #     lines!(axs[i], theta_fi, Uelra[k][slicex, slicey], color = (colors[l], 0.5),
@@ -107,13 +117,16 @@ function slice_spada(
             ylims!(axs[i], (-5, 45))
         end
         xlims!(axs[i], (0, 15))
+
+        println("Mean error: ", mean_error)
+        println("Max error: ", max_error)
+        println("------------------------")
     end
 
     Hcapslice = Hcap[slicex, slicey]
     Hlolim = zeros(length(Hcapslice))
     band!(axs[1], theta_fi, Hlolim, Hcapslice ./ 25, color = :skyblue1)
     poly!(axs[2], Point2f[(0, 0), (10, 0), (10, 1e3 / 25), (0, 1e3 / 25)], color = :skyblue1)
-
 
     poly!(axs[3], Point2f[(0, 1e3), (10, 1e3), (10, 2e3), (0, 2e3)], color = :skyblue1,
         strokecolor = :skyblue1, strokewidth = 3, label = L"ice (height scaled 1:25) $\,$")
@@ -217,8 +230,8 @@ function main(
         label,
     )
     plotname = "test2/$suffix"
-    save("plots/$(plotname)-$(prefix)v0.6.png", response_fig)
-    save("plots/$(plotname)-$(prefix)v0.6.pdf", response_fig)
+    # save("plots/$(plotname)-$(prefix)v0.6.png", response_fig)
+    # save("plots/$(plotname)-$(prefix)v0.6.pdf", response_fig)
 end
 
 solvers = [:elva]

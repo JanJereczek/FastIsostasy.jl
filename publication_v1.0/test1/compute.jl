@@ -28,18 +28,17 @@ function main(n::Int; use_cuda::Bool = false, dense::Bool = false)
     pushfirst!(t_out, -εt)
     t_Hice = [-εt, 0.0, t_out[end]]
     fip = FastIsoProblem(Omega, c, p, t_out, t_Hice, Hice)
-        # diffeq = (alg = SimpleEuler(), dt = years2seconds(1.0)))
     solve!(fip)
     println("Computation took $(fip.out.computation_time) seconds!")
     println("-------------------------------------")
 
-    path = "../data/test1/$filename"
+    path = "$(@__DIR__)/../../data/test1/$filename"
     @save "$path.jld2" fip
     savefip("$path.nc", fip)
 end
 
-for use_cuda in [false] # [false, true]
-    for n in 6:6
+for use_cuda in [true]
+    for n in 3:8
         main(n, use_cuda = use_cuda, dense = false)
     end
 end

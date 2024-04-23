@@ -9,6 +9,8 @@ function get_denseoutput_fastiso(fastiso_files::Vector)
     u_plot = []
     for file in fastiso_files
         @load "../data/test3/$file" fip
+        @show file
+        @show fip.out.computation_time
         if include_elastic
             push!(u_plot, fip.out.u[2:end] + fip.out.ue[2:end])
         else
@@ -21,6 +23,8 @@ end
 
 function get_denseoutput_fastiso(fastiso_file::String)
     @load "../data/test3/$fastiso_file" fip
+    @show fastiso_file
+    @show fip.out.computation_time
     return fip.out.u[2:end] .+ fip.out.ue[2:end]
 end
 
@@ -81,6 +85,9 @@ function mainplot(n)
     mean_error = fill(Inf, length(tvec))
 
     for j in eachindex(u_3DGIA)
+        poly!(axs[j], Point2f[(1.3e6, -500), (2e6, -500),
+            (2e6, 500), (1.3e6, 500)], color = (:gray70, 0.5))
+
         umax = maximum(abs.(u_3DGIA[j]))
         for i in eachindex(u_fastiso[j])
             itp = linear_interpolation(r, u_3DGIA[j][:, i], extrapolation_bc = Flat())
@@ -102,9 +109,10 @@ function mainplot(n)
             elra_max_error[i] = maximum(abs.(diff_elra)/umax)
             elra_mean_error[i] = mean(abs.(diff_elra)/umax)
         end
-        poly!(axs[j], Point2f[(0, 0), (1e6, 0), (1e6, 40), (0, 40)],
+        poly!(axs[j], Point2f[(0, 0), (1e6, 0), (1e6, 1e3/25), (0, 1e3/25)],
             color = :skyblue1)
-        
+
+
         scatterlines!(axs[j+8], eachindex(tvec), elra_max_error, color = elra_color,
             label = L"$\hat{e}_\mathrm{ELRA}$"; max_opts...)
         scatterlines!(axs[j+8], eachindex(tvec), elra_mean_error, color = elra_color,
@@ -121,12 +129,14 @@ function mainplot(n)
             label = L"$\bar{e}_\mathrm{LV\text{-}ELVA}$"; mean_opts...)
     end
     poly!(axs[5], Point2f[(0, 1e8), (1e6, 1e8), (1e6, 1e8), (0, 1e8)],
-        color = :skyblue1, label = L"Ice (height is 1:40) $\,$")
+        color = :skyblue1, label = L"ice (height scaled 1:25) $\,$")
+    poly!(axs[5], Point2f[(0, 1e8), (1e6, 1e8), (1e6, 1e8), (0, 1e8)],
+        color = (:gray70, 0.5), label = L"forebulge $\,$")
     hlines!(axs[5], [1e3], color = :gray20, label = L"Seakon $\,$", linestyle = :dash,
         linewidth = lw)
     hlines!(axs[5], [1e3], color = :gray20, label = L"LV-ELVA $\,$",
         linewidth = lw)
-    Legend(fig[1, 2:end-1], axs[5], nbanks = 3, framevisible = false, colgap = 40,
+    Legend(fig[1, 2:end-1], axs[5], nbanks = 4, framevisible = false, colgap = 40,
         linepoints = [Point2f(0, 0.5), Point2f(4, 0.5)], patchlabelgap = 80,
         polypoints = [Point2f(0, -0.5), Point2f(4, -0.5), Point2f(4, 1.5), Point2f(0, 1.5)])
     Legend(fig[2, 2:end-1], axs[1], nbanks = 8,
