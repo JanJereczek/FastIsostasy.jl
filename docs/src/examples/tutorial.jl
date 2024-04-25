@@ -106,17 +106,13 @@ fig
 #=
 ## GPU support
 
-For about $$n \geq 7$$, the present example can be computed even faster by using GPU parallelism. It could not represent less work from the user's perspective, as it boils down to calling [`ComputationDomain`](@ref) with an extra keyword argument and passing it to a `::LayeredEarth` with the viscosity and depth values defined earlier:
+For about $$n \geq 7$$, the present example can be computed even faster by using GPU parallelism. It could not represent less work from the user's perspective, as it boils down to calling [`ComputationDomain`](@ref) with an extra keyword argument:
 =#
 
-Omega = ComputationDomain(W, n, use_cuda = true)
-p = LayeredEarth(Omega, layer_viscosities = lv, layer_boundaries = lb)
-fip = FastIsoProblem(Omega, c, p, t_out, t_Hice, Hice)
-solve!(fip)
-fig = plot3D(fip, [lastindex(t_out) ÷ 2, lastindex(t_out)])
+Omega = ComputationDomain(W, n, use_cuda = true);
 
 #=
-That's it, nothing more! For postprocessing, consider using [`reinit_structs_cpu`](@ref).
+We then pass `Omega` to a `LayeredEarth` and a `FastIsoProblem`, which we solve: that's it! For postprocessing, consider using [`reinit_structs_cpu`](@ref).
 
 !!! info "Only CUDA supported!"
     For now only Nvidia GPUs are supported and there is no plan of extending this compatibility at this point.
@@ -152,5 +148,12 @@ fig = plot3D(fip, [lastindex(t_out) ÷ 2, lastindex(t_out)])
 
 ## Using different backends
 
+ELRA is a GIA model that is commonly used in ice-sheet modelling. For the vast majority of applications, it is less accurate than LV-ELVA without providing any significant speed up. However, it can be used by specifying adequate options:
 
 =#
+
+p = LayeredEarth(Omega, tau = years2seconds(3e3))
+opts = SolverOptions(deformation_model = :elra)
+fip = FastIsoProblem(Omega, c, p, t_out, t_Hice, Hice, opts = opts)
+solve!(fip)
+fig = plot3D(fip, [lastindex(t_out) ÷ 2, lastindex(t_out)])
