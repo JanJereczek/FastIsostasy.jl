@@ -21,7 +21,6 @@ NLsolve = "2774e3e8-f4cf-5e23-947b-6d7e65073b56"
 OrdinaryDiffEq = "1dea7af3-3e70-54e6-95c3-0bf5283fa5ed"
 ParallelStencil = "94395366-693c-11ea-3b26-d9b7aac5d958"
 Reexport = "189a3867-3050-52da-a836-e630ba90ab69"
-Setfield = "efcf1570-3423-57d1-acb7-fd33fddbac46"
 SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
 Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 
