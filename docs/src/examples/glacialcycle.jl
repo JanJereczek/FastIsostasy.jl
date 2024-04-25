@@ -98,5 +98,5 @@ The displayed fields are displacement anomalies w.r.t. to the last interglacial,
 
 ## Additional examples
 
-The examples presented so far are slightly simplified versions of what you would normally run for a comprehensive simulation. For instance, the present example omits the sea-level treatment, which is important to reduce the error in displacement between FastIsostasy and Seakon. In `/publication_v1.0` of the GitHub repository, you can find the code used to generate the results and figures of [Swierczek-Jereczek et al. in prep.](@cite), which includes more elaborate simulations.
+The examples presented so far are slightly simplified versions of what you would normally run for a comprehensive simulation. For instance, the present example omits the sea-level treatment, which is important to reduce the error in displacement between FastIsostasy and Seakon. In `/publication_v1.0` of the GitHub repository, you can find the code used to generate the results and figures of Swierczek-Jereczek et al., GMD, in rev., which includes more elaborate simulations.
 =#
