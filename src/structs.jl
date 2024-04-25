@@ -473,8 +473,9 @@ function DenseOutputs(Omega::ComputationDomain{T, L, M}, t_out::Vector{T}, eta_e
     canomload = [copy(placeholder) for t in t_out]
     canomlitho = [copy(placeholder) for t in t_out]
     canommantle = [copy(placeholder) for t in t_out]
-    return DenseOutputs(t_out, similar(t_out), u, dudt, ue, b, geoid, seasurfaceheight, maskgrounded,
-        Hice, Hwater, canomfull, canomload, canomlitho, canommantle, 0.0, eta_eff, maskactive)
+    return DenseOutputs(t_out, similar(t_out), u, dudt, ue, b, geoid, seasurfaceheight,
+        maskgrounded, Hice, Hwater, canomfull, canomload, canomlitho, canommantle,
+        0.0, Array(eta_eff), T.(Array(maskactive)))
 end
 
 mutable struct SparseOutputs{T<:AbstractFloat, M<:Matrix{T}} <: Outputs
@@ -496,7 +497,7 @@ function SparseOutputs(Omega::ComputationDomain{T, L, M}, t_out::Vector{T}) wher
     seasurfaceheight = [copy(placeholder) for t in t_out]
     maskgrounded = [copy(placeholder) for t in t_out]
     Hice = [copy(placeholder) for t in t_out]
-    return DenseOutputs(t_out, utot, b, seasurfaceheight, maskgrounded, Hice, 0.0)
+    return SparseOutputs(t_out, utot, b, seasurfaceheight, maskgrounded, Hice, 0.0)
 end
 
 #########################################################
@@ -618,7 +619,7 @@ function FastIsoProblem(
     now = CurrentState(Omega, ref)
 
     if opts.dense_output
-        out = DenseOutputs(Omega, t_out, Array(p.effective_viscosity), T.(Array(ref.maskactive)))
+        out = DenseOutputs(Omega, t_out, p.effective_viscosity, ref.maskactive)
     else
         out = SparseOutputs(Omega, t_out)
     end
