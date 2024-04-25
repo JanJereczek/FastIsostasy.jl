@@ -13,7 +13,7 @@ using CairoMakie, FastIsostasy
 W = 3000e3      # (m) half-width of the domain Wx = Wy
 n = 7           # implies an Nx x Ny grid with Nx = Ny = 2^n = 128.
 Omega = ComputationDomain(W, n)
-fig = Figure(resolution = (1600, 800), fontsize = 24)
+fig = Figure(size = (1600, 800), fontsize = 24)
 axs = [Axis3(fig[1, j], title = ["Original grid", "Projected grid"][j]) for j in 1:2]
 wireframe!(axs[1], Omega.X .* Omega.K, Omega.Y .* Omega.K,
     Omega.R .* cos.(deg2rad.(Omega.Lat)), color = :gray10, linewidth = 0.1)
@@ -149,4 +149,8 @@ fig = plot3D(fip, [lastindex(t_out) ÷ 2, lastindex(t_out)])
 !!! warning "GPU not supported"
     [`step!`](@ref) does not support GPU computation so far. Make sure your model is initialized
     on CPU.
+
+## Using different backends
+
+
 =#

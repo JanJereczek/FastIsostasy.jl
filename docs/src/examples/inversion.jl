@@ -45,7 +45,7 @@ function plot_viscfields(paraminv)
 
     cmap = cgrad(:jet, rev = true)
     crange = (19.5, 21.5)
-    fig = Figure(resolution = (1800, 1000), fontsize = 40)
+    fig = Figure(size = (1800, 1000), fontsize = 40)
     axs = [Axis(fig[1,i], aspect = DataAspect()) for i in 1:2]
     [hidedecorations!(ax) for ax in axs]
     heatmap!(axs[1], log10.(true_viscosity), colormap = cmap, colorrange = crange)
