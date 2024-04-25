@@ -536,19 +536,35 @@ function choose_fft_plans(X, use_cuda)
     return pfft!, pifft!
 end
 
+# function remake!(fip::FastIsoProblem)
+#     @set fip.now = CurrentState(fip.Omega, fip.ref)
+#     println(extrema(fip.now.u))
+#     if fip.opts.dense_output
+#         @set fip.out = DenseOutputs(fip.Omega, fip.out.t,
+#             fip.p.effective_viscosity, fip.ref.maskactive)
+#     else
+#         @set fip.out = SparseOutputs(fip.Omega, fip.out.t)
+#     end
+#     return nothing
+# end
+
 function remake!(fip::FastIsoProblem)
-    fip.now.u = null(fip.Omega) #fip.ref.u
-    fip.now.dudt = null(fip.Omega)
-    fip.now.ue = null(fip.Omega) #fip.ref.ue
-    fip.now.geoid = null(fip.Omega)
-    fip.now.seasurfaceheight = null(fip.Omega) #fip.ref.seasurfaceheight
-    fip.now.H_water = null(fip.Omega) #fip.ref.H_water
-    fip.now.H_ice = fip.tools.Hice(0.0)
-    fip.now.b = fip.ref.b
+    # Get values from ReferenceState
+    fip.now.u .= copy(fip.ref.u)
+    fip.now.ue .= copy(fip.ref.ue)
+    fip.now.seasurfaceheight .= copy(fip.ref.seasurfaceheight)
+    fip.now.H_water .= copy(fip.ref.H_water)
+    fip.now.H_ice .= fip.tools.Hice(fip.out.t[1])
+    fip.now.b .= copy(fip.ref.b)
+
+    # Some values are not included in ReferenceState and need to be init with 0.
+    fip.now.dudt .= null(fip.Omega)
+    fip.now.geoid .= null(fip.Omega)
     fip.now.countupdates = 0
     fip.now.columnanoms = ColumnAnomalies(fip.Omega)
 
-    out = SparseOutputs(fip.Omega, fip.out.t)
+    out = DenseOutputs(fip.Omega, fip.out.t,
+        fip.p.effective_viscosity, fip.ref.maskactive)
     fip.out.u = out.u
     fip.out.ue = out.ue
     return nothing
