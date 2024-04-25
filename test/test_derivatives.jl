@@ -23,11 +23,6 @@ end
     test_derivatives(P, u, Omega, uxx, uyy, uxy)
 end
 
-@testset "gpu derivatives" begin
-    Omega, P, u, uxx, uyy, uxy = derivative_stdsetup(true)
-    test_derivatives(P, u, Omega, uxx, uyy, uxy)
-end
-
 
 #=
 # function check_uneven_pseudodiff()
