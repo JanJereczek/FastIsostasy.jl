@@ -37,14 +37,14 @@ function load_dataset(name::String; kwargs...)
     elseif name == "Lithothickness_Pan2022"
         return load_lithothickness_pan2022(; kwargs...)
     elseif name == "Viscosity_Pan2022"
-        return load_3Dvisc_pan2022(; kwargs...)
+        return load_logvisc_pan2022(; kwargs...)
     ########################## Model outputs ##################################
     elseif name == "Spada2011"
         return load_spada2011(; kwargs...)
     # elseif name == "LatychevGaussian"
     #     return load_latychev_gaussian(dir::String, x_lb::Real, x_ub::Real)
     elseif name == "LatychevICE6G"
-        return load_laty_ICE6G(; kwargs...)
+        return load_latychev2023_ICE6G(; kwargs...)
     end
 end
 
@@ -56,7 +56,7 @@ end
 
 function load_antarctic_3regionmask()
     link = "$isos_data/raw/main/tools/masks/ANT-16KM_BASINS-nasa.nc"
-    tmp = Downloads.download(link, tempdir() *"/"* basename(link))
+    tmp = download(link, tempdir() *"/"* basename(link))
     ds = NCDataset(tmp, "r")
     x = copy(ds["xc"][:])
     y = copy(ds["yc"][:])
@@ -64,61 +64,56 @@ function load_antarctic_3regionmask()
     close(ds)
 
     mask_itp = linear_interpolation((x, y), mask, extrapolation_bc = Flat())
+    println("returning: (x, y), mask, interpolator")
     return (x, y), mask, mask_itp
 end
 
 #############################################################
 # Parameter fields
 #############################################################
-function load_oceansurfacefunction()
+function load_oceansurfacefunction(; verbose = true)
     link = "$isos_data/raw/main/tools/ocean_surface/dz=0.1m.jld2"
-    tmp = Downloads.download(link)
+    tmp = download(link)
     @load "$tmp" z_support A_support
     z, A = collect(z_support), collect(A_support)
-    itp = linear_interpolation(z, A, extrapolation_bc = Flat())    # 
+    itp = linear_interpolation(z, A, extrapolation_bc = Flat())    #
+    if verbose
+        println("returning: z, A, interpolator")
+    end
     return z, A, itp
 end
 
 function load_bedmachine3(; var = "bed", T = Float64)
     link = "$isos_data/raw/main/topography/BedMachineAntarctica-v3-sparse.nc"
-    tmp = Downloads.download(link, tempdir() *"/"* basename(link))
+    tmp = download(link, tempdir() *"/"* basename(link))
     ds = NCDataset(tmp, "r")
     var = T.(ds["$var"][:, :])
     x, y = T.(ds["x"][:]), T.(ds["y"][:])
     close(ds)
     itp = linear_interpolation((x, reverse(y)), reverse(var, dims=2))
+    println("returning: (x, y), var, interpolator")
     return (x, y), var, itp
-end
-
-function bathymetry(Omega::ComputationDomain)
-    T = Float32
-    ds = NCDataset(joinpath(@__DIR__, "../data/bathymetry/ETOPO_2022_v1_60s_N90W180_bed.nc"),"r")
-    lon, lat = T.(ds["lon"][:]), T.(ds["lat"][:])
-    z = T.(ds["z"][:, :])
-    close(ds)
-    itp = linear_interpolation((lon, lat), z, extrapolation_bc = Flat())
-    return itp.(Array(Omega.Lon), Array(Omega.Lat))
 end
 
 function load_ice6gd(; var = "IceT")
     link = "$isos_data/raw/main/ice_history/ICE6G_D/ICE6GD_$var.nc"
-    tmp = Downloads.download(link, tempdir() *"/"* basename(link))
+    tmp = download(link, tempdir() *"/"* basename(link))
     ds = NCDataset(tmp, "r")
     t, lon, lat = copy(ds["Time"][:]), copy(ds["Lon"][:]), copy(ds["Lat"][:])
-    Hice = copy(ds["$var"][:, :, :])
+    X = copy(ds["$var"][:, :, :])
     close(ds)
 
     t .*= -1
-    lon180, Hice180 = lon360tolon180(lon, Hice)
-    Hice_itp = linear_interpolation((lon180, lat, t), Hice180, extrapolation_bc = 0.0)
+    lon180, X180 = lon360tolon180(lon, X)
+    Hice_itp = linear_interpolation((lon180, lat, t), X180, extrapolation_bc = 0.0)
 
-    println("returning: (lon180, lat, t), Hice, interpolator")
-    return (lon180, lat, t), Hice, Hice_itp
+    println("returning (var determined by kwarg): (lon180, lat, t), var, interpolator")
+    return (lon180, lat, t), X180, Hice_itp # check if this should be X or X180
 end
 
 function load_wiens2022(; extrapolation_bc = Throw())
     link = "$isos_data/raw/main/earth_structure/viscosity/wiens2022.nc"
-    tmp = Downloads.download(link, tempdir() *"/"* basename(link))
+    tmp = download(link, tempdir() *"/"* basename(link))
     ds = NCDataset(tmp, "r")
     x, y, z = copy(ds["x"][:]), copy(ds["y"][:]), copy(ds["z"][:])
     log10visc = copy(ds["log10visc"][:, :, :])
@@ -130,7 +125,7 @@ end
 
 function load_lithothickness_pan2022()
     link = "$isos_data/raw/main/earth_structure/lithothickness/pan2022.llz"
-    tmp = Downloads.download(link, tempdir() *"/"* basename(link))
+    tmp = download(link, tempdir() *"/"* basename(link))
     data, head = readdlm(tmp, header = true)
     Lon_vec, Lat_vec, T_vec = data[:, 1], data[:, 2], data[:, 3]
     lon, lat = unique(Lon_vec), unique(Lat_vec)
@@ -147,7 +142,7 @@ end
 
 function load_logvisc_pan2022()
     link = "$isos_data/raw/main/earth_structure/viscosity/pan2022.nc"
-    tmp = Downloads.download(link, tempdir() *"/"* basename(link))
+    tmp = download(link, tempdir() *"/"* basename(link))
     ds = NCDataset(tmp, "r")
     lon = copy(ds["lon"][:])
     lat = copy(ds["lat"][:])
@@ -204,7 +199,7 @@ end
 function load_spada2011(case)
     theta, t = spada_dims()
     link = "$isos_data/raw/main/model_outputs/Spada-2011/$case.jld2"
-    tmp = Downloads.download(link, tempdir() *"/"* basename(link))
+    tmp = download(link, tempdir() *"/"* basename(link))
     @load "$tmp" X
     if occursin("n_", case)
         reverse!(X, dims = 1)
@@ -214,12 +209,13 @@ end
 
 function load_latychev_test3(; case = "E0L1V1")
     link = "$isos_data/raw/main/model_outputs/SwierczekLatychev-2023/test3/$case.nc"
-    tmp = Downloads.download(link, tempdir() *"/"* basename(link))
+    tmp = download(link, tempdir() *"/"* basename(link))
     ds = NCDataset(tmp, "r")
     r = copy(ds["r"][:])
     t = copy(ds["t"][:])
     u = copy(ds["u"][:, :])
     close(ds)
+    println("returning: (r, t), u, interpolator")
     return (r, t), u, linear_interpolation((r, t), u)
 end
 
@@ -274,7 +270,7 @@ function get_greenintegrand_coeffs(T::Type; file_is_remote = true,
     local_path = nothing)
 
     if file_is_remote
-        tmp = Downloads.download(remote_path, tempdir() *"/"* basename(remote_path))
+        tmp = download(remote_path, tempdir() *"/"* basename(remote_path))
     else
         tmp = local_path
     end
@@ -295,7 +291,7 @@ Reference: Deformation of the Earth by surface Loads, Farell 1972, table A3.
 """
 function load_viscous_kelvin_function(T::Type)
     remote_path = "$isos_data/raw/main/tools/green_viscous/tabulated_kelvin_function_elra.txt"
-    tmp = Downloads.download(remote_path, tempdir() *"/"* basename(remote_path))
+    tmp = download(remote_path, tempdir() *"/"* basename(remote_path))
     data = T.(readdlm(tmp, ','))
     return data[:, 1], data[:, 2]   # rn, kei
 end
