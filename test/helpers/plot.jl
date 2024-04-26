@@ -4,6 +4,25 @@ using DelimitedFiles
 # Visualization
 ################################################
 
+function comparison_figure(n)
+    fig = Figure()
+    axs = [Axis(fig[i, 1]) for i in 1:n]
+    return fig, axs
+end
+
+function update_compfig!(axs::Vector{Axis}, fi::Vector, bm::Vector, clr)
+    if length(axs) == length(fi) == length(bm)
+        nothing
+    else
+        error("Vectors don't have matching length.")
+    end
+
+    for i in eachindex(axs)
+        lines!(axs[i], bm[i], color = clr)
+        lines!(axs[i], fi[i], color = clr, linestyle = :dash)
+    end
+end
+
 function num2latexstring(x::Real)
     return L"%$x"
 end
@@ -124,78 +143,4 @@ function slice_test3(
     save("plots/$plotname.png", fig)
     save("plots/$plotname.pdf", fig)
     return fig
-end
-
-function animate_viscous_response(
-    t_vec::AbstractVector{T},
-    Omega::ComputationDomain,
-    u::Array{T, 3},
-    anim_name::String,
-    u_range::Tuple{T, T},
-    points,
-    framerate::Int,
-) where {T<:AbstractFloat}
-
-    t_vec = seconds2years.(t_vec)
-
-    # umax = [minimum(u[:, :, j]) for j in axes(u, 3)]
-    u_lowest_eta = u[points[1][1], points[1][2], :]
-    u_highest_eta = u[points[2][1], points[2][2], :]
-
-    i = Observable(1)
-    
-    u2D = @lift(u[:, :, $i])
-    timepoint = @lift(t_vec[$i])
-    upoint_lowest = @lift(u_lowest_eta[$i])
-    upoint_highest = @lift(u_highest_eta[$i])
-
-    fig = Figure(resolution = (1600, 900))
-    ax1 = Axis(
-        fig[1, 1:3],
-        xlabel = L"Time $t$ (yr)",
-        ylabel = L"Viscous displacement $u^V$ (m)",
-        xminorticks = IntervalsBetween(10),
-        xminorgridvisible = true,
-    )
-    ax2 = Axis3(
-        fig[1, 5:8],
-        xlabel = L"$x$ (m)",
-        ylabel = L"$y$ (m)",
-        zlabel = L"$u^V$ (m)",
-    )
-    cmap = cgrad(:cool, rev = true)
-    clims = u_range
-
-    zlims!(ax2, clims)
-    lines!(ax1, t_vec, u_lowest_eta)
-    lines!(ax1, t_vec, u_highest_eta)
-    scatter!(ax1, timepoint, upoint_lowest, color = :red)
-    scatter!(ax1, timepoint, upoint_highest, color = :red)
-
-    sf = surface!(
-        ax2,
-        Omega.X,
-        Omega.Y,
-        u2D,
-        colorrange = clims,
-        colormap = cmap,
-    )
-    wireframe!(
-        ax2,
-        Omega.X,
-        Omega.Y,
-        u2D,
-        linewidth = 0.08,
-        color = :black,
-    )
-    Colorbar(
-        fig[1, 9],
-        sf,
-        label = L"Viscous displacement field $u^V$ (m)",
-        height = Relative(0.5),
-    )
-
-    record(fig, "$anim_name.mp4", axes(u, 3), framerate = framerate) do k
-        i[] = k
-    end
 end

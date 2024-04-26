@@ -17,7 +17,7 @@ function get_geoidgreen(Omega::ComputationDomain{T, L, M}, c::PhysicalConstants{
     ) where {T<:AbstractFloat, L, M<:KernelMatrix{T}}
     geoidgreen = unbounded_geoidgreen(Omega.R, c)
     max_geoidgreen = unbounded_geoidgreen(norm([100e3, 100e3]), c)  # tolerance = resolution on 100km
-    return Omega.arraykernel(min.(geoidgreen, max_geoidgreen))
+    return min.(geoidgreen, max_geoidgreen)
     # equivalent to: geoidgreen[geoidgreen .> max_geoidgreen] .= max_geoidgreen
 end
 
@@ -27,36 +27,36 @@ end
 
 # Functions to compute/update density-scaled column anomalies
 # Correction of surface distortion not needed here since rho * A * z / A = rho * z.
-
-anom(scale, now, ref) = scale .* (now - ref)
-columnanom_ice(fip::FastIsoProblem) = anom(fip.c.rho_ice, fip.now.H_ice, fip.ref.H_ice)
-columnanom_water(fip::FastIsoProblem) = anom(fip.c.rho_seawater, fip.now.H_water,
-    fip.ref.H_water)
+function anom!(x, scale, now, ref)
+    @. x = scale * (now - ref)
+    return nothing
+end
 
 function columnanom_mantle!(fip::FastIsoProblem)
-    fip.now.columnanoms.mantle .= anom(fip.c.rho_uppermantle, fip.now.u, fip.ref.u)
+    anom!(fip.now.columnanoms.mantle, fip.c.rho_uppermantle, fip.now.u, fip.ref.u)
     return nothing
 end
 
 function columnanom_litho!(fip::FastIsoProblem)
-    fip.now.columnanoms.litho .= anom(fip.c.rho_litho, fip.now.ue, fip.ref.ue)
+    anom!(fip.now.columnanoms.litho, fip.c.rho_litho, fip.now.ue, fip.ref.ue)
     return nothing
 end
 
 function columnanom_load!(fip::FastIsoProblem)
-    fip.now.columnanoms.load .= fip.ref.maskactive .*
-        (columnanom_ice(fip) + columnanom_water(fip))
+    @. fip.now.columnanoms.load = fip.ref.maskactive * (fip.c.rho_ice *
+        (fip.now.H_ice - fip.ref.H_ice) + fip.c.rho_seawater * (fip.now.H_water
+        - fip.ref.H_water))
     return nothing
 end
 
 function columnanom_full!(fip::FastIsoProblem)
     canoms = fip.now.columnanoms
-    canoms.full .= canoms.load + canoms.litho + canoms.mantle
+    @. canoms.full = canoms.load + canoms.litho + canoms.mantle
     return nothing
 end
 
 function mass_anom(fip::FastIsoProblem)
-    return fip.Omega.A .* (fip.now.columnanoms.full -
+    return fip.Omega.A .* (fip.now.columnanoms.full .-
         fip.c.rho_seawater .* fip.now.bsl .* fip.now.maskocean .* fip.ref.maskactive )
 end
 
@@ -85,9 +85,9 @@ function watercolumn(fip)
 end
 
 function watercolumn(H_ice, maskgrounded, b, seasurfaceheight, c)
-    wcl = max.(seasurfaceheight - b, 0)
-    return (H_ice .<= 1) .* wcl + not.(maskgrounded) .* (H_ice .> 1) .* (wcl -
-        (H_ice .* c.rho_ice / c.rho_seawater))
+    wcl = max.(seasurfaceheight .- b, 0)
+    return (H_ice .<= 1) .* wcl + not.(maskgrounded) .* (H_ice .> 1) .* (wcl .-
+        (H_ice .* c.rho_ice ./ c.rho_seawater))
 end
 
 function update_maskgrounded!(fip::FastIsoProblem)
@@ -111,7 +111,7 @@ function height_above_floatation(state::GeoState, c::PhysicalConstants)
 end
 
 function height_above_floatation(H_ice, b, seasurfaceheight, c)
-    return H_ice + min.(b - seasurfaceheight, 0) .* (c.rho_seawater / c.rho_ice)
+    return H_ice .+ min.(b .- seasurfaceheight, 0) .* (c.rho_seawater / c.rho_ice)
 end
 
 function update_maskocean!(fip)
@@ -131,7 +131,7 @@ function update_bedrock!(fip::FastIsoProblem{T, L, M, C, FP, IP}, u::M) where
     {T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}, C<:ComplexMatrix{T},
     FP<:ForwardPlan{T}, IP<:InversePlan{T}}
     fip.now.u .= u
-    fip.now.b .= fip.ref.b + fip.now.ue + fip.now.u
+    @. fip.now.b = fip.ref.b + fip.now.ue + fip.now.u
     return nothing
 end
 
@@ -144,7 +144,7 @@ thank for mass conservation and is embedded in convolution operation.
 """
 function update_seasurfaceheight!(fip::FastIsoProblem)
     now = fip.now
-    now.seasurfaceheight .= fip.ref.seasurfaceheight .+ now.geoid .+ now.bsl
+    @. now.seasurfaceheight = fip.ref.seasurfaceheight + now.geoid + now.bsl
     return nothing
 end
 
@@ -197,8 +197,7 @@ sea water, as in [goelzer-brief-2020](@cite) (eq. 10).
 """
 function update_V_den!(fip::FastIsoProblem)
     density_factor = fip.c.rho_ice / fip.c.rho_water - fip.c.rho_ice / fip.c.rho_seawater
-    dH = fip.now.H_ice - fip.ref.H_ice
-    fip.now.V_den = sum( dH .* density_factor .* fip.Omega.A )
+    fip.now.V_den = sum( (fip.now.H_ice .- fip.ref.H_ice) .* density_factor .* fip.Omega.A )
     return nothing
 end
 

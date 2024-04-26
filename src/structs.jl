@@ -16,6 +16,7 @@ mutable struct PreAllocated{T<:AbstractFloat, M<:KernelMatrix{T}, C<:ComplexMatr
     Mxyxy::M
     fftrhs::C
     ifftrhs::C
+    convo_out::M
 end
 
 #########################################################
@@ -221,6 +222,9 @@ mutable struct LayeredEarth{T<:AbstractFloat, M<:KernelMatrix{T}}
     mantle_poissonratio::T
     layer_viscosities::Array{T, 3}
     layer_boundaries::Array{T, 3}
+    tau::M
+    litho_youngmodulus::T
+    litho_shearmodulus::T
 end
 
 function LayeredEarth(
@@ -230,11 +234,17 @@ function LayeredEarth(
     litho_youngmodulus::T = T(6.6e10),         # (N/m^2)
     litho_poissonratio::T = T(0.28),
     mantle_poissonratio::T = T(0.28),
+    tau = years2seconds(855.0),
 ) where {
     T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T},
     A<:Union{Vector{T}, Array{T, 3}},
     B<:Union{Vector{T}, Array{T, 3}},
 }
+
+    if tau isa Real
+        tau = fill(tau, Omega.Nx, Omega.Ny)
+    end
+    tau = kernelpromote(tau, Omega.arraykernel)
 
     if layer_boundaries isa Vector{<:Real}
         layer_boundaries = matrify(layer_boundaries, Omega.Nx, Omega.Ny)
@@ -252,10 +262,14 @@ function LayeredEarth(
 
     litho_rigidity, effective_viscosity = kernelpromote(
         [litho_rigidity, effective_viscosity], Omega.arraykernel)
+    
+    litho_shearmodulus = litho_youngmodulus / (2 * (1 + litho_poissonratio))
+
     return LayeredEarth(
         effective_viscosity,
         litho_thickness, litho_rigidity, litho_poissonratio,
         mantle_poissonratio, layer_viscosities, layer_boundaries,
+        tau, litho_youngmodulus, litho_shearmodulus,
     )
 
 end
@@ -308,6 +322,7 @@ mutable struct CurrentState{T<:AbstractFloat, M<:KernelMatrix{T}} <: GeoState
     u::M                    # viscous displacement
     dudt::M                 # viscous displacement rate
     ue::M                   # elastic displacement
+    u_eq::M                 # equilibrium dispalcement
     ucorner::T              # corner displacement of the domain
     H_ice::M                # current height of ice column
     H_water::M              # current height of water column
@@ -330,7 +345,7 @@ end
 function CurrentState(Omega::ComputationDomain{T, L, M}, ref::ReferenceState{T, M}) where
     {T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}}
     return CurrentState(
-        copy(ref.u), null(Omega), copy(ref.ue), T(0.0),
+        copy(ref.u), null(Omega), copy(ref.ue), copy(ref.u), T(0.0),
         copy(ref.H_ice), copy(ref.H_water),
         ColumnAnomalies(Omega), copy(ref.b),
         copy(ref.bsl), null(Omega), copy(ref.seasurfaceheight),
@@ -352,6 +367,7 @@ preallocated arrays.
 """
 struct FastIsoTools{T<:AbstractFloat, M<:KernelMatrix{T}, C<:ComplexMatrix{T},
     FP<:ForwardPlan{T}, IP<:InversePlan{T}}
+    viscousconvo::InplaceConvolution{T, C, FP, IP}
     elasticconvo::InplaceConvolution{T, C, FP, IP}
     geoidconvo::InplaceConvolution{T, C, FP, IP}
     pfft!::FP
@@ -366,10 +382,17 @@ end
 function FastIsoTools(
     Omega::ComputationDomain{T, L, M},
     c::PhysicalConstants{T},
+    p::LayeredEarth{T, M},
     t_Hice_snapshots::Vector{T},
     Hice_snapshots::Vector{<:KernelMatrix{T}},
     bsl_itp; quad_precision::Int = 4,
 ) where {T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}}
+
+    # Build in-place convolution for viscous response (only used in ELRA)
+    L_w = get_flexural_lengthscale(mean(p.litho_rigidity), c.rho_uppermantle, c.g)
+    kei = get_kei(Omega, L_w)
+    viscousgreen = calc_viscous_green(Omega, mean(p.litho_rigidity), kei, L_w)
+    viscousconvo = InplaceConvolution(viscousgreen, Omega.use_cuda)
 
     # Build in-place convolution to compute elastic response
     distance, greenintegrand_coeffs = get_greenintegrand_coeffs(T)
@@ -389,11 +412,13 @@ function FastIsoTools(
     Hice = linear_interpolation( t_Hice_snapshots,
         kernelpromote(Hice_snapshots, Omega.arraykernel); extrapolation_bc=Flat())
 
-    realmatrices = [null(Omega) for _ in eachindex(fieldnames(PreAllocated))[1:end-2]]
+    realmatrices = [null(Omega) for _ in eachindex(fieldnames(PreAllocated))[1:end-3]]
     cplxmatrices = [complex.(null(Omega)) for _ in 1:2]
-    prealloc = PreAllocated(realmatrices..., cplxmatrices...)
+    convo_out = Omega.arraykernel(zeros(T, size(geoidconvo.Afft)...))
+    prealloc = PreAllocated(realmatrices..., cplxmatrices..., convo_out)
     
-    return FastIsoTools(elasticconvo, geoidconvo, pfft!, pifft!, Hice, bsl_itp, prealloc)
+    return FastIsoTools(viscousconvo, elasticconvo, geoidconvo, pfft!, pifft!,
+        Hice, bsl_itp, prealloc)
 end
 
 #########################################################
@@ -411,6 +436,7 @@ from solving a [`FastIsoProblem`](@ref).
 """
 mutable struct DenseOutputs{T<:AbstractFloat, M<:Matrix{T}} <: Outputs
     t::Vector{T}
+    bsl::Vector{T}
     u::Vector{M}
     dudt::Vector{M}
     ue::Vector{M}
@@ -425,10 +451,12 @@ mutable struct DenseOutputs{T<:AbstractFloat, M<:Matrix{T}} <: Outputs
     canomlitho::Vector{M}
     canommantle::Vector{M}
     computation_time::Float64
+    eta_eff::M
+    maskactive::M
 end
 
-function DenseOutputs(Omega::ComputationDomain{T, L, M}, t_out::Vector{T}) where
-    {T<:AbstractFloat, L, M<:KernelMatrix{T}}
+function DenseOutputs(Omega::ComputationDomain{T, L, M}, t_out::Vector{T}, eta_eff, maskactive) where
+    {T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}}
     # initialize with placeholders
     placeholder = Array(null(Omega))
     u = [copy(placeholder) for t in t_out]
@@ -445,8 +473,9 @@ function DenseOutputs(Omega::ComputationDomain{T, L, M}, t_out::Vector{T}) where
     canomload = [copy(placeholder) for t in t_out]
     canomlitho = [copy(placeholder) for t in t_out]
     canommantle = [copy(placeholder) for t in t_out]
-    return DenseOutputs(t_out, u, dudt, ue, b, geoid, seasurfaceheight, maskgrounded,
-        Hice, Hwater, canomfull, canomload, canomlitho, canommantle, 0.0)
+    return DenseOutputs(t_out, similar(t_out), u, dudt, ue, b, geoid, seasurfaceheight,
+        maskgrounded, Hice, Hwater, canomfull, canomload, canomlitho, canommantle,
+        0.0, Array(eta_eff), T.(Array(maskactive)))
 end
 
 mutable struct SparseOutputs{T<:AbstractFloat, M<:Matrix{T}} <: Outputs
@@ -468,7 +497,7 @@ function SparseOutputs(Omega::ComputationDomain{T, L, M}, t_out::Vector{T}) wher
     seasurfaceheight = [copy(placeholder) for t in t_out]
     maskgrounded = [copy(placeholder) for t in t_out]
     Hice = [copy(placeholder) for t in t_out]
-    return DenseOutputs(t_out, utot, b, seasurfaceheight, maskgrounded, Hice, 0.0)
+    return SparseOutputs(t_out, utot, b, seasurfaceheight, maskgrounded, Hice, 0.0)
 end
 
 #########################################################
@@ -481,6 +510,7 @@ end
 Return a struct containing the options relative to solving a [`FastIsoProblem`](@ref).
 """
 Base.@kwdef struct SolverOptions
+    deformation_model::Symbol = :lv_elva  # :lv_elva! or :lv_elra! or :lv_elra
     interactive_sealevel::Bool = false
     internal_loadupdate::Bool = true
     internal_bsl_update::Bool = true
@@ -568,7 +598,7 @@ function FastIsoProblem(
             " of the cells when using an interactive sea level.")
     end
 
-    tools = FastIsoTools(Omega, c, t_Hice_snapshots, Hice_snapshots, bsl_itp)
+    tools = FastIsoTools(Omega, c, p, t_Hice_snapshots, Hice_snapshots, bsl_itp)
 
     # Initialise the reference state
     H_ice_0, bsl_0 = tools.Hice(t_out[1]), tools.bsl(t_out[1])
@@ -589,7 +619,7 @@ function FastIsoProblem(
     now = CurrentState(Omega, ref)
 
     if opts.dense_output
-        out = DenseOutputs(Omega, t_out)
+        out = DenseOutputs(Omega, t_out, p.effective_viscosity, ref.maskactive)
     else
         out = SparseOutputs(Omega, t_out)
     end

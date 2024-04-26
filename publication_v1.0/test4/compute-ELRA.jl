@@ -9,21 +9,15 @@ function main(N, isl; use_cuda = false, mask_bsl = true)
     Omega = ComputationDomain(3500e3, 3500e3, N, N, use_cuda = use_cuda)
     Lon, Lat = Omega.Lon, Omega.Lat
     c = PhysicalConstants()
-    opts = SolverOptions(interactive_sealevel = isl, verbose = true, internal_bsl_update = false)
+    opts = SolverOptions(interactive_sealevel = isl, verbose = true,
+        internal_bsl_update = false, deformation_model = :elra)
 
-    lbmantle = c.r_equator .- [5.721, 5.179] .* 1e6
-    lb = vcat(96e3, lbmantle)
-    lv = [0.5, 1.58, 3.16] .* 1e21
-    p = LayeredEarth(Omega, layer_boundaries = lb[1:2], layer_viscosities = lv[1:2])
+    # Load upper-mantle viscosity
+    p = LayeredEarth(Omega, tau = years2seconds(3e3))
 
     # Load ice thickness and deduce (active load) mask from it.
     (_, _, t), _, Hitp = load_ice6gd()
     Hice_vec = [Hitp.(Array(Omega.Lon), Array(Omega.Lat), tt) for tt in t]
-    # South pole gives 0 because of projection. Correct by mean smoothing.
-    # H_soutpole = [mean(H[173:4:177, 173:4:177]) for H in Hice_vec]
-    # for k in eachindex(Hice_vec)
-    #     Hice_vec[k][174:176, 174:176] .= H_soutpole[k]
-    # end
     if isl
         k_lgm = argmax([mean(Hice_vec[k]) for k in eachindex(Hice_vec)])
         sharp_lgm_mask = Float64.(Hice_vec[k_lgm] .> 1e-3)
@@ -57,55 +51,9 @@ function main(N, isl; use_cuda = false, mask_bsl = true)
     println("Computation took $(fip.out.computation_time) s")
 
     dir = @__DIR__
-    path = "$dir/../../data/test4/ICE6G/elva-interactivesl=$isl-maskbsl=$mask_bsl-"*
-        "N=$(Omega.Nx)"
-    println("Saving to $path.nc")
+    path = "$dir/../../data/test4/ICE6G/elra-interactivesl=$isl-maskbsl=$mask_bsl-N=$(Omega.Nx)"
     savefip("$path.nc", fip)
 end
 
 init()
 main(350, true, use_cuda = true)
-
-
-
-
-
-
-#=
-init()
-
-n = 7
-maxdepth = 500e3
-nlayers = 3
-use_cuda = true
-isl = true
-Omega = ComputationDomain(3500e3, n, use_cuda = use_cuda)
-c = PhysicalConstants()
-p = LayeredEarth(Omega)
-opts = SolverOptions(interactive_sealevel = isl, verbose = true)
-(lon, lat, t), Hice, Hitp = load_ice6gd()
-Hice_vec = [Hitp.(Array(Omega.Lon), Array(Omega.Lat), tt) for tt in t]
-tsec = years2seconds.(t .* 1e3)
-mask = collect(Omega.R .< 1e6)
-fip = FastIsoProblem(Omega, c, p, tsec, tsec, Hice_vec, opts = opts, maskactive = mask)
-
-u = Omega.arraykernel(copy(fip.out.u[1]))
-dudt = Omega.arraykernel(copy(fip.out.u[1]))
-t = 0.0
-update_diagnostics!(dudt, u, fip, t)
-@btime update_diagnostics!($dudt, $u, $fip, $t)
-@profview update_diagnostics!(dudt, u, fip, t)
-
-@profview lv_elva!(dudt, u, fip, t)
-@code_warntype lv_elva!(dudt, u, fip, t)
-@btime lv_elva!($dudt, $u, $fip, $t)
-
-# On GPU:
-# 428.753 μs (961 allocations: 56.81 KiB)
-
-# On GPU, with apply_bc!
-416.316 μs (782 allocations: 45.12 KiB)
-
-# On CPU:
-# 135.883 μs (47 allocations: 641.05 KiB)
-=#

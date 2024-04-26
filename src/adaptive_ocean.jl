@@ -28,7 +28,7 @@ mutable struct OceanSurfaceChange{T<:AbstractFloat}
 end
 
 function OceanSurfaceChange(; T = Float64, A_ocean_pd = T(3.625e14), z0 = T(0.0))
-    z, A, itp = load_oceansurfacefunction()
+    z, A, itp = load_oceansurfacefunction(verbose = false)
     A_itp(z) = A_ocean_pd / itp(T(0.0)) * itp(z)
     return OceanSurfaceChange(z0, A_itp(z0), z, A, A_itp, A_ocean_pd, T(1e10))
 end

@@ -8,7 +8,7 @@ We now want to provide an example that presents:
 - a more elaborate load that evolves over time
 - changes in the sea-level
 
-For this we run a glacial cycle of Antarctica with lithospheric thickness and upper-mantle viscosity from [wiens-seismic-2022](@cite) and the ice thickness history from [argus-antarctica-2014](@cite). We start by generating a [`ComputationDomain`](@ref) with intermediate resolution for the sake of the example and load the heterogeneous lithospheric from [pan-influence-2022](@cite) thanks to the convenience of [`load_dataset`](@ref):
+For this we run a glacial cycle of Antarctica with lithospheric thickness and upper-mantle viscosity from [wiens-seismic-2022](@cite) and the ice thickness history from [peltier-comment-2018](@cite). We start by generating a [`ComputationDomain`](@ref) with intermediate resolution for the sake of the example and load the heterogeneous lithospheric from [pan-influence-2022](@cite) thanks to the convenience of [`load_dataset`](@ref):
 =#
 
 using CairoMakie, FastIsostasy
@@ -22,7 +22,7 @@ c = PhysicalConstants()
 Tlitho = Titp.(Lon, Lat) .* 1e3                     # convert from m to km
 
 function niceheatmap(X)
-    fig = Figure(resolution = (800, 700))
+    fig = Figure(size = (800, 700))
     ax = Axis(fig[1, 1], aspect = DataAspect())
     hidedecorations!(ax)
     hm = heatmap!(ax, X)
@@ -81,7 +81,7 @@ The computation time of this last step is less than a minute on a modern i7 (Int
 =#
 
 tplot = [-26, -12, 0]
-fig = Figure(resolution = (1800, 600))
+fig = Figure(size = (1800, 600))
 opts = ( colormap = :PuOr, colorrange = (-400, 400) )
 for k in eachindex(tplot)
     ax = Axis(fig[1, k], aspect = DataAspect())
@@ -94,5 +94,5 @@ Colorbar(fig[1, 4], height = Relative(0.6); opts...)
 fig
 
 #=
-The displayed fields are displacement anomalies w.r.t. to the last interglacial, defined as the reference for the ice thickness anomalies. In (Swierczek-Jereczek et al. in prep.), these computations are performed on a finer grid, with an interactive sea level, and show great agreement with a 3D GIA model that runs between 10,000-100,000 slower (however at with advantage of obtaining a global and richer output).
+The displayed fields are displacement anomalies w.r.t. to the last interglacial, defined as the reference for the ice thickness anomalies. In Swierczek-Jereczek et al., GMD, in rev., these computations are performed on a finer grid, with an interactive sea level, and show great agreement with a 3D GIA model that runs between 10,000-100,000 slower (however at with advantage of obtaining a global and richer output). You can find this more comprehensive example in the `/publication_v1.0` folder of the GitHub repository.
 =#

@@ -1,3 +1,7 @@
+function inn(X)
+    return X[2:end-1, 2:end-1]
+end
+
 #####################################################
 # Data loaders
 #####################################################
@@ -27,7 +31,7 @@ end
 # Generate binary parameter fields for test 3
 ################################################
 
-function slice_along_x(Omega::ComputationDomain)
+function slice_along_x(Omega)
     Nx, Ny = Omega.Nx, Omega.Ny
     return Nx÷2:Nx, Ny÷2
 end

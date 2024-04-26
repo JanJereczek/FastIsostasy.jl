@@ -14,6 +14,11 @@ function solve!(fip::FastIsoProblem)
     t1 = time()
     t_out = fip.out.t
 
+    if fip.opts.deformation_model == :lv_elra
+        # No need to have heterogeneous viscosity for LV-ELRA
+        fip.p.effective_viscosity .= 1e21
+    end
+
     # Make a first diagnotisc update to store these values. (k=1)
     update_diagnostics!(fip.now.dudt, fip.now.u, fip, t_out[1])
     write_out!(fip, 1)
@@ -81,10 +86,9 @@ function update_diagnostics!(dudt::M, u::M, fip::FastIsoProblem{T, L, M, C, FP, 
     ) where {T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}, C<:ComplexMatrix{T},
     FP<:ForwardPlan{T}, IP<:InversePlan{T}}
 
-    # Order really matters here!
+    # CAUTION: Order really matters here!
 
     # Make sure that integrated viscous displacement satisfies BC.
-    # corner_bc!(u, fip.Omega.Nx, fip.Omega.Ny, fip.now.ucorner)
     apply_bc!(u, fip.Omega.bc_matrix, fip.Omega.nbc)
 
     # Update load columns if interpolator available
@@ -116,47 +120,151 @@ function update_diagnostics!(dudt::M, u::M, fip::FastIsoProblem{T, L, M, C, FP, 
         fip.now.countupdates += 1
     end
     columnanom_full!(fip)
-    dudt_isostasy!(dudt, u, fip, t)
+
+    if fip.opts.deformation_model == :lv_elva
+        lv_elva!(dudt, u, fip, t)
+    elseif fip.opts.deformation_model == :lv_elra
+        lv_elra!(dudt, u, fip, t)
+    elseif fip.opts.deformation_model == :elra
+        elra!(dudt, u, fip, t)
+    end
     columnanom_mantle!(fip)
     update_bedrock!(fip, u)
 
     return nothing
 end
 
-function update_ucorner!(fip::FastIsoProblem)
-    fip.now.ucorner = -fip.now.bsl * fip.c.rho_seawater / fip.c.rho_uppermantle
-end
-
 """
-    dudt_isostasy!()
+    lv_elva!(dudt, u, fip, t)
 
-Update the displacement rate `dudt` of the viscous response.
+Update the displacement rate `dudt` of the viscous response according to LV-ELVA.
 """
-function dudt_isostasy!(dudt::M, u::M, fip::FastIsoProblem{T, L, M, C, FP, IP}, t::T) where
+function lv_elva!(dudt::M, u::M, fip::FastIsoProblem{T, L, M, C, FP, IP}, t::T) where
     {T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}, C<:ComplexMatrix{T},
     FP<:ForwardPlan{T}, IP<:InversePlan{T}}
 
     Omega, P = fip.Omega, fip.tools.prealloc
-    P.rhs .= -fip.c.g .* fip.now.columnanoms.full
-    update_second_derivatives!(P.uxx, P.uyy, P.ux, P.uxy, u, Omega)
-    P.Mxx .= - fip.p.litho_rigidity .* (P.uxx + fip.p.litho_poissonratio .* P.uyy)
-    P.Myy .= - fip.p.litho_rigidity .* (P.uyy + fip.p.litho_poissonratio .* P.uxx)
-    P.Mxy .= - fip.p.litho_rigidity .* (1 - fip.p.litho_poissonratio) .* P.uxy
-    update_second_derivatives!(P.Mxxxx, P.Myyyy, P.Mxyx, P.Mxyxy, P.Mxx, P.Myy,
-        P.Mxy, Omega)
-    P.rhs += P.Mxxxx + P.Myyyy + 2 .* P.Mxyxy
-
-    P.fftrhs .= complex.(P.rhs .* Omega.K ./ (2 .* fip.p.effective_viscosity))
+    update_deformation_rhs!(fip, u)
+    @. P.fftrhs = complex(P.rhs * Omega.K / (2 * fip.p.effective_viscosity))
     fip.tools.pfft! * P.fftrhs
-    P.ifftrhs .= P.fftrhs ./ Omega.pseudodiff
+    @. P.ifftrhs = P.fftrhs / Omega.pseudodiff
     fip.tools.pifft! * P.ifftrhs
     dudt .= real.(P.ifftrhs)
-    
-    # corner_bc!(dudt, fip.Omega.Nx, fip.Omega.Ny, 0.0)
+
     apply_bc!(dudt, fip.Omega.bc_matrix, fip.Omega.nbc)
 
     return nothing
 end
+
+"""
+    elra!(dudt, u, fip, t)
+
+Update the displacement rate `dudt` of the viscous response according to ELRA.
+"""
+function elra!(dudt::M, u::M, fip::FastIsoProblem{T, L, M, C, FP, IP}, t::T) where
+    {T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}, C<:ComplexMatrix{T},
+    FP<:ForwardPlan{T}, IP<:InversePlan{T}}
+
+    update_deformation_rhs!(fip, u)
+    samesize_conv!(fip.now.u_eq, fip.tools.prealloc.convo_out,
+        - (fip.now.columnanoms.load + fip.now.columnanoms.litho) .* fip.c.g .*
+        fip.Omega.K .^ 2, fip.tools.viscousconvo, fip.Omega)
+    @. dudt = 1 / fip.p.tau * (fip.now.u_eq - fip.now.u)
+    return nothing
+end
+
+"""
+    lv_elra!(dudt, u, fip, t)
+
+Update the displacement rate `dudt` of the viscous response according to LV-ELRA.
+"""
+function lv_elra!(dudt::M, u::M, fip::FastIsoProblem{T, L, M, C, FP, IP}, t::T) where
+    {T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}, C<:ComplexMatrix{T},
+    FP<:ForwardPlan{T}, IP<:InversePlan{T}}
+
+    relax_u_eq!(fip, t)
+    @. dudt = 1 / fip.p.tau * (fip.now.u_eq - fip.now.u)
+    return nothing
+end
+
+"""
+    relax_u_eq!(fip)
+
+Get equilibrium displacement `u_eq` by integrating LV-ELVA equation, which gives the same
+equilibrium as LV-ELRA.
+"""
+function relax_u_eq!(fip, t)
+    Omega, P = fip.Omega, fip.tools.prealloc
+    dt = years2seconds(1e-2)    # take a small time step s.t. no instability
+    # dt = years2seconds(1e3 / (fip.Omega.Nx * fip.Omega.Ny))    # take a small time step s.t. no instability
+    tau_relax_numerics = years2seconds(1e3)
+    # n_steps = Int(round(tau_relax_numerics / dt))
+    
+    use_lv_elva = false
+
+    # samesize_conv!(fip.now.u_eq, fip.tools.prealloc.convo_out,
+    #     - (fip.now.columnanoms.load + fip.now.columnanoms.litho) .* fip.c.g .*
+    #     fip.Omega.K .^ 2, fip.tools.viscousconvo, fip.Omega)
+    # dts = years2seconds.( 10.0 .^ (-3:0.001:-1) )
+
+    # while abs(mean(fip.now.columnanoms.full)) > 1e3
+    for i in 1:1_000
+        anom!(fip.now.columnanoms.mantle, fip.c.rho_uppermantle, fip.now.u_eq, fip.ref.u)
+        columnanom_full!(fip)
+        # println(abs(mean(fip.now.columnanoms.full)))
+
+        if use_lv_elva
+            lv_elva!(fip.now.dudt, fip.now.u_eq, fip, t)
+            @. fip.now.u_eq += dt * fip.now.dudt
+        else
+            update_deformation_rhs!(fip, fip.now.u_eq)
+            @. fip.now.u_eq += dt * P.rhs / # * Omega.K 
+                (2 * fip.p.litho_shearmodulus * tau_relax_numerics * π / Omega.Wx)
+        end
+    end
+    columnanom_mantle!(fip)
+    columnanom_full!(fip)
+    return nothing
+end
+
+"""
+    update_deformation_rhs!(fip)
+
+Update the right-hand side of the deformation equation.
+"""
+function update_deformation_rhs!(fip::FastIsoProblem{T, L, M, C, FP, IP}, u::M) where
+    {T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}, C<:ComplexMatrix{T},
+    FP<:ForwardPlan{T}, IP<:InversePlan{T}}
+
+    Omega, P = fip.Omega, fip.tools.prealloc
+    @. P.rhs = -fip.c.g * fip.now.columnanoms.full
+    update_second_derivatives!(P.uxx, P.uyy, P.ux, P.uxy, u, Omega)
+    @. P.Mxx = -fip.p.litho_rigidity * (P.uxx + fip.p.litho_poissonratio * P.uyy)
+    @. P.Myy = -fip.p.litho_rigidity * (P.uyy + fip.p.litho_poissonratio * P.uxx)
+    @. P.Mxy = -fip.p.litho_rigidity * (1 - fip.p.litho_poissonratio) * P.uxy
+    update_second_derivatives!(P.Mxxxx, P.Myyyy, P.Mxyx, P.Mxyxy, P.Mxx, P.Myy,
+        P.Mxy, Omega)
+    @. P.rhs += P.Mxxxx + P.Myyyy + 2 * P.Mxyxy
+    return nothing
+end
+
+# function update_deformation_rhs!(fip::FastIsoProblem{T, L, M, C, FP, IP}, u::M) where
+#     {T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}, C<:ComplexMatrix{T},
+#     FP<:ForwardPlan{T}, IP<:InversePlan{T}}
+
+#     # TODO make @. + run profview alloc
+#     Omega, P = fip.Omega, fip.tools.prealloc
+#     P.rhs .= -fip.c.g .* fip.now.columnanoms.full
+#     update_second_derivatives!(P.uxx, P.uyy, P.ux, P.uxy, u, Omega)
+#     P.Mxx .= - fip.p.litho_rigidity .* (P.uxx + fip.p.litho_poissonratio .* P.uyy)
+#     P.Myy .= - fip.p.litho_rigidity .* (P.uyy + fip.p.litho_poissonratio .* P.uxx)
+#     P.Mxy .= - fip.p.litho_rigidity .* (1 - fip.p.litho_poissonratio) .* P.uxy
+#     update_second_derivatives!(P.Mxxxx, P.Myyyy, P.Mxyx, P.Mxyxy, P.Mxx, P.Myy,
+#         P.Mxy, Omega)
+#     P.rhs += P.Mxxxx + P.Myyyy + 2 .* P.Mxyxy
+#     return nothing
+# end
+
 
 #####################################################
 # BCs
@@ -169,32 +277,6 @@ on average, which is the only way to impose them for Fourier collocation.
 """
 function apply_bc!(u::M, bcm::M, nbc::T) where {T <: AbstractFloat, M<:KernelMatrix{T}}
     u .-= sum(u .* bcm) / nbc
-end
-
-"""
-    corner_bc!(u, Nx, Ny, offset)
-
-Shift `u` s.t. its mean value at the corner points is `offset`.
-"""
-function corner_bc!(u::KernelMatrix{T}, Nx::Int, Ny::Int, offset::T) where {T<:AbstractFloat}
-    allowscalar() do
-        u .-= ( u[1, 1] + u[Nx, 1] + u[1, Ny] + u[Nx, Ny] ) / 4
-    end
-    u .+= offset
-    return u
-end
-
-"""
-    edge_bc!(u, Nx, Ny)
-
-Shift `u` s.t. its mean value at on the edge is 0. Same as in [bueler-fast-2007](@cite).
-"""
-function edge_bc!(u::KernelMatrix{<:AbstractFloat}, Nx::Int, Ny::Int)
-    allowscalar() do
-        u .-= sum( view(u, 1, :) + view(u, Nx, :) + view(u, :, Ny) + view(u, :, 1) ) /
-            (2*Nx + 2*Ny)
-    end
-    return u
 end
 
 function no_mean_bc!(u::KernelMatrix{<:AbstractFloat}, Nx::Int, Ny::Int)
@@ -214,8 +296,10 @@ To use coefficients differing from [^Farrell1972], see [FastIsoTools](@ref).
 function update_elasticresponse!(fip::FastIsoProblem{T, L, M, C, FP, IP}) where
     {T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}, C<:ComplexMatrix{T},
     FP<:ForwardPlan{T}, IP<:InversePlan{T}}
-    fip.now.ue .= samesize_conv(fip.now.columnanoms.load .* fip.Omega.K .^ 2,
-        fip.tools.elasticconvo, fip.Omega)
+    samesize_conv!(fip.now.ue, fip.tools.prealloc.convo_out,
+        fip.now.columnanoms.load .* fip.Omega.K .^ 2, fip.tools.elasticconvo, fip.Omega)
+    # fip.now.ue .= samesize_conv(fip.now.columnanoms.load .* fip.Omega.K .^ 2,
+    #     fip.tools.elasticconvo, fip.Omega)
     return nothing
 end
 
@@ -407,5 +491,9 @@ function get_elasticgreen(
             (q+1)*dy,
         )
     end
-    return Omega.arraykernel(elasticgreen)
+    return elasticgreen
+end
+
+function cudainfo()
+    return CUDA.versioninfo()
 end

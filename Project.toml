@@ -26,7 +26,7 @@ Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 
 [compat]
 AbstractFFTs = "1.5"
-CUDA = "4.4, 5"
+CUDA = "5"
 DelimitedFiles = "1.9"
 Distributions = "0.25"
 Downloads = "1.6"

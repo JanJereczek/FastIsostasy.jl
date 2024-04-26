@@ -115,6 +115,16 @@ function samesize_conv(X::M, ipc::InplaceConvolution{T, C, FP, IP},
         Omega.j1-Omega.convo_offset:Omega.j2-Omega.convo_offset)
 end
 
+function samesize_conv!(inout::M, convo_out::M, X::M,
+    ipc::InplaceConvolution{T, C, FP, IP},
+    Omega::ComputationDomain{T, L, M}) where {T<:AbstractFloat, L<:Matrix{T},
+    M<:KernelMatrix{T}, C<:ComplexMatrix{T}, FP<:ForwardPlan{T}, IP<:InversePlan{T}}
+    ipc(convo_out, X)
+    inout .= view(convo_out,
+        Omega.i1+Omega.convo_offset:Omega.i2+Omega.convo_offset,
+        Omega.j1-Omega.convo_offset:Omega.j2-Omega.convo_offset)
+    apply_bc!(inout, Omega.bc_matrix, Omega.nbc)
+end
 
 # function samesize_conv(X::CuMatrix{T}, Y::CuMatrix{T}, Omega::ComputationDomain{T, L, M}) where
 #     {T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}}
@@ -131,11 +141,11 @@ If the load is updated externally, the user is responsible for writing results.
 """
 function write_out!(fip::FastIsoProblem, k::Int)
     if fip.opts.internal_loadupdate
+        fip.out.bsl[k] = fip.now.bsl
         fip.out.u[k] .= copy(Array(fip.now.u))
         fip.out.dudt[k] .= copy(Array(fip.now.dudt))
         fip.out.ue[k] .= copy(Array(fip.now.ue))
         fip.out.b[k] .= copy(Array(fip.now.b))
-        # fip.out.bsl[k] .= copy(fip.now.bsl)
         fip.out.geoid[k] .= copy(Array(fip.now.geoid))
         fip.out.seasurfaceheight[k] .= copy(Array(fip.now.seasurfaceheight))
         fip.out.maskgrounded[k] .= copy(Array(fip.now.maskgrounded))
@@ -165,6 +175,12 @@ function savefip(filename, fip; T = Float32)
     ncx[:] = x
     ncy[:] = y
     nct[:] = seconds2years.(t)
+
+    append1D2nc!(ds, T, fip.out.bsl, "bsl")
+
+    append2D2nc!(ds, T, log10.(fip.out.eta_eff), "log10 effective viscosity")
+    append2D2nc!(ds, T, fip.out.maskactive, "active mask")
+
     append3D2nc!(ds, T, fip.out.u, "u")
     append3D2nc!(ds, T, fip.out.dudt, "dudt")
     append3D2nc!(ds, T, fip.out.ue, "ue")
@@ -178,20 +194,27 @@ function savefip(filename, fip; T = Float32)
     append3D2nc!(ds, T, fip.out.canomload, "canomload")
     append3D2nc!(ds, T, fip.out.canomlitho, "canomlitho")
     append3D2nc!(ds, T, fip.out.canommantle, "canommantle")
-    close(ds)
     
+    close(ds)
+
+end
+
+function append1D2nc!(ds, T, Z, var::String)
+    ncZ = defVar(ds, var, T, ("t",))
+    ncZ[:] = T.(Z)
+    return nothing
+end
+
+function append2D2nc!(ds, T, Z, var::String)
+    ncZ = defVar(ds, var, T, ("x", "y"))
+    ncZ[:, :] = T.(Z)
+    return nothing
 end
 
 function append3D2nc!(ds, T, Z, var::String)
     Z = cat(Z..., dims = 3)
     ncZ = defVar(ds, var, T, ("x", "y", "t"))
     ncZ[:, :, :] = T.(Z)
-    return nothing
-end
-
-function append1D2nc!(ds, T, Z, var::String)
-    ncZ = defVar(ds, var, T, ("t"))
-    ncZ[:] = T.(Z)
     return nothing
 end
 
@@ -367,6 +390,7 @@ function blur(X::AbstractMatrix, Omega::ComputationDomain, level::Real)
     T = eltype(X)
     sigma = diagm([(level * Omega.Wx)^2, (level * Omega.Wy)^2])
     kernel = T.(generate_gaussian_field(Omega, 0.0, [0.0, 0.0], 1.0, sigma))
+    kernel ./= sum(kernel)
     # return copy(samesize_conv(Omega.arraykernel(kernel), Omega.arraykernel(X), Omega))
     return samesize_conv(kernel, X, Omega)
 end
@@ -512,19 +536,35 @@ function choose_fft_plans(X, use_cuda)
     return pfft!, pifft!
 end
 
+# function remake!(fip::FastIsoProblem)
+#     @set fip.now = CurrentState(fip.Omega, fip.ref)
+#     println(extrema(fip.now.u))
+#     if fip.opts.dense_output
+#         @set fip.out = DenseOutputs(fip.Omega, fip.out.t,
+#             fip.p.effective_viscosity, fip.ref.maskactive)
+#     else
+#         @set fip.out = SparseOutputs(fip.Omega, fip.out.t)
+#     end
+#     return nothing
+# end
+
 function remake!(fip::FastIsoProblem)
-    fip.now.u = null(fip.Omega) #fip.ref.u
-    fip.now.dudt = null(fip.Omega)
-    fip.now.ue = null(fip.Omega) #fip.ref.ue
-    fip.now.geoid = null(fip.Omega)
-    fip.now.seasurfaceheight = null(fip.Omega) #fip.ref.seasurfaceheight
-    fip.now.H_water = null(fip.Omega) #fip.ref.H_water
-    fip.now.H_ice = fip.tools.Hice(0.0)
-    fip.now.b = fip.ref.b
+    # Get values from ReferenceState
+    fip.now.u .= copy(fip.ref.u)
+    fip.now.ue .= copy(fip.ref.ue)
+    fip.now.seasurfaceheight .= copy(fip.ref.seasurfaceheight)
+    fip.now.H_water .= copy(fip.ref.H_water)
+    fip.now.H_ice .= fip.tools.Hice(fip.out.t[1])
+    fip.now.b .= copy(fip.ref.b)
+
+    # Some values are not included in ReferenceState and need to be init with 0.
+    fip.now.dudt .= null(fip.Omega)
+    fip.now.geoid .= null(fip.Omega)
     fip.now.countupdates = 0
     fip.now.columnanoms = ColumnAnomalies(fip.Omega)
 
-    out = DenseOutputs(fip.Omega, fip.out.t)
+    out = DenseOutputs(fip.Omega, fip.out.t,
+        fip.p.effective_viscosity, fip.ref.maskactive)
     fip.out.u = out.u
     fip.out.ue = out.ue
     return nothing

@@ -1,38 +1,3 @@
-function comparison_figure(n)
-    fig = Figure()
-    axs = [Axis(fig[i, 1]) for i in 1:n]
-    return fig, axs
-end
-
-function update_compfig!(axs::Vector{Axis}, fi::Vector, bm::Vector, clr)
-    if length(axs) == length(fi) == length(bm)
-        nothing
-    else
-        error("Vectors don't have matching length.")
-    end
-
-    for i in eachindex(axs)
-        lines!(axs[i], bm[i], color = clr)
-        lines!(axs[i], fi[i], color = clr, linestyle = :dash)
-    end
-end
-
-function benchmark1_constants(Omega)
-    c = PhysicalConstants(rho_litho = 0.0)
-    p = LayeredEarth(Omega)
-    t_out = years2seconds.([0.0, 100.0, 500.0, 1500.0, 5000.0, 10_000.0, 50_000.0])
-    
-    εt = 1e-8
-    pushfirst!(t_out, -εt)
-    t_Hice = [-εt, 0.0, t_out[end]]
-
-    R, H = 1000e3, 1e3
-    Hcylinder = uniform_ice_cylinder(Omega, R, H)
-    Hice = [zeros(Omega.Nx, Omega.Ny), Hcylinder, Hcylinder]
-
-    return c, p, t_out, R, H, t_Hice, Hice
-end
-
 function benchmark1_compare(Omega, fip, H, R)
     # Comparing to analytical results
     ii, jj = slice_along_x(Omega)
@@ -81,7 +46,7 @@ end
 
 function benchmark1_external_loadupdate()
     # Generating numerical results
-    Omega = ComputationDomain(3000e3, 7)
+    Omega = ComputationDomain(3000e3, 7, correct_distortion = false)
     c, p, t_out, R, H, t_Hice, Hice = benchmark1_constants(Omega)
     fip = FastIsoProblem(Omega, c, p, t_out, t_Hice, Hice)
     update_diagnostics!(fip.now.dudt, fip.now.u, fip, 0.0)
@@ -161,7 +126,7 @@ function benchmark2()
             m_dudt = mean(abs.(dudt_fi .- dudt_bm))
             m_n = mean(abs.(n_fi .- n_bm))
             println("$m_u, $m_dudt, $m_n")
-            @test m_u < 30
+            @test m_u < 27
             @test m_dudt < 8
             @test m_n < 4
         end

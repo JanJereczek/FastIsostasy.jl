@@ -13,7 +13,7 @@ using CairoMakie, FastIsostasy
 W = 3000e3      # (m) half-width of the domain Wx = Wy
 n = 7           # implies an Nx x Ny grid with Nx = Ny = 2^n = 128.
 Omega = ComputationDomain(W, n)
-fig = Figure(resolution = (1600, 800), fontsize = 24)
+fig = Figure(size = (1600, 800), fontsize = 24)
 axs = [Axis3(fig[1, j], title = ["Original grid", "Projected grid"][j]) for j in 1:2]
 wireframe!(axs[1], Omega.X .* Omega.K, Omega.Y .* Omega.K,
     Omega.R .* cos.(deg2rad.(Omega.Lat)), color = :gray10, linewidth = 0.1)
@@ -50,7 +50,7 @@ The next section shows how to use the now obtained `p::LayeredEarth` for actual 
 
 ## Simple load and geometry
 
-We now apply a constant load, here a cylinder of ice with radius $$ R = 1000 \, \mathrm{km} $$ and thickness $$H = 1 \, \mathrm{km}$$, over `Omega::ComputationDomain` introduced in [`LayeredEarth`](@ref). To formulate the problem conviniently, we use [`FastIsoProblem`](@ref), a struct containing the variables and options that are necessary to perform the integration over time. We can then simply apply `solve!(fip::FastIsoProblem)` to perform the integration of the ODE. Under the hood, the ODE is obtained from the PDE by applying a Fourier collocation scheme contained in [`dudt_isostasy!`](@ref). The integration is performed according to `FastIsoProblem.diffeq::NamedTuple`, which contains the algorithm and optionally tolerances, maximum iteration number... etc.
+We now apply a constant load, here a cylinder of ice with radius $$ R = 1000 \, \mathrm{km} $$ and thickness $$H = 1 \, \mathrm{km}$$, over `Omega::ComputationDomain` introduced in [`LayeredEarth`](@ref). To formulate the problem conviniently, we use [`FastIsoProblem`](@ref), a struct containing the variables and options that are necessary to perform the integration over time. We can then simply apply `solve!(fip::FastIsoProblem)` to perform the integration of the ODE. Under the hood, the ODE is obtained from the PDE by applying a Fourier collocation scheme contained in [`lv_elva!`](@ref). The integration is performed according to `FastIsoProblem.diffeq::NamedTuple`, which contains the algorithm and optionally tolerances, maximum iteration number... etc.
 =#
 
 R = 1000e3                  # ice disc radius (m)
@@ -106,17 +106,13 @@ fig
 #=
 ## GPU support
 
-For about $$n \geq 7$$, the present example can be computed even faster by using GPU parallelism. It could not represent less work from the user's perspective, as it boils down to calling [`ComputationDomain`](@ref) with an extra keyword argument and passing it to a `::LayeredEarth` with the viscosity and depth values defined earlier:
+For about $$n \geq 7$$, the present example can be computed even faster by using GPU parallelism. It could not represent less work from the user's perspective, as it boils down to calling [`ComputationDomain`](@ref) with an extra keyword argument:
 =#
 
-Omega = ComputationDomain(W, n, use_cuda = true)
-p = LayeredEarth(Omega, layer_viscosities = lv, layer_boundaries = lb)
-fip = FastIsoProblem(Omega, c, p, t_out, t_Hice, Hice)
-solve!(fip)
-fig = plot3D(fip, [lastindex(t_out) ÷ 2, lastindex(t_out)])
+Omega = ComputationDomain(W, n, use_cuda = true);
 
 #=
-That's it, nothing more! For postprocessing, consider using [`reinit_structs_cpu`](@ref).
+We then pass `Omega` to a `LayeredEarth` and a `FastIsoProblem`, which we solve: that's it! For postprocessing, consider using [`reinit_structs_cpu`](@ref).
 
 !!! info "Only CUDA supported!"
     For now only Nvidia GPUs are supported and there is no plan of extending this compatibility at this point.
@@ -149,4 +145,15 @@ fig = plot3D(fip, [lastindex(t_out) ÷ 2, lastindex(t_out)])
 !!! warning "GPU not supported"
     [`step!`](@ref) does not support GPU computation so far. Make sure your model is initialized
     on CPU.
+
+## Using different backends
+
+ELRA is a GIA model that is commonly used in ice-sheet modelling. For the vast majority of applications, it is less accurate than LV-ELVA without providing any significant speed up. However, it can be used by specifying adequate options:
+
 =#
+
+p = LayeredEarth(Omega, tau = years2seconds(3e3))
+opts = SolverOptions(deformation_model = :elra)
+fip = FastIsoProblem(Omega, c, p, t_out, t_Hice, Hice, opts = opts)
+solve!(fip)
+fig = plot3D(fip, [lastindex(t_out) ÷ 2, lastindex(t_out)])
