@@ -44,6 +44,7 @@ include("structs.jl")
 include("utils.jl")
 include("derivatives.jl")
 include("derivatives_parallel.jl")
+include("integrators.jl")
 include("geostate.jl")
 include("mechanics.jl")
 include("inversion.jl")
@@ -84,6 +85,9 @@ export maxwelltime_scaling!, compute_shearmodulus, get_rigidity, load_prem
 export get_flexural_lengthscale, get_kei, calc_kei_value, calc_viscous_green
 export update_deformation_rhs!
 export build_greenintegrand, get_quad_coeffs, get_elasticgreen, get_geoidgreen
+
+# integrators.jl
+export simple_euler!, SimpleEuler
 
 # inversion.jl
 export InversionConfig, InversionData, InversionProblem, solve, extract_inversion
