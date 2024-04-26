@@ -1,0 +1,8 @@
+ignore:
+  - "benchmarks/*"
+  - "docs/*"
+  - "publication_v1.0/*"
+  - "src/input"
+  - "src/threaded.jl"             # not functional yet
+  - "src/inversion.jl"            # will be externalised + takes a lot of time
+  - "src/derivatives_parallel.jl" # cannot be tested because GPU not available in CI
