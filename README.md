@@ -2,8 +2,17 @@
 
 [![](https://img.shields.io/badge/docs-stable-blue.svg)](https://janjereczek.github.io/FastIsostasy.jl/dev/)
 [![](https://img.shields.io/badge/license-GNU_GPL_3.0-green.svg)](https://www.gnu.org/licenses/gpl-3.0.en.html)
-<!-- [![codecov](https://codecov.io/gh/JuliaDynamics/TransitionsInTimeseries.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/JuliaDynamics/TransitionsInTimeseries.jl) -->
 [![](https://img.shields.io/badge/GMD-preprint-purple.svg)](https://egusphere.copernicus.org/preprints/2023/egusphere-2023-2869/#discussion)
+[![][ci-img]][ci-url]
+[![][codecov-img]][codecov-url]
+<!-- [![codecov](https://codecov.io/gh/JuliaDynamics/TransitionsInTimeseries.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/JuliaDynamics/TransitionsInTimeseries.jl) -->
+
+[ci-img]: https://github.com/JanJereczek/FastIsostasy.jl/workflows/CI/badge.svg
+[ci-url]: https://github.com/JanJereczek/FastIsostasy.jl/actions
+
+[codecov-img]: https://codecov.io/gh/JanJereczek/FastIsostasy.jl/branch/master/graph/badge.svg
+[codecov-url]: https://codecov.io/gh/JanJereczek/FastIsostasy.jl
+
 
 ❄ *Fast and friendly glacial isostatic adjustment on CPU and GPU.*
 
