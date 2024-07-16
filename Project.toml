@@ -1,7 +1,7 @@
 name = "FastIsostasy"
 uuid = "80efc11e-3694-4407-a4bf-24e5955cde3d"
 authors = ["Jan Swierczek-Jereczek"]
-version = "0.3.0"
+version = "0.4.0"
 
 [deps]
 AbstractFFTs = "621f4979-c628-5d54-868e-fcf4e3e8185c"
