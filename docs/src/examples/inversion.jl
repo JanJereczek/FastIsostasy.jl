@@ -19,7 +19,7 @@ p = LayeredEarth(Omega, layer_boundaries = lb, layer_viscosities = lv)
 heatmap(p.effective_viscosity)
 
 #=
-To make this problem more exciting, we place the center of the ice load to $$ (-1000, -1000) \: \mathrm{km} $$ where the viscosity field displays a less uniform structure. For the sake of simplicity, the data to fit is obtained from a FastIsostasy simulation with the ground-truth viscosity field.
+To make this problem more exciting, we place the center of the ice load to $$(-1000, -1000) \: \mathrm{km} $$where the viscosity field displays a less uniform structure. For the sake of simplicity, the data to fit is obtained from a FastIsostasy simulation with the ground-truth viscosity field.
 =#
 
 R, H = 1000e3, 1e3
