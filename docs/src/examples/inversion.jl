@@ -5,6 +5,8 @@ FastIsostasy relies on simplifications of the full GIA problem and might therefo
 =#
 
 using CairoMakie
+using Distributions
+using EnsembleKalmanProcesses
 using FastIsostasy
 
 Omega = ComputationDomain(3000e3, 5)
@@ -17,7 +19,7 @@ p = LayeredEarth(Omega, layer_boundaries = lb, layer_viscosities = lv)
 heatmap(p.effective_viscosity)
 
 #=
-To make this problem more exciting, we shift the center of the ice load to $$ (-1000, -1000) \: \mathrm{km} $$ where the viscosity field displays a less uniform structure. For the sake of simplicity, the data to fit is obtained from a FastIsostasy simulation with the ground-truth viscosity field.
+To make this problem more exciting, we place the center of the ice load to $$ (-1000, -1000) \: \mathrm{km} $$ where the viscosity field displays a less uniform structure. For the sake of simplicity, the data to fit is obtained from a FastIsostasy simulation with the ground-truth viscosity field.
 =#
 
 R, H = 1000e3, 1e3
@@ -35,10 +37,10 @@ solve!(fip)
 Now that we have the displacement field, we can recover the viscosity field from which it results. We therefore pass an [`InversionConfig`](@ref) and an [`InversionData`](@ref) to an [`InversionProblem`](@ref). Let's look at the initialized viscosity field:
 =#
 
-config = InversionConfig(N_iter = 15)
+config = InversionConfig(N_iter = 15, method = EnsembleKalmanProcesses.Unscented)
 data = InversionData(copy(fip.out.t[2:end]), copy(fip.out.u[2:end]), copy(Hice[2:end]),
     config)
-paraminv = InversionProblem(deepcopy(fip), config, data)
+paraminv = inversion_problem(deepcopy(fip), config, data)
 
 function plot_viscfields(paraminv)
     estim_viscosity = copy(true_viscosity)
