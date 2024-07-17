@@ -70,7 +70,7 @@ function matrify(x::Vector{<:Real}, N::Int)
 end
 
 function matrify(x::Vector{T}, Nx::Int, Ny::Int) where {T<:Real}
-    X = zeros(T, Nx, Ny, length(x))
+    X = Array{T, 3}(undef, Nx, Ny, length(x))
     @inbounds for i in eachindex(x)
         X[:, :, i] = fill(x[i], Nx, Ny)
     end
@@ -481,7 +481,15 @@ end
 # Kernel utils
 #####################################################
 
-null(Omega::ComputationDomain) = copy(Omega.null)
+function null(Omega::ComputationDomain{T, L, M}) where {T, L, M}
+    return L(undef, Omega.Nx, Omega.Ny)
+end
+
+function kernelnull(Omega::ComputationDomain{T, L, M}) where {T, L, M}
+    return M(undef, Omega.Nx, Omega.Ny)
+end
+
+# null(Omega::ComputationDomain) = copy(Omega.null)
 
 function kernelcollect(X, Omega)
     if not(Omega.use_cuda)
@@ -558,8 +566,8 @@ function remake!(fip::FastIsoProblem)
     fip.now.b .= copy(fip.ref.b)
 
     # Some values are not included in ReferenceState and need to be init with 0.
-    fip.now.dudt .= null(fip.Omega)
-    fip.now.geoid .= null(fip.Omega)
+    fip.now.dudt .= kernelnull(fip.Omega)
+    fip.now.geoid .= kernelnull(fip.Omega)
     fip.now.countupdates = 0
     fip.now.columnanoms = ColumnAnomalies(fip.Omega)
 

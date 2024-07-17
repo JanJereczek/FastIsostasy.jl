@@ -208,9 +208,9 @@ lv = [1e19, 1e21]
 p = LayeredEarth(Omega, layer_boundaries = lb, layer_viscosities = lv)
 ```
 
-which initializes a lithosphere of thickness $$T_1 = 100 \\mathrm{km}$$, a viscous
-channel between $$T_1$$ and $$T_2 = 200 \\mathrm{km}$$ and a viscous halfspace starting
-at $$T_2$$. This represents a homogenous case. For heterogeneous ones, simply make
+which initializes a lithosphere of thickness ``T_1 = 100 \\mathrm{km}``, a viscous
+channel between ``T_1``and ``T_2 = 200 \\mathrm{km}``and a viscous halfspace starting
+at ``T_2``. This represents a homogenous case. For heterogeneous ones, simply make
 `lb::Vector{Matrix}`, `lv::Vector{Matrix}` such that the vector elements represent the
 lateral variability of each layer on the grid of `Omega::ComputationDomain`.
 """
@@ -229,6 +229,7 @@ end
 
 function LayeredEarth(
     Omega::ComputationDomain{T, L, M};
+    litho_thickness = nothing,
     layer_boundaries::A = T.([88e3, 400e3]),    # 88 km: asthenosphere, 400 km: half-space (Bueler 2007).
     layer_viscosities::B = T.([1e19, 1e21]),    # (Pa*s) (Bueler 2007, Ivins 2022, Fig 12 WAIS)
     litho_youngmodulus::T = T(6.6e10),         # (N/m^2)
@@ -253,13 +254,30 @@ function LayeredEarth(
         layer_viscosities = matrify(layer_viscosities, Omega.Nx, Omega.Ny)
     end
 
-    litho_thickness = layer_boundaries[:, :, 1]
+    if isnothing(litho_thickness)
+        litho_thickness = layer_boundaries[:, :, 1]
+    end
     litho_rigidity = get_rigidity.(litho_thickness, litho_youngmodulus, litho_poissonratio)
 
-    layers_thickness = diff(layer_boundaries, dims=3)
-    effective_viscosity = get_effective_viscosity(
-        Omega, layer_viscosities, layers_thickness, mantle_poissonratio)
+    layering = "folded"
 
+    if layering == "equalizing"
+        layers_thickness = diff(layer_boundaries, dims=3)
+        effective_viscosity = get_effective_viscosity(
+            Omega, layer_viscosities, layers_thickness, mantle_poissonratio)
+    elseif layering == "embedded"
+        layers_thickness = diff(layer_boundaries, dims=3)
+        effective_viscosity = new_effective_viscosity(Omega, litho_thickness,
+            layer_boundaries, layer_viscosities, layers_thickness, mantle_poissonratio)
+    elseif layering == "folded"
+        effective_viscosity, folded_layers, folded_viscosities =
+            interpolated_effective_viscosity(Omega, layer_boundaries, layer_viscosities,
+                litho_thickness, mantle_poissonratio)
+    else
+        throw(ArgumentError("Unknown layering type: $layering"))
+    end
+
+    
     litho_rigidity, effective_viscosity = kernelpromote(
         [litho_rigidity, effective_viscosity], Omega.arraykernel)
     
@@ -268,7 +286,7 @@ function LayeredEarth(
     return LayeredEarth(
         effective_viscosity,
         litho_thickness, litho_rigidity, litho_poissonratio,
-        mantle_poissonratio, layer_viscosities, layer_boundaries,
+        mantle_poissonratio, folded_viscosities, folded_layers,
         tau, litho_youngmodulus, litho_shearmodulus,
     )
 
@@ -414,7 +432,7 @@ function FastIsoTools(
 
     realmatrices = [null(Omega) for _ in eachindex(fieldnames(PreAllocated))[1:end-3]]
     cplxmatrices = [complex.(null(Omega)) for _ in 1:2]
-    convo_out = Omega.arraykernel(zeros(T, size(geoidconvo.Afft)...))
+    convo_out = Omega.arraykernel(Matrix{T}(undef, size(geoidconvo.Afft)...))
     prealloc = PreAllocated(realmatrices..., cplxmatrices..., convo_out)
     
     return FastIsoTools(viscousconvo, elasticconvo, geoidconvo, pfft!, pifft!,
@@ -458,21 +476,20 @@ end
 function DenseOutputs(Omega::ComputationDomain{T, L, M}, t_out::Vector{T}, eta_eff, maskactive) where
     {T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}}
     # initialize with placeholders
-    placeholder = Array(null(Omega))
-    u = [copy(placeholder) for t in t_out]
-    dudt = [copy(placeholder) for t in t_out]
-    ue = [copy(placeholder) for t in t_out]
-    b = [copy(placeholder) for t in t_out]
+    u = [null(Omega) for t in t_out]
+    dudt = [null(Omega) for t in t_out]
+    ue = [null(Omega) for t in t_out]
+    b = [null(Omega) for t in t_out]
     bsl = zeros(T, length(t_out))
-    geoid = [copy(placeholder) for t in t_out]
-    seasurfaceheight = [copy(placeholder) for t in t_out]
-    maskgrounded = [copy(placeholder) for t in t_out]
-    Hice = [copy(placeholder) for t in t_out]
-    Hwater = [copy(placeholder) for t in t_out]
-    canomfull = [copy(placeholder) for t in t_out]
-    canomload = [copy(placeholder) for t in t_out]
-    canomlitho = [copy(placeholder) for t in t_out]
-    canommantle = [copy(placeholder) for t in t_out]
+    geoid = [null(Omega) for t in t_out]
+    seasurfaceheight = [null(Omega) for t in t_out]
+    maskgrounded = [null(Omega) for t in t_out]
+    Hice = [null(Omega) for t in t_out]
+    Hwater = [null(Omega) for t in t_out]
+    canomfull = [null(Omega) for t in t_out]
+    canomload = [null(Omega) for t in t_out]
+    canomlitho = [null(Omega) for t in t_out]
+    canommantle = [null(Omega) for t in t_out]
     return DenseOutputs(t_out, similar(t_out), u, dudt, ue, b, geoid, seasurfaceheight,
         maskgrounded, Hice, Hwater, canomfull, canomload, canomlitho, canommantle,
         0.0, Array(eta_eff), T.(Array(maskactive)))
@@ -491,12 +508,11 @@ end
 function SparseOutputs(Omega::ComputationDomain{T, L, M}, t_out::Vector{T}) where
     {T<:AbstractFloat, L, M<:KernelMatrix{T}}
     # initialize with placeholders
-    placeholder = Array(null(Omega))
-    utot = [copy(placeholder) for t in t_out]
-    b = [copy(placeholder) for t in t_out]
-    seasurfaceheight = [copy(placeholder) for t in t_out]
-    maskgrounded = [copy(placeholder) for t in t_out]
-    Hice = [copy(placeholder) for t in t_out]
+    utot = [null(Omega) for t in t_out]
+    b = [null(Omega) for t in t_out]
+    seasurfaceheight = [null(Omega) for t in t_out]
+    maskgrounded = [null(Omega) for t in t_out]
+    Hice = [null(Omega) for t in t_out]
     return SparseOutputs(t_out, utot, b, seasurfaceheight, maskgrounded, Hice, 0.0)
 end
 
