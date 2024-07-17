@@ -25,7 +25,7 @@ end
 """
     m_per_sec2mm_per_yr(dudt::Real)
 
-Convert displacement rate `dudt` from $$ m \\, s^{-1} $$ to $$ mm \\, \\mathrm{yr}^{-1} $$.
+Convert displacement rate `dudt` from ``m \\, s^{-1} ``to ``mm \\, \\mathrm{yr}^{-1} ``.
 """
 function m_per_sec2mm_per_yr(dudt::Real)
     return dudt * 1e3 * SECONDS_PER_YEAR
