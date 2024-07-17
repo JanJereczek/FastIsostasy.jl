@@ -25,7 +25,7 @@ end
 """
     m_per_sec2mm_per_yr(dudt::Real)
 
-Convert displacement rate `dudt` from \$ m \\, s^{-1} \$ to \$ mm \\, \\mathrm{yr}^{-1} \$.
+Convert displacement rate `dudt` from ``m \\, s^{-1} ``to ``mm \\, \\mathrm{yr}^{-1} ``.
 """
 function m_per_sec2mm_per_yr(dudt::Real)
     return dudt * 1e3 * SECONDS_PER_YEAR
@@ -94,10 +94,10 @@ end
 # Just a helper for blur! Not performant but we only blur at preprocessing
 # so we do not care :)
 function samesize_conv(X::M, Y::M, Omega::ComputationDomain) where
-    {T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}}
-    (; i1, i2, j1, j2) = Omega
+    {T<:AbstractFloat, M<:KernelMatrix{T}}
+    (; i1, i2, j1, j2, convo_offset) = Omega
     ipc = InplaceConvolution(X, false)
-    return samesize_conv(Y, ipc, Omega.i1, Omega.i2, Omega.j1, Omega.j2, Omega.convo_offset)
+    return samesize_conv(Y, ipc, i1, i2, j1, j2, convo_offset)
 end
 function samesize_conv(X, ipc, i1, i2, j1, j2, convo_offset)
     convo = ipc(X)

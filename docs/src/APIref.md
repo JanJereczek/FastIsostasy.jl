@@ -31,7 +31,6 @@ update_elasticresponse!
 InversionConfig
 InversionData
 InversionProblem
-solve!(::InversionProblem)
 ```
 
 ## Convenience

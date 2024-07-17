@@ -208,9 +208,9 @@ lv = [1e19, 1e21]
 p = LayeredEarth(Omega, layer_boundaries = lb, layer_viscosities = lv)
 ```
 
-which initializes a lithosphere of thickness \$T_1 = 100 \\mathrm{km}\$, a viscous
-channel between \$T_1\$ and \$T_2 = 200 \\mathrm{km}\$ and a viscous halfspace starting
-at \$T_2\$. This represents a homogenous case. For heterogeneous ones, simply make
+which initializes a lithosphere of thickness $$T_1 = 100 \\mathrm{km}$$, a viscous
+channel between $$T_1$$ and $$T_2 = 200 \\mathrm{km}$$ and a viscous halfspace starting
+at $$T_2$$. This represents a homogenous case. For heterogeneous ones, simply make
 `lb::Vector{Matrix}`, `lv::Vector{Matrix}` such that the vector elements represent the
 lateral variability of each layer on the grid of `Omega::ComputationDomain`.
 """

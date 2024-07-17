@@ -44,13 +44,13 @@ p = LayeredEarth(Omega, layer_viscosities = lv, layer_boundaries = lb)
 extrema(p.effective_viscosity)
 
 #=
-As expected, the effective viscosity is a homogeneous field. It corresponds to a nonlinear mean of the layered values provided by the user. Note that we have set $$ \ŗho_{litho} = 0 $$ to prevent the lithosphere from contributing to the hydrostatic, upward force. This is made to comply with the later computed analytical solution, which assumes a purely elastic lithosphere that does not generate a hydrostatic upward force when displaced. In reality, this is arguably wrong and the default choice `c = PhysicalConstants()` therefore uses $$ \ŗho_{litho} = 2600 \, \mathrm{kg \, m^{-3}} $$.
+As expected, the effective viscosity is a homogeneous field. It corresponds to a nonlinear mean of the layered values provided by the user. Note that we have set $$\rho_{litho} = 0$$ to prevent the lithosphere from contributing to the hydrostatic, upward force. This is made to comply with the later computed analytical solution, which assumes a purely elastic lithosphere that does not generate a hydrostatic upward force when displaced. In reality, this is arguably wrong and the default choice `c = PhysicalConstants()` therefore uses $$\rho_{litho} = 2600 \, \mathrm{kg \, m^{-3}}$$.
 
 The next section shows how to use the now obtained `p::LayeredEarth` for actual GIA computation.
 
 ## Simple load and geometry
 
-We now apply a constant load, here a cylinder of ice with radius $$ R = 1000 \, \mathrm{km} $$ and thickness $$H = 1 \, \mathrm{km}$$, over `Omega::ComputationDomain` introduced in [`LayeredEarth`](@ref). To formulate the problem conviniently, we use [`FastIsoProblem`](@ref), a struct containing the variables and options that are necessary to perform the integration over time. We can then simply apply `solve!(fip::FastIsoProblem)` to perform the integration of the ODE. Under the hood, the ODE is obtained from the PDE by applying a Fourier collocation scheme contained in [`lv_elva!`](@ref). The integration is performed according to `FastIsoProblem.diffeq::NamedTuple`, which contains the algorithm and optionally tolerances, maximum iteration number... etc.
+We now apply a constant load, here a cylinder of ice with radius $$R = 1000 \, \mathrm{km}$$ and thickness $$H = 1 \, \mathrm{km}$$, over `Omega::ComputationDomain` introduced in [`LayeredEarth`](@ref). To formulate the problem conviniently, we use [`FastIsoProblem`](@ref), a struct containing the variables and options that are necessary to perform the integration over time. We can then simply apply `solve!(fip::FastIsoProblem)` to perform the integration of the ODE. Under the hood, the ODE is obtained from the PDE by applying a Fourier collocation scheme contained in [`lv_elva!`](@ref). The integration is performed according to `FastIsoProblem.diffeq::NamedTuple`, which contains the algorithm and optionally tolerances, maximum iteration number... etc.
 =#
 
 R = 1000e3                  # ice disc radius (m)
