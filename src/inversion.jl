@@ -57,7 +57,7 @@ end
 
 function InversionConfig(
     method;
-    N_iter = 20,
+    N_iter = 5,
     α_reg = 1.0,
     update_freq = 1,
     n_samples = 100,
