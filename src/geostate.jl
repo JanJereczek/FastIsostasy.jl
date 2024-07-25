@@ -1,27 +1,27 @@
 """
-    update_geoid!(fip::FastIsoProblem)
+    update_dz_ss!(fip::FastIsoProblem)
 
-Update the geoid by convoluting the Green's function with the load anom.
+Update the SSH perturbation `dz_ss` by convoluting the Green's function with the load anom.
 """
-function update_geoid!(fip::FastIsoProblem)
-    fip.now.geoid .= samesize_conv(mass_anom(fip), fip.tools.geoidconvo, fip.Omega)
+function update_dz_ss!(fip::FastIsoProblem)
+    fip.now.dz_ss .= samesize_conv(mass_anom(fip), fip.tools.dz_ssconvo, fip.Omega)
     return nothing
 end
 
 """
-    get_geoidgreen(fip::FastIsoProblem)
+    get_dz_ssgreen(fip::FastIsoProblem)
 
-Return the Green's function used to compute the geoid anomaly as in [^Coulon2021].
+Return the Green's function used to compute the SSH perturbation `dz_ss` as in [^Coulon2021].
 """
-function get_geoidgreen(Omega::ComputationDomain{T, L, M}, c::PhysicalConstants{T}
+function get_dz_ssgreen(Omega::ComputationDomain{T, L, M}, c::PhysicalConstants{T}
     ) where {T<:AbstractFloat, L, M<:KernelMatrix{T}}
-    geoidgreen = unbounded_geoidgreen(Omega.R, c)
-    max_geoidgreen = unbounded_geoidgreen(norm([100e3, 100e3]), c)  # tolerance = resolution on 100km
-    return min.(geoidgreen, max_geoidgreen)
-    # equivalent to: geoidgreen[geoidgreen .> max_geoidgreen] .= max_geoidgreen
+    dz_ssgreen = unbounded_dz_ssgreen(Omega.R, c)
+    max_dz_ssgreen = unbounded_dz_ssgreen(norm([100e3, 100e3]), c)  # tolerance = resolution on 100km
+    return min.(dz_ssgreen, max_dz_ssgreen)
+    # equivalent to: dz_ssgreen[dz_ssgreen .> max_dz_ssgreen] .= max_dz_ssgreen
 end
 
-function unbounded_geoidgreen(R, c::PhysicalConstants{<:AbstractFloat})
+function unbounded_dz_ssgreen(R, c::PhysicalConstants{<:AbstractFloat})
     return c.r_pole ./ ( 2 .* c.mE .* sin.( R ./ (2 .* c.r_pole) ) )
 end
 
@@ -33,7 +33,7 @@ function anom!(x, scale, now, ref)
 end
 
 function columnanom_mantle!(fip::FastIsoProblem)
-    anom!(fip.now.columnanoms.mantle, fip.c.rho_uppermantle, fip.now.u, fip.ref.u)
+    anom!(fip.now.columnanoms.mantle, fip.p.rho_uppermantle, fip.now.u, fip.ref.u)
     return nothing
 end
 
@@ -81,11 +81,11 @@ end
 
 function watercolumn(fip)
     now = fip.now
-    return watercolumn(now.H_ice, now.maskgrounded, now.b, now.seasurfaceheight, fip.c)
+    return watercolumn(now.H_ice, now.maskgrounded, now.b, now.z_ss, fip.c)
 end
 
-function watercolumn(H_ice, maskgrounded, b, seasurfaceheight, c)
-    wcl = max.(seasurfaceheight .- b, 0)
+function watercolumn(H_ice, maskgrounded, b, z_ss, c)
+    wcl = max.(z_ss .- b, 0)
     return (H_ice .<= 1) .* wcl + not.(maskgrounded) .* (H_ice .> 1) .* (wcl .-
         (H_ice .* c.rho_ice ./ c.rho_seawater))
 end
@@ -101,30 +101,30 @@ end
 
 get_maskgrounded(state, c) = height_above_floatation(state, c) .> 0
 
-function get_maskgrounded(H_ice, b, seasurfaceheight, c)
-    return height_above_floatation(H_ice, b, seasurfaceheight, c) .> 0
+function get_maskgrounded(H_ice, b, z_ss, c)
+    return height_above_floatation(H_ice, b, z_ss, c) .> 0
 end
 
 function height_above_floatation(state::GeoState, c::PhysicalConstants)
     return height_above_floatation(state.H_ice, state.b,
-        state.seasurfaceheight .+ state.bsl, c)
+        state.z_ss, c)
 end
 
-function height_above_floatation(H_ice, b, seasurfaceheight, c)
-    return H_ice .+ min.(b .- seasurfaceheight, 0) .* (c.rho_seawater / c.rho_ice)
+function height_above_floatation(H_ice, b, z_ss, c)
+    return max.(H_ice .+ min.(b .- z_ss, 0), 0) .* (c.rho_seawater / c.rho_ice)
 end
 
 function update_maskocean!(fip)
     now = fip.now
     if fip.Omega.use_cuda
-        now.maskocean .= get_maskocean(now.seasurfaceheight, now.b, now.maskgrounded)
+        now.maskocean .= get_maskocean(now.z_ss, now.b, now.maskgrounded)
     else
-        now.maskocean .= collect(get_maskocean(now.seasurfaceheight, now.b, now.maskgrounded))
+        now.maskocean .= collect(get_maskocean(now.z_ss, now.b, now.maskgrounded))
     end
 end
 
-function get_maskocean(seasurfaceheight, b, maskgrounded)
-    return ((seasurfaceheight - b) .> 0) .& not.(maskgrounded)
+function get_maskocean(z_ss, b, maskgrounded)
+    return ((z_ss - b) .> 0) .& not.(maskgrounded)
 end
 
 function update_bedrock!(fip::FastIsoProblem{T, L, M, C, FP, IP}, u::M) where
@@ -136,15 +136,15 @@ function update_bedrock!(fip::FastIsoProblem{T, L, M, C, FP, IP}, u::M) where
 end
 
 """
-    update_seasurfaceheight!(fip::FastIsoProblem)
+    update_z_ss!(fip::FastIsoProblem)
 
 Update the sea-level by adding the various contributions as in [coulon-contrasting-2021](@cite).
-Here, the constant term is used to impose a zero geoid perturbation in the far field rather
+Here, the constant term is used to impose a zero dz_ss perturbation in the far field rather
 thank for mass conservation and is embedded in convolution operation.
 """
-function update_seasurfaceheight!(fip::FastIsoProblem)
+function update_z_ss!(fip::FastIsoProblem)
     now = fip.now
-    @. now.seasurfaceheight = fip.ref.seasurfaceheight + now.geoid + now.bsl
+    @. now.z_ss = fip.ref.z_ss + now.dz_ss + now.bsl
     return nothing
 end
 
@@ -165,8 +165,7 @@ function update_bsl!(fip::FastIsoProblem)
     Vnew = total_volume(fip)
 
     delta_V = Vnew - Vold
-    delta_V_ocean = -delta_V
-    fip.now.osc(delta_V_ocean)
+    fip.now.osc(-delta_V)
 
     fip.now.bsl = fip.now.osc.z_k
     return nothing
@@ -211,6 +210,6 @@ allow a correct representation of external sea-level forcings.
 """
 function update_V_pov!(fip::FastIsoProblem)
     fip.now.V_pov = sum( max.(fip.ref.b - fip.now.b, 0) .*
-        (fip.now.b .< fip.now.seasurfaceheight) .* fip.Omega.A )
+        (fip.now.b .< fip.now.z_ss) .* fip.Omega.A )
     return nothing
 end
