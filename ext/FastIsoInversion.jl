@@ -8,6 +8,7 @@ using EnsembleKalmanProcesses.Observations: Observations
 using EnsembleKalmanProcesses.ParameterDistributions: ParameterDistributions,
     ParameterDistribution, combine_distributions, constrained_gaussian
 using LinearAlgebra
+using .Threads
 
 """
     inversion_problem(fip, config, data, reduction, priors; save_stride_iter::Int = 1)
@@ -72,18 +73,21 @@ inversion as initialized in `paraminv`.
 function FastIsostasy.solve!(paraminv::InversionProblem; verbose::Bool = false)
 
     paraminv.out[1] .= get_ϕ_mean_final(paraminv.priors, paraminv.ukiobj)
+    ϕ_n = get_ϕ_final(paraminv.priors, paraminv.ukiobj)
+    fips = [deepcopy(paraminv.fip) for _ in 1:nthreads()]
 
     for n in 1:paraminv.config.N_iter
 
         # Get params in physical/constrained space
-        ϕ_n = get_ϕ_final(paraminv.priors, paraminv.ukiobj)
+        ϕ_n .= get_ϕ_final(paraminv.priors, paraminv.ukiobj)
 
-        @inbounds for j in axes(ϕ_n, 2)
+        Threads.@threads for j in axes(ϕ_n, 2)
             if verbose && (rem(j, 10) == 0)
                 println("Populating ensemble displacement matrix at n = $n, j = $j")
             end
-            FastIsostasy.reconstruct!(paraminv.fip, ϕ_n[:, j], paraminv.reduction)
-            paraminv.G_ens[:, j] = forward_fastiso(paraminv)
+            id = Threads.threadid()
+            FastIsostasy.reconstruct!(fips[id], ϕ_n[:, j], paraminv.reduction)
+            paraminv.G_ens[:, j] .= forward_fastiso(fips[id], paraminv.reduction)
         end
 
         if verbose
@@ -95,16 +99,16 @@ function FastIsostasy.solve!(paraminv::InversionProblem; verbose::Bool = false)
         paraminv.out[n+1] .= get_ϕ_mean_final(paraminv.priors, paraminv.ukiobj)
         print_inversion_evolution(paraminv, n, ϕ_n, paraminv.reduction)
     end
+
+    FastIsostasy.reconstruct!(paraminv.fip, get_ϕ_mean_final(paraminv.priors, paraminv.ukiobj),
+        paraminv.reduction)
+
     return nothing
 end
 
-function FastIsostasy.forward_fastiso(paraminv::InversionProblem)
-
-    fip, r = paraminv.fip, paraminv.reduction
-    remake!(paraminv.fip)
-    solve!(paraminv.fip)
-
-    # results from k=2 onwards because k=1 returns solution at time t=0.
+function FastIsostasy.forward_fastiso(fip::FastIsoProblem, r::ParameterReduction)
+    remake!(fip)
+    solve!(fip)
     return FastIsostasy.extract_output(fip, r)
 end
 
