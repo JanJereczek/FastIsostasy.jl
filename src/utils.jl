@@ -133,89 +133,35 @@ end
 #     return view(convo, Omega.i1:Omega.i2, Omega.j1:Omega.j2)
 # end
 
-"""
-    write_out!(fip::FastIsoProblem)
-
-Write results in output vectors if the load is updated internally.
-If the load is updated externally, the user is responsible for writing results.
-"""
-function write_out!(fip::FastIsoProblem, k::Int)
-    if fip.opts.internal_loadupdate
-        fip.out.bsl[k] = fip.now.bsl
-        fip.out.u[k] .= copy(Array(fip.now.u))
-        fip.out.dudt[k] .= copy(Array(fip.now.dudt))
-        fip.out.ue[k] .= copy(Array(fip.now.ue))
-        fip.out.b[k] .= copy(Array(fip.now.b))
-        fip.out.geoid[k] .= copy(Array(fip.now.geoid))
-        fip.out.seasurfaceheight[k] .= copy(Array(fip.now.seasurfaceheight))
-        fip.out.maskgrounded[k] .= copy(Array(fip.now.maskgrounded))
-        fip.out.Hice[k] .= copy(Array(fip.now.H_ice))
-        fip.out.Hwater[k] .= copy(Array(fip.now.H_water))
-        fip.out.canomfull[k] .= copy(Array(fip.now.columnanoms.full))
-        fip.out.canomload[k] .= copy(Array(fip.now.columnanoms.load))
-        fip.out.canomlitho[k] .= copy(Array(fip.now.columnanoms.litho))
-        fip.out.canommantle[k] .= copy(Array(fip.now.columnanoms.mantle))
+function write_step(ncout::NetcdfOutput{Tout}, state::CurrentState{T, M}, k::Int) where {
+    T<:AbstractFloat, M<:KernelMatrix{T}, Tout<:AbstractFloat}
+    for i in eachindex(ncout.varnames3D)
+        if M == Matrix{T}
+            ncout.buffer .= Tout.(getfield(state, ncout.varsfi3D[i]))
+        else
+            ncout.buffer .= Tout.(Array(getfield(state, ncout.varsfi3D[i])))
+        end
+        NetCDF.open(ncout.filename, mode = NC_WRITE) do nc
+            NetCDF.putvar(nc, ncout.varnames3D[i], ncout.buffer,
+                start = [1, 1, k], count = [-1, -1, 1])
+        end
+    end
+    for i in eachindex(ncout.varnames1D)
+        val = Tout(getfield(state, ncout.varsfi1D[i]))
+        NetCDF.open(ncout.filename, mode = NC_WRITE) do nc
+            NetCDF.putvar(nc, ncout.varnames1D[i], [val], start = [k], count = [1])
+        end
     end
 end
 
 """
-    savefip(filename, fip; T = Float32)
-Save the output of `fip::FastIsoProblem` as NetCDF file under `filename`.
+    write_out!(fip::FastIsoProblem)
+
+Write results in output vectors.
 """
-function savefip(filename, fip; T = Float32)
-
-    ds = NCDataset(filename, "c")
-    x, y, t = T.(fip.Omega.x), T.(fip.Omega.y), T.(fip.out.t)
-    defDim(ds, "x", length(x))
-    defDim(ds, "y", length(y))
-    defDim(ds, "t", length(t))
-    ncx = defVar(ds, "x", T, ("x",))
-    ncy = defVar(ds, "y", T, ("y",))
-    nct = defVar(ds, "t", T, ("t",))
-    ncx[:] = x
-    ncy[:] = y
-    nct[:] = seconds2years.(t)
-
-    append1D2nc!(ds, T, fip.out.bsl, "bsl")
-
-    append2D2nc!(ds, T, log10.(fip.out.eta_eff), "log10 effective viscosity")
-    append2D2nc!(ds, T, fip.out.maskactive, "active mask")
-
-    append3D2nc!(ds, T, fip.out.u, "u")
-    append3D2nc!(ds, T, fip.out.dudt, "dudt")
-    append3D2nc!(ds, T, fip.out.ue, "ue")
-    append3D2nc!(ds, T, fip.out.b, "b")
-    append3D2nc!(ds, T, fip.out.geoid, "geoid")
-    append3D2nc!(ds, T, fip.out.seasurfaceheight, "seasurfaceheight")
-    append3D2nc!(ds, T, fip.out.maskgrounded, "maskgrounded")
-    append3D2nc!(ds, T, fip.out.Hice, "Hice")
-    append3D2nc!(ds, T, fip.out.Hwater, "Hwater")
-    append3D2nc!(ds, T, fip.out.canomfull, "canomfull")
-    append3D2nc!(ds, T, fip.out.canomload, "canomload")
-    append3D2nc!(ds, T, fip.out.canomlitho, "canomlitho")
-    append3D2nc!(ds, T, fip.out.canommantle, "canommantle")
-    
-    close(ds)
-
-end
-
-function append1D2nc!(ds, T, Z, var::String)
-    ncZ = defVar(ds, var, T, ("t",))
-    ncZ[:] = T.(Z)
-    return nothing
-end
-
-function append2D2nc!(ds, T, Z, var::String)
-    ncZ = defVar(ds, var, T, ("x", "y"))
-    ncZ[:, :] = T.(Z)
-    return nothing
-end
-
-function append3D2nc!(ds, T, Z, var::String)
-    Z = cat(Z..., dims = 3)
-    ncZ = defVar(ds, var, T, ("x", "y", "t"))
-    ncZ[:, :, :] = T.(Z)
-    return nothing
+function write_out!(fip::FastIsoProblem, k::Int)
+    fip.out.u[k] .= copy(Array(fip.now.u))
+    fip.out.ue[k] .= copy(Array(fip.now.ue))
 end
 
 #####################################################
@@ -482,12 +428,20 @@ end
 #####################################################
 
 function null(Omega::ComputationDomain{T, L, M}) where {T, L, M}
-    return L(undef, Omega.Nx, Omega.Ny)
+    return zeros(T, Omega.Nx, Omega.Ny)
 end
 
 function kernelnull(Omega::ComputationDomain{T, L, M}) where {T, L, M}
-    return M(undef, Omega.Nx, Omega.Ny)
+    return Omega.arraykernel(zeros(T, Omega.Nx, Omega.Ny))
 end
+
+# function null(Omega::ComputationDomain{T, L, M}) where {T, L, M}
+#     return L(undef, Omega.Nx, Omega.Ny)
+# end
+
+# function kernelnull(Omega::ComputationDomain{T, L, M}) where {T, L, M}
+#     return M(undef, Omega.Nx, Omega.Ny)
+# end
 
 # null(Omega::ComputationDomain) = copy(Omega.null)
 
@@ -548,10 +502,10 @@ end
 #     @set fip.now = CurrentState(fip.Omega, fip.ref)
 #     println(extrema(fip.now.u))
 #     if fip.opts.dense_output
-#         @set fip.out = DenseOutputs(fip.Omega, fip.out.t,
+#         @set fip.ncout = DenseOutputs(fip.Omega, fip.ncout.t,
 #             fip.p.effective_viscosity, fip.ref.maskactive)
 #     else
-#         @set fip.out = SparseOutputs(fip.Omega, fip.out.t)
+#         @set fip.ncout = SparseOutputs(fip.Omega, fip.ncout.t)
 #     end
 #     return nothing
 # end
@@ -560,21 +514,16 @@ function remake!(fip::FastIsoProblem)
     # Get values from ReferenceState
     fip.now.u .= copy(fip.ref.u)
     fip.now.ue .= copy(fip.ref.ue)
-    fip.now.seasurfaceheight .= copy(fip.ref.seasurfaceheight)
+    fip.now.z_ss .= copy(fip.ref.z_ss)
     fip.now.H_water .= copy(fip.ref.H_water)
-    fip.now.H_ice .= fip.tools.Hice(fip.out.t[1])
+    fip.now.H_ice .= fip.tools.Hice(fip.ncout.t[1])
     fip.now.b .= copy(fip.ref.b)
 
     # Some values are not included in ReferenceState and need to be init with 0.
     fip.now.dudt .= kernelnull(fip.Omega)
-    fip.now.geoid .= kernelnull(fip.Omega)
+    fip.now.dz_ss .= kernelnull(fip.Omega)
     fip.now.countupdates = 0
     fip.now.columnanoms = ColumnAnomalies(fip.Omega)
-
-    out = DenseOutputs(fip.Omega, fip.out.t,
-        fip.p.effective_viscosity, fip.ref.maskactive)
-    fip.out.u = out.u
-    fip.out.ue = out.ue
     return nothing
 end
 
