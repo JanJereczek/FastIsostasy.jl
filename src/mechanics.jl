@@ -12,17 +12,26 @@ function solve!(fip::FastIsoProblem)
         error("`solve!` does not support external updating of the load. Use `step!` instead.")
     end
     t1 = time()
-    t_out = fip.out.t
+    t_out = fip.ncout.t
 
     if fip.opts.deformation_model == :lv_elra
+        throw(ArgumentError("LV-ELRA is not implemented yet."))
+
         # No need to have heterogeneous viscosity for LV-ELRA
         fip.p.effective_viscosity .= 1e21
     end
 
     # Make a first diagnotisc update to store these values. (k=1)
     update_diagnostics!(fip.now.dudt, fip.now.u, fip, t_out[1])
-    write_out!(fip, 1)
+    
+    if length(fip.ncout.filename) > 0
+        write_step(fip.ncout, fip.now, 1)
+    end
 
+    if !(fip.out isa MinimalOutput)
+        write_out!(fip, 1)
+    end
+    
     # Initialize dummy ODEProblem and perform integration.
     dummy = ODEProblem(update_diagnostics!, fip.now.u, (0.0, 1.0), fip)
     @inbounds for k in eachindex(t_out)[2:end]
@@ -42,12 +51,17 @@ function solve!(fip::FastIsoProblem)
                 simple_euler!(fip.now.u, fip.now.dudt, fip.opts.diffeq.dt)
             end
         end
-        write_out!(fip, k)
+        if length(fip.ncout.filename) > 0
+            write_step(fip.ncout, fip.now, fip.now.k)
+        end
+        if !(fip.out isa MinimalOutput)
+            write_out!(fip, k)
+        end
         fip.now.countupdates = 0    # reset to update sl at beginning of next solve()
 
     end
 
-    fip.out.computation_time += time()-t1
+    fip.ncout.computation_time += time()-t1
     return nothing
 end
 
@@ -67,12 +81,12 @@ obtained by [`init`](@ref).
 function step!(fip::FastIsoProblem{T, M}, ode::CoupledODEs,
     tspan::Tuple{T, T}) where {T<:AbstractFloat, M<:Matrix{T}}
 
-    fip.out.computation_time -= time()
+    fip.ncout.computation_time -= time()
     dt = tspan[2] - tspan[1]
     X, t = trajectory(ode, dt, fip.now.u; t0 = tspan[1], Δt = dt)
     fip.now.u .= reshape(X[2, :], fip.Omega.Nx, fip.Omega.Ny)
     update_diagnostics!(fip.now.dudt, fip.now.u, fip, t[2])
-    fip.out.computation_time += time()
+    fip.ncout.computation_time += time()
     return nothing
 end
 
@@ -99,12 +113,12 @@ function update_diagnostics!(dudt::M, u::M, fip::FastIsoProblem{T, L, M, C, FP, 
     # Regardless of update method for column, update the anomalies!
     columnanom_load!(fip)
 
-    # Only update the geoid and sea level if now is interactive.
+    # Only update the dz_ss and sea level if now is interactive.
     # As integration requires smaller time steps than diagnostics,
     # only update geostate every fip.now.dt
-    if (((t - fip.out.t[fip.now.k]) / fip.opts.dt_sl) >= fip.now.countupdates) ||
-        t ≈ fip.out.t[fip.now.k + 1]
-        # if elastic update placed after geoid, worse match with (Spada et al. 2011)
+    if (((t - fip.ncout.t[fip.now.k]) / fip.opts.dt_sl) >= fip.now.countupdates) ||
+        t ≈ fip.ncout.t[fip.now.k + 1]
+        # if elastic update placed after dz_ss, worse match with (Spada et al. 2011)
         update_elasticresponse!(fip)
         columnanom_litho!(fip)
         if fip.opts.interactive_sealevel
@@ -113,8 +127,8 @@ function update_diagnostics!(dudt::M, u::M, fip::FastIsoProblem{T, L, M, C, FP, 
             else
                 fip.now.bsl = fip.tools.bsl(seconds2years(t))
             end
-            update_geoid!(fip)
-            update_seasurfaceheight!(fip)
+            update_dz_ss!(fip)
+            update_z_ss!(fip)
             update_maskocean!(fip)
         end
         fip.now.countupdates += 1
@@ -209,7 +223,7 @@ function relax_u_eq!(fip, t)
 
     # while abs(mean(fip.now.columnanoms.full)) > 1e3
     for i in 1:1_000
-        anom!(fip.now.columnanoms.mantle, fip.c.rho_uppermantle, fip.now.u_eq, fip.ref.u)
+        anom!(fip.now.columnanoms.mantle, fip.p.rho_uppermantle, fip.now.u_eq, fip.ref.u)
         columnanom_full!(fip)
         # println(abs(mean(fip.now.columnanoms.full)))
 
