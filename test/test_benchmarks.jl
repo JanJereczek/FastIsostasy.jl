@@ -118,7 +118,7 @@ function benchmark2()
 
             u_fi = fip.out.u[k][ii, jj]
             dudt_fi = m_per_sec2mm_per_yr.(fip.out.dudt[k][ii, jj])
-            n_fi = fip.out.geoid[k][ii, jj]
+            n_fi = fip.out.dz_ss[k][ii, jj]
 
             update_compfig!(axs, [u_fi, dudt_fi, n_fi], [u_bm, dudt_bm, n_bm], cmap[k])
 
@@ -138,7 +138,7 @@ end
 
 function benchmark3()
     Omega = ComputationDomain(3000e3, 6)
-    c = PhysicalConstants(rho_uppermantle = 3.6e3)
+    c = PhysicalConstants()
 
     R = 1000e3                  # ice disc radius (m)
     H = 1e3                     # ice disc thickness (m)
