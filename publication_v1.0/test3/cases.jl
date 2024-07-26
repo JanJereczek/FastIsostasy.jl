@@ -42,7 +42,7 @@ function choose_case(case::String, Omega::ComputationDomain)
         lb = cat(lb1, lb2, dims=3)
         lv = cat(lv1, lv2, dims=3)
     end
-    p = LayeredEarth(Omega, layer_boundaries = lb, layer_viscosities = lv)
+    p = LayeredEarth(Omega, layer_boundaries = lb, layer_viscosities = lv, rho_uppermantle = 3.6e3)
 
     return p, lb, lv
 end

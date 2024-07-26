@@ -122,7 +122,7 @@ function slice_test3(
         for l in eachindex(t_plot)
             t = t_plot[l]
             k = argmin( (t_vec .- t) .^ 2 )
-            tyr = Int(round( seconds2years(t) ))
+            tyr = Int(round( t ))
             lines!(
                 axs[i],
                 theta,

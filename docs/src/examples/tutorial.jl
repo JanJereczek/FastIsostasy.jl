@@ -62,7 +62,7 @@ t_out = years2seconds.([0.0, 200.0, 600.0, 2000.0, 5000.0, 10_000.0, 50_000.0])
 εt = 1e-8
 pushfirst!(t_out, -εt)
 t_Hice = [-εt, 0.0, t_out[end]]
-fip = FastIsoProblem(Omega, c, p, t_out, t_Hice, Hice)
+fip = FastIsoProblem(Omega, c, p, t_out, t_Hice, Hice, output = "sparse")
 solve!(fip)
 
 function plot3D(fip, k_idx)
@@ -125,14 +125,14 @@ As any high-level function, [`solve!`](@ref) has some limitations. An ice-sheet 
 
 Omega = ComputationDomain(3000e3, n)
 p = LayeredEarth(Omega)
-fip = FastIsoProblem(Omega, c, p, t_out, t_Hice, Hice)
+fip = FastIsoProblem(Omega, c, p, t_out, t_Hice, Hice, output = "sparse")
 
 update_diagnostics!(fip.now.dudt, fip.now.u, fip, 0.0)
-write_out!(fip, 1)
+write_out!(fip.out, fip.now, 1)
 ode = init(fip)
 @inbounds for k in eachindex(fip.out.t)[2:end]
     step!(fip, ode, (fip.out.t[k-1], fip.out.t[k]))
-    write_out!(fip, k)
+    write_out!(fip.out, fip.now, k)
 end
 fig = plot3D(fip, [lastindex(t_out) ÷ 2, lastindex(t_out)])
 
@@ -154,6 +154,6 @@ ELRA is a GIA model that is commonly used in ice-sheet modelling. For the vast m
 
 p = LayeredEarth(Omega, tau = years2seconds(3e3))
 opts = SolverOptions(deformation_model = :elra)
-fip = FastIsoProblem(Omega, c, p, t_out, t_Hice, Hice, opts = opts)
+fip = FastIsoProblem(Omega, c, p, t_out, t_Hice, Hice, opts = opts, output = "sparse")
 solve!(fip)
 fig = plot3D(fip, [lastindex(t_out) ÷ 2, lastindex(t_out)])

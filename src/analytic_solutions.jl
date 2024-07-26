@@ -44,7 +44,7 @@ function analytic_integrand(
 ) where {T<:AbstractFloat}
 
     # Here we assume that p-fields are constant over Omega
-    beta = c.rho_uppermantle * c.g + mean(p.litho_rigidity) * kappa ^ 4
+    beta = p.rho_uppermantle * c.g + mean(p.litho_rigidity) * kappa ^ 4
     j0 = besselj0(kappa * r)
     j1 = besselj1(kappa * R0)
     eta = mean(p.effective_viscosity)
@@ -58,7 +58,7 @@ function equilibrium_integrand(
     p::LayeredEarth,
     R0::T,
 ) where {T<:AbstractFloat}
-    beta = c.rho_uppermantle * c.g + mean(p.litho_rigidity) * kappa ^ 4
+    beta = p.rho_uppermantle * c.g + mean(p.litho_rigidity) * kappa ^ 4
     j0 = besselj0(kappa * r)
     j1 = besselj1(kappa * R0)
     # integrand of inverse Hankel transform when t-->infty

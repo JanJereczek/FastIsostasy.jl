@@ -1,10 +1,12 @@
 [deps]
+CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
 CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
 Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
 Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
 DocumenterCitations = "daee34ce-89f3-4625-b898-19384cb65244"
 DocumenterTools = "35a29f4d-8980-5a13-9543-d66fff28ecb8"
 EnsembleKalmanProcesses = "aa8a2aa5-91d8-4396-bcef-d4f2ec43552d"
+FastIsostasy = "80efc11e-3694-4407-a4bf-24e5955cde3d"
 Literate = "98b081ad-f1c9-55d3-8b20-4c87d4299306"
 NCDatasets = "85f8d34a-cbdd-5861-8df4-14fed0d494ab"
 Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"

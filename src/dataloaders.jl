@@ -169,7 +169,7 @@ end
 
 
 #############################################################
-# Model outputs
+# Model output
 #############################################################
 
 function spada_dims()
@@ -233,8 +233,8 @@ function load_latychev2023_ICE6G(; case = "1D", var = "R")
     latyfiles = latyfiles[1:end-1]
     tlaty = tlaty[1:end-1]
     nlon, nlat = 512, 256
+    # X = Array{Float64, 3}(undef, nlon, nlat, length(tlaty))
     X = zeros(nlon, nlat, length(tlaty))
-
     for k in eachindex(latyfiles)
         X[:, :, k] = reshape(vec(readdlm(joinpath(latydir, latyfiles[k]))),
             nlon, nlat)

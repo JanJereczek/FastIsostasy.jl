@@ -11,7 +11,7 @@ end
 
 function dxx(u::M, Omega::ComputationDomain{T, L, M}) where
     {T<:AbstractFloat, L<:Matrix{T}, M<:Matrix{T}}
-    du = zeros(T, size(u)...)
+    du = Matrix{T}(undef, size(u)...)
     dxx!(du, u, Omega)
     return du
 end
@@ -30,7 +30,7 @@ end
 
 function dyy(u::M, Omega::ComputationDomain{T, L, M}) where
     {T<:AbstractFloat, L<:Matrix{T}, M<:Matrix{T}}
-    du = zeros(T, size(u)...)
+    du = Matrix{T}(undef, size(u)...)
     dyy!(du, u, Omega)
     return du
 end
@@ -49,8 +49,8 @@ end
 
 function dxy(u::M, Omega::ComputationDomain{T, L, M}) where
     {T<:AbstractFloat, L<:Matrix{T}, M<:Matrix{T}}
-    ux = zeros(T, size(u)...)
-    uxy = zeros(T, size(u)...)
+    ux = Matrix{T}(undef, size(u)...)
+    uxy = Matrix{T}(undef, size(u)...)
     dx!(ux, u, Omega)
     dy!(uxy, ux, Omega)
     return uxy
