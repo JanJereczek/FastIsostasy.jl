@@ -19,6 +19,18 @@ mutable struct PreAllocated{T<:AbstractFloat, M<:KernelMatrix{T}, C<:ComplexMatr
     convo_out::M
 end
 
+# TODO: replace by:
+
+mutable struct Buffer{T<:AbstractFloat, M<:KernelMatrix{T}, C<:ComplexMatrix{T}}
+    m1::M
+    m2::M
+    m3::M
+    m4::M
+    c1::C
+    c2::C
+    mlarge::M
+end
+
 #########################################################
 # Computation domain
 #########################################################
@@ -240,7 +252,7 @@ function LayeredEarth(
     tau = years2seconds(855.0),
     rho_uppermantle = T(3.4e3),                 # Mean density of topmost upper mantle (kg m^-3)
     rho_litho = T(3.2e3),                       # Mean density of lithosphere (kg m^-3)
-    layering = "folded",
+    layering = "equalizing",
 ) where {
     T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T},
     A<:Union{Vector{T}, Array{T, 3}},
@@ -434,7 +446,8 @@ function FastIsoTools(
 
     realmatrices = [null(Omega) for _ in eachindex(fieldnames(PreAllocated))[1:end-3]]
     cplxmatrices = [complex.(null(Omega)) for _ in 1:2]
-    convo_out = Omega.arraykernel(Matrix{T}(undef, size(dz_ssconvo.Afft)...))
+    # convo_out = Omega.arraykernel(Matrix{T}(undef, size(dz_ssconvo.Afft)...))
+    convo_out = Omega.arraykernel(zeros(T, size(dz_ssconvo.Afft)...))
     prealloc = PreAllocated(realmatrices..., cplxmatrices..., convo_out)
     
     return FastIsoTools(viscousconvo, elasticconvo, dz_ssconvo, pfft!, pifft!,
@@ -539,14 +552,14 @@ end
 mutable struct IntermediateOutput{T<:AbstractFloat} <: Output
     t::Vector{T}
     bsl::Vector{T}
-    u::Matrix{T}
-    ue::Matrix{T}
-    dudt::Matrix{T}
-    dz_ss::Matrix{T}
+    u::Vector{Matrix{T}}
+    ue::Vector{Matrix{T}}
+    dudt::Vector{Matrix{T}}
+    dz_ss::Vector{Matrix{T}}
 end
 
 function IntermediateOutput(Omega::ComputationDomain{T, L, M}, t_out::Vector{T}) where
-    {T<:AbstractFloat, L, M}
+    {T<:AbstractFloat, L, M<:KernelMatrix{T}}
     bsl = similar(t_out)
     placeholder = null(Omega)
     u = [copy(placeholder) for t in t_out]

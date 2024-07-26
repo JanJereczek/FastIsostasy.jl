@@ -70,7 +70,8 @@ function matrify(x::Vector{<:Real}, N::Int)
 end
 
 function matrify(x::Vector{T}, Nx::Int, Ny::Int) where {T<:Real}
-    X = Array{T, 3}(undef, Nx, Ny, length(x))
+    # X = Array{T, 3}(undef, Nx, Ny, length(x))
+    X = zeros(T, Nx, Ny, length(x))
     @inbounds for i in eachindex(x)
         X[:, :, i] = fill(x[i], Nx, Ny)
     end
@@ -133,7 +134,7 @@ end
 #     return view(convo, Omega.i1:Omega.i2, Omega.j1:Omega.j2)
 # end
 
-function write_step(ncout::NetcdfOutput{Tout}, state::CurrentState{T, M}, k::Int) where {
+function write_step!(ncout::NetcdfOutput{Tout}, state::CurrentState{T, M}, k::Int) where {
     T<:AbstractFloat, M<:KernelMatrix{T}, Tout<:AbstractFloat}
     for i in eachindex(ncout.varnames3D)
         if M == Matrix{T}

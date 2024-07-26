@@ -24,7 +24,7 @@ function get_kei(Omega::ComputationDomain{T, <:Any, <:Any}, L_w) where
 
     # Load tabulated values and init filt before filling with loop
     rn_vals, kei_vals = load_viscous_kelvin_function(T)
-    filt = Matrix{T}(undef, Nx, Ny)
+    filt = null(Omega)
     for j = -n2:n2
         for i = -n2:n2
             x = i*dx
