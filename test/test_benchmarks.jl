@@ -5,12 +5,19 @@ function benchmark1_compare(Omega, fip, H, R)
     fig, axs = comparison_figure(1)
     x, y = Omega.X[ii, jj], Omega.Y[ii, jj]
     cmap = cgrad(:jet, length(fip.out.t), categorical = true)
+    
     for k in eachindex(fip.out.t)[2:end]
-        t = fip.out.t[k]
+        t = years2seconds(fip.out.t[k])
         analytic_solution_r(r) = analytic_solution(r, t, fip.c, fip.p, H, R)
         u_analytic = analytic_solution_r.( get_r.(x, y) )
-        @test mean(abs.(fip.out.u[k][ii, jj] .- u_analytic)) < 6
-        @test maximum(abs.(fip.out.u[k][ii, jj] .- u_analytic)) < 8
+
+        mean_error = mean(abs.(fip.out.u[k][ii, jj] .- u_analytic))
+        max_error = maximum(abs.(fip.out.u[k][ii, jj] .- u_analytic))
+        # @show mean_error, max_error
+
+        @test mean_error < 6
+        @test max_error < 7
+
         update_compfig!(axs, [fip.out.u[k][ii, jj]], [u_analytic], cmap[k])
     end
     return fig
@@ -76,7 +83,7 @@ function benchmark2()
         litho_poissonratio = nu )
 
     εt = 1e-8
-    t_out = years2seconds.([-εt, 0.0, 1.0, 1e3, 2e3, 5e3, 1e4, 1e5])
+    t_out = [-εt, 0.0, 1.0, 1e3, 2e3, 5e3, 1e4, 1e5]
     t_Hice = [-εt, 0.0, t_out[end]]
     b = fill(1e6, Omega.Nx, Omega.Ny)
     ii, jj = slice_along_x(Omega)
@@ -111,13 +118,13 @@ function benchmark2()
         cmap = cgrad(:jet, length(fip.out.t), categorical = true)
 
         for k in eachindex(t_out)[3:end]
-            tt = seconds2years(t_out[k])
+            tt = t_out[k]
             u_bm = Xitp["u_$case"].(theta, tt) .- u_0
             dudt_bm = Xitp["dudt_$case"].(theta, tt)
             n_bm = Xitp["n_$case"].(theta, tt)
 
             u_fi = fip.out.u[k][ii, jj]
-            dudt_fi = m_per_sec2mm_per_yr.(fip.out.dudt[k][ii, jj])
+            dudt_fi = fip.out.dudt[k][ii, jj] .* 1e3    # convert m/yr to mm/yr
             dz_ss_fi = fip.out.dz_ss[k][ii, jj]
 
             update_compfig!(axs, [u_fi, dudt_fi, dz_ss_fi], [u_bm, dudt_bm, n_bm], cmap[k])
@@ -145,7 +152,7 @@ function benchmark3()
     Hcylinder = uniform_ice_cylinder(Omega, R, H)
     Hice = [zeros(Omega.Nx, Omega.Ny), Hcylinder, Hcylinder]
 
-    t_out = years2seconds.([0.0, 100.0, 500.0, 1500.0, 5000.0, 10_000.0, 50_000.0])
+    t_out = [0.0, 100.0, 500.0, 1500.0, 5000.0, 10_000.0, 50_000.0]
     εt = 1e-8
     pushfirst!(t_out, -εt)
     t_Hice = [-εt, 0.0, t_out[end]]
@@ -157,8 +164,8 @@ function benchmark3()
     cases = ["gaussian_lo_D", "gaussian_hi_D", "gaussian_lo_η", "gaussian_hi_η",
         "no_litho", "ref"]
     seakon_files = ["E0L1V1", "E0L2V1", "E0L3V2", "E0L3V3", "E0L0V1", "E0L4V4"]
-    mean_tol = [12, 12, 16, 15, 10, 20]
-    max_tol = [24, 30, 30, 35, 25, 45]
+    mean_tol = [10, 10, 15, 10, 10, 15]
+    max_tol = [15, 20, 30, 25, 25, 45]
 
     for m in eachindex(cases)
         fig, axs = comparison_figure(1)
@@ -174,7 +181,7 @@ function benchmark3()
 
         println("---------------")
         for k in eachindex(t_out)[2:end]
-            u_bm = usk_itp.(x ./ 1e3, seconds2years(t_out[k]))
+            u_bm = usk_itp.(x ./ 1e3, t_out[k])
             u_fi = fip.out.u[k][ii, jj] + fip.out.ue[k][ii, jj]
             update_compfig!(axs, [u_fi], [u_bm], cmap[k])
             emean = mean(abs.(u_fi .- u_bm))

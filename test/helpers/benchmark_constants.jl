@@ -1,7 +1,7 @@
 function benchmark1_constants(Omega)
     c = PhysicalConstants(rho_litho = 0.0)
     p = LayeredEarth(Omega)
-    t_out = years2seconds.([0.0, 100.0, 500.0, 1500.0, 5000.0, 10_000.0, 50_000.0])
+    t_out = [0.0, 100.0, 500.0, 1500.0, 5000.0, 10_000.0, 50_000.0]
     
     εt = 1e-8
     pushfirst!(t_out, -εt)

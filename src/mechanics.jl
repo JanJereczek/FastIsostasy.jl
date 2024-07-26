@@ -12,7 +12,7 @@ function solve!(fip::FastIsoProblem)
         error("`solve!` does not support external updating of the load. Use `step!` instead.")
     end
     t1 = time()
-    t_out = fip.ncout.t
+    t_out = fip.out.t
 
     if fip.opts.deformation_model == :lv_elra
         throw(ArgumentError("LV-ELRA is not implemented yet."))
@@ -25,7 +25,7 @@ function solve!(fip::FastIsoProblem)
     update_diagnostics!(fip.now.dudt, fip.now.u, fip, t_out[1])
     
     if length(fip.ncout.filename) > 0
-        write_step(fip.ncout, fip.now, 1)
+        write_step!(fip.ncout, fip.now, 1)
     end
 
     if !(fip.out isa MinimalOutput)
@@ -38,7 +38,8 @@ function solve!(fip::FastIsoProblem)
         
         fip.now.k = k - 1
         if fip.opts.verbose
-            println("Computing until t = $(Int(round(seconds2years(t_out[k])))) years...")
+            # println("Computing until t = $(Int(round(seconds2years(t_out[k])))) years...")
+            println("Computing until t = $(Int(round(t_out[k]))) years...")
         end
 
         if fip.opts.diffeq.alg != SimpleEuler()
@@ -52,7 +53,7 @@ function solve!(fip::FastIsoProblem)
             end
         end
         if length(fip.ncout.filename) > 0
-            write_step(fip.ncout, fip.now, fip.now.k)
+            write_step!(fip.ncout, fip.now, fip.now.k)
         end
         if !(fip.out isa MinimalOutput)
             write_out!(fip.out, fip.now, k)
@@ -125,7 +126,8 @@ function update_diagnostics!(dudt::M, u::M, fip::FastIsoProblem{T, L, M, C, FP, 
             if fip.opts.internal_bsl_update
                 update_bsl!(fip)
             else
-                fip.now.bsl = fip.tools.bsl(seconds2years(t))
+                fip.now.bsl = fip.tools.bsl(t)
+                # fip.now.bsl = fip.tools.bsl(seconds2years(t))
             end
             update_dz_ss!(fip)
             update_z_ss!(fip)
@@ -144,7 +146,7 @@ function update_diagnostics!(dudt::M, u::M, fip::FastIsoProblem{T, L, M, C, FP, 
     end
     columnanom_mantle!(fip)
     update_bedrock!(fip, u)
-
+    # @show t, extrema(fip.now.u)
     return nothing
 end
 
@@ -163,7 +165,7 @@ function lv_elva!(dudt::M, u::M, fip::FastIsoProblem{T, L, M, C, FP, IP}, t::T) 
     fip.tools.pfft! * P.fftrhs
     @. P.ifftrhs = P.fftrhs / Omega.pseudodiff
     fip.tools.pifft! * P.ifftrhs
-    dudt .= real.(P.ifftrhs)
+    dudt .= real.(P.ifftrhs) .* years2seconds(1.0)
 
     apply_bc!(dudt, fip.Omega.bc_matrix, fip.Omega.nbc)
 
@@ -183,61 +185,7 @@ function elra!(dudt::M, u::M, fip::FastIsoProblem{T, L, M, C, FP, IP}, t::T) whe
     samesize_conv!(fip.now.u_eq, fip.tools.prealloc.convo_out,
         - (fip.now.columnanoms.load + fip.now.columnanoms.litho) .* fip.c.g .*
         fip.Omega.K .^ 2, fip.tools.viscousconvo, fip.Omega)
-    @. dudt = 1 / fip.p.tau * (fip.now.u_eq - fip.now.u)
-    return nothing
-end
-
-"""
-    lv_elra!(dudt, u, fip, t)
-
-Update the displacement rate `dudt` of the viscous response according to LV-ELRA.
-"""
-function lv_elra!(dudt::M, u::M, fip::FastIsoProblem{T, L, M, C, FP, IP}, t::T) where
-    {T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}, C<:ComplexMatrix{T},
-    FP<:ForwardPlan{T}, IP<:InversePlan{T}}
-
-    relax_u_eq!(fip, t)
-    @. dudt = 1 / fip.p.tau * (fip.now.u_eq - fip.now.u)
-    return nothing
-end
-
-"""
-    relax_u_eq!(fip)
-
-Get equilibrium displacement `u_eq` by integrating LV-ELVA equation, which gives the same
-equilibrium as LV-ELRA.
-"""
-function relax_u_eq!(fip, t)
-    Omega, P = fip.Omega, fip.tools.prealloc
-    dt = years2seconds(1e-2)    # take a small time step s.t. no instability
-    # dt = years2seconds(1e3 / (fip.Omega.Nx * fip.Omega.Ny))    # take a small time step s.t. no instability
-    tau_relax_numerics = years2seconds(1e3)
-    # n_steps = Int(round(tau_relax_numerics / dt))
-    
-    use_lv_elva = false
-
-    # samesize_conv!(fip.now.u_eq, fip.tools.prealloc.convo_out,
-    #     - (fip.now.columnanoms.load + fip.now.columnanoms.litho) .* fip.c.g .*
-    #     fip.Omega.K .^ 2, fip.tools.viscousconvo, fip.Omega)
-    # dts = years2seconds.( 10.0 .^ (-3:0.001:-1) )
-
-    # while abs(mean(fip.now.columnanoms.full)) > 1e3
-    for i in 1:1_000
-        anom!(fip.now.columnanoms.mantle, fip.p.rho_uppermantle, fip.now.u_eq, fip.ref.u)
-        columnanom_full!(fip)
-        # println(abs(mean(fip.now.columnanoms.full)))
-
-        if use_lv_elva
-            lv_elva!(fip.now.dudt, fip.now.u_eq, fip, t)
-            @. fip.now.u_eq += dt * fip.now.dudt
-        else
-            update_deformation_rhs!(fip, fip.now.u_eq)
-            @. fip.now.u_eq += dt * P.rhs / # * Omega.K 
-                (2 * fip.p.litho_shearmodulus * tau_relax_numerics * π / Omega.Wx)
-        end
-    end
-    columnanom_mantle!(fip)
-    columnanom_full!(fip)
+    @. dudt = 1 / fip.p.tau * (fip.now.u_eq - fip.now.u) * years2seconds(1.0)
     return nothing
 end
 
@@ -261,24 +209,6 @@ function update_deformation_rhs!(fip::FastIsoProblem{T, L, M, C, FP, IP}, u::M) 
     @. P.rhs += P.Mxxxx + P.Myyyy + 2 * P.Mxyxy
     return nothing
 end
-
-# function update_deformation_rhs!(fip::FastIsoProblem{T, L, M, C, FP, IP}, u::M) where
-#     {T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}, C<:ComplexMatrix{T},
-#     FP<:ForwardPlan{T}, IP<:InversePlan{T}}
-
-#     # TODO make @. + run profview alloc
-#     Omega, P = fip.Omega, fip.tools.prealloc
-#     P.rhs .= -fip.c.g .* fip.now.columnanoms.full
-#     update_second_derivatives!(P.uxx, P.uyy, P.ux, P.uxy, u, Omega)
-#     P.Mxx .= - fip.p.litho_rigidity .* (P.uxx + fip.p.litho_poissonratio .* P.uyy)
-#     P.Myy .= - fip.p.litho_rigidity .* (P.uyy + fip.p.litho_poissonratio .* P.uxx)
-#     P.Mxy .= - fip.p.litho_rigidity .* (1 - fip.p.litho_poissonratio) .* P.uxy
-#     update_second_derivatives!(P.Mxxxx, P.Myyyy, P.Mxyx, P.Mxyxy, P.Mxx, P.Myy,
-#         P.Mxy, Omega)
-#     P.rhs += P.Mxxxx + P.Myyyy + 2 .* P.Mxyxy
-#     return nothing
-# end
-
 
 #####################################################
 # BCs
