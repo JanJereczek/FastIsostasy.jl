@@ -18,7 +18,6 @@ using ParallelStencil: ParallelStencil, @init_parallel_stencil, @parallel,
                        @parallel_indices
 using Statistics: mean, cov
 using SpecialFunctions: besselj0, besselj1
-# using .Threads
 
 using Reexport: Reexport, @reexport
 @reexport using Interpolations
@@ -49,7 +48,7 @@ export ComputationDomain, PhysicalConstants
 export ReferenceEarthModel, LayeredEarth, SolverOptions
 export CurrentState, ReferenceState
 export FastIsoTools, FastIsoProblem
-export NetcdfOutput, write_step
+export NetcdfOutput, write_step!
 
 # utils.jl
 export years2seconds, seconds2years, m_per_sec2mm_per_yr
