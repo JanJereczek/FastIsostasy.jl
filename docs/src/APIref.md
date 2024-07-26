@@ -39,5 +39,4 @@ InversionProblem
 load_dataset
 reinit_structs_cpu
 write_out!
-savefip
 ```
