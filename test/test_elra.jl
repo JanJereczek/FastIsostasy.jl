@@ -10,7 +10,8 @@
     p = LayeredEarth(Omega, tau = years2seconds(3e3), layer_boundaries = [100e3, 600e3])
 
     opts = SolverOptions(verbose = true, deformation_model = :elra)
-    fip = FastIsoProblem(Omega, c, p, zeros(2), zeros(2), [Omega.null, Omega.null], opts = opts)
+    fip = FastIsoProblem(Omega, c, p, zeros(2), zeros(2),
+        [Omega.null, Omega.null], opts = opts, output = "sparse")
 
     R = T(1000e3)               # ice disc radius (m)
     H = T(1000)                 # ice disc thickness (m)

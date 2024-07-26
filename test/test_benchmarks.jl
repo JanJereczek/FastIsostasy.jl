@@ -20,9 +20,9 @@ function benchmark1()
     # Generating numerical results
     Omega = ComputationDomain(3000e3, 7, correct_distortion = false)
     c, p, t_out, R, H, t_Hice, Hice = benchmark1_constants(Omega)
-    fip = FastIsoProblem(Omega, c, p, t_out, t_Hice, Hice)
+    fip = FastIsoProblem(Omega, c, p, t_out, t_Hice, Hice, output = "sparse")
     solve!(fip)
-    println("Computation took $(fip.out.computation_time) s")
+    # println("Computation took $(fip.out.computation_time) s")
     fig = benchmark1_compare(Omega, fip, H, R)
     if SAVE_PLOTS
         save("plots/benchmark1/plot.png", fig)
@@ -33,7 +33,7 @@ function benchmark1_gpu()
     # Generating numerical results
     Omega = ComputationDomain(3000e3, 7, use_cuda = true, correct_distortion = false)
     c, p, t_out, R, H, t_Hice, Hice = benchmark1_constants(Omega)
-    fip = FastIsoProblem(Omega, c, p, t_out, t_Hice, Hice)
+    fip = FastIsoProblem(Omega, c, p, t_out, t_Hice, Hice, output = "sparse")
     solve!(fip)
     # println("Computation took $(fip.out.computation_time) s")
     Omega, p = reinit_structs_cpu(Omega, p)
@@ -48,13 +48,13 @@ function benchmark1_external_loadupdate()
     # Generating numerical results
     Omega = ComputationDomain(3000e3, 7, correct_distortion = false)
     c, p, t_out, R, H, t_Hice, Hice = benchmark1_constants(Omega)
-    fip = FastIsoProblem(Omega, c, p, t_out, t_Hice, Hice)
+    fip = FastIsoProblem(Omega, c, p, t_out, t_Hice, Hice, output = "sparse")
     update_diagnostics!(fip.now.dudt, fip.now.u, fip, 0.0)
-    write_out!(fip, 1)
+    write_out!(fip.out, fip.now, 1)
     ode = init(fip)
     @inbounds for k in eachindex(fip.out.t)[2:end]
         step!(fip, ode, (fip.out.t[k-1], fip.out.t[k]))
-        write_out!(fip, k)
+        write_out!(fip.out, fip.now, k)
     end
     # println("Computation took $(fip.out.computation_time) s")
 
@@ -102,7 +102,7 @@ function benchmark2()
         Hice = [zeros(Omega.Nx, Omega.Ny), H_ice, H_ice]
         mask = collect(H_ice .> 1e-8)
         fip = FastIsoProblem(Omega, c, p, t_out, t_Hice, Hice, opts = opts, b_0 = b,
-            maskactive = mask)
+            maskactive = mask, output = "intermediate")
         solve!(fip)
         
         # Compare to 1D GIA models benchmark
@@ -118,13 +118,13 @@ function benchmark2()
 
             u_fi = fip.out.u[k][ii, jj]
             dudt_fi = m_per_sec2mm_per_yr.(fip.out.dudt[k][ii, jj])
-            n_fi = fip.out.dz_ss[k][ii, jj]
+            dz_ss_fi = fip.out.dz_ss[k][ii, jj]
 
-            update_compfig!(axs, [u_fi, dudt_fi, n_fi], [u_bm, dudt_bm, n_bm], cmap[k])
+            update_compfig!(axs, [u_fi, dudt_fi, dz_ss_fi], [u_bm, dudt_bm, n_bm], cmap[k])
 
             m_u = mean(abs.(u_fi .- u_bm))
             m_dudt = mean(abs.(dudt_fi .- dudt_bm))
-            m_n = mean(abs.(n_fi .- n_bm))
+            m_n = mean(abs.(dz_ss_fi .- n_bm))
             println("$m_u, $m_dudt, $m_n")
             @test m_u < 27
             @test m_dudt < 8
@@ -169,7 +169,7 @@ function benchmark3()
         tol = occursin("_D", case) ? 1e-5 : 1e-4
         opts = SolverOptions(diffeq = (alg = Tsit5(), reltol = tol), verbose = true)
 
-        fip = FastIsoProblem(Omega, c, p, t_out, t_Hice, Hice, opts = opts)
+        fip = FastIsoProblem(Omega, c, p, t_out, t_Hice, Hice, opts = opts, output = "sparse")
         solve!(fip)
 
         println("---------------")

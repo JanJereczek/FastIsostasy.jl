@@ -11,7 +11,7 @@ function benchmark5()
     t_Hice = [0.0, 1e-8, t_out[end]]
     Hice = [zeros(Omega.Nx, Omega.Ny), Hcylinder, Hcylinder]
     t_out = years2seconds.(1e3:1e3:2e3)
-    fip = FastIsoProblem(Omega, c, p, t_out, t_Hice, Hice)
+    fip = FastIsoProblem(Omega, c, p, t_out, t_Hice, Hice, output = "sparse")
     solve!(fip)
     ground_truth = copy(p.effective_viscosity)
 

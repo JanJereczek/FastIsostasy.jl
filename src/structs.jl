@@ -273,7 +273,7 @@ function LayeredEarth(
         effective_viscosity = new_effective_viscosity(Omega, litho_thickness,
             layer_boundaries, layer_viscosities, layers_thickness, mantle_poissonratio)
     elseif layering == "folded"
-        effective_viscosity, folded_layers, folded_viscosities =
+        effective_viscosity, layer_boundaries, layer_viscosities =
             interpolated_effective_viscosity(Omega, layer_boundaries, layer_viscosities,
                 litho_thickness, mantle_poissonratio)
     else
@@ -288,7 +288,7 @@ function LayeredEarth(
     return LayeredEarth(
         effective_viscosity,
         litho_thickness, litho_rigidity, litho_poissonratio,
-        mantle_poissonratio, folded_viscosities, folded_layers,
+        mantle_poissonratio, layer_viscosities, layer_boundaries,
         tau, litho_youngmodulus, litho_shearmodulus, rho_uppermantle, rho_litho,
     )
 
@@ -536,6 +536,26 @@ function SparseOutput(Omega::ComputationDomain{T, L, M}, t_out::Vector{T}) where
     return SparseOutput(t_out, u, ue)
 end
 
+mutable struct IntermediateOutput{T<:AbstractFloat} <: Output
+    t::Vector{T}
+    bsl::Vector{T}
+    u::Matrix{T}
+    ue::Matrix{T}
+    dudt::Matrix{T}
+    dz_ss::Matrix{T}
+end
+
+function IntermediateOutput(Omega::ComputationDomain{T, L, M}, t_out::Vector{T}) where
+    {T<:AbstractFloat, L, M}
+    bsl = similar(t_out)
+    placeholder = null(Omega)
+    u = [copy(placeholder) for t in t_out]
+    ue = [copy(placeholder) for t in t_out]
+    dudt = [copy(placeholder) for t in t_out]
+    dz_ss = [copy(placeholder) for t in t_out]
+    return IntermediateOutput(t_out, bsl, u, ue, dudt, dz_ss)
+end
+
 #########################################################
 # Options
 #########################################################
@@ -659,6 +679,8 @@ function FastIsoProblem(
 
     if output == "sparse"
         out = SparseOutput(Omega, t_out)
+    elseif output == "intermediate"
+        out = IntermediateOutput(Omega, t_out)
     else
         out = MinimalOutput(t_out)
     end

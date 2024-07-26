@@ -155,13 +155,25 @@ function write_step(ncout::NetcdfOutput{Tout}, state::CurrentState{T, M}, k::Int
 end
 
 """
-    write_out!(fip::FastIsoProblem)
+    write_out!(now, out, k)
 
 Write results in output vectors.
 """
-function write_out!(fip::FastIsoProblem, k::Int)
-    fip.out.u[k] .= copy(Array(fip.now.u))
-    fip.out.ue[k] .= copy(Array(fip.now.ue))
+function write_out!(out::SparseOutput{T}, now::CurrentState{T, M}, k::Int) where
+    {T<:AbstractFloat, M<:KernelMatrix{T}}
+    out.u[k] .= copy(Array(now.u))
+    out.ue[k] .= copy(Array(now.ue))
+    return nothing
+end
+
+function write_out!(out::IntermediateOutput{T}, now::CurrentState{T, M}, k::Int) where
+    {T<:AbstractFloat, M<:KernelMatrix{T}}
+    out.bsl[k] = now.bsl
+    out.u[k] .= copy(Array(now.u))
+    out.ue[k] .= copy(Array(now.ue))
+    out.dudt[k] .= copy(Array(now.dudt))
+    out.dz_ss[k] .= copy(Array(now.dz_ss))
+    return nothing
 end
 
 #####################################################

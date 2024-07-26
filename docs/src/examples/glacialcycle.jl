@@ -14,14 +14,14 @@ For this we run a glacial cycle of Antarctica with lithospheric thickness and up
 using CairoMakie, FastIsostasy
 
 N = 140
-Omega = ComputationDomain(3500e3, 3500e3, N, N)     # 100 km resolution
+Omega = ComputationDomain(3500e3, 3500e3, N, N)     # 50 km resolution
 (; Lon, Lat) = Omega
 c = PhysicalConstants()
 
 (_, _), Tpan, Titp = load_lithothickness_pan2022()
 Tlitho = Titp.(Lon, Lat) .* 1e3                     # convert from m to km
 
-function niceheatmap(X)
+function nicer_heatmap(X)
     fig = Figure(size = (800, 700))
     ax = Axis(fig[1, 1], aspect = DataAspect())
     hidedecorations!(ax)
@@ -29,7 +29,7 @@ function niceheatmap(X)
     Colorbar(fig[1, 2], hm, height = Relative(0.6))
     return fig
 end
-niceheatmap(Tlitho)
+nicer_heatmap(Tlitho)
 
 #=
 In a similar way, we can load the log-viscosity field from [pan-influence-2022](@cite) and plot it at about 300 km depth
@@ -37,7 +37,7 @@ In a similar way, we can load the log-viscosity field from [pan-influence-2022](
 
 (_, _, _), _, logeta_itp = load_logvisc_pan2022()
 logeta300 = logeta_itp.(Lon, Lat, c.r_equator - 300e3)
-niceheatmap(logeta300)
+nicer_heatmap(logeta300)
 
 #=
 The number of layers and the depth of viscous half-space are arbitrary parameters that have to be defined by the user. We here use a relatively shallow model (half-space begins at 300 km depth) with 1 equalisation layer and 3 intermediate layers:
@@ -55,25 +55,26 @@ lv_3D = 10 .^ cat([logeta_itp.(Lon, Lat, rlb[:, :, k]) for k in 1:nlb]..., dims=
 To prevent extreme values of the viscosity, we require it to be larger than a minimal value, fixed to be $$10^{16} \, \mathrm{Pa \, s} $$. We subsequently generate a [`LayeredEarth`](@ref) that embeds all the information that has been loaded so far:
 =#
 
-eta_lowerbound = 1e16
+eta_lowerbound = 1e18
 lv_3D[lv_3D .< eta_lowerbound] .= eta_lowerbound
-p = LayeredEarth(Omega, layer_boundaries = lb, layer_viscosities = lv_3D)
-niceheatmap(p.effective_viscosity)
+p = LayeredEarth(Omega, layer_boundaries = lb, layer_viscosities = lv_3D,
+    layering = "folded")
+nicer_heatmap(log10.(p.effective_viscosity))
 
 #=
 We now load the ice thickness history from ICE6G_D, again helped by the convenience of [`load_dataset`](@ref). We then create a vector of anomaly snapshots, between which FastIsostasy automatically interpolates linearly. To get an idea of ICE6G_D, the ice thickness anomaly is then visualised at LGM:
 =#
 
-(lon, lat, t), Hice, Hitp = load_ice6gd()
-dHice = [Hitp.(Lon, Lat, tk) - Hitp.(Lon, Lat, minimum(t)) for tk in t]
-niceheatmap(Hitp.(Lon, Lat, -26) - Hitp.(Lon, Lat, 0))
+(lon, lat, t), _, Hitp = load_ice6gd()
+Hice_vec = [Hitp.(Lon, Lat, tk) for tk in t]
+nicer_heatmap(Hitp.(Lon, Lat, -26) - Hitp.(Lon, Lat, 0))
 
 #=
 Finally, defining and solving the resulting [`FastIsoProblem`](@ref) is done by running:
 =#
 
 tsec = years2seconds.(t .* 1e3)
-fip = FastIsoProblem(Omega, c, p, tsec, tsec, dHice)
+fip = FastIsoProblem(Omega, c, p, tsec, tsec, Hice_vec, output = "sparse")
 solve!(fip)     # gives fip.out.computation_time = 53 s
 
 #=

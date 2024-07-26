@@ -29,7 +29,7 @@ function solve!(fip::FastIsoProblem)
     end
 
     if !(fip.out isa MinimalOutput)
-        write_out!(fip, 1)
+        write_out!(fip.out, fip.now, 1)
     end
     
     # Initialize dummy ODEProblem and perform integration.
@@ -55,7 +55,7 @@ function solve!(fip::FastIsoProblem)
             write_step(fip.ncout, fip.now, fip.now.k)
         end
         if !(fip.out isa MinimalOutput)
-            write_out!(fip, k)
+            write_out!(fip.out, fip.now, k)
         end
         fip.now.countupdates = 0    # reset to update sl at beginning of next solve()
 
