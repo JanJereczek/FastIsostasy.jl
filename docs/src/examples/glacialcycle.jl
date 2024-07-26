@@ -8,13 +8,13 @@ We now want to provide an example that presents:
 - a more elaborate load that evolves over time
 - changes in the sea-level
 
-For this we run a glacial cycle of Antarctica with lithospheric thickness and upper-mantle viscosity from [wiens-seismic-2022](@cite) and the ice thickness history from [peltier-comment-2018](@cite). We start by generating a [`ComputationDomain`](@ref) with intermediate resolution for the sake of the example and load the heterogeneous lithospheric from [pan-influence-2022](@cite) thanks to the convenience of [`load_dataset`](@ref):
+For this we run a glacial cycle of Antarctica with lithospheric thickness and upper-mantle viscosity from @wiens-seismic-2022 and the ice thickness history from @peltier-comment-2018. We start by generating a [`ComputationDomain`](@ref) with intermediate resolution for the sake of the example and load the heterogeneous lithospheric from @pan-influence-2022 thanks to the convenience of [`load_dataset`](@ref):
 =#
 
 using CairoMakie, FastIsostasy
 
-N = 140
-Omega = ComputationDomain(3500e3, 3500e3, N, N)     # 50 km resolution
+N = 140     # corresponds to 50 km resolution
+Omega = ComputationDomain(3500e3, 3500e3, N, N)
 (; Lon, Lat) = Omega
 c = PhysicalConstants()
 
@@ -32,7 +32,7 @@ end
 nicer_heatmap(Tlitho)
 
 #=
-In a similar way, we can load the log-viscosity field from [pan-influence-2022](@cite) and plot it at about 300 km depth
+In a similar way, we can load the log-viscosity field from @pan-influence-2022 and plot it at about 300 km depth
 =#
 
 (_, _, _), _, logeta_itp = load_logvisc_pan2022()
@@ -55,17 +55,16 @@ lv_3D = 10 .^ cat([logeta_itp.(Lon, Lat, rlb[:, :, k]) for k in 1:nlb]..., dims=
 To prevent extreme values of the viscosity, we require it to be larger than a minimal value, fixed to be $$10^{16} \, \mathrm{Pa \, s} $$. We subsequently generate a [`LayeredEarth`](@ref) that embeds all the information that has been loaded so far:
 =#
 
-eta_lowerbound = 1e18
+eta_lowerbound = 1e16
 lv_3D[lv_3D .< eta_lowerbound] .= eta_lowerbound
-p = LayeredEarth(Omega, layer_boundaries = lb, layer_viscosities = lv_3D,
-    layering = "folded")
+p = LayeredEarth(Omega, layer_boundaries = lb, layer_viscosities = lv_3D)
 nicer_heatmap(log10.(p.effective_viscosity))
 
 #=
 We now load the ice thickness history from ICE6G_D, again helped by the convenience of [`load_dataset`](@ref). We then create a vector of anomaly snapshots, between which FastIsostasy automatically interpolates linearly. To get an idea of ICE6G_D, the ice thickness anomaly is then visualised at LGM:
 =#
 
-(lon, lat, t), _, Hitp = load_ice6gd()
+(lon, lat, t), Hice, Hitp = load_ice6gd()
 Hice_vec = [Hitp.(Lon, Lat, tk) for tk in t]
 nicer_heatmap(Hitp.(Lon, Lat, -26) - Hitp.(Lon, Lat, 0))
 
@@ -73,8 +72,9 @@ nicer_heatmap(Hitp.(Lon, Lat, -26) - Hitp.(Lon, Lat, 0))
 Finally, defining and solving the resulting [`FastIsoProblem`](@ref) is done by running:
 =#
 
-tsec = years2seconds.(t .* 1e3)
-fip = FastIsoProblem(Omega, c, p, tsec, tsec, Hice_vec, output = "sparse")
+opts = SolverOptions(verbose = true)
+tyr = t .* 1e3
+fip = FastIsoProblem(Omega, c, p, tyr, tyr, Hice_vec, output = "sparse", opts = opts)
 solve!(fip)     # gives fip.out.computation_time = 53 s
 
 #=
@@ -82,12 +82,12 @@ The computation time of this last step is less than a minute on a modern i7 (Int
 =#
 
 tplot = [-26, -12, 0]
-fig = Figure(size = (1800, 600))
+fig = Figure(size = (1200, 400))
 opts = ( colormap = :PuOr, colorrange = (-400, 400) )
 for k in eachindex(tplot)
-    ax = Axis(fig[1, k], aspect = DataAspect())
+    kfi = argmin( abs.(tplot[k] * 1e3 .- tyr) )
+    ax = Axis(fig[1, k], aspect = DataAspect(), title = "t = $(t[kfi]) kyr")
     hidedecorations!(ax)
-    kfi = argmin( abs.(years2seconds(tplot[k] * 1e3) .- tsec) )
     heatmap!(ax, fip.out.u[kfi] + fip.out.ue[kfi]; opts...)
     println(kfi)
 end
@@ -95,5 +95,5 @@ Colorbar(fig[1, 4], height = Relative(0.6); opts...)
 fig
 
 #=
-The displayed fields are displacement anomalies w.r.t. to the last interglacial, defined as the reference for the ice thickness anomalies. In Swierczek-Jereczek et al., GMD, in rev., these computations are performed on a finer grid, with an interactive sea level, and show great agreement with a 3D GIA model that runs between 10,000-100,000 slower (however at with advantage of obtaining a global and richer output). You can find this more comprehensive example in the `/publication_v1.0` folder of the GitHub repository.
+The displayed fields are displacement anomalies w.r.t. to the last interglacial, defined as the reference for the ice thickness anomalies. In @swierczek2024fastisostasy these computations are performed on a finer grid, with an interactive sea level, and show great agreement with a 3D GIA model that runs between 10,000-100,000 slower (however at with advantage of obtaining a global and richer output). You can find this more comprehensive example in the `/publication_v1.0` folder of the GitHub repository.
 =#
