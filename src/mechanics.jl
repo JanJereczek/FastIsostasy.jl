@@ -163,9 +163,9 @@ function lv_elva!(dudt::M, u::M, fip::FastIsoProblem{T, L, M, C, FP, IP}, t::T) 
     update_deformation_rhs!(fip, u)
     @. P.fftrhs = complex(P.rhs * Omega.K / (2 * fip.p.effective_viscosity))
     fip.tools.pfft! * P.fftrhs
-    @. P.ifftrhs = P.fftrhs / Omega.pseudodiff
-    fip.tools.pifft! * P.ifftrhs
-    dudt .= real.(P.ifftrhs) .* years2seconds(1.0)
+    @. P.fftrhs /= Omega.pseudodiff
+    fip.tools.pifft! * P.fftrhs
+    dudt .= real.(P.fftrhs) .* years2seconds(1.0)
 
     apply_bc!(dudt, fip.Omega.bc_matrix, fip.Omega.nbc)
 
@@ -182,9 +182,9 @@ function elra!(dudt::M, u::M, fip::FastIsoProblem{T, L, M, C, FP, IP}, t::T) whe
     FP<:ForwardPlan{T}, IP<:InversePlan{T}}
 
     update_deformation_rhs!(fip, u)
-    samesize_conv!(fip.now.u_eq, fip.tools.prealloc.convo_out,
-        - (fip.now.columnanoms.load + fip.now.columnanoms.litho) .* fip.c.g .*
-        fip.Omega.K .^ 2, fip.tools.viscousconvo, fip.Omega)
+    fip.now.u_eq = samesize_conv( - (fip.now.columnanoms.load +
+        fip.now.columnanoms.litho) .* fip.c.g .* fip.Omega.K .^ 2,
+        fip.tools.viscous_convo, fip.Omega)
     @. dudt = 1 / fip.p.tau * (fip.now.u_eq - fip.now.u) * years2seconds(1.0)
     return nothing
 end
@@ -224,7 +224,7 @@ function apply_bc!(u::M, bcm::M, nbc::T) where {T <: AbstractFloat, M<:KernelMat
 end
 
 function no_mean_bc!(u::KernelMatrix{<:AbstractFloat}, Nx::Int, Ny::Int)
-    u .= u .- mean(u)
+    u .-= mean(u)
     return u
 end
 
@@ -240,10 +240,8 @@ To use coefficients differing from [^Farrell1972], see [FastIsoTools](@ref).
 function update_elasticresponse!(fip::FastIsoProblem{T, L, M, C, FP, IP}) where
     {T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}, C<:ComplexMatrix{T},
     FP<:ForwardPlan{T}, IP<:InversePlan{T}}
-    samesize_conv!(fip.now.ue, fip.tools.prealloc.convo_out,
-        fip.now.columnanoms.load .* fip.Omega.K .^ 2, fip.tools.elasticconvo, fip.Omega)
-    # fip.now.ue .= samesize_conv(fip.now.columnanoms.load .* fip.Omega.K .^ 2,
-    #     fip.tools.elasticconvo, fip.Omega)
+    fip.now.ue .= samesize_conv(fip.now.columnanoms.load .* fip.Omega.K .^ 2,
+        fip.tools.elastic_convo, fip.Omega)
     return nothing
 end
 

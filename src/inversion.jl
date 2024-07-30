@@ -46,13 +46,13 @@ Struct containing configuration parameters for a [`InversionProblem`].
 - `n_samples::Int`: Number of samples for the inversion.
 - `scale_obscov::Real`: Scaling factor for the observational covariance matrix.
 """
-struct InversionConfig
+struct InversionConfig{T<:AbstractFloat}
     method::Any
     N_iter::Int
-    α_reg::Real
+    α_reg::T
     update_freq::Int
     n_samples::Int
-    scale_obscov::Real
+    scale_obscov::T
 end
 
 function InversionConfig(

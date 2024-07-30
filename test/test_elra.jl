@@ -19,9 +19,9 @@
     update_loadcolumns!(fip, Hice)
     columnanom_load!(fip)
     update_deformation_rhs!(fip, fip.now.u)
-    samesize_conv!(fip.now.u_eq, fip.tools.prealloc.convo_out,
-        - (fip.now.columnanoms.load + fip.now.columnanoms.litho) .* fip.c.g .*
-        fip.Omega.K .^ 2, fip.tools.viscousconvo, fip.Omega)
+    fip.now.u_eq = samesize_conv( - (fip.now.columnanoms.load +
+        fip.now.columnanoms.litho) .* fip.c.g .* fip.Omega.K .^ 2,
+        fip.tools.viscous_convo, fip.Omega)
     @test maximum(fip.now.u_eq) < 10
     @test minimum(fip.now.u_eq) > -300
 end

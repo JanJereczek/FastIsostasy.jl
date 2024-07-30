@@ -82,7 +82,7 @@ function FastIsostasy.reconstruct!(fip, params, reduction::ViscosityRegion)
     fip.p.effective_viscosity[reduction.mask] .= 10 .^ params
 end
 
-function FastIsostasy.extract_output(fip, reduction::ViscosityRegion)
+function FastIsostasy.extract_output(fip, reduction::ViscosityRegion, data::InversionData)
     return extract_fip(fip)[1][reduction.mask]
 end
 

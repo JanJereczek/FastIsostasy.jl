@@ -78,19 +78,20 @@ function matrify(x::Vector{T}, Nx::Int, Ny::Int) where {T<:Real}
     return X
 end
 
-# function samesize_conv(X::M, Y::M, Omega::ComputationDomain{T, L, M}, bc::Function) where
-#     {T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}}
-#     convo = bc(conv(X, Y), 2*Omega.Nx-1, 2*Omega.Ny-1)
-#     return view(convo, Omega.i1:Omega.i2, Omega.j1:Omega.j2)
-# end
+"""
+    samesize_conv(X, ipc, Omega)
 
-# function samesize_conv(X::M, Y::M, Omega::ComputationDomain{T, L, M}) where
-#     {T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}}
-#     convo = conv(X, Y)
-#     # corner_bc!(convo, 2*Omega.Nx-1, 2*Omega.Ny-1, 0.0)
-#     apply_bc!(convo, Omega.extended_bc_matrix, Omega.extended_nbc)
-#     return view(convo, Omega.i1:Omega.i2, Omega.j1:Omega.j2)
-# end
+Perform convolution of `X` with `ipc` and crop the result to the same size as `X`.
+"""
+function samesize_conv(X::M, ipc::InplaceConvolution{T, M, C, FP, IP},
+    Omega::ComputationDomain{T, L, M}) where {T<:AbstractFloat, L<:Matrix{T},
+    M<:KernelMatrix{T}, C<:ComplexMatrix{T}, FP<:ForwardPlan{T}, IP<:InversePlan{T}}
+    ipc(X)
+    apply_bc!(ipc.out, Omega.extended_bc_matrix, Omega.extended_nbc)
+    return view(ipc.out,
+        Omega.i1+Omega.convo_offset:Omega.i2+Omega.convo_offset,
+        Omega.j1-Omega.convo_offset:Omega.j2-Omega.convo_offset)
+end
 
 # Just a helper for blur! Not performant but we only blur at preprocessing
 # so we do not care :)
@@ -100,39 +101,11 @@ function samesize_conv(X::M, Y::M, Omega::ComputationDomain) where
     ipc = InplaceConvolution(X, false)
     return samesize_conv(Y, ipc, i1, i2, j1, j2, convo_offset)
 end
-function samesize_conv(X, ipc, i1, i2, j1, j2, convo_offset)
-    convo = ipc(X)
-    return view(convo, i1+convo_offset:i2+convo_offset, j1-convo_offset:j2-convo_offset)
+function samesize_conv(Y, ipc, i1, i2, j1, j2, convo_offset)
+    ipc(Y)
+    return view(ipc.out, i1+convo_offset:i2+convo_offset,
+        j1-convo_offset:j2-convo_offset)
 end
-
-# Performant version for time loop
-function samesize_conv(X::M, ipc::InplaceConvolution{T, C, FP, IP},
-    Omega::ComputationDomain{T, L, M}) where {T<:AbstractFloat, L<:Matrix{T},
-    M<:KernelMatrix{T}, C<:ComplexMatrix{T}, FP<:ForwardPlan{T}, IP<:InversePlan{T}}
-    convo = ipc(X)
-    apply_bc!(convo, Omega.extended_bc_matrix, Omega.extended_nbc)
-    return view(convo,
-        Omega.i1+Omega.convo_offset:Omega.i2+Omega.convo_offset,
-        Omega.j1-Omega.convo_offset:Omega.j2-Omega.convo_offset)
-end
-
-function samesize_conv!(inout::M, convo_out::M, X::M,
-    ipc::InplaceConvolution{T, C, FP, IP},
-    Omega::ComputationDomain{T, L, M}) where {T<:AbstractFloat, L<:Matrix{T},
-    M<:KernelMatrix{T}, C<:ComplexMatrix{T}, FP<:ForwardPlan{T}, IP<:InversePlan{T}}
-    ipc(convo_out, X)
-    inout .= view(convo_out,
-        Omega.i1+Omega.convo_offset:Omega.i2+Omega.convo_offset,
-        Omega.j1-Omega.convo_offset:Omega.j2-Omega.convo_offset)
-    apply_bc!(inout, Omega.bc_matrix, Omega.nbc)
-end
-
-# function samesize_conv(X::CuMatrix{T}, Y::CuMatrix{T}, Omega::ComputationDomain{T, L, M}) where
-#     {T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}}
-#     convo = conv(X, Y)
-#     corner_bc!(convo, 2*Omega.Nx-1, 2*Omega.Ny-1, 0.0)
-#     return view(convo, Omega.i1:Omega.i2, Omega.j1:Omega.j2)
-# end
 
 function write_step!(ncout::NetcdfOutput{Tout}, state::CurrentState{T, M}, k::Int) where {
     T<:AbstractFloat, M<:KernelMatrix{T}, Tout<:AbstractFloat}
@@ -510,18 +483,6 @@ function choose_fft_plans(X, use_cuda)
     end
     return pfft!, pifft!
 end
-
-# function remake!(fip::FastIsoProblem)
-#     @set fip.now = CurrentState(fip.Omega, fip.ref)
-#     println(extrema(fip.now.u))
-#     if fip.opts.dense_output
-#         @set fip.ncout = DenseOutputs(fip.Omega, fip.ncout.t,
-#             fip.p.effective_viscosity, fip.ref.maskactive)
-#     else
-#         @set fip.ncout = SparseOutputs(fip.Omega, fip.ncout.t)
-#     end
-#     return nothing
-# end
 
 function remake!(fip::FastIsoProblem)
     # Get values from ReferenceState

@@ -15,20 +15,6 @@ mutable struct PreAllocated{T<:AbstractFloat, M<:KernelMatrix{T}, C<:ComplexMatr
     Mxyx::M
     Mxyxy::M
     fftrhs::C
-    ifftrhs::C
-    convo_out::M
-end
-
-# TODO: replace by:
-
-mutable struct Buffer{T<:AbstractFloat, M<:KernelMatrix{T}, C<:ComplexMatrix{T}}
-    m1::M
-    m2::M
-    m3::M
-    m4::M
-    c1::C
-    c2::C
-    mlarge::M
 end
 
 #########################################################
@@ -75,9 +61,9 @@ struct ComputationDomain{T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}}
     Lat::L
     Lon::L
     K::M                        # Length distortion matrix
-    Dx::M                       # dx matrix accounting for distortion
-    Dy::M                       # dy matrix accounting for distortion
-    A::M                        # surface matrix accounting for distortion
+    Dx::M                       # dx matrix accounting for distortion.  TODO: macro
+    Dy::M                       # dy matrix accounting for distortion.  TODO: macro
+    A::M                        # area (accounting for distortion).     TODO: macro
     correct_distortion::Bool
     null::M                     # a zero matrix of size Nx x Ny
     pseudodiff::M               # pseudodiff operator as matrix (Hadamard product)
@@ -228,12 +214,10 @@ lateral variability of each layer on the grid of `Omega::ComputationDomain`.
 """
 mutable struct LayeredEarth{T<:AbstractFloat, M<:KernelMatrix{T}}
     effective_viscosity::M
-    litho_thickness::Matrix{T}
+    litho_thickness::M
     litho_rigidity::M
     litho_poissonratio::T
     mantle_poissonratio::T
-    layer_viscosities::Array{T, 3}
-    layer_boundaries::Array{T, 3}
     tau::M
     litho_youngmodulus::T
     litho_shearmodulus::T
@@ -300,8 +284,8 @@ function LayeredEarth(
     return LayeredEarth(
         effective_viscosity,
         litho_thickness, litho_rigidity, litho_poissonratio,
-        mantle_poissonratio, layer_viscosities, layer_boundaries,
-        tau, litho_youngmodulus, litho_shearmodulus, rho_uppermantle, rho_litho,
+        mantle_poissonratio, tau, litho_youngmodulus, litho_shearmodulus,
+        rho_uppermantle, rho_litho,
     )
 
 end
@@ -323,7 +307,7 @@ struct ReferenceState{T<:AbstractFloat, M<:KernelMatrix{T}} <: GeoState
     H_water::M              # ref height of water column
     b::M                    # ref bedrock position
     bsl::T                  # ref barystatic sea level
-    z_ss::M     # ref z_ss field
+    z_ss::M                 # ref z_ss field
     V_af::T                 # ref sl-equivalent of ice volume above floatation
     V_pov::T                # ref potential ocean volume
     V_den::T                # ref potential ocean volume associated with V_den
@@ -399,9 +383,9 @@ preallocated arrays.
 """
 struct FastIsoTools{T<:AbstractFloat, M<:KernelMatrix{T}, C<:ComplexMatrix{T},
     FP<:ForwardPlan{T}, IP<:InversePlan{T}}
-    viscousconvo::InplaceConvolution{T, C, FP, IP}
-    elasticconvo::InplaceConvolution{T, C, FP, IP}
-    dz_ssconvo::InplaceConvolution{T, C, FP, IP}
+    viscous_convo::InplaceConvolution{T, M, C, FP, IP}
+    elastic_convo::InplaceConvolution{T, M, C, FP, IP}
+    dz_ss_convo::InplaceConvolution{T, M, C, FP, IP}
     pfft!::FP
     pifft!::IP
     Hice::Interpolations.Extrapolation{M, 1, Interpolations.GriddedInterpolation{M, 1, Vector{M},
@@ -424,18 +408,18 @@ function FastIsoTools(
     L_w = get_flexural_lengthscale(mean(p.litho_rigidity), p.rho_uppermantle, c.g)
     kei = get_kei(Omega, L_w)
     viscousgreen = calc_viscous_green(Omega, mean(p.litho_rigidity), kei, L_w)
-    viscousconvo = InplaceConvolution(viscousgreen, Omega.use_cuda)
+    viscous_convo = InplaceConvolution(viscousgreen, Omega.use_cuda)
 
     # Build in-place convolution to compute elastic response
     distance, greenintegrand_coeffs = get_greenintegrand_coeffs(T)
     greenintegrand_function = build_greenintegrand(distance, greenintegrand_coeffs)
     quad_support, quad_coeffs = get_quad_coeffs(T, quad_precision)
     elasticgreen = get_elasticgreen(Omega, greenintegrand_function, quad_support, quad_coeffs)
-    elasticconvo = InplaceConvolution(elasticgreen, Omega.use_cuda)
+    elastic_convo = InplaceConvolution(elasticgreen, Omega.use_cuda)
 
     # Build in-place convolution to compute dz_ss response
     dz_ssgreen = get_dz_ssgreen(Omega, c)
-    dz_ssconvo = InplaceConvolution(dz_ssgreen, Omega.use_cuda)
+    dz_ss_convo = InplaceConvolution(dz_ssgreen, Omega.use_cuda)
 
     # FFT plans depening on CPU vs. GPU usage
     pfft!, pifft! = choose_fft_plans(Omega.K, Omega.use_cuda)
@@ -444,13 +428,13 @@ function FastIsoTools(
     Hice = linear_interpolation( t_Hice_snapshots,
         kernelpromote(Hice_snapshots, Omega.arraykernel); extrapolation_bc=Flat())
 
-    realmatrices = [null(Omega) for _ in eachindex(fieldnames(PreAllocated))[1:end-3]]
-    cplxmatrices = [complex.(null(Omega)) for _ in 1:2]
-    # convo_out = Omega.arraykernel(Matrix{T}(undef, size(dz_ssconvo.Afft)...))
-    convo_out = Omega.arraykernel(zeros(T, size(dz_ssconvo.Afft)...))
-    prealloc = PreAllocated(realmatrices..., cplxmatrices..., convo_out)
+    n_cplx_matrices = 1
+    realmatrices = [null(Omega) for _ in 
+        eachindex(fieldnames(PreAllocated))[1:end-n_cplx_matrices]]
+    cplxmatrices = [complex.(null(Omega)) for _ in 1:n_cplx_matrices]
+    prealloc = PreAllocated(realmatrices..., cplxmatrices...)
     
-    return FastIsoTools(viscousconvo, elasticconvo, dz_ssconvo, pfft!, pifft!,
+    return FastIsoTools(viscous_convo, elastic_convo, dz_ss_convo, pfft!, pifft!,
         Hice, bsl_itp, prealloc)
 end
 
