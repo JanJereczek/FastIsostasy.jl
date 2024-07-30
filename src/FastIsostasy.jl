@@ -55,7 +55,7 @@ export years2seconds, seconds2years, m_per_sec2mm_per_yr
 export latlon2stereo, stereo2latlon, lon360tolon180
 export reinit_structs_cpu, meshgrid, kernelcollect
 
-export get_r, gauss_distr, generate_gaussian_field, samesize_conv, samesize_conv!, blur
+export get_r, gauss_distr, generate_gaussian_field, samesize_conv, blur
 export uniform_ice_cylinder, stereo_ice_cylinder, stereo_ice_cap
 export write_out!, remake!, savefip, null, not, cudainfo
 
