@@ -2,11 +2,20 @@ module FastIsoInversion
 
 using FastIsostasy
 using Distributions
-using EnsembleKalmanProcesses: EnsembleKalmanProcesses, EnsembleKalmanProcess,
-    Unscented, get_error, get_g_mean_final, get_ϕ_final, get_ϕ_mean_final
+using EnsembleKalmanProcesses:
+    EnsembleKalmanProcesses,
+    EnsembleKalmanProcess,
+    Unscented,
+    get_error,
+    get_g_mean_final,
+    get_ϕ_final,
+    get_ϕ_mean_final
 using EnsembleKalmanProcesses.Observations: Observations
-using EnsembleKalmanProcesses.ParameterDistributions: ParameterDistributions,
-    ParameterDistribution, combine_distributions, constrained_gaussian
+using EnsembleKalmanProcesses.ParameterDistributions:
+    ParameterDistributions,
+    ParameterDistribution,
+    combine_distributions,
+    constrained_gaussian
 using LinearAlgebra
 using .Threads
 
@@ -27,45 +36,62 @@ defined by `reduction<:ParameterReduction` and the behaviour of
 
 """
 function FastIsostasy.inversion_problem(
-    fip::FastIsoProblem{T, L, M, C, FP, IP, O},
+    fip::FastIsoProblem{T,L,M,C,FP,IP,O},
     config::InversionConfig,
-    data::InversionData{T, M},
-    reduction::ParameterReduction,
+    data::InversionData{T,M},
+    reduction::R,
     priors;
     save_stride_iter = 1,
-) where {T<:AbstractFloat, L, M<:Matrix{T}, C, FP, IP, O}
+) where {T<:AbstractFloat,L,M<:Matrix{T},C,FP,IP,O,R<:ParameterReduction{T}}
 
 
     println("Generating noisy data set...")
-    Σ_y = uncorrelated_obs_covariance(config.scale_obscov, ones(T, data.countmask * data.nt))
+    Σ_y = uncorrelated_obs_covariance(
+        config.scale_obscov,
+        ones(T, data.countmask * data.nt),
+    )
     yn = zeros(T, data.countmask * data.nt, config.n_samples)
     y = vcat([yy[data.mask] for yy in data.Y]...)
-    @inbounds for j in 1:config.n_samples
-        yn[:, j] .= y .+ rand(Distributions.MvNormal(
-            zeros(T, data.countmask * data.nt), Σ_y))
+    @inbounds for j in axes(yn, 2)
+        view(yn, :, j) .=
+            y .+ rand(Distributions.MvNormal(zeros(T, data.countmask * data.nt), Σ_y))
     end
 
     println("Observing data...")
     ynoisy = Observations.Observation(yn, Σ_y, ["Noisy truth"])
 
     println("Defining process ...")
-    process = Unscented(mean(priors), cov(priors);  # Could also use process = Inversion()
-        α_reg = config.α_reg, update_freq = config.update_freq)
+    process = Unscented(
+        mean(priors),
+        cov(priors);  # Could also use process = Inversion()
+        α_reg = config.α_reg,
+        update_freq = config.update_freq,
+    )
     ukiobj = EnsembleKalmanProcess(ynoisy.mean, ynoisy.obs_noise_cov, process)
 
     println("Initializing arrays...")
     error = fill(T(Inf), config.N_iter)
-    out = [fill(Inf, reduction.nparams) for _ in 1:save_stride_iter:config.N_iter+1]
+    out = [fill(Inf, reduction.nparams) for _ = 1:save_stride_iter:config.N_iter+1]
     ϕ_tool = get_ϕ_final(priors, ukiobj)       # Params in physical/constrained space
     G_ens = zeros(T, data.countmask * data.nt, size(ϕ_tool, 2))
 
-    return InversionProblem(fip, config, data, reduction, priors, ukiobj, error, out, G_ens)
+    return InversionProblem(
+        fip,
+        config,
+        data,
+        reduction,
+        priors,
+        ukiobj,
+        error,
+        out,
+        G_ens,
+    )
 
 end
 
 function uncorrelated_obs_covariance(scale_obscov, loadscaling_obscov)
     diagvar = scale_obscov ./ (loadscaling_obscov .+ 1)   # 10000.0
-    return convert(Array, Diagonal(diagvar) )
+    return convert(Array, Diagonal(diagvar))
 end
 
 """
@@ -78,9 +104,9 @@ function FastIsostasy.solve!(paraminv::InversionProblem; verbose::Bool = false)
 
     paraminv.out[1] .= get_ϕ_mean_final(paraminv.priors, paraminv.ukiobj)
     ϕ_n = get_ϕ_final(paraminv.priors, paraminv.ukiobj)
-    fips = [deepcopy(paraminv.fip) for _ in 1:nthreads()]
+    fips = [deepcopy(paraminv.fip) for _ = 1:nthreads()]
 
-    for n in 1:paraminv.config.N_iter
+    for n = 1:paraminv.config.N_iter
 
         # Get params in physical/constrained space
         ϕ_n .= get_ϕ_final(paraminv.priors, paraminv.ukiobj)
@@ -91,8 +117,8 @@ function FastIsostasy.solve!(paraminv::InversionProblem; verbose::Bool = false)
                 println("Populating ̂Y at: thread = $id,  n = $n,  j = $j")
             end
             FastIsostasy.reconstruct!(fips[id], ϕ_n[:, j], paraminv.reduction)
-            paraminv.G_ens[:, j] .= forward_fastiso(fips[id], paraminv.reduction,
-                paraminv.data)
+            paraminv.G_ens[:, j] .=
+                forward_fastiso(fips[id], paraminv.reduction, paraminv.data)
         end
 
         if verbose
@@ -105,22 +131,27 @@ function FastIsostasy.solve!(paraminv::InversionProblem; verbose::Bool = false)
         print_inversion_evolution(paraminv, n, ϕ_n, paraminv.reduction)
     end
 
-    FastIsostasy.reconstruct!(paraminv.fip, get_ϕ_mean_final(paraminv.priors, paraminv.ukiobj),
-        paraminv.reduction)
+    FastIsostasy.reconstruct!(
+        paraminv.fip,
+        get_ϕ_mean_final(paraminv.priors, paraminv.ukiobj),
+        paraminv.reduction,
+    )
 
     return nothing
 end
 
-function FastIsostasy.forward_fastiso(fip::FastIsoProblem, r::ParameterReduction,
-    d::InversionData)
+function FastIsostasy.forward_fastiso(
+    fip::FastIsoProblem,
+    r::ParameterReduction,
+    d::InversionData,
+)
     remake!(fip)
     solve!(fip)
     return FastIsostasy.extract_output(fip, r, d)
 end
 
 # Actually, this should not be diagonal because there is a correlation between points.
-function correlated_obs_covariance()
-end
+function correlated_obs_covariance() end
 
 """
     extract_inversion()

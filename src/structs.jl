@@ -367,7 +367,7 @@ function CurrentState(Omega::ComputationDomain{T, L, M}, ref::ReferenceState{T, 
         copy(ref.bsl), null(Omega), copy(ref.z_ss),
         copy(ref.V_af), copy(ref.V_pov), copy(ref.V_den),
         copy(ref.maskgrounded), copy(ref.maskocean),
-        OceanSurfaceChange(z0 = ref.bsl), 0, 1,
+        OceanSurfaceChange(T = T, z0 = ref.bsl), 0, 1,
     )
 end
 
