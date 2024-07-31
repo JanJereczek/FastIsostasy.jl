@@ -25,6 +25,7 @@ include("test_dimensions.jl")
 include("test_benchmarks.jl")
 @testset "benchmarks" begin
     benchmark1()
+    benchmark1_float32()
     benchmark1_external_loadupdate()
     benchmark2()
     benchmark3()

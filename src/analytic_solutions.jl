@@ -11,7 +11,7 @@ by `t`.
 function analytic_solution(r::T, t::T, c, p,
     H0::T, R0::T; n_quad_support=5::Int) where {T<:AbstractFloat}
 
-    support = vcat(1e-14, 10 .^ (-10:0.05:-3), 1.0)     # support vector for quadrature
+    support = T.(vcat(1e-14, 10 .^ (-10:0.05:-3), 1.0))     # support vector for quadrature
     scaling = c.rho_ice * c.g * H0 * R0
     if t == T(Inf)
         equilibrium_integrand_r(kappa) = equilibrium_integrand(kappa, r, c, p, R0)

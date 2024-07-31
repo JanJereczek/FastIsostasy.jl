@@ -1,7 +1,6 @@
-function benchmark1_compare(Omega, fip, H, R)
+function benchmark1_compare(Omega::ComputationDomain, fip, H, R)
     # Comparing to analytical results
     ii, jj = slice_along_x(Omega)
-    analytic_support = vcat(1.0e-14, 10 .^ (-10:0.05:-3), 1.0)
     fig, axs = comparison_figure(1)
     x, y = Omega.X[ii, jj], Omega.Y[ii, jj]
     cmap = cgrad(:jet, length(fip.out.t), categorical = true)
@@ -34,6 +33,26 @@ function benchmark1()
     if SAVE_PLOTS
         save("plots/benchmark1/plot.png", fig)
     end
+end
+
+function benchmark1_float32()
+    T = Float32
+    Omega = ComputationDomain(3000f3, 7, correct_distortion = false)
+    c = PhysicalConstants(type = T)
+    p = LayeredEarth(Omega, rho_litho = 0f0)
+    t_out = T.([0.0, 100.0, 500.0, 1500.0, 5000.0, 10_000.0, 50_000.0])
+    
+    εt = 1f-8
+    pushfirst!(t_out, -εt)
+    t_Hice = [-εt, 0f0, t_out[end]]
+
+    R, H = 1000f3, 1f3
+    Hcylinder = uniform_ice_cylinder(Omega, R, H)
+    Hice = [zeros(T, Omega.Nx, Omega.Ny), Hcylinder, Hcylinder]
+    fip = FastIsoProblem(Omega, c, p, t_out, t_Hice, Hice, output = "sparse")
+    solve!(fip)
+    fig = benchmark1_compare(Omega, fip, H, R)
+    return nothing
 end
 
 function benchmark1_gpu()
@@ -73,14 +92,14 @@ end
 
 function benchmark2()
     Omega = ComputationDomain(3000e3, 6)
-    c = PhysicalConstants(rho_ice = 0.931e3, rho_litho = 2.8e3)
+    c = PhysicalConstants(rho_ice = 0.931e3)
 
     G, nu = 0.50605e11, 0.28        # shear modulus (Pa) and Poisson ratio of lithsphere
     E = G * 2 * (1 + nu)
     lb = c.r_equator .- [6301e3, 5951e3, 5701e3]
     p = LayeredEarth( Omega, layer_boundaries = lb,
         layer_viscosities = [1e21, 1e21, 2e21], litho_youngmodulus = E,
-        litho_poissonratio = nu )
+        litho_poissonratio = nu, rho_litho = 2.8e3)
 
     εt = 1e-8
     t_out = [-εt, 0.0, 1.0, 1e3, 2e3, 5e3, 1e4, 1e5]

@@ -185,7 +185,7 @@ function elra!(dudt::M, u::M, fip::FastIsoProblem{T, L, M, C, FP, IP}, t::T) whe
     fip.now.u_eq = samesize_conv( - (fip.now.columnanoms.load +
         fip.now.columnanoms.litho) .* fip.c.g .* fip.Omega.K .^ 2,
         fip.tools.viscous_convo, fip.Omega)
-    @. dudt = 1 / fip.p.tau * (fip.now.u_eq - fip.now.u) * years2seconds(1.0)
+    @. dudt = 1 / fip.p.tau * (fip.now.u_eq - fip.now.u) * years2seconds(T(1.0))
     return nothing
 end
 
@@ -200,13 +200,17 @@ function update_deformation_rhs!(fip::FastIsoProblem{T, L, M, C, FP, IP}, u::M) 
 
     Omega, P = fip.Omega, fip.tools.prealloc
     @. P.rhs = -fip.c.g * fip.now.columnanoms.full
-    update_second_derivatives!(P.uxx, P.uyy, P.ux, P.uxy, u, Omega)
-    @. P.Mxx = -fip.p.litho_rigidity * (P.uxx + fip.p.litho_poissonratio * P.uyy)
-    @. P.Myy = -fip.p.litho_rigidity * (P.uyy + fip.p.litho_poissonratio * P.uxx)
-    @. P.Mxy = -fip.p.litho_rigidity * (1 - fip.p.litho_poissonratio) * P.uxy
-    update_second_derivatives!(P.Mxxxx, P.Myyyy, P.Mxyx, P.Mxyxy, P.Mxx, P.Myy,
-        P.Mxy, Omega)
-    @. P.rhs += P.Mxxxx + P.Myyyy + 2 * P.Mxyxy
+    update_second_derivatives!(P.buffer_xx, P.buffer_yy, P.buffer_x,
+        P.buffer_xy, u, Omega)
+    @. P.Mxx = -fip.p.litho_rigidity * (P.buffer_xx +
+        fip.p.litho_poissonratio * P.buffer_yy)
+    @. P.Myy = -fip.p.litho_rigidity * (P.buffer_yy +
+        fip.p.litho_poissonratio * P.buffer_xx)
+    @. P.Mxy = -fip.p.litho_rigidity * (1 - fip.p.litho_poissonratio) * P.buffer_xy
+
+    update_second_derivatives!(P.buffer_xx, P.buffer_yy, P.buffer_x, P.buffer_xy,
+        P.Mxx, P.Myy, P.Mxy, Omega)
+    @. P.rhs += P.buffer_xx + P.buffer_yy + 2 * P.buffer_xy
     return nothing
 end
 

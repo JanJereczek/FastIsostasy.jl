@@ -540,9 +540,9 @@ function mask_disc(r::KernelMatrix{T}, R::T) where {T<:AbstractFloat}
 end
 
 function uniform_ice_cylinder(Omega::ComputationDomain, R::T, H::T;
-    center::Vector{<:Real} = [0.0, 0.0]) where {T<:AbstractFloat}
+    center::Vector{T} = T.([0.0, 0.0])) where {T<:AbstractFloat}
     M = mask_disc(Omega.X, Omega.Y, R, center = center)
-    return M .* H
+    return T.(M .* H)
 end
 
 function stereo_ice_cylinder(

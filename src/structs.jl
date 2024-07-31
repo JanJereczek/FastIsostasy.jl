@@ -3,17 +3,13 @@
 #########################################################
 mutable struct PreAllocated{T<:AbstractFloat, M<:KernelMatrix{T}, C<:ComplexMatrix{T}}
     rhs::M
-    uxx::M
-    uyy::M
-    ux::M
-    uxy::M
+    buffer_xx::M
+    buffer_yy::M
+    buffer_x::M
+    buffer_xy::M
     Mxx::M
     Myy::M
     Mxy::M
-    Mxxxx::M
-    Myyyy::M
-    Mxyx::M
-    Mxyxy::M
     fftrhs::C
 end
 
@@ -166,8 +162,8 @@ Base.@kwdef struct PhysicalConstants{T<:AbstractFloat}
     rho_seawater::T = type(1.023e3)               # (kg/m^3)
     # rho_uppermantle::T = 3.7e3            # Mean density of topmost upper mantle (kg m^-3)
     # rho_litho::T = 2.6e3                  # Mean density of lithosphere (kg m^-3)
-    rho_uppermantle::T = type(3.4e3)              # Mean density of topmost upper mantle (kg m^-3)
-    rho_litho::T = type(3.2e3)                    # Mean density of lithosphere (kg m^-3)
+    # rho_uppermantle::T = type(3.4e3)              # Mean density of topmost upper mantle (kg m^-3)
+    # rho_litho::T = type(3.2e3)                    # Mean density of lithosphere (kg m^-3)
 end
 
 #########################################################
@@ -233,10 +229,10 @@ function LayeredEarth(
     litho_youngmodulus::T = T(6.6e10),          # (N/m^2)
     litho_poissonratio::T = T(0.28),
     mantle_poissonratio::T = T(0.28),
-    tau = years2seconds(855.0),
-    rho_uppermantle = T(3.4e3),                 # Mean density of topmost upper mantle (kg m^-3)
-    rho_litho = T(3.2e3),                       # Mean density of lithosphere (kg m^-3)
-    layering = "equalizing",
+    tau::T = T(years2seconds(855.0)),
+    rho_uppermantle::T = T(3.4e3),                 # Mean density of topmost upper mantle (kg m^-3)
+    rho_litho::T = T(3.2e3),                       # Mean density of lithosphere (kg m^-3)
+    layering::String = "equalizing",
 ) where {
     T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T},
     A<:Union{Vector{T}, Array{T, 3}},
@@ -324,7 +320,7 @@ mutable struct ColumnAnomalies{T<:AbstractFloat, M<:KernelMatrix{T}}
 end
 
 function ColumnAnomalies(Omega)
-    zero_columnanoms = [null(Omega) for _ in eachindex(fieldnames(ColumnAnomalies))]
+    zero_columnanoms = [kernelnull(Omega) for _ in eachindex(fieldnames(ColumnAnomalies))]
     return ColumnAnomalies(zero_columnanoms...)
 end
 
@@ -388,10 +384,14 @@ struct FastIsoTools{T<:AbstractFloat, M<:KernelMatrix{T}, C<:ComplexMatrix{T},
     dz_ss_convo::InplaceConvolution{T, M, C, FP, IP}
     pfft!::FP
     pifft!::IP
-    Hice::Interpolations.Extrapolation{M, 1, Interpolations.GriddedInterpolation{M, 1, Vector{M},
-        Gridded{Linear{Throw{OnGrid}}}, Tuple{Vector{T}}}, Gridded{Linear{Throw{OnGrid}}}, <:Any}
-    bsl::Interpolations.Extrapolation{T, 1, Interpolations.GriddedInterpolation{T, 1, Vector{T},
-        Gridded{Linear{Throw{OnGrid}}}, Tuple{Vector{T}}}, Gridded{Linear{Throw{OnGrid}}}, <:Any}
+    Hice::Interpolations.Extrapolation{Matrix{Float64}, 1,
+        Interpolations.GriddedInterpolation{Matrix{Float64}, 1, Vector{M},
+        Gridded{Linear{Throw{OnGrid}}}, Tuple{Vector{T}}},
+        Gridded{Linear{Throw{OnGrid}}}, <:Any}
+    bsl::Interpolations.Extrapolation{T, 1,
+        Interpolations.GriddedInterpolation{T, 1, Vector{T},
+        Gridded{Linear{Throw{OnGrid}}}, Tuple{Vector{T}}},
+        Gridded{Linear{Throw{OnGrid}}}, <:Any}
     prealloc::PreAllocated{T, M, C}
 end
 
@@ -408,18 +408,18 @@ function FastIsoTools(
     L_w = get_flexural_lengthscale(mean(p.litho_rigidity), p.rho_uppermantle, c.g)
     kei = get_kei(Omega, L_w)
     viscousgreen = calc_viscous_green(Omega, mean(p.litho_rigidity), kei, L_w)
-    viscous_convo = InplaceConvolution(viscousgreen, Omega.use_cuda)
+    viscous_convo = InplaceConvolution(T.(viscousgreen), Omega.use_cuda)
 
     # Build in-place convolution to compute elastic response
     distance, greenintegrand_coeffs = get_greenintegrand_coeffs(T)
     greenintegrand_function = build_greenintegrand(distance, greenintegrand_coeffs)
     quad_support, quad_coeffs = get_quad_coeffs(T, quad_precision)
     elasticgreen = get_elasticgreen(Omega, greenintegrand_function, quad_support, quad_coeffs)
-    elastic_convo = InplaceConvolution(elasticgreen, Omega.use_cuda)
+    elastic_convo = InplaceConvolution(T.(elasticgreen), Omega.use_cuda)
 
     # Build in-place convolution to compute dz_ss response
     dz_ssgreen = get_dz_ssgreen(Omega, c)
-    dz_ss_convo = InplaceConvolution(dz_ssgreen, Omega.use_cuda)
+    dz_ss_convo = InplaceConvolution(T.(dz_ssgreen), Omega.use_cuda)
 
     # FFT plans depening on CPU vs. GPU usage
     pfft!, pifft! = choose_fft_plans(Omega.K, Omega.use_cuda)
@@ -626,6 +626,7 @@ function FastIsoProblem(
     return FastIsoProblem(Omega, c, p, t_out, t_Hice_snapshots, Hice_snapshots; kwargs...)
 end
 
+zero_bsl(T, t) = linear_interpolation(T.([extrema(t)...]), T.([0.0, 0.0]))
 function FastIsoProblem(
     Omega::ComputationDomain{T, L, M},
     c::PhysicalConstants{T},
@@ -638,7 +639,7 @@ function FastIsoProblem(
     ue_0::KernelMatrix{T} = null(Omega),
     z_ss_0::KernelMatrix{T} = null(Omega),
     b_0::KernelMatrix{T} = null(Omega),
-    bsl_itp = linear_interpolation([extrema(t_out)...], [0.0, 0.0]),
+    bsl_itp = zero_bsl(T, t_out),
     maskactive::BoolMatrix = kernelcollect(Omega.K .< Inf, Omega),
     output_file::String = "",
     output::String = "nothing",

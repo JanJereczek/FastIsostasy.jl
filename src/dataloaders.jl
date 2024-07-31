@@ -69,11 +69,11 @@ end
 #############################################################
 # Parameter fields
 #############################################################
-function load_oceansurfacefunction(; verbose = true)
+function load_oceansurfacefunction(; T = Float64, verbose = true)
     link = "$isos_data/raw/main/tools/ocean_surface/dz=0.1m.txt"
     tmp = download(link)
     data = readdlm(tmp)
-    z, A = data[:, 1], data[:, 2]
+    z, A = T.(data[:, 1]), T.(data[:, 2])
     itp = linear_interpolation(z, A, extrapolation_bc = Flat())
     if verbose
         println("returning: z, A, interpolator")

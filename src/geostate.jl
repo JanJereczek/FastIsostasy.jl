@@ -38,7 +38,7 @@ function columnanom_mantle!(fip::FastIsoProblem)
 end
 
 function columnanom_litho!(fip::FastIsoProblem)
-    anom!(fip.now.columnanoms.litho, fip.c.rho_litho, fip.now.ue, fip.ref.ue)
+    anom!(fip.now.columnanoms.litho, fip.p.rho_litho, fip.now.ue, fip.ref.ue)
     return nothing
 end
 
