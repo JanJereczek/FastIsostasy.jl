@@ -8,7 +8,6 @@ using DynamicalSystemsBase: CoupledODEs, trajectory
 using FastGaussQuadrature: gausslegendre
 using FFTW: fft, ifft, plan_fft!, plan_ifft!, cFFTWPlan
 using Interpolations: Flat, Gridded, Linear, OnGrid, Throw, linear_interpolation
-using JLD2: @load, jldopen, load
 using LinearAlgebra: Diagonal, det, diagm, norm
 using NCDatasets: NCDatasets, NCDataset, defDim, defVar
 using NetCDF
