@@ -9,7 +9,6 @@ using FastGaussQuadrature: gausslegendre
 using FFTW: fft, ifft, plan_fft!, plan_ifft!, cFFTWPlan
 using Interpolations: Flat, Gridded, Linear, OnGrid, Throw, linear_interpolation
 using LinearAlgebra: Diagonal, det, diagm, norm
-using NCDatasets: NCDatasets, NCDataset, defDim, defVar
 using NetCDF
 using NLsolve: mcpsolve
 using OrdinaryDiffEq: ODEProblem, solve, remake, OrdinaryDiffEqAlgorithm

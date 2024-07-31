@@ -57,11 +57,9 @@ end
 function load_antarctic_3regionmask()
     link = "$isos_data/raw/main/tools/masks/ANT-16KM_BASINS-nasa.nc"
     tmp = download(link, tempdir() *"/"* basename(link))
-    ds = NCDataset(tmp, "r")
-    x = copy(ds["xc"][:])
-    y = copy(ds["yc"][:])
-    mask = copy(ds["mask_regions"][:, :])
-    close(ds)
+    x = ncread(tmp, "xc")
+    y = ncread(tmp, "yc")
+    mask = ncread(tmp, "mask_regions")
 
     mask_itp = linear_interpolation((x, y), mask, extrapolation_bc = Flat())
     println("returning: (x, y), mask, interpolator")
@@ -86,10 +84,8 @@ end
 function load_bedmachine3(; var = "bed", T = Float64)
     link = "$isos_data/raw/main/topography/BedMachineAntarctica-v3-sparse.nc"
     tmp = download(link, tempdir() *"/"* basename(link))
-    ds = NCDataset(tmp, "r")
-    var = T.(ds["$var"][:, :])
-    x, y = T.(ds["x"][:]), T.(ds["y"][:])
-    close(ds)
+    var = T.(ncread(tmp, "$var"))
+    x, y = T.(ncread(tmp, "x")), T.(ncread(tmp, "y"))
     itp = linear_interpolation((x, reverse(y)), reverse(var, dims=2))
     println("returning: (x, y), var, interpolator")
     return (x, y), var, itp
@@ -98,10 +94,8 @@ end
 function load_ice6gd(; var = "IceT")
     link = "$isos_data/raw/main/ice_history/ICE6G_D/ICE6GD_$var.nc"
     tmp = download(link, tempdir() *"/"* basename(link))
-    ds = NCDataset(tmp, "r")
-    t, lon, lat = copy(ds["Time"][:]), copy(ds["Lon"][:]), copy(ds["Lat"][:])
-    X = copy(ds["$var"][:, :, :])
-    close(ds)
+    t, lon, lat = ncread(tmp, "Time"), ncread(tmp, "Lon"), ncread(tmp, "Lat")
+    X = ncread(tmp, "$var")
 
     t .*= -1
     lon180, X180 = lon360tolon180(lon, X)
@@ -114,10 +108,8 @@ end
 function load_wiens2022(; extrapolation_bc = Throw())
     link = "$isos_data/raw/main/earth_structure/viscosity/wiens2022.nc"
     tmp = download(link, tempdir() *"/"* basename(link))
-    ds = NCDataset(tmp, "r")
-    x, y, z = copy(ds["x"][:]), copy(ds["y"][:]), copy(ds["z"][:])
-    log10visc = copy(ds["log10visc"][:, :, :])
-    close(ds)
+    x, y, z = ncread(tmp, "x"), ncread(tmp, "y"), ncread(tmp, "z")
+    log10visc = ncread(tmp, "log10visc")
     println("returning: (x, y, z), log10visc, interpolator")
     return (x, y, z), log10visc, linear_interpolation((x, y, z), log10visc,
         extrapolation_bc = extrapolation_bc)
@@ -143,12 +135,10 @@ end
 function load_logvisc_pan2022()
     link = "$isos_data/raw/main/earth_structure/viscosity/pan2022.nc"
     tmp = download(link, tempdir() *"/"* basename(link))
-    ds = NCDataset(tmp, "r")
-    lon = copy(ds["lon"][:])
-    lat = copy(ds["lat"][:])
-    r = copy(ds["r"][:])
-    logvisc = copy(ds["eta"][:, :, :])
-    close(ds)
+    lon = ncread(tmp, "lon")
+    lat = ncread(tmp, "lat")
+    r = ncread(tmp, "r")
+    logvisc = ncread(tmp, "eta")
     logvisc_itp = linear_interpolation((lon, lat, r), logvisc, extrapolation_bc = Flat())
     println("returning: (lon180, lat, r), eta (in log10 space), interpolator")
     return (lon, lat, r), logvisc, logvisc_itp
@@ -210,11 +200,9 @@ end
 function load_latychev_test3(; case = "E0L1V1")
     link = "$isos_data/raw/main/model_outputs/SwierczekLatychev-2023/test3/$case.nc"
     tmp = download(link, tempdir() *"/"* basename(link))
-    ds = NCDataset(tmp, "r")
-    r = copy(ds["r"][:])
-    t = copy(ds["t"][:])
-    u = copy(ds["u"][:, :])
-    close(ds)
+    r = ncread(tmp, "r")
+    t = ncread(tmp, "t")
+    u = ncread(tmp, "u")
     println("returning: (r, t), u, interpolator")
     return (r, t), u, linear_interpolation((r, t), u)
 end
