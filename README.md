@@ -2,7 +2,7 @@
 
 [![](https://img.shields.io/badge/docs-stable-blue.svg)](https://janjereczek.github.io/FastIsostasy.jl/dev/)
 [![](https://img.shields.io/badge/license-GNU_GPL_3.0-green.svg)](https://www.gnu.org/licenses/gpl-3.0.en.html)
-[![](https://img.shields.io/badge/GMD-preprint-purple.svg)](https://egusphere.copernicus.org/preprints/2023/egusphere-2023-2869/#discussion)
+[![](https://img.shields.io/badge/GMD-paper-purple.svg)](https://doi.org/10.5194/gmd-17-5263-2024)
 [![][ci-img]][ci-url]
 [![][codecov-img]][codecov-url]
 <!-- [![codecov](https://codecov.io/gh/JuliaDynamics/TransitionsInTimeseries.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/JuliaDynamics/TransitionsInTimeseries.jl) -->
@@ -42,6 +42,8 @@ using Pkg
 Pkg.add("FastIsostasy")
 ```
 
-## Publications
+## How to cite?
 
-For more information on the model devlopment and validation, please check out our [preprint](https://egusphere.copernicus.org/preprints/2023/egusphere-2023-2869/#discussion).
+For more information on the model devlopment and validation, please check out our [description paper](https://doi.org/10.5194/gmd-17-5263-2024), which should be cited as:
+
+Swierczek-Jereczek, J., Montoya, M., Latychev, K., Robinson, A., Alvarez-Solas, J., & Mitrovica, J. (2024). FastIsostasy v1. 0–a regional, accelerated 2D glacial isostatic adjustment (GIA) model accounting for the lateral variability of the solid Earth. *Geoscientific Model Development, 17*(13), 5263-5290.

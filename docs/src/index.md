@@ -4,7 +4,7 @@
 
 ![GlacialCycle](assets/isl-ice6g-N=350.gif)
 
-FastIsostasy is a friendly and flexible model that regionally computes the glacial isostatic adjustment (GIA) with laterally-variable mantle viscosity and lithospheric thickness. It is mainly adressed to ice-sheet modellers who seek for (1) a good representation of solid-Earth mechanics at virtually zero computational cost, (2) an approximation of the sea-level equation and (3) ready-to-use inversion tools to calibrate the model parameters to data. The simple interface of FastIsostasy allows to flexibly solve GIA problems within few lines of code. It is fully open-source under MIT license and was succesfully benchmarked against analytical, 1D GIA and 3D GIA model solutions.
+FastIsostasy is a friendly and flexible model that regionally computes the glacial isostatic adjustment (GIA) with laterally-variable mantle viscosity and lithospheric thickness. It is described in @swierczek2024fastisostasy and is mainly adressed to ice-sheet modellers who seek for (1) a good representation of solid-Earth mechanics at virtually zero computational cost, (2) an approximation of the sea-level equation and (3) ready-to-use inversion tools to calibrate the model parameters to data. The simple interface of FastIsostasy allows to flexibly solve GIA problems within few lines of code. The code is distributed under GNU general public license v3 and was succesfully benchmarked against analytical, 1D GIA and 3D GIA model solutions.
 
 FastIsostasy relies on a hybrid Fourier/finite-difference collocation of the problem introduced in [cathles-viscosity-1975](@cite) and solved in [lingle-numerical-1985](@cite), [bueler-fast-2007](@cite). Thanks to a simplification of the full problem from 3D to 2D space and the use of [optimized software packages](@ref Juliaecosystem), running kiloyears of regional GIA with $$\Delta x = \Delta y = 45 \, \mathrm{km}$$ is a matter of seconds on a single CPU. For high resolution runs, the user can switch to GPU usage with minimal syntax change and enjoy the advantage of parallelization without requiring an HPC cluster. For GIA "purists", this package is likely to miss interesting processes but we belive that its ridiculous run-time can help to fast-prototype a problem before transfering it to a more comprehensive model.
 
@@ -23,6 +23,10 @@ Pkg.add("FastIsostasy")
 ## How to read the docs?
 
 If you want a quick introduction to GIA, please go to [Quick intro to GIA](@ref). If you want to have a thorough but still accessbile introduction to GIA, we highly recommend reading [whitehouse-solid-2019](@cite). If you want to get started right away, feel free to directly go to the [Tutorial](@ref). If you face any problem using the code or want to know more about the functionalities of the package, visit the [API reference](@ref). If you face a problem you cannot solve, please open a [GitHub issue](https://github.com/JanJereczek/FastIsostasy.jl/issues) with a minimal and reproduceable example. We also welcome feature requests!
+
+## How to cite?
+
+Swierczek-Jereczek, J., Montoya, M., Latychev, K., Robinson, A., Alvarez-Solas, J., & Mitrovica, J. (2024). FastIsostasy v1. 0–a regional, accelerated 2D glacial isostatic adjustment (GIA) model accounting for the lateral variability of the solid Earth. *Geoscientific Model Development, 17*(13), 5263-5290.
 
 ## [Julia ecosystem](@id Juliaecosystem)
 
