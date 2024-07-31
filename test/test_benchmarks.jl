@@ -164,8 +164,8 @@ function benchmark3()
     cases = ["gaussian_lo_D", "gaussian_hi_D", "gaussian_lo_η", "gaussian_hi_η",
         "no_litho", "ref"]
     seakon_files = ["E0L1V1", "E0L2V1", "E0L3V2", "E0L3V3", "E0L0V1", "E0L4V4"]
-    mean_tol = [10, 10, 15, 10, 10, 15]
-    max_tol = [15, 20, 30, 25, 25, 45]
+    mean_tol = [7, 8, 15, 11, 8, 15]
+    max_tol = [13, 18, 28, 22, 22, 42]
 
     for m in eachindex(cases)
         fig, axs = comparison_figure(1)
