@@ -16,9 +16,9 @@ bib = CitationBibliography(
 
 Literate.markdown("src/examples/tutorial.jl", "src/examples"; credit = false)
 Literate.markdown("src/examples/glacialcycle.jl", "src/examples"; credit = false)
-Literate.markdown("src/examples/inversion.jl", "src/examples"; credit = false)
+# Literate.markdown("src/examples/inversion.jl", "src/examples"; credit = false)
 
-example_pages = ["examples/glacialcycle.md", "examples/inversion.md"]
+example_pages = ["examples/glacialcycle.md"] #, "examples/inversion.md"]
 ref_pages = ["APIref.md", "fortran.md", "references.md"]
 # %% Build docs
 PAGES = [
