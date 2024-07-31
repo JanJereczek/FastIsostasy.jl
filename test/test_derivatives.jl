@@ -12,10 +12,10 @@ function derivative_stdsetup(use_cuda::Bool)
 end
 
 function test_derivatives(P, u, Omega, uxx, uyy, uxy)
-    update_second_derivatives!(P.uxx, P.uyy, P.ux, P.uxy, u, Omega)
-    @test inn(Array(P.uxx)) ≈ inn(uxx)
-    @test inn(Array(P.uyy)) ≈ inn(uyy)
-    @test inn(Array(P.uxy)) ≈ inn(uxy)
+    update_second_derivatives!(P.buffer_xx, P.buffer_yy, P.buffer_x, P.buffer_xy, u, Omega)
+    @test inn(Array(P.buffer_xx)) ≈ inn(uxx)
+    @test inn(Array(P.buffer_yy)) ≈ inn(uyy)
+    @test inn(Array(P.buffer_xy)) ≈ inn(uxy)
 end
 
 @testset "derivatives" begin

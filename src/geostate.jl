@@ -4,7 +4,7 @@
 Update the SSH perturbation `dz_ss` by convoluting the Green's function with the load anom.
 """
 function update_dz_ss!(fip::FastIsoProblem)
-    fip.now.dz_ss .= samesize_conv(mass_anom(fip), fip.tools.dz_ssconvo, fip.Omega)
+    fip.now.dz_ss .= samesize_conv(mass_anom(fip), fip.tools.dz_ss_convo, fip.Omega)
     return nothing
 end
 
@@ -38,7 +38,7 @@ function columnanom_mantle!(fip::FastIsoProblem)
 end
 
 function columnanom_litho!(fip::FastIsoProblem)
-    anom!(fip.now.columnanoms.litho, fip.c.rho_litho, fip.now.ue, fip.ref.ue)
+    anom!(fip.now.columnanoms.litho, fip.p.rho_litho, fip.now.ue, fip.ref.ue)
     return nothing
 end
 

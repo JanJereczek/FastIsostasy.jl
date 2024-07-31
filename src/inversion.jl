@@ -5,7 +5,7 @@ Abstract type for parameter reduction methods. Any subtype must implement the
 `reconstruct!(fip, theta)` method, which assigns the reconstructed parameter
 values to `fip::FastIsoProblem`.
 """
-abstract type ParameterReduction end
+abstract type ParameterReduction{T} end
 
 
 """
@@ -46,13 +46,13 @@ Struct containing configuration parameters for a [`InversionProblem`].
 - `n_samples::Int`: Number of samples for the inversion.
 - `scale_obscov::Real`: Scaling factor for the observational covariance matrix.
 """
-struct InversionConfig
+struct InversionConfig{T<:AbstractFloat}
     method::Any
     N_iter::Int
-    α_reg::Real
+    α_reg::T
     update_freq::Int
     n_samples::Int
-    scale_obscov::Real
+    scale_obscov::T
 end
 
 function InversionConfig(
@@ -97,28 +97,17 @@ Solid-Earth parameter fields. For now, only viscosity can be inverted but future
 versions will support lithosphere rigidity. For now, the unscented Kalman inversion
 is the only method available but ensemble Kalman inversion will be available in future.
 """
-struct InversionProblem{T<:AbstractFloat, M<:Matrix{T}, R<:ParameterReduction}
+struct InversionProblem{T<:AbstractFloat, V<:Vector{T}, M<:Matrix{T},
+    R<:ParameterReduction{T}, PD, EKP}
     fip::FastIsoProblem{T, <:Any, M, <:Any, <:Any, <:Any, <:Any}
-    config::InversionConfig
+    config::InversionConfig# {T}
     data::InversionData{T, M}
     reduction::R
-    priors::Any
-    ukiobj::Any
-    error::Vector{T}
-    out::Vector{Vector{T}}
+    priors::PD
+    ukiobj::EKP
+    error::V
+    out::Vector{V}
     G_ens::M
-end
-# priors::ParameterDistribution
-# ukiobj::EnsembleKalmanProcess   # {T, Int64, Unscented{T, Int64}, DefaultScheduler{T}}
-
-"""
-    where_significant()
-
-Find points of parameter field that can be inverted. We here assume that 
-"""
-function where_significant(X::Vector{<:Matrix}, tol::Real)
-    transientmax = max.( [abs.(x) for x in X]... )
-    return transientmax .> tol
 end
 
 function testfunc end

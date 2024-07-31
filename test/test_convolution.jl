@@ -2,7 +2,7 @@
     N = 300
     A, B = rand(N, N), rand(N, N)
     ipconv = InplaceConvolution(A, false)
-    Cipc = ipconv(B)
+    ipconv(B)
     C = conv(A, B)
-    @test Cipc ≈ C
+    @test ipconv.out ≈ C
 end

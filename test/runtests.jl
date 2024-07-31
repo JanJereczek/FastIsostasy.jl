@@ -3,7 +3,6 @@ using DelimitedFiles
 using DSP
 using FastIsostasy
 using Interpolations
-using JLD2
 using LinearAlgebra
 using Statistics
 using Test
@@ -26,6 +25,7 @@ include("test_dimensions.jl")
 include("test_benchmarks.jl")
 @testset "benchmarks" begin
     benchmark1()
+    benchmark1_float32()
     benchmark1_external_loadupdate()
     benchmark2()
     benchmark3()

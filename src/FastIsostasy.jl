@@ -8,9 +8,7 @@ using DynamicalSystemsBase: CoupledODEs, trajectory
 using FastGaussQuadrature: gausslegendre
 using FFTW: fft, ifft, plan_fft!, plan_ifft!, cFFTWPlan
 using Interpolations: Flat, Gridded, Linear, OnGrid, Throw, linear_interpolation
-using JLD2: @load, jldopen, load
 using LinearAlgebra: Diagonal, det, diagm, norm
-using NCDatasets: NCDatasets, NCDataset, defDim, defVar
 using NetCDF
 using NLsolve: mcpsolve
 using OrdinaryDiffEq: ODEProblem, solve, remake, OrdinaryDiffEqAlgorithm
@@ -55,7 +53,7 @@ export years2seconds, seconds2years, m_per_sec2mm_per_yr
 export latlon2stereo, stereo2latlon, lon360tolon180
 export reinit_structs_cpu, meshgrid, kernelcollect
 
-export get_r, gauss_distr, generate_gaussian_field, samesize_conv, samesize_conv!, blur
+export get_r, gauss_distr, generate_gaussian_field, samesize_conv, blur
 export uniform_ice_cylinder, stereo_ice_cylinder, stereo_ice_cap
 export write_out!, remake!, savefip, null, not, cudainfo
 

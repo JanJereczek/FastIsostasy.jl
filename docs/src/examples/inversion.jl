@@ -33,7 +33,7 @@ lb = [100e3, 200e3, 300e3]
 _, eta, eta_itp = load_dataset("Wiens2022")
 loglv = cat([eta_itp.(Omega.X, Omega.Y, z) for z in lb]..., dims = 3)
 lv = 10 .^ loglv
-p = LayeredEarth(Omega, layer_boundaries = lb, layer_viscosities = lv);
+p = LayeredEarth(Omega, layer_boundaries = lb, layer_viscosities = lv)
 
 #=
 To make this problem more exciting, we place the center of the ice load to $$(-1000, -1000) \: \mathrm{km}$$ where the viscosity field displays a less uniform structure. For the sake of simplicity, the data to fit is obtained from a FastIsostasy simulation with the ground-truth viscosity field.
@@ -48,7 +48,7 @@ t_Hice = copy(t_out)
 
 true_viscosity = copy(p.effective_viscosity)
 fip = FastIsoProblem(Omega, c, p, t_out, t_Hice, Hice, output = "sparse")
-solve!(fip);
+solve!(fip)
 
 #=
 Assuming the result of this simulation to be the ground truth $$\hat{y}$$, we can now build an `InversionData` object that will be passed to an `InversionProblem`. The `InversionData` object contains the time series of the input field `X = Hice` and the output field `Y = extract_fip(fip)` (here the displacement field). Furthermore, we define an `InversionConfig` that uses the unscented Kalman filter as introduced in [huang-improve-2021](@cite). 
@@ -67,7 +67,7 @@ extract_fip = extract_last_viscous_displacement
 Y = extract_fip(fip)
 
 data = InversionData(t_inv, length(t_inv), X, Y, mask, count(mask))
-config = InversionConfig(Unscented, N_iter = 5);
+config = InversionConfig(Unscented, N_iter = 5)
 
 #=
 Before finalising the inversion, we need to specify a `ParameterReduction`, which allows a multiple dispatch of `reconstruct!`, `extract_output` and (optionally) `print_inversion_evolution`. This allows the inversion procedure to update the parameters, extract the relevant output and (optionally) print out meaningful information over the iterations of the inversion procedure. In this example, we define a `ViscosityRegion` that reduces the number of parameters to the number of grid points in the mask.
@@ -82,7 +82,7 @@ function FastIsostasy.reconstruct!(fip, params, reduction::ViscosityRegion)
     fip.p.effective_viscosity[reduction.mask] .= 10 .^ params
 end
 
-function FastIsostasy.extract_output(fip, reduction::ViscosityRegion)
+function FastIsostasy.extract_output(fip, reduction::ViscosityRegion, data::InversionData)
     return extract_fip(fip)[1][reduction.mask]
 end
 
@@ -98,7 +98,7 @@ function FastIsostasy.print_inversion_evolution(paraminv, n, ϕ_n, reduction::Vi
     return nothing
 end
 
-reduction = ViscosityRegion(mask, count(mask));
+reduction = ViscosityRegion(mask, count(mask))
 
 #=
 We can now proceed to the definition of the [`InversionProblem`]:
