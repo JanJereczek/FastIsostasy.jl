@@ -72,11 +72,11 @@ end
 # Parameter fields
 #############################################################
 function load_oceansurfacefunction(; verbose = true)
-    link = "$isos_data/raw/main/tools/ocean_surface/dz=0.1m.jld2"
+    link = "$isos_data/raw/main/tools/ocean_surface/dz=0.1m.txt"
     tmp = download(link)
-    @load "$tmp" z_support A_support
-    z, A = collect(z_support), collect(A_support)
-    itp = linear_interpolation(z, A, extrapolation_bc = Flat())    #
+    data = readdlm(tmp)
+    z, A = data[:, 1], data[:, 2]
+    itp = linear_interpolation(z, A, extrapolation_bc = Flat())
     if verbose
         println("returning: z, A, interpolator")
     end
@@ -198,9 +198,9 @@ end
 
 function load_spada2011(case)
     theta, t = spada_dims()
-    link = "$isos_data/raw/main/model_outputs/Spada-2011/$case.jld2"
+    link = "$isos_data/raw/main/model_outputs/Spada-2011/$case.txt"
     tmp = download(link, tempdir() *"/"* basename(link))
-    @load "$tmp" X
+    X = readdlm(tmp)
     if occursin("n_", case)
         reverse!(X, dims = 1)
     end
@@ -265,8 +265,9 @@ end
 Return the load response coefficients with type `T`.
 Reference: Deformation of the Earth by surface Loads, Farell 1972, table A3.
 """
-function get_greenintegrand_coeffs(T::Type; file_is_remote = true,
-    remote_path = "$isos_data/raw/main/tools/green_elastic/elasticgreencoeffs_farrell1972.jld2",
+function get_greenintegrand_coeffs(T::Type;
+    file_is_remote = true,
+    remote_path = "$isos_data/raw/main/tools/green_elastic/elasticgreencoeffs_farrell1972.txt",
     local_path = nothing)
 
     if file_is_remote
@@ -274,12 +275,12 @@ function get_greenintegrand_coeffs(T::Type; file_is_remote = true,
     else
         tmp = local_path
     end
-    data = jldopen(tmp)
+    data = readdlm(tmp)
 
     # rm is column 1 converted to meters (and some extra factor)
     # GE /(10^12 rm) is vertical displacement in meters (applied load is 1kg)
     # GE corresponds to column 2
-    return T.(data["rm"]), T.(data["GE"])
+    return T.(data[:, 2]), T.(data[:, 3])
 end
 
 

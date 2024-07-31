@@ -3,7 +3,6 @@ using DelimitedFiles
 using DSP
 using FastIsostasy
 using Interpolations
-using JLD2
 using LinearAlgebra
 using Statistics
 using Test
