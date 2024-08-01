@@ -44,13 +44,13 @@ p = LayeredEarth(Omega, layer_viscosities = lv, layer_boundaries = lb)
 extrema(p.effective_viscosity)
 
 #=
-As expected, the effective viscosity is a homogeneous field. It corresponds to a nonlinear mean of the layered values provided by the user. Note that we have set $$ \ŗho_{litho} = 0 $$ to prevent the lithosphere from contributing to the hydrostatic, upward force. This is made to comply with the later computed analytical solution, which assumes a purely elastic lithosphere that does not generate a hydrostatic upward force when displaced. In reality, this is arguably wrong and the default choice `c = PhysicalConstants()` therefore uses $$ \ŗho_{litho} = 2600 \, \mathrm{kg \, m^{-3}} $$.
+As expected, the effective viscosity is a homogeneous field. It corresponds to a nonlinear mean of the layered values provided by the user. Note that we have set $$\rho_{litho} = 0$$ to prevent the lithosphere from contributing to the hydrostatic, upward force. This is made to comply with the later computed analytical solution, which assumes a purely elastic lithosphere that does not generate a hydrostatic upward force when displaced. In reality, this is arguably wrong and the default choice `c = PhysicalConstants()` therefore uses $$\rho_{litho} = 2600 \, \mathrm{kg \, m^{-3}}$$.
 
 The next section shows how to use the now obtained `p::LayeredEarth` for actual GIA computation.
 
 ## Simple load and geometry
 
-We now apply a constant load, here a cylinder of ice with radius $$ R = 1000 \, \mathrm{km} $$ and thickness $$H = 1 \, \mathrm{km}$$, over `Omega::ComputationDomain` introduced in [`LayeredEarth`](@ref). To formulate the problem conviniently, we use [`FastIsoProblem`](@ref), a struct containing the variables and options that are necessary to perform the integration over time. We can then simply apply `solve!(fip::FastIsoProblem)` to perform the integration of the ODE. Under the hood, the ODE is obtained from the PDE by applying a Fourier collocation scheme contained in [`lv_elva!`](@ref). The integration is performed according to `FastIsoProblem.diffeq::NamedTuple`, which contains the algorithm and optionally tolerances, maximum iteration number... etc.
+We now apply a constant load, here a cylinder of ice with radius $$R = 1000 \, \mathrm{km}$$ and thickness $$H = 1 \, \mathrm{km}$$, over `Omega::ComputationDomain` introduced in [`LayeredEarth`](@ref). To formulate the problem conviniently, we use [`FastIsoProblem`](@ref), a struct containing the variables and options that are necessary to perform the integration over time. We can then simply apply `solve!(fip::FastIsoProblem)` to perform the integration of the ODE. Under the hood, the ODE is obtained from the PDE by applying a Fourier collocation scheme contained in [`lv_elva!`](@ref). The integration is performed according to `FastIsoProblem.diffeq::NamedTuple`, which contains the algorithm and optionally tolerances, maximum iteration number... etc.
 =#
 
 R = 1000e3                  # ice disc radius (m)
@@ -62,7 +62,7 @@ t_out = years2seconds.([0.0, 200.0, 600.0, 2000.0, 5000.0, 10_000.0, 50_000.0])
 εt = 1e-8
 pushfirst!(t_out, -εt)
 t_Hice = [-εt, 0.0, t_out[end]]
-fip = FastIsoProblem(Omega, c, p, t_out, t_Hice, Hice)
+fip = FastIsoProblem(Omega, c, p, t_out, t_Hice, Hice, output = "sparse")
 solve!(fip)
 
 function plot3D(fip, k_idx)
@@ -125,14 +125,14 @@ As any high-level function, [`solve!`](@ref) has some limitations. An ice-sheet 
 
 Omega = ComputationDomain(3000e3, n)
 p = LayeredEarth(Omega)
-fip = FastIsoProblem(Omega, c, p, t_out, t_Hice, Hice)
+fip = FastIsoProblem(Omega, c, p, t_out, t_Hice, Hice, output = "sparse")
 
 update_diagnostics!(fip.now.dudt, fip.now.u, fip, 0.0)
-write_out!(fip, 1)
+write_out!(fip.out, fip.now, 1)
 ode = init(fip)
 @inbounds for k in eachindex(fip.out.t)[2:end]
     step!(fip, ode, (fip.out.t[k-1], fip.out.t[k]))
-    write_out!(fip, k)
+    write_out!(fip.out, fip.now, k)
 end
 fig = plot3D(fip, [lastindex(t_out) ÷ 2, lastindex(t_out)])
 
@@ -154,6 +154,6 @@ ELRA is a GIA model that is commonly used in ice-sheet modelling. For the vast m
 
 p = LayeredEarth(Omega, tau = years2seconds(3e3))
 opts = SolverOptions(deformation_model = :elra)
-fip = FastIsoProblem(Omega, c, p, t_out, t_Hice, Hice, opts = opts)
+fip = FastIsoProblem(Omega, c, p, t_out, t_Hice, Hice, opts = opts, output = "sparse")
 solve!(fip)
 fig = plot3D(fip, [lastindex(t_out) ÷ 2, lastindex(t_out)])
