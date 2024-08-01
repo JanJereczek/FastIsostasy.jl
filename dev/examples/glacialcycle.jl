@@ -8,7 +8,7 @@ We now want to provide an example that presents:
 - a more elaborate load that evolves over time
 - changes in the sea-level
 
-For this we run a glacial cycle of Antarctica with lithospheric thickness and upper-mantle viscosity from @wiens-seismic-2022 and the ice thickness history from @peltier-comment-2018. We start by generating a [`ComputationDomain`](@ref) with intermediate resolution for the sake of the example and load the heterogeneous lithospheric from @pan-influence-2022 thanks to the convenience of [`load_dataset`](@ref):
+For this we run a glacial cycle of Antarctica with lithospheric thickness and upper-mantle viscosity from @wiens-seismic-2022 and the ice thickness history from [peltier-comment-2018](@citet). We start by generating a [`ComputationDomain`](@ref) with intermediate resolution for the sake of the example and load the heterogeneous lithospheric from [pan-influence-2022](@citet) thanks to the convenience of [`load_dataset`](@ref):
 =#
 
 using CairoMakie, FastIsostasy
@@ -32,7 +32,7 @@ end
 nicer_heatmap(Tlitho)
 
 #=
-In a similar way, we can load the log-viscosity field from @pan-influence-2022 and plot it at about 300 km depth
+In a similar way, we can load the log-viscosity field from [pan-influence-2022](@citet) and plot it at about 300 km depth
 =#
 
 (_, _, _), _, logeta_itp = load_logvisc_pan2022()
@@ -95,5 +95,5 @@ Colorbar(fig[1, 4], height = Relative(0.6); opts...)
 fig
 
 #=
-The displayed fields are displacement anomalies w.r.t. to the last interglacial, defined as the reference for the ice thickness anomalies. In @swierczek2024fastisostasy these computations are performed on a finer grid, with an interactive sea level, and show great agreement with a 3D GIA model that runs between 10,000-100,000 slower (however at with advantage of obtaining a global and richer output). You can find this more comprehensive example in the `/publication_v1.0` folder of the GitHub repository.
+The displayed fields are displacement anomalies w.r.t. to the last interglacial, defined as the reference for the ice thickness anomalies. In [swierczek2024fastisostasy](@citet) these computations are performed on a finer grid, with an interactive sea level, and show great agreement with a 3D GIA model that runs between 10,000-100,000 slower (however at with advantage of obtaining a global and richer output). You can find this more comprehensive example in the `/publication_v1.0` folder of the GitHub repository.
 =#
