@@ -37,10 +37,10 @@ Initializing a [`LayeredEarth`](@ref) with parameters corresponding to this situ
 =#
 
 Omega = ComputationDomain(W, n, correct_distortion = false)
-c = PhysicalConstants(rho_litho = 0.0)
+c = PhysicalConstants()
 lv = [1e19, 1e21]       # viscosity layers (Pa s)
 lb = [88e3, 400e3]      # depth of layer boundaries (m)
-p = LayeredEarth(Omega, layer_viscosities = lv, layer_boundaries = lb)
+p = LayeredEarth(Omega, layer_viscosities = lv, layer_boundaries = lb, rho_litho = 0.0)
 extrema(p.effective_viscosity)
 
 #=
@@ -107,11 +107,11 @@ fig
 ## GPU support
 
 For about $$n \geq 7$$, the present example can be computed even faster by using GPU parallelism. It could not represent less work from the user's perspective, as it boils down to calling [`ComputationDomain`](@ref) with an extra keyword argument:
-=#
 
-Omega = ComputationDomain(W, n, use_cuda = true);
+```julia
+Omega = ComputationDomain(W, n, use_cuda = true)
+```
 
-#=
 We then pass `Omega` to a `LayeredEarth` and a `FastIsoProblem`, which we solve: that's it! For postprocessing, consider using [`reinit_structs_cpu`](@ref).
 
 !!! info "Only CUDA supported!"
