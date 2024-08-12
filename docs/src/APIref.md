@@ -31,6 +31,12 @@ update_elasticresponse!
 InversionConfig
 InversionData
 InversionProblem
+inversion_problem
+ParameterReduction
+print_inversion_evolution
+extract_inversion
+reconstruct!
+extract_output
 ```
 
 ## Convenience

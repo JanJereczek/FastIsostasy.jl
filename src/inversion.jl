@@ -93,9 +93,20 @@ end
     InversionProblem
 
 Struct containing variables and configs for the inversion of
-Solid-Earth parameter fields. For now, only viscosity can be inverted but future
-versions will support lithosphere rigidity. For now, the unscented Kalman inversion
-is the only method available but ensemble Kalman inversion will be available in future.
+Solid-Earth parameter fields. `InversionProblem` needs to be initialized
+using [`inversion_problem`](@ref). For now, the unscented Kalman inversion
+is the only method available.
+
+# Fields
+- `fip::FastIsoProblem`: FastIsoProblem object.
+- `config::InversionConfig`: Configuration for the inversion.
+- `data::InversionData`: Data for the inversion.
+- `reduction::R`: Parameter reduction method.
+- `priors::PD`: Prior distribution.
+- `ukiobj::EKP`: Unscented Kalman inversion object.
+- `error::V`: Error vector.
+- `out::Vector{V}`: Output vector.
+- `G_ens::M`: Ensemble of the covariance matrix.
 """
 struct InversionProblem{T<:AbstractFloat, V<:Vector{T}, M<:Matrix{T},
     R<:ParameterReduction{T}, PD, EKP}
@@ -110,14 +121,43 @@ struct InversionProblem{T<:AbstractFloat, V<:Vector{T}, M<:Matrix{T},
     G_ens::M
 end
 
-function testfunc end
+"""
+    inversion_problem(fip, config, data, reduction, priors; save_stride_iter::Int = 1)
+
+Generate an inversion problem for the given `fip::FastIsoProblem` object.
+"""
 function inversion_problem end
+
 function solve! end
 function forward_fastiso end
+
+"""
+    print_inversion_evolution(paraminv, n, ϕ_n, reduction)
+
+Print the inversion evolution.
+"""
 function print_inversion_evolution end
+
+"""
+    extract_inversion(paraminv, n)
+
+Extract the inversion results to compare them with the ground truth.
+"""
 function extract_inversion end
+
+"""
+    reconstruct!(fip, params, reduction)
+
+Reconstruct the parameter values from `reduction` and update `fip` accordingly.
+"""
 function reconstruct! end
+
+"""
+    extract_output(fip, reduction, data)
+
+Extract the output of the forward run for the inversion.
+"""
 function extract_output end
 
-export testfunc, inversion_problem, solve!, forward_fastiso,
+export inversion_problem, solve!, forward_fastiso,
     print_inversion_evolution, extract_inversion, reconstruct!, extract_output

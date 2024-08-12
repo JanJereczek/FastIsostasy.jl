@@ -1,6 +1,6 @@
 # FastIsostasy.jl
 
-[![](https://img.shields.io/badge/docs-stable-blue.svg)](https://janjereczek.github.io/FastIsostasy.jl/dev/)
+[![](https://img.shields.io/badge/docs-dev-blue.svg)](https://janjereczek.github.io/FastIsostasy.jl/dev/)
 [![](https://img.shields.io/badge/license-GNU_GPL_3.0-green.svg)](https://www.gnu.org/licenses/gpl-3.0.en.html)
 [![](https://img.shields.io/badge/GMD-paper-purple.svg)](https://doi.org/10.5194/gmd-17-5263-2024)
 [![][ci-img]][ci-url]
