@@ -1,23 +1,23 @@
 #=
 # Parameter inversion
 
-Assume a dynamical system $$f$$ generates an output $$y$$ based on its input $$x$$ and on a set of parameters $$\theta$$. The goal of parameter inversion is to estimate the parameters $$\theta$$ that best fit the data $$\hat{y}$$ with respect to an error metric $$\Psi$$, i.e. to solve the following optimization problem:
+Assume a dynamical system $$f$$ generates an output $$y$$ based on its input $$x$$ and on a set of parameters $$\theta$$. The goal of a parameter inversion is to estimate the parameters $$\theta$$ that best fit the data $$\hat{y}$$ with respect to an error metric $$\Psi$$, i.e. to solve the following optimization problem:
 
 ```math
 \begin{aligned}
-y = f(x, \theta) \\
-\hat{\theta} = \arg\min_{\theta} \Psi(\hat{y} - y)
+y &=& f(x, \theta) \\
+\hat{\theta} &=& \arg\min_{\theta} \Psi(\hat{y} - y)
 \end{aligned}
 ```
 
 Since FastIsostasy relies on simplifications of the full GIA problem, applying such inversion can be useful to tune the model parameters (upper-mantle viscosity field, lithospheric thickness... etc.) such that the output $$y$$ (typically the displacement) matches the data $$\hat{y}$$ (typically obtained from observations or from a 3D GIA model). There are many ways of solving this problem, among which the use of Kalman filtering techniques. FastIsostasy.jl provides convenience functions for the latter by wrapping the functionalities of EnsembleKalmanProcesses.jl in an external routine that is automatically loaded when `using EnsembleKalmanProcesses`.
 
-We demonstrate the tuning of the effective viscosity in a region that is being forced by a circular ice load. We emphasise that the highlighted tools provided by FastIsostasy are not limited to this case. As it will be made clear throughout the example, the user merely needs to define their own `ParameterReduction` and the associated behaviours of `FastIsostasy.reconstruct!` and `FastIsostasy.extract_output` to adapt the inversion procedure to their needs (e.g. tune lithospheric thickness throughout the whole domain).
+We demonstrate the tuning of the effective viscosity in a region that is being forced by a circular ice load. We emphasise that the highlighted tools provided by FastIsostasy are not limited to this case. As it will be made clear throughout the example, the user merely needs to define their own [`ParameterReduction`](@ref) and the associated behaviours of [`reconstruct!`](@ref) and [`extract_output`](@ref) to adapt the inversion procedure to their needs (e.g. tune lithospheric thickness throughout the whole domain).
 
 !!! note "Resolution"
-    We perform the following analysis on a low-resolution grid. high resolutions (ca. ? `Omega.Nx = Omega.Ny > 200`) are difficult to achieve since the underlying unscented Kalman filter requires many simulations. This is however typically not a problem, since the parametric fields (here the viscosity) are smooth and can be downsampled without significant loss of information.
+    We perform the following analysis on a low-resolution grid. High resolutions (ca. `Omega.Nx = Omega.Ny > 200`) are difficult to achieve since the underlying unscented Kalman filter requires many simulations. This is however typically not a problem, since the parametric fields (here the viscosity) are smooth and can be downsampled without significant loss of information.
 
-We first load the necessary packages, initialize the `ComputationDomain` and assign laterally-variable viscosity profiles to `p::LayeredEarth` by loading the fields estimated in [wiens-seismic-2022](@cite):
+We first load the necessary packages, initialize the [`ComputationDomain`](@ref) and assign laterally-variable viscosity profiles to a [`LayeredEarth`](@ref) by loading the fields estimated in [wiens-seismic-2022](@citet):
 =#
 
 using CairoMakie
@@ -51,17 +51,14 @@ fip = FastIsoProblem(Omega, c, p, t_out, t_Hice, Hice, output = "sparse")
 solve!(fip)
 
 #=
-Assuming the result of this simulation to be the ground truth $$\hat{y}$$, we can now build an `InversionData` object that will be passed to an `InversionProblem`. The `InversionData` object contains the time series of the input field `X = Hice` and the output field `Y = extract_fip(fip)` (here the displacement field). Furthermore, we define an `InversionConfig` that uses the unscented Kalman filter as introduced in [huang-improve-2021](@cite). 
+Assuming the result of this simulation to be the ground truth $$\hat{y}$$, we can now build an [`InversionData`](@ref) object that will be passed to an [`InversionProblem`](@ref). The [`InversionData`](@ref) object contains the time series of the input field `X = Hice` and the output field `Y = extract_fip(fip)` (here the displacement field). Furthermore, we define an [`InversionConfig`](@ref) that uses the unscented Kalman filter as introduced in [huang-improve-2021](@citet). 
 =#
 
 X = Hice
-
-# Only tune viscosity in the region where there is ice.
 mask3D = cat([x .> 0 for x in X]..., dims = 3)
-mask = reduce(|, mask3D, dims = 3)[:, :, 1]
+mask = reduce(|, mask3D, dims = 3)[:, :, 1]     # Only tune viscosity where there is ice.
 
-# Only use last time step for inversion
-t_inv = t_out[end:end]
+t_inv = t_out[end:end]                          # Only use last time step for inversion.
 extract_last_viscous_displacement(fip) = fip.out.u[end:end]
 extract_fip = extract_last_viscous_displacement
 Y = extract_fip(fip)
@@ -70,7 +67,7 @@ data = InversionData(t_inv, length(t_inv), X, Y, mask, count(mask))
 config = InversionConfig(Unscented, N_iter = 15, scale_obscov = 10.0)
 
 #=
-Before finalising the inversion, we need to specify a `ParameterReduction`, which allows a multiple dispatch of `reconstruct!`, `extract_output` and (optionally) `print_inversion_evolution`. This allows the inversion procedure to update the parameters, extract the relevant output and (optionally) print out meaningful information over the iterations of the inversion procedure. In this example, we define a `ViscosityRegion` that reduces the number of parameters to the number of grid points in the mask.
+Before finalising the inversion, we need to specify a [`ParameterReduction`](@ref), which allows a multiple dispatch of [`reconstruct!`](@ref), [`extract_output`](@ref) and (optionally) [`print_inversion_evolution`](@ref). This allows the inversion procedure to update the parameters, extract the relevant output and (optionally) print out meaningful information over the iterations of the inversion procedure. In this example, we define a `ViscosityRegion` that reduces the number of parameters to the number of grid points in the mask.
 =#
 
 struct ViscosityRegion{T<:AbstractFloat} <: ParameterReduction{T}
@@ -101,15 +98,13 @@ end
 reduction = ViscosityRegion{Float64}(mask, count(mask))
 
 #=
-We can now proceed to the definition of the [`InversionProblem`]:
+We can now proceed to the definition of the [`InversionProblem`](@ref) with a prior distribution that is a Gaussian with mean $$20.5$$, variance $$0.5$$ and bounds $$[19.0, 22.0]$$. We then check the initialisation of the inversion problem by reconstructing the field with the prior parameters:
 =#
 
-# Defining prior with mean = 20.5, var = 0.5, bounds = (19.0, 22.0)
 priors = combine_distributions([constrained_gaussian( "p_$(i)",
     20.5, 0.5, 19.0, 22.0) for i in 1:reduction.nparams])
 paraminv = inversion_problem(deepcopy(fip), config, data, reduction, priors)
 
-# Check the initialisation
 params = fill(20.5, count(mask))
 reconstruct!(paraminv.fip, params, reduction)
 function plot_viscfields(paraminv)
@@ -128,7 +123,7 @@ end
 fig1 = plot_viscfields(paraminv)
 
 #=
-Solve the inversion problem and visualise the results:
+Finally, we solve the inversion problem and visualise the results.
 =#
 
 solve!(paraminv)
