@@ -61,7 +61,7 @@ function InversionConfig(
     α_reg = 1.0,
     update_freq = 1,
     n_samples = 100,
-    scale_obscov = 10_000.0,
+    scale_obscov = 1_000.0,
 )
     return InversionConfig(method, N_iter, α_reg, update_freq, n_samples, scale_obscov)
 end

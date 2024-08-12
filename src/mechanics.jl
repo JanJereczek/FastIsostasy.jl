@@ -185,7 +185,7 @@ function elra!(dudt::M, u::M, fip::FastIsoProblem{T, L, M, C, FP, IP}, t::T) whe
     fip.now.u_eq = samesize_conv( - (fip.now.columnanoms.load +
         fip.now.columnanoms.litho) .* fip.c.g .* fip.Omega.K .^ 2,
         fip.tools.viscous_convo, fip.Omega)
-    @. dudt = 1 / fip.p.tau * (fip.now.u_eq - fip.now.u) * years2seconds(T(1.0))
+    @. dudt = 1 / fip.p.tau * (fip.now.u_eq - fip.now.u)
     return nothing
 end
 
