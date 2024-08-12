@@ -166,6 +166,5 @@ function FastIsostasy.extract_inversion(paraminv::InversionProblem)
     return p, Gx, abserror
 end
 
-FastIsostasy.testfunc(x) = println("Externalised inversion is imported correctly.")
 
 end
