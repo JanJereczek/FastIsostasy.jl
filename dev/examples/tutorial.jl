@@ -27,7 +27,12 @@ end
 fig
 
 #=
-The distortion factor `Omega.K` is not only accessible but also accounted for in all the computations. The projection allows to treat the radially-layered, onion-like structure of the solid Earth as a superposition of horizontal layers. Furthermore, FastIsostasy reduces this 3D problem into a 2D problem by collapsing the depth dimension, mainly through the computation of an effective viscosity field that accounts for the superposition of layers with different viscosities. The user is required to provide the 3D information, which will then be used under the hood to compute the effective viscosity. This tutorial shows such an example.
+If not specified through `Omega = ComputationDomain(correct_distortion=false)`, the distortion factor `Omega.K` is accounted for in all the computations.
+
+!!! note "Using other projections"
+    For now, FastIsostasy only supports the polar stereographic projection. Future releases will allow the user to define their own projection.
+
+The projection allows to treat the radially-layered, onion-like structure of the solid Earth as a superposition of horizontal layers. Furthermore, FastIsostasy reduces this 3D problem into a 2D problem by collapsing the depth dimension, mainly through the computation of an effective viscosity field that accounts for the superposition of layers with different viscosities. The user is required to provide the 3D information, which will then be used under the hood to compute the effective viscosity. This tutorial shows such an example.
 
 We want to render a situation similar to the one depicted below:
 
@@ -37,10 +42,10 @@ Initializing a [`LayeredEarth`](@ref) with parameters corresponding to this situ
 =#
 
 Omega = ComputationDomain(W, n, correct_distortion = false)
-c = PhysicalConstants(rho_litho = 0.0)
+c = PhysicalConstants()
 lv = [1e19, 1e21]       # viscosity layers (Pa s)
 lb = [88e3, 400e3]      # depth of layer boundaries (m)
-p = LayeredEarth(Omega, layer_viscosities = lv, layer_boundaries = lb)
+p = LayeredEarth(Omega, layer_viscosities = lv, layer_boundaries = lb, rho_litho = 0.0)
 extrema(p.effective_viscosity)
 
 #=
@@ -53,15 +58,18 @@ The next section shows how to use the now obtained `p::LayeredEarth` for actual 
 We now apply a constant load, here a cylinder of ice with radius $$R = 1000 \, \mathrm{km}$$ and thickness $$H = 1 \, \mathrm{km}$$, over `Omega::ComputationDomain` introduced in [`LayeredEarth`](@ref). To formulate the problem conviniently, we use [`FastIsoProblem`](@ref), a struct containing the variables and options that are necessary to perform the integration over time. We can then simply apply `solve!(fip::FastIsoProblem)` to perform the integration of the ODE. Under the hood, the ODE is obtained from the PDE by applying a Fourier collocation scheme contained in [`lv_elva!`](@ref). The integration is performed according to `FastIsoProblem.diffeq::NamedTuple`, which contains the algorithm and optionally tolerances, maximum iteration number... etc.
 =#
 
-R = 1000e3                  # ice disc radius (m)
-H = 1e3                     # ice disc thickness (m)
-Hcylinder = uniform_ice_cylinder(Omega, R, H)
+t_out = [0.0, 2e2, 6e2, 2e3, 5e3, 1e4, 5e4]     # vector of output time steps (yr)
+εt = 1e-8
+pushfirst!(t_out, -εt)                          # append a step to generate Heaviside at t = 0
+
+R = 1000e3                                      # ice disc radius (m)
+H = 1e3                                         # ice disc thickness (m)
+Hcylinder = uniform_ice_cylinder(Omega, R, H)   # field representing ice disk
+
+# Define time vector and corresponding ice history (Heaviside in time)
+t_Hice = [-εt, 0.0, t_out[end]]
 Hice = [zeros(Omega.Nx, Omega.Ny), Hcylinder, Hcylinder]
 
-t_out = years2seconds.([0.0, 200.0, 600.0, 2000.0, 5000.0, 10_000.0, 50_000.0])
-εt = 1e-8
-pushfirst!(t_out, -εt)
-t_Hice = [-εt, 0.0, t_out[end]]
 fip = FastIsoProblem(Omega, c, p, t_out, t_Hice, Hice, output = "sparse")
 solve!(fip)
 
@@ -81,7 +89,7 @@ end
 fig = plot3D(fip, [lastindex(t_out) ÷ 2, lastindex(t_out)])
 
 #=
-... and here goes the total displacement at $$t = 50 \, \mathrm{kyr}$$. You can now access the elastic and viscous displacement at time `t_out[k]` by respectively calling `fip.out.ue[k]` and `fip.out.u[k]`. For the present case, the latter can be compared to an analytic solution that is known for this particular case. Let's look at the accuracy of our numerical scheme over time by running following plotting commands:
+... and here goes the total displacement at $$t = 0.6 \, \mathrm{kyr}$$ and $$t = 50 \, \mathrm{kyr}$$. Since we defined `output = "sparse"`, we can now access the elastic and viscous displacement at time `t_out[k]` by calling `fip.out.ue[k]` and `fip.out.u[k]`. For the present case, the latter can be compared to an analytic solution that is known for this particular case. Let's look at the accuracy of our numerical scheme over time by running following plotting commands:
 =#
 
 fig = Figure()
@@ -91,28 +99,29 @@ ii, jj = Omega.Mx:Omega.Nx, Omega.My
 x = Omega.X[ii, jj]
 r = Omega.R[ii, jj]
 
-for k in eachindex(t_out)
-    analytic_solution_r(r) = analytic_solution(r, t_out[k], c, p, H, R)
+for k in eachindex(t_out)[2:end]
+    analytic_solution_r(r) = analytic_solution(r, years2seconds(t_out[k]),
+        c, p, H, R)
     u_analytic = analytic_solution_r.(r)
     u_numeric = fip.out.u[k][ii, jj]
     lines!(ax, x, u_analytic, color = cmap[k], linewidth = 5,
-        label = L"$u_{ana}(t = %$(round(seconds2years(t_out[k]))) \, \mathrm{yr})$")
+        label = L"$u_{ana}(t = %$(t_out[k]) \, \mathrm{yr})$")
     lines!(ax, x, u_numeric, color = cmap[k], linewidth = 5, linestyle = :dash,
-        label = L"$u_{num}(t = %$(round(seconds2years(t_out[k]))) \, \mathrm{yr})$")
+        label = L"$u_{num}(t = %$(t_out[k]) \, \mathrm{yr})$")
 end
-axislegend(ax, position = :rb, nbanks = 2, patchsize = (50.0f0, 20.0f0))
+axislegend(ax, position = :rb, patchsize = (50.0f0, 20.0f0))
 fig
 
 #=
 ## GPU support
 
 For about $$n \geq 7$$, the present example can be computed even faster by using GPU parallelism. It could not represent less work from the user's perspective, as it boils down to calling [`ComputationDomain`](@ref) with an extra keyword argument:
-=#
 
-Omega = ComputationDomain(W, n, use_cuda = true);
+```julia
+Omega = ComputationDomain(W, n, use_cuda = true)
+```
 
-#=
-We then pass `Omega` to a `LayeredEarth` and a `FastIsoProblem`, which we solve: that's it! For postprocessing, consider using [`reinit_structs_cpu`](@ref).
+We then pass `Omega` to a `LayeredEarth` and a `FastIsoProblem`, which we solve as done above: that's it!
 
 !!! info "Only CUDA supported!"
     For now only Nvidia GPUs are supported and there is no plan of extending this compatibility at this point.
@@ -137,22 +146,16 @@ end
 fig = plot3D(fip, [lastindex(t_out) ÷ 2, lastindex(t_out)])
 
 #=
-!!! info "Coupling to julia Ice-Sheet model"
-    In case your Ice-Sheet model is programmed in julia, we highly recommend performing
-    the coupling within the function updating the derivatives and let `OrdinaryDiffEq.jl`
-    handle the rest.
-
-!!! warning "GPU not supported"
+!!! warning "`step!` does not support GPU"
     [`step!`](@ref) does not support GPU computation so far. Make sure your model is initialized
     on CPU.
 
 ## Using different backends
 
-ELRA is a GIA model that is commonly used in ice-sheet modelling. For the vast majority of applications, it is less accurate than LV-ELVA without providing any significant speed up. However, it can be used by specifying adequate options:
-
+ELRA is a GIA model that is commonly used in ice-sheet modelling. For the vast majority of applications, it is less accurate than LV-ELVA [swierczek2024fastisostasy](@cite) without providing any significant speed up. However, it can be used by specifying adequate options:
 =#
 
-p = LayeredEarth(Omega, tau = years2seconds(3e3))
+p = LayeredEarth(Omega, tau = 3e3)
 opts = SolverOptions(deformation_model = :elra)
 fip = FastIsoProblem(Omega, c, p, t_out, t_Hice, Hice, opts = opts, output = "sparse")
 solve!(fip)
