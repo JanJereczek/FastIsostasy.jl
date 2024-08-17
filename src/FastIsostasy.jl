@@ -17,6 +17,10 @@ using ParallelStencil: ParallelStencil, @init_parallel_stencil, @parallel,
 using Statistics: mean, cov
 using SpecialFunctions: besselj0, besselj1
 
+# Init stencil on GPU. Will only be used if specified in ComputationDomain.
+allowscalar(false)
+@init_parallel_stencil(CUDA, Float64, 3);
+
 using Reexport: Reexport, @reexport
 @reexport using Interpolations
 @reexport using OrdinaryDiffEq: Euler, Midpoint, Heun, Ralston, BS3, BS5, RK4,
