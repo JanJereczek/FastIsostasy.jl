@@ -8,8 +8,8 @@ BoolMatrix{T} = Union{Matrix{Bool}, CuMatrix{Bool}}
 Allias for in-place precomputed plans from FFTW or CUFFT. Used to compute forward FFT.
 """
 ForwardPlan{T} = Union{
-    cFFTWPlan{Complex{T}, -1, true, 2, Tuple{Int64, Int64}}, 
-    CUFFT.cCuFFTPlan{Complex{T}, -1, true, 2}
+    cFFTWPlan{Complex{T}, -1, true, 2, Tuple{Int64, Int64}},
+    CUFFT.CuFFTPlan{Complex{T}, Complex{T}, -1, true, 2}
 } where {T<:AbstractFloat}
 
 """
@@ -19,5 +19,5 @@ Allias for in-place precomputed plans from FFTW or CUFFT. Used to compute invers
 """
 InversePlan{T} = Union{
     AbstractFFTs.ScaledPlan{Complex{T}, cFFTWPlan{Complex{T}, 1, true, 2, UnitRange{Int64}}, T},
-    AbstractFFTs.ScaledPlan{Complex{T}, CUFFT.cCuFFTPlan{Complex{T}, 1, true, 2}, T}
+    AbstractFFTs.ScaledPlan{Complex{T}, CUFFT.CuFFTPlan{Complex{T}, Complex{T}, -1, true, 2}, T}
 } where {T<:AbstractFloat}

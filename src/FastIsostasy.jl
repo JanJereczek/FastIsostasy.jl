@@ -11,10 +11,11 @@ using Interpolations: Flat, Gridded, Linear, OnGrid, Throw, linear_interpolation
 using LinearAlgebra: Diagonal, det, diagm, norm
 using NetCDF
 using NLsolve: mcpsolve
-using OrdinaryDiffEq: ODEProblem, solve, remake, OrdinaryDiffEqAlgorithm
+using OrdinaryDiffEqTsit5: Tsit5, ODEProblem, solve, remake
 using ParallelStencil: ParallelStencil, @init_parallel_stencil, @parallel,
                        @parallel_indices
-using Statistics: mean, cov
+using Proj
+using Statistics: mean, cov, std
 using SpecialFunctions: besselj0, besselj1
 
 # Init stencil on GPU. Will only be used if specified in ComputationDomain.
@@ -23,9 +24,6 @@ allowscalar(false)
 
 using Reexport: Reexport, @reexport
 @reexport using Interpolations
-@reexport using OrdinaryDiffEq: Euler, Midpoint, Heun, Ralston, BS3, BS5, RK4,
-    OwrenZen3, OwrenZen4, OwrenZen5, Tsit5, DP5, RKO65, TanYam7, DP8,
-    Feagin10, Feagin12, Feagin14, TsitPap8, Vern6, Vern7, Vern8, Vern9
 
 include("convenience_types.jl")
 include("convolution.jl")
@@ -54,7 +52,7 @@ export NetcdfOutput, write_step!
 
 # utils.jl
 export years2seconds, seconds2years, m_per_sec2mm_per_yr
-export latlon2stereo, stereo2latlon, lon360tolon180
+export lon360tolon180
 export reinit_structs_cpu, meshgrid, kernelcollect
 
 export get_r, gauss_distr, generate_gaussian_field, samesize_conv, blur

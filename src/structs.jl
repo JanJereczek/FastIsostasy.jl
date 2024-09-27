@@ -77,18 +77,7 @@ function ComputationDomain(W::T, n::Int; kwargs...) where {T<:AbstractFloat}
     return ComputationDomain(Wx, Wy, Nx, Ny; kwargs...)
 end
 
-function ComputationDomain(
-    Wx::T,
-    Wy::T,
-    Nx::Int,
-    Ny::Int;
-    use_cuda::Bool = false,
-    lat0::T = T(-90.0),
-    lon0::T = T(0.0),
-    correct_distortion::Bool = true,
-) where {T<:AbstractFloat}
-
-    # Geometry
+function ComputationDomain(Wx::T, Wy::T, Nx::Int, Ny::Int; kwargs...) where {T<:AbstractFloat}
     Mx, My = Nx ÷ 2, Ny ÷ 2
     dx = 2*Wx / Nx
     dy = 2*Wy / Ny
@@ -96,13 +85,66 @@ function ComputationDomain(
     # y = collect(-Wy+dy:dy:Wy)
     x = collect(range(-Wx+dx, stop = Wx, length = Nx))
     y = collect(range(-Wy+dy, stop = Wy, length = Ny))
+    return ComputationDomain(x, y, dx, dy, Wx, Wy, Nx, Ny, Mx, My; kwargs...)
+end
+
+
+function ComputationDomain(x::Vector{T}, y::Vector{T}; kwargs...) where {T<:AbstractFloat}
+    Nx = length(x)
+    Ny = length(y)
+    Mx, My = Nx ÷ 2, Ny ÷ 2
+
+    centering_tolerance = 1e3
+    if mean(x) > centering_tolerance || mean(y) > centering_tolerance
+        error("x and y must be centered around zero.")
+    end
+    Wx, Wy = maximum(abs.(x)), maximum(abs.(y))
+
+    if std(diff(x)) .> 1e-5 || std(diff(y)) .> 1e-5
+        error("x and y must be regularly spaced.")
+    end
+
+    dx = mean(diff(x))
+    dy = mean(diff(y))
+
+    return ComputationDomain(x, y, dx, dy, Wx, Wy, Nx, Ny, Mx, My; kwargs...)
+end
+
+function ComputationDomain(
+    x::Vector{T},
+    y::Vector{T},
+    dx::T,
+    dy::T,
+    Wx::T,
+    Wy::T,
+    Nx::Int,
+    Ny::Int,
+    Mx::Int,
+    My::Int;
+    use_cuda::Bool = false,
+    lat_ref::T = T(-71.0),      # Reference latitude for scale factor
+    lon_ref::T = T(0.0),        # Reference longitude for scale factor
+    lat_0::T = T(-90.0),        # Latitude of center point (allows oblique proj)
+    lon_0::T = T(0.0),          # Longitude of center point (allows oblique proj)
+    proj_lonlat = "EPSG:4326",
+    proj_target = "+proj=stere +datum=WGS84",
+    correct_distortion::Bool = true,
+) where {T<:AbstractFloat}
+
     X, Y = meshgrid(x, y)
     null = fill(T(0), Nx, Ny)
     R = get_r.(X, Y)
-    Lat, Lon = stereo2latlon(X, Y, lat0, lon0)
+
+    lonlat2target = Proj.Transformation(proj_lonlat,
+        "$proj_target +lat_0=$lat_0 +lat_ts=$lat_ref +lon_0=$lon_0 +lon_ts=$lon_ref",
+        always_xy=true)
+    target2lonlat = Proj.inv(lonlat2target)
+    coords = target2lonlat.(X, Y)
+    Lon = map(x -> x[1], coords)
+    Lat = map(x -> x[2], coords)
 
     if correct_distortion
-        K = scalefactor(deg2rad.(Lat), deg2rad.(Lon), deg2rad(lat0), deg2rad(lon0))
+        K = scalefactor(deg2rad.(Lat), deg2rad.(Lon), deg2rad(lat_ref), deg2rad(lon_ref))
     else
         K = fill(T(1), Nx, Ny)
     end
@@ -357,10 +399,10 @@ end
 function CurrentState(Omega::ComputationDomain{T, L, M}, ref::ReferenceState{T, M}) where
     {T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}}
     return CurrentState(
-        copy(ref.u), null(Omega), copy(ref.ue), copy(ref.u), T(0.0),
+        copy(ref.u), kernelnull(Omega), copy(ref.ue), copy(ref.u), T(0.0),
         copy(ref.H_ice), copy(ref.H_water),
         ColumnAnomalies(Omega), copy(ref.b),
-        copy(ref.bsl), null(Omega), copy(ref.z_ss),
+        copy(ref.bsl), kernelnull(Omega), copy(ref.z_ss),
         copy(ref.V_af), copy(ref.V_pov), copy(ref.V_den),
         copy(ref.maskgrounded), copy(ref.maskocean),
         OceanSurfaceChange(T = T, z0 = ref.bsl), 0, 1,
@@ -645,7 +687,7 @@ function FastIsoProblem(
     output::String = "nothing",
 ) where {T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}}
 
-    if !isa(opts.diffeq.alg, OrdinaryDiffEqAlgorithm) && !isa(opts.diffeq.alg, SimpleEuler)
+    if !isa(opts.diffeq.alg, Tsit5) && !isa(opts.diffeq.alg, SimpleEuler)
         error("Provided algorithm for solving ODE is not supported.")
     end
 

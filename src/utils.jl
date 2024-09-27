@@ -193,83 +193,37 @@ function lon360tolon180(lon, X)
 end
 
 """
-    scalefactor(lat::T, lon::T, lat0::T, lon0::T) where {T<:Real}
-    scalefactor(lat::M, lon::M, lat0::T, lon0::T) where {T<:Real, M<:KernelMatrix{T}}
+    XY2LonLat(X, Y, proj)
 
-Compute scaling factor of stereographic projection for a given `(lat, lon)` and reference
-`(lat0, lon0)`. Angles must be provided in radians.
-Reference: [^Snyder1987], p. 157, eq. (21-4).
+Convert Cartesian coordinates `(X, Y)` to longitude-latitude `(Lon, Lat)`
+using the projection `proj`.
 """
-function scalefactor(lat::T, lon::T, lat0::T, lon0::T; k0::T = T(1)) where {T<:Real}
-    return 2*k0 / (1 + sin(lat0)*sin(lat) + cos(lat0)*cos(lat)*cos(lon-lon0))
+function XY2LonLat(X, Y, proj)
+    coords = proj.(X, Y)
+    Lon = map(x -> x[1], coords)
+    Lat = map(x -> x[2], coords)
+    return Lon, Lat
 end
 
-function scalefactor(lat::M, lon::M, lat0::T, lon0::T; kwargs...,
+"""
+    scalefactor(lat::T, lon::T, lat_ref::T, lon_ref::T) where {T<:Real}
+    scalefactor(lat::M, lon::M, lat_ref::T, lon_ref::T) where {T<:Real, M<:KernelMatrix{T}}
+
+Compute scaling factor of stereographic projection for a given `(lat, lon)` and reference
+`(lat_ref, lon_ref)`. Angles must be provided in radians.
+Reference: [^Snyder1987], p. 157, eq. (21-4).
+"""
+function scalefactor(lat::T, lon::T, lat_ref::T, lon_ref::T; k0::T = T(1)) where {T<:Real}
+    return 2*k0 / (1 + sin(lat_ref)*sin(lat) + cos(lat_ref)*cos(lat)*cos(lon-lon_ref))
+end
+
+function scalefactor(lat::M, lon::M, lat_ref::T, lon_ref::T; kwargs...,
     ) where {T<:Real, M<:KernelMatrix{T}}
     K = similar(lat)
     @inbounds for idx in CartesianIndices(lat)
-        K[idx] = scalefactor(lat[idx], lon[idx], lat0, lon0; kwargs...)
+        K[idx] = scalefactor(lat[idx], lon[idx], lat_ref, lon_ref; kwargs...)
     end
     return K
-end
-
-"""
-    latlon2stereo(lat, lon, lat0, lon0)
-
-Compute stereographic projection (x,y) for a given latitude `lat`
-longitude `lon`, reference latitude `lat0` and reference longitude `lon0`.
-Optionally one can provide `lat::KernelMatrix` and `lon::KernelMatrix`
-if the projection is to be computed for the whole domain.
-Note: angles must be provided in degrees!
-Reference: John P. Snyder (1987), p. 157, eq. (21-2), (21-3), (21-4).
-"""
-function latlon2stereo(lat::T, lon::T, lat0::T, lon0::T;
-    R::T = T(6371e3), kwargs...) where {T<:Real}
-    lat, lon, lat0, lon0 = deg2rad.([lat, lon, lat0, lon0])
-    k = scalefactor(lat, lon, lat0, lon0; kwargs...)
-    x = R * k * cos(lat) * sin(lon - lon0)
-    y = R * k * (cos(lat0) * sin(lat) - sin(lat0) * cos(lat) * cos(lon-lon0))
-    return k, x, y
-end
-
-function latlon2stereo(lat::M, lon::M, lat0::T, lon0::T; kwargs...,
-    ) where {T<:Real, M<:KernelMatrix{T}}
-    K, X, Y = similar(lat), similar(lat), similar(lat)
-    @inbounds for idx in CartesianIndices(lat)
-        K[idx], X[idx], Y[idx] = latlon2stereo(lat[idx], lon[idx], lat0, lon0; kwargs...)
-    end
-    return K, X, Y
-end
-
-"""
-    stereo2latlon(x, y, lat0, lon0)
-
-Compute the inverse stereographic projection `(lat, lon)` based on Cartesian coordinates
-`(x,y)` and for a given reference latitude `lat0` and reference longitude `lon0`.
-Optionally one can provide `x::KernelMatrix` and `y::KernelMatrix`
-if the projection is to be computed for the whole domain.
-Note: angles must be  para elloprovided in degrees!
-
-Convert stereographic (x,y)-coordinates to latitude-longitude.
-Reference: John P. Snyder (1987), p. 159, eq. (20-14), (20-15), (20-18), (21-15).
-"""
-function stereo2latlon(x::T, y::T, lat0::T, lon0::T;
-    R::T = T(6371e3), k0::T = T(1)) where {T<:Real}
-    lat0, lon0 = deg2rad.([lat0, lon0])
-    r = get_r(x, y) + 1e-8      # add small tolerance to avoid division by zero
-    c = 2 * atan(r, 2*R*k0)
-    lat = asin( cos(c) * sin(lat0) + y/r * sin(c) * cos(lat0) )
-    lon = lon0 + atan( x*sin(c), ( - y * sin(lat0) * sin(c)) ) #(r * cos(lat0) * cos(c) - y * sin(lat0) * sin(c)) 
-    return rad2deg(lat), rad2deg(lon)
-end
-
-function stereo2latlon(X::Matrix{T}, Y::Matrix{T}, lat0::T, lon0::T;
-    kwargs...) where {T<:Real}
-    Lat, Lon = copy(X), copy(X)
-    @inbounds for idx in CartesianIndices(X)
-        Lat[idx], Lon[idx] = stereo2latlon(X[idx], Y[idx], lat0, lon0; kwargs...)
-    end
-    return Lat, Lon
 end
 
 
@@ -485,19 +439,31 @@ function choose_fft_plans(X, use_cuda)
 end
 
 function remake!(fip::FastIsoProblem)
-    # Get values from ReferenceState
-    fip.now.u .= copy(fip.ref.u)
-    fip.now.ue .= copy(fip.ref.ue)
-    fip.now.z_ss .= copy(fip.ref.z_ss)
-    fip.now.H_water .= copy(fip.ref.H_water)
-    fip.now.H_ice .= fip.tools.Hice(fip.ncout.t[1])
-    fip.now.b .= copy(fip.ref.b)
 
-    # Some values are not included in ReferenceState and need to be init with 0.
-    fip.now.dudt .= kernelnull(fip.Omega)
-    fip.now.dz_ss .= kernelnull(fip.Omega)
-    fip.now.countupdates = 0
-    fip.now.columnanoms = ColumnAnomalies(fip.Omega)
+    T = Float64
+    (; Omega, ref, now) = fip
+
+    now.u .= ref.u
+    now.dudt .= T.(0.0)
+    now.ue .= ref.ue
+    now.u_eq .= ref.u
+    now.ucorner = T(0.0)
+    now.H_ice .= ref.H_ice
+    now.H_water .= ref.H_water
+    now.columnanoms = ColumnAnomalies(Omega)
+    now.b .= ref.b
+    now.bsl = ref.bsl
+    now.dz_ss .= T.(0.0)
+    now.z_ss .= ref.z_ss
+    now.V_af = ref.V_af
+    now.V_pov = ref.V_pov
+    now.V_den = ref.V_den
+    now.maskgrounded .= ref.maskgrounded
+    now.maskocean .= ref.maskocean
+    now.osc = OceanSurfaceChange(T = T, z0 = ref.bsl)
+    now.countupdates = 0
+    now.k = 1
+
     return nothing
 end
 
@@ -519,12 +485,6 @@ function zeropad_extension(M::Matrix{T}, Nx::Int, Ny::Int) where {T<:AbstractFlo
     M_zeropadded[2:end-1, 2:end-1] .= M
     return M_zeropadded
 end
-
-# function init()
-#     println("Initializing CUDA Stencil")
-#     @init_parallel_stencil(CUDA, Float64, 2)
-#     CUDA.allowscalar(false)
-# end
 
 #####################################################
 # Example utils

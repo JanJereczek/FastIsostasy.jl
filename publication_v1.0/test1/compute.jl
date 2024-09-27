@@ -47,7 +47,7 @@ end
 Slight speed up if using powers of 2:
 
 This file:
-main(n, use_cuda = false, solver = BS3(), active_gs = false)
+main(n, use_cuda = false, solver = Tsit5(), active_gs = false)
 Took 0.6100420951843262 seconds!
 
 main(n, use_cuda = false, solver = "SimpleEuler", active_gs = false)
@@ -56,7 +56,7 @@ Took 14.107969999313354 seconds!
 ------------------------------------
 
 test1_rectangle.jl:
-main(63, 64, use_cuda = false, solver = BS3(), active_gs = false)
+main(63, 64, use_cuda = false, solver = Tsit5(), active_gs = false)
 Took 0.6303250789642334 seconds!
 
 main(63, 64, use_cuda = false, solver = "SimpleEuler", active_gs = false)
