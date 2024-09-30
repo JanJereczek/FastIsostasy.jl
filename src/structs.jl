@@ -131,10 +131,6 @@ function ComputationDomain(
     correct_distortion::Bool = true,
 ) where {T<:AbstractFloat}
 
-    if approx_in(0.0, x, 1e3) || approx_in(0.0, y, 1e3)
-        error("x and y must not contain zero to prevent singularity of projection.")
-    end
-
     X, Y = meshgrid(x, y)
     null = fill(T(0), Nx, Ny)
     R = get_r.(X, Y)
@@ -148,6 +144,9 @@ function ComputationDomain(
     Lat = map(x -> x[2], coords)
 
     if correct_distortion
+        if approx_in(0.0, x, 1e3) || approx_in(0.0, y, 1e3)
+            error("x and y must not contain zero to prevent singularity of projection.")
+        end
         K = scalefactor(Lat, lat_ref)
     else
         K = fill(T(1), Nx, Ny)
