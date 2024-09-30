@@ -38,7 +38,6 @@ function solve!(fip::FastIsoProblem)
         
         fip.now.k = k - 1
         if fip.opts.verbose
-            # println("Computing until t = $(Int(round(seconds2years(t_out[k])))) years...")
             println("Computing until t = $(Int(round(t_out[k]))) years...")
         end
 
@@ -46,6 +45,7 @@ function solve!(fip::FastIsoProblem)
             prob = remake(dummy, u0 = fip.now.u, tspan = (t_out[k-1], t_out[k]), p = fip)
             sol = solve(prob, fip.opts.diffeq.alg, reltol=fip.opts.diffeq.reltol)
             fip.now.dudt = sol(t_out[k], Val{1})
+            append!(fip.out.t_ode, sol.t)
         else
             @inbounds for t in t_out[k-1]:fip.opts.diffeq.dt:t_out[k]
                 update_diagnostics!(fip.now.dudt, fip.now.u, fip, t)
