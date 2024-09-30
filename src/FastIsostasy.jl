@@ -14,7 +14,6 @@ using NLsolve: mcpsolve
 using OrdinaryDiffEqTsit5: Tsit5, ODEProblem, solve, remake
 using ParallelStencil: ParallelStencil, @init_parallel_stencil, @parallel,
                        @parallel_indices
-using Proj
 using Statistics: mean, cov, std
 using SpecialFunctions: besselj0, besselj1
 
@@ -24,6 +23,7 @@ allowscalar(false)
 
 using Reexport: Reexport, @reexport
 @reexport using Interpolations
+@reexport using Proj
 
 include("convenience_types.jl")
 include("convolution.jl")
@@ -39,6 +39,7 @@ include("analytic_solutions.jl")
 include("dataloaders.jl")
 include("elra.jl")
 include("inversion.jl")
+include("coordinates.jl")
 
 # convolution.jl
 export InplaceConvolution
