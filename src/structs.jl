@@ -131,6 +131,10 @@ function ComputationDomain(
     correct_distortion::Bool = true,
 ) where {T<:AbstractFloat}
 
+    if approx_in(0.0, x, 1e3) || approx_in(0.0, y, 1e3)
+        error("x and y must not contain zero to prevent singularity of projection.")
+    end
+
     X, Y = meshgrid(x, y)
     null = fill(T(0), Nx, Ny)
     R = get_r.(X, Y)
@@ -144,7 +148,7 @@ function ComputationDomain(
     Lat = map(x -> x[2], coords)
 
     if correct_distortion
-        K = scalefactor(deg2rad.(Lat), deg2rad.(Lon), deg2rad(lat_ref), deg2rad(lon_ref))
+        K = scalefactor(Lat, lat_ref)
     else
         K = fill(T(1), Nx, Ny)
     end
@@ -558,10 +562,12 @@ interm_varunits1D = ["m"]
 abstract type Output end
 struct MinimalOutput{T<:AbstractFloat} <: Output
     t::Vector{T}
+    t_ode::Vector{T}
 end
 
 mutable struct SparseOutput{T<:AbstractFloat} <: Output
     t::Vector{T}
+    t_ode::Vector{T}
     u::Vector{Matrix{T}}
     ue::Vector{Matrix{T}}
 end
@@ -572,11 +578,12 @@ function SparseOutput(Omega::ComputationDomain{T, L, M}, t_out::Vector{T}) where
     placeholder = Array(null(Omega))
     u = [copy(placeholder) for t in t_out]
     ue = [copy(placeholder) for t in t_out]
-    return SparseOutput(t_out, u, ue)
+    return SparseOutput(t_out, T[], u, ue)
 end
 
 mutable struct IntermediateOutput{T<:AbstractFloat} <: Output
     t::Vector{T}
+    t_ode::Vector{T}
     bsl::Vector{T}
     u::Vector{Matrix{T}}
     ue::Vector{Matrix{T}}
@@ -592,7 +599,7 @@ function IntermediateOutput(Omega::ComputationDomain{T, L, M}, t_out::Vector{T})
     ue = [copy(placeholder) for t in t_out]
     dudt = [copy(placeholder) for t in t_out]
     dz_ss = [copy(placeholder) for t in t_out]
-    return IntermediateOutput(t_out, bsl, u, ue, dudt, dz_ss)
+    return IntermediateOutput(t_out, T[], bsl, u, ue, dudt, dz_ss)
 end
 
 #########################################################
@@ -722,7 +729,7 @@ function FastIsoProblem(
     elseif output == "intermediate"
         out = IntermediateOutput(Omega, t_out)
     else
-        out = MinimalOutput(t_out)
+        out = MinimalOutput(t_out, T[])
     end
     return FastIsoProblem(Omega, c, p, opts, tools, ref, now, ncout, out)
 end
