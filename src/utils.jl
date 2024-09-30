@@ -39,6 +39,8 @@ not(x::Bool) = !x
 Base.fill(x::Real, fip::FastIsoProblem) = fill(x, fip.Omega)
 Base.fill(x::Real, Omega::ComputationDomain) = Omega.arraykernel(fill(x, Omega.Nx, Omega.Ny))
 
+approx_in(item, collection, tol) = any(abs.(collection .- item) .< tol)
+
 function corner_matrix(T, Nx, Ny)
     M = zeros(T, Nx, Ny)
     M[1, 1], M[Nx, 1], M[1, Ny], M[Nx, Ny] = T.([1, 1, 1, 1])
@@ -148,82 +150,6 @@ function write_out!(out::IntermediateOutput{T}, now::CurrentState{T, M}, k::Int)
     out.dudt[k] .= copy(Array(now.dudt))
     out.dz_ss[k] .= copy(Array(now.dz_ss))
     return nothing
-end
-
-#####################################################
-# Domain and projection utils
-#####################################################
-"""
-    get_r(x::T, y::T) where {T<:Real}
-
-Get euclidean distance of point (x, y) to origin.
-"""
-get_r(x::T, y::T) where {T<:Real} = sqrt(x^2 + y^2)
-
-"""
-    meshgrid(x, y)
-
-Return a 2D meshgrid spanned by `x, y`.
-"""
-function meshgrid(x::V, y::V) where {T<:AbstractFloat, V<:AbstractVector{T}}
-    one_x, one_y = ones(T, length(x)), ones(T, length(y))
-    return x * one_y', one_x * y'
-end
-
-"""
-    dist2angulardist(r::Real)
-
-Convert Euclidean to angular distance along great circle.
-"""
-function dist2angulardist(r::T) where {T<:AbstractFloat}
-    R = T(6371e3)       # radius at equator
-    return 2 * atan( r / (2 * R) )
-end
-
-"""
-    lon360tolon180(lon, X)
-
-Convert longitude and field from `lon=0:360` to `lon=-180:180`.
-"""
-function lon360tolon180(lon, X)
-    permidx = lon .> 180
-    lon180 = vcat(lon[permidx] .- 360, lon[not.(permidx)])
-    X180 = cat(X[permidx, :, :], X[not.(permidx), :, :], dims=1)
-    return lon180, X180
-end
-
-"""
-    XY2LonLat(X, Y, proj)
-
-Convert Cartesian coordinates `(X, Y)` to longitude-latitude `(Lon, Lat)`
-using the projection `proj`.
-"""
-function XY2LonLat(X, Y, proj)
-    coords = proj.(X, Y)
-    Lon = map(x -> x[1], coords)
-    Lat = map(x -> x[2], coords)
-    return Lon, Lat
-end
-
-"""
-    scalefactor(lat::T, lon::T, lat_ref::T, lon_ref::T) where {T<:Real}
-    scalefactor(lat::M, lon::M, lat_ref::T, lon_ref::T) where {T<:Real, M<:KernelMatrix{T}}
-
-Compute scaling factor of stereographic projection for a given `(lat, lon)` and reference
-`(lat_ref, lon_ref)`. Angles must be provided in radians.
-Reference: [^Snyder1987], p. 157, eq. (21-4).
-"""
-function scalefactor(lat::T, lon::T, lat_ref::T, lon_ref::T; k0::T = T(1)) where {T<:Real}
-    return 2*k0 / (1 + sin(lat_ref)*sin(lat) + cos(lat_ref)*cos(lat)*cos(lon-lon_ref))
-end
-
-function scalefactor(lat::M, lon::M, lat_ref::T, lon_ref::T; kwargs...,
-    ) where {T<:Real, M<:KernelMatrix{T}}
-    K = similar(lat)
-    @inbounds for idx in CartesianIndices(lat)
-        K[idx] = scalefactor(lat[idx], lon[idx], lat_ref, lon_ref; kwargs...)
-    end
-    return K
 end
 
 
