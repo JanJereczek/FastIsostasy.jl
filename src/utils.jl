@@ -1,3 +1,6 @@
+
+cudainfo() = CUDA.versioninfo()
+
 #####################################################
 # Unit conversion utils
 #####################################################
@@ -48,21 +51,6 @@ function corner_matrix(T, Nx, Ny)
 end
 
 """
-    samesize_conv_indices(N, M)
-
-Get the start and end indices required for a [`samesize_conv`](@ref)
-"""
-function samesize_conv_indices(N, M)
-    if iseven(N)
-        j1 = M
-    else
-        j1 = M+1
-    end
-    j2 = 2*N-1-M
-    return j1, j2
-end
-
-"""
     matrify(x, Nx, Ny)
 
 Generate a vector of constant matrices from a vector of constants.
@@ -79,79 +67,6 @@ function matrify(x::Vector{T}, Nx::Int, Ny::Int) where {T<:Real}
     end
     return X
 end
-
-"""
-    samesize_conv(X, ipc, Omega)
-
-Perform convolution of `X` with `ipc` and crop the result to the same size as `X`.
-"""
-function samesize_conv(X::M, ipc::InplaceConvolution{T, M, C, FP, IP},
-    Omega::ComputationDomain{T, L, M}) where {T<:AbstractFloat, L<:Matrix{T},
-    M<:KernelMatrix{T}, C<:ComplexMatrix{T}, FP<:ForwardPlan{T}, IP<:InversePlan{T}}
-    ipc(X)
-    apply_bc!(ipc.out, Omega.extended_bc_matrix, Omega.extended_nbc)
-    return view(ipc.out,
-        Omega.i1+Omega.convo_offset:Omega.i2+Omega.convo_offset,
-        Omega.j1-Omega.convo_offset:Omega.j2-Omega.convo_offset)
-end
-
-# Just a helper for blur! Not performant but we only blur at preprocessing
-# so we do not care :)
-function samesize_conv(X::M, Y::M, Omega::ComputationDomain) where
-    {T<:AbstractFloat, M<:KernelMatrix{T}}
-    (; i1, i2, j1, j2, convo_offset) = Omega
-    ipc = InplaceConvolution(X, false)
-    return samesize_conv(Y, ipc, i1, i2, j1, j2, convo_offset)
-end
-function samesize_conv(Y, ipc, i1, i2, j1, j2, convo_offset)
-    ipc(Y)
-    return view(ipc.out, i1+convo_offset:i2+convo_offset,
-        j1-convo_offset:j2-convo_offset)
-end
-
-function write_step!(ncout::NetcdfOutput{Tout}, state::CurrentState{T, M}, k::Int) where {
-    T<:AbstractFloat, M<:KernelMatrix{T}, Tout<:AbstractFloat}
-    for i in eachindex(ncout.varnames3D)
-        if M == Matrix{T}
-            ncout.buffer .= Tout.(getfield(state, ncout.varsfi3D[i]))
-        else
-            ncout.buffer .= Tout.(Array(getfield(state, ncout.varsfi3D[i])))
-        end
-        NetCDF.open(ncout.filename, mode = NC_WRITE) do nc
-            NetCDF.putvar(nc, ncout.varnames3D[i], ncout.buffer,
-                start = [1, 1, k], count = [-1, -1, 1])
-        end
-    end
-    for i in eachindex(ncout.varnames1D)
-        val = Tout(getfield(state, ncout.varsfi1D[i]))
-        NetCDF.open(ncout.filename, mode = NC_WRITE) do nc
-            NetCDF.putvar(nc, ncout.varnames1D[i], [val], start = [k], count = [1])
-        end
-    end
-end
-
-"""
-    write_out!(now, out, k)
-
-Write results in output vectors.
-"""
-function write_out!(out::SparseOutput{T}, now::CurrentState{T, M}, k::Int) where
-    {T<:AbstractFloat, M<:KernelMatrix{T}}
-    out.u[k] .= copy(Array(now.u))
-    out.ue[k] .= copy(Array(now.ue))
-    return nothing
-end
-
-function write_out!(out::IntermediateOutput{T}, now::CurrentState{T, M}, k::Int) where
-    {T<:AbstractFloat, M<:KernelMatrix{T}}
-    out.bsl[k] = now.bsl
-    out.u[k] .= copy(Array(now.u))
-    out.ue[k] .= copy(Array(now.ue))
-    out.dudt[k] .= copy(Array(now.dudt))
-    out.dz_ss[k] .= copy(Array(now.dz_ss))
-    return nothing
-end
-
 
 #####################################################
 # Math utils
@@ -194,19 +109,6 @@ function generate_gaussian_field(
     G = G ./ maximum(G) .* z_peak
     return fill(z_background, N, N) + G
 end
-
-function blur(X::AbstractMatrix, Omega::ComputationDomain, level::Real)
-    if not(0 <= level <= 1)
-        error("Blurring level must be a value between 0 and 1.")
-    end
-    T = eltype(X)
-    sigma = diagm([(level * Omega.Wx)^2, (level * Omega.Wy)^2])
-    kernel = T.(generate_gaussian_field(Omega, 0.0, [0.0, 0.0], 1.0, sigma))
-    kernel ./= sum(kernel)
-    # return copy(samesize_conv(Omega.arraykernel(kernel), Omega.arraykernel(X), Omega))
-    return samesize_conv(kernel, X, Omega)
-end
-
 
 #####################################################
 # Quadrature utils
@@ -297,19 +199,7 @@ function null(Omega::ComputationDomain{T, L, M}) where {T, L, M}
     return zeros(T, Omega.Nx, Omega.Ny)
 end
 
-function kernelnull(Omega::ComputationDomain{T, L, M}) where {T, L, M}
-    return Omega.arraykernel(zeros(T, Omega.Nx, Omega.Ny))
-end
-
-# function null(Omega::ComputationDomain{T, L, M}) where {T, L, M}
-#     return L(undef, Omega.Nx, Omega.Ny)
-# end
-
-# function kernelnull(Omega::ComputationDomain{T, L, M}) where {T, L, M}
-#     return M(undef, Omega.Nx, Omega.Ny)
-# end
-
-# null(Omega::ComputationDomain) = copy(Omega.null)
+kernelnull(Omega) = Omega.arraykernel(null(Omega))
 
 function kernelcollect(X, Omega)
     if not(Omega.use_cuda)
