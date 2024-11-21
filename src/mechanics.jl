@@ -1,60 +1,3 @@
-#####################################################
-# Forward integration
-#####################################################
-"""
-    solve!(fip)
-
-Solve the isostatic adjustment problem defined in `fip::FastIsoProblem`.
-"""
-function solve!(fip::FastIsoProblem)
-    prob, nc_callback, t1 = init_problem(fip)
-    solve(prob, fip.opts.diffeq.alg, reltol=fip.opts.diffeq.reltol, saveat=fip.out.t,
-        tstops=fip.out.t, callback=nc_callback)
-    fip.ncout.computation_time += time()-t1
-    return nothing
-end
-
-function init_problem(fip::FastIsoProblem)
-    if !(fip.opts.internal_loadupdate)
-        error("`solve!` does not support external updating of the load. Use `step!` instead.")
-    end
-
-    if fip.opts.deformation_model == :lv_elra
-        throw(ArgumentError("LV-ELRA is not implemented yet."))
-    end
-    
-    t1 = time()
-    update_diagnostics!(fip.now.dudt, fip.now.u, fip, fip.out.t[1])
-    (length(fip.ncout.filename) > 3) && write_nc!(fip.ncout, fip.now, fip.now.k)
-    prob = ODEProblem(update_diagnostics!, fip.now.u, extrema(fip.out.t), fip)
-    nc_callback = DiscreteCallback(nc_condition, nc_affect!)
-    return prob, nc_callback, t1
-end
-
-nc_condition(_, t, integrator) = t in integrator.p.out.t
-
-function nc_affect!(integrator)
-    println("Saving at $(integrator.t) years...")
-    integrator.p.now.k += 1
-
-    if length(integrator.p.ncout.filename) > 3
-        write_nc!(integrator.p.ncout, integrator.p.now, integrator.p.now.k)
-    end
-
-    if !(integrator.p.out isa MinimalOutput)
-        write_out!(integrator.p.out, integrator.p.now, integrator.p.now.k)
-    end
-end
-
-"""
-    init_integrator(fip)
-"""
-function init_integrator(fip::FastIsoProblem)
-    prob, _, _ = init_problem(fip)
-    integrator = init(prob, fip.opts.diffeq.alg, reltol=fip.opts.diffeq.reltol, saveat=[])
-    return integrator
-end
-
 """
     update_diagnostics!(dudt, u, fip, t)
 
@@ -80,20 +23,20 @@ function update_diagnostics!(dudt::M, u::M, fip::FastIsoProblem{T, L, M, C, FP, 
     # Regardless of update method for column, update the anomalies!
     columnanom_load!(fip)
 
-    # Only update the dz_ss and sea level if now is interactive.
     # As integration requires smaller time steps than diagnostics,
-    # only update geostate every fip.now.dt
-    if (((t - fip.ncout.t[fip.now.k]) / fip.opts.dt_sl) >= fip.now.countupdates) ||
+    # only update diagnostics every fip.opts.dt_diagnostics
+    if (((t - fip.ncout.t[fip.now.k]) / fip.opts.dt_diagnostics) >= fip.now.countupdates) ||
         t ≈ fip.ncout.t[fip.now.k + 1]
         # if elastic update placed after dz_ss, worse match with (Spada et al. 2011)
         update_elasticresponse!(fip)
         columnanom_litho!(fip)
+
+        # Only update the dz_ss and sea level if now is interactive.
         if fip.opts.interactive_sealevel
             if fip.opts.internal_bsl_update
                 update_bsl!(fip)
             else
                 fip.now.bsl = fip.tools.bsl(t)
-                # fip.now.bsl = fip.tools.bsl(seconds2years(t))
             end
             update_dz_ss!(fip)
             update_z_ss!(fip)
@@ -208,12 +151,6 @@ function update_horizontal_displacement!(u_x, u_y, u, litho_thickness, Omega)
     return nothing
 end
 
-"""
-    update_bedrock!(fip, u)
-
-#####################################################
-# BCs
-#####################################################
 
 """
     apply_bc!(u::M, bcm::M, nbc::T)
