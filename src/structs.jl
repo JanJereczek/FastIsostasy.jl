@@ -144,10 +144,10 @@ function ComputationDomain(
     Lat = map(x -> x[2], coords)
 
     if correct_distortion
-        if approx_in(0.0, x, 1e3) || approx_in(0.0, y, 1e3)
-            error("x and y must not contain zero to prevent singularity of projection.")
-        end
         K = scalefactor(Lat, lat_ref)
+        if approx_in(0.0, x, 1e3) || approx_in(0.0, y, 1e3)
+            K[Mx, My] = mean([K[Mx-1, My], K[Mx+1, My], K[Mx, My-1], K[Mx, My+1]])
+        end
     else
         K = fill(T(1), Nx, Ny)
     end
@@ -269,19 +269,17 @@ end
 function LayeredEarth(
     Omega::ComputationDomain{T, L, M};
     litho_thickness = nothing,
-    layer_boundaries::A = T.([88e3, 400e3]),    # 88 km: asthenosphere, 400 km: half-space (Bueler 2007).
-    layer_viscosities::B = T.([1e19, 1e21]),    # (Pa*s) (Bueler 2007, Ivins 2022, Fig 12 WAIS)
+    layer_viscosities::A = T.([1e19, 1e21]),    # (Pa*s) (Bueler 2007, Ivins 2022, Fig 12 WAIS)
     litho_youngmodulus::T = T(6.6e10),          # (N/m^2)
     litho_poissonratio::T = T(0.28),
     mantle_poissonratio::T = T(0.28),
     tau::T = T(years2seconds(855.0)),
     rho_uppermantle::T = T(3.4e3),                 # Mean density of topmost upper mantle (kg m^-3)
     rho_litho::T = T(3.2e3),                       # Mean density of lithosphere (kg m^-3)
-    layering::String = "equalizing",
+    layering::AbstractLayering{T} = UniformLayering{T}(),
 ) where {
     T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T},
     A<:Union{Vector{T}, Array{T, 3}},
-    B<:Union{Vector{T}, Array{T, 3}},
 }
 
     if tau isa Real
@@ -289,33 +287,24 @@ function LayeredEarth(
     end
     tau = kernelpromote(tau, Omega.arraykernel)
 
-    if layer_boundaries isa Vector{<:Real}
-        layer_boundaries = matrify(layer_boundaries, Omega.Nx, Omega.Ny)
-    end
     if layer_viscosities isa Vector{<:Real}
         layer_viscosities = matrify(layer_viscosities, Omega.Nx, Omega.Ny)
     end
 
     if isnothing(litho_thickness)
-        litho_thickness = layer_boundaries[:, :, 1]
+        if layering isa UniformLayering
+            println("Using a uniform lithosphere thickness.")
+            litho_thickness = zeros(T, Omega.Nx, Omega.Ny)
+            litho_thickness .= layering.boundaries[1]
+        else
+            error("Please provide a lithosphere thickness.")
+        end
     end
-    litho_rigidity = get_rigidity.(litho_thickness, litho_youngmodulus, litho_poissonratio)
 
-    if layering == "equalizing"
-        layers_thickness = diff(layer_boundaries, dims=3)
-        effective_viscosity = get_effective_viscosity(
-            Omega, layer_viscosities, layers_thickness, mantle_poissonratio)
-    elseif layering == "embedded"
-        layers_thickness = diff(layer_boundaries, dims=3)
-        effective_viscosity = new_effective_viscosity(Omega, litho_thickness,
-            layer_boundaries, layer_viscosities, layers_thickness, mantle_poissonratio)
-    elseif layering == "folded"
-        effective_viscosity, layer_boundaries, layer_viscosities =
-            interpolated_effective_viscosity(Omega, layer_boundaries, layer_viscosities,
-                litho_thickness, mantle_poissonratio)
-    else
-        throw(ArgumentError("Unknown layering type: $layering"))
-    end
+    litho_rigidity = get_rigidity.(litho_thickness, litho_youngmodulus, litho_poissonratio)
+    layer_boundaries = get_layer_boundaries(Omega.Nx, Omega.Ny, litho_thickness, layering)
+    effective_viscosity = get_effective_viscosity(Omega, layer_viscosities,
+        layer_boundaries, mantle_poissonratio)
 
     litho_rigidity, effective_viscosity = kernelpromote(
         [litho_rigidity, effective_viscosity], Omega.arraykernel)
@@ -470,7 +459,7 @@ function FastIsoTools(
     pfft!, pifft! = choose_fft_plans(Omega.K, Omega.use_cuda)
 
     # rhog = p.uppermantle_density .* c.g
-    Hice = linear_interpolation( t_Hice_snapshots,
+    Hice = linear_interpolation(t_Hice_snapshots,
         kernelpromote(Hice_snapshots, Omega.arraykernel); extrapolation_bc=Flat())
 
     n_cplx_matrices = 1
@@ -481,124 +470,6 @@ function FastIsoTools(
     
     return FastIsoTools(viscous_convo, elastic_convo, dz_ss_convo, pfft!, pifft!,
         Hice, bsl_itp, prealloc)
-end
-
-#########################################################
-# Output
-#########################################################
-
-mutable struct NetcdfOutput{T<:AbstractFloat}
-    t::Vector{<:AbstractFloat}
-    filename::String
-    buffer::Matrix{T}
-    varsfi3D::Vector{Symbol}
-    varnames3D::Vector{String}
-    varsfi1D::Vector{Symbol}
-    varnames1D::Vector{String}
-    computation_time::Float64
-end
-
-function NetcdfOutput(Omega::ComputationDomain{T, L, M}, t, filename;
-    varsfi3D = interm_varsfi3D,
-    varnames3D = interm_varnames3D,
-    varlongnames3D = interm_varlongnames3D,
-    varunits3D = interm_varunits3D,
-    varsfi1D = interm_varsfi1D,
-    varnames1D = interm_varnames1D,
-    varlongnames1D = interm_varlongnames1D,
-    varunits1D = interm_varunits1D,
-    Tout = Float32,
-) where {T<:AbstractFloat, L, M}
-
-    isfile(filename) && rm(filename)
-
-    xatts = Dict("longname" => "x", "units" => "m")
-    yatts = Dict("longname" => "y", "units" => "m")
-    tatts = Dict("longname" => "time", "units" => "yr")
-
-    xdim = NcDim("x", Omega.x, xatts)
-    ydim = NcDim("y", Omega.y, yatts)
-    tdim = NcDim("t", seconds2years.(t), tatts)
-
-    vars = NcVar[]
-    for i in eachindex(varnames3D)
-        varatts = Dict("longname" => varlongnames3D[i], "units" => varunits3D[i])
-        push!(vars, NcVar(varnames3D[i], [xdim, ydim, tdim]; atts = varatts, t = Tout))
-    end
-    for i in eachindex(varnames1D)
-        varatts = Dict("longname" => varlongnames1D[i], "units" => varunits1D[i])
-        push!(vars, NcVar(varnames1D[i], [tdim]; atts = varatts, t = Tout))
-    end
-
-    if length(filename) > 0
-        isfile(filename) && rm(filename)
-        NetCDF.create(filename, vars) do nc
-            nothing
-        end
-    end
-    
-    buffer = Matrix{Tout}(undef, Omega.Nx, Omega.Ny)
-    return NetcdfOutput(t, filename, buffer, varsfi3D, varnames3D,
-        varsfi1D, varnames1D, 0.0)
-end
-
-interm_varsfi3D = [:u, :ue, :dudt, :b, :dz_ss, :z_ss, :maskgrounded, :H_ice,
-    :H_water]
-interm_varnames3D = ["u", "ue", "dudt", "b", "dz_ss", "z_ss",
-    "maskgrounded", "Hice", "Hwater"]
-interm_varlongnames3D = ["Viscous displacement", "Elastic displacement",
-    "Viscous displacement rate", "Bedrock position", "SSH parturbation",
-    "Sea-surface height (SSH)", "Mask for grounded ice", "Ice thickness", "Water depth"]
-interm_varunits3D = ["m", "m", "m/yr", "m", "m", "m", "1", "m", "m"]
-
-interm_varsfi1D = [:bsl]
-interm_varnames1D = ["bsl"]
-interm_varlongnames1D = ["Barystatic sea level"]
-interm_varunits1D = ["m"]
-
-
-
-abstract type Output end
-struct MinimalOutput{T<:AbstractFloat} <: Output
-    t::Vector{T}
-    t_ode::Vector{T}
-end
-
-mutable struct SparseOutput{T<:AbstractFloat} <: Output
-    t::Vector{T}
-    t_ode::Vector{T}
-    u::Vector{Matrix{T}}
-    ue::Vector{Matrix{T}}
-end
-
-function SparseOutput(Omega::ComputationDomain{T, L, M}, t_out::Vector{T}) where
-    {T<:AbstractFloat, L, M<:KernelMatrix{T}}
-    # initialize with placeholders
-    placeholder = Array(null(Omega))
-    u = [copy(placeholder) for t in t_out]
-    ue = [copy(placeholder) for t in t_out]
-    return SparseOutput(t_out, T[], u, ue)
-end
-
-mutable struct IntermediateOutput{T<:AbstractFloat} <: Output
-    t::Vector{T}
-    t_ode::Vector{T}
-    bsl::Vector{T}
-    u::Vector{Matrix{T}}
-    ue::Vector{Matrix{T}}
-    dudt::Vector{Matrix{T}}
-    dz_ss::Vector{Matrix{T}}
-end
-
-function IntermediateOutput(Omega::ComputationDomain{T, L, M}, t_out::Vector{T}) where
-    {T<:AbstractFloat, L, M<:KernelMatrix{T}}
-    bsl = similar(t_out)
-    placeholder = null(Omega)
-    u = [copy(placeholder) for t in t_out]
-    ue = [copy(placeholder) for t in t_out]
-    dudt = [copy(placeholder) for t in t_out]
-    dz_ss = [copy(placeholder) for t in t_out]
-    return IntermediateOutput(t_out, T[], bsl, u, ue, dudt, dz_ss)
 end
 
 #########################################################
