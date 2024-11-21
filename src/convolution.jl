@@ -88,4 +88,3 @@ function samesize_conv_indices(N, M)
     j2 = 2*N-1-M
     return j1, j2
 end
-

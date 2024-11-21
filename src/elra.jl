@@ -1,4 +1,3 @@
-
 """
     get_kei(filt, L_w, dx, dy; T = Float64)
 
