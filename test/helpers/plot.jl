@@ -7,6 +7,9 @@ using DelimitedFiles
 function comparison_figure(n)
     fig = Figure()
     axs = [Axis(fig[i, 1]) for i in 1:n]
+    for i in 2:n
+        axs[i].xticklabelsvisible = false
+    end
     return fig, axs
 end
 

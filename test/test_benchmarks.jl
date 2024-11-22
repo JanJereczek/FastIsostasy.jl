@@ -12,8 +12,8 @@ function benchmark1_compare(Omega::ComputationDomain, fip, H, R)
 
         mean_error = mean(abs.(fip.out.u[k][ii, jj] .- u_analytic))
         max_error = maximum(abs.(fip.out.u[k][ii, jj] .- u_analytic))
-        # @show mean_error, max_error
 
+        # @show mean_error, max_error
         @test mean_error < 6
         @test max_error < 7
 
@@ -26,11 +26,13 @@ function benchmark1()
     # Generating numerical results
     Omega = ComputationDomain(3000e3, 7, correct_distortion = false)
     c, p, t_out, R, H, t_Hice, Hice = benchmark1_constants(Omega)
-    fip = FastIsoProblem(Omega, c, p, t_out, t_Hice, Hice, output = "sparse")
+    fip = FastIsoProblem(Omega, c, p, t_out, t_Hice, Hice, output = "intermediate")
     solve!(fip)
+    
     # println("Computation took $(fip.out.computation_time) s")
     fig = benchmark1_compare(Omega, fip, H, R)
     if SAVE_PLOTS
+        isdir("plots/benchmark1") || mkdir("plots/benchmark1")
         save("plots/benchmark1/plot.png", fig)
     end
 end
@@ -52,6 +54,10 @@ function benchmark1_float32()
     fip = FastIsoProblem(Omega, c, p, t_out, t_Hice, Hice, output = "sparse")
     solve!(fip)
     fig = benchmark1_compare(Omega, fip, H, R)
+    if SAVE_PLOTS
+        isdir("plots/benchmark1") || mkdir("plots/benchmark1")
+        save("plots/benchmark1/plot_float32.png", fig)
+    end
     return nothing
 end
 
@@ -61,10 +67,10 @@ function benchmark1_gpu()
     c, p, t_out, R, H, t_Hice, Hice = benchmark1_constants(Omega)
     fip = FastIsoProblem(Omega, c, p, t_out, t_Hice, Hice, output = "sparse")
     solve!(fip)
-    # println("Computation took $(fip.out.computation_time) s")
-    Omega, p = reinit_structs_cpu(Omega, p)
+    # println("Computation took $(fip.ncout.computation_time) s")
+    Omega_cpu = ComputationDomain(Omega.Wx, Omega.Wy, Omega.Nx, Omega.Ny, use_cuda = false)
 
-    fig = benchmark1_compare(Omega, fip, H, R)
+    fig = benchmark1_compare(Omega_cpu, fip, H, R)
     if SAVE_PLOTS
         save("plots/benchmark1/plot_gpu.png", fig)
     end
@@ -75,29 +81,29 @@ function benchmark1_external_loadupdate()
     Omega = ComputationDomain(3000e3, 7, correct_distortion = false)
     c, p, t_out, R, H, t_Hice, Hice = benchmark1_constants(Omega)
     fip = FastIsoProblem(Omega, c, p, t_out, t_Hice, Hice, output = "sparse")
-    update_diagnostics!(fip.now.dudt, fip.now.u, fip, 0.0)
-    write_out!(fip.out, fip.now, 1)
-    ode = init(fip)
-    @inbounds for k in eachindex(fip.out.t)[2:end]
-        step!(fip, ode, (fip.out.t[k-1], fip.out.t[k]))
-        write_out!(fip.out, fip.now, k)
+    integrator = init_integrator(fip)
+
+    for k in eachindex(fip.out.t)[2:end]
+        step!(integrator, fip.out.t[k] - fip.out.t[k-1], true)
+        write_out!(integrator.p.out, integrator.p.now, k)
     end
     # println("Computation took $(fip.out.computation_time) s")
 
-    fig = benchmark1_compare(Omega, fip, H, R)
+    fig = benchmark1_compare(Omega, integrator.p, H, R)
     if SAVE_PLOTS
+        isdir("plots/benchmark1") || mkdir("plots/benchmark1")
         save("plots/benchmark1/plot_external_loadupdate.png", fig)
     end
 end
 
 function benchmark2()
-    Omega = ComputationDomain(3000e3, 6)
+    Omega = ComputationDomain(3000e3, 6, correct_distortion = false)
     c = PhysicalConstants(rho_ice = 0.931e3)
 
     G, nu = 0.50605e11, 0.28        # shear modulus (Pa) and Poisson ratio of lithsphere
     E = G * 2 * (1 + nu)
     lb = c.r_equator .- [6301e3, 5951e3, 5701e3]
-    p = LayeredEarth( Omega, layer_boundaries = lb,
+    p = LayeredEarth( Omega, layering = UniformLayering(3, lb),
         layer_viscosities = [1e21, 1e21, 2e21], litho_youngmodulus = E,
         litho_poissonratio = nu, rho_litho = 2.8e3)
 
@@ -111,7 +117,7 @@ function benchmark2()
     theta = rad2deg.(Omega.Theta[ii, jj])
     (_, _), X, Xitp = load_spada2011()
     opts = SolverOptions(interactive_sealevel = true, verbose = true,
-        diffeq = (alg=Tsit5(), reltol=1e-4))
+        diffeq = DiffEqOptions(reltol = 1e-4))
 
     for case in ["disc", "cap"]
         # Generate FastIsostasy results
@@ -157,6 +163,7 @@ function benchmark2()
             @test m_n < 4
         end
         if SAVE_PLOTS
+            isdir("plots/benchmark2") || mkdir("plots/benchmark2")
             save("plots/benchmark2/$case.png", fig)
         end
     end
