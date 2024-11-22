@@ -125,8 +125,8 @@ function ComputationDomain(
         always_xy=true)
     target2lonlat = Proj.inv(lonlat2target)
     coords = target2lonlat.(X, Y)
-    Lon = map(x -> x[1], coords)
-    Lat = map(x -> x[2], coords)
+    Lon = T.(map(x -> x[1], coords))
+    Lat = T.(map(x -> x[2], coords))
 
     if correct_distortion
         K = scalefactor(Lat, lat_ref)

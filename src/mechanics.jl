@@ -4,20 +4,30 @@
 Update all the diagnotisc variables, i.e. all fields of `fip.now` apart
 from the displacement, which requires an integrator.
 """
-function update_diagnostics!(dudt::M, u::M, fip::FastIsoProblem{T, L, M, C, FP, IP}, t::T,
-    ) where {T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}, C<:ComplexMatrix{T},
-    FP<:ForwardPlan{T}, IP<:InversePlan{T}}
+function update_diagnostics!(dudt::M, u::M, fip::FastIsoProblem{T, L, M, MM, B, C, FP, IP},
+    t::T) where {
+        T<:AbstractFloat,
+        L<:Matrix{T},
+        M<:KernelMatrix{T},
+        MM<:KernelMatrix{Float64},
+        B<:BoolMatrix,
+        C<:ComplexMatrix{T},
+        FP<:ForwardPlan{T},
+        IP<:InversePlan{T}}
 
     # @show t, extrema(u), extrema(fip.now.ue)
 
     # CAUTION: Order really matters here!
 
     # Make sure that integrated viscous displacement satisfies BC.
-    apply_bc!(u, fip.Omega.bc_matrix, fip.Omega.nbc)
+    apply_bc!(u, fip.tools.prealloc.buffer_x, fip.Omega.bc_matrix, fip.Omega.nbc)
 
     # Update load columns if interpolator available
     if fip.opts.internal_loadupdate
-        update_loadcolumns!(fip, fip.tools.Hice(t))
+        fip.now.H_ice .= fip.tools.Hice(t)
+        @. fip.now.H_af = max(fip.now.H_ice + min.(fip.now.b - fip.now.z_ss, 0), 0) *
+            (fip.c.rho_seawater / fip.c.rho_ice)
+        update_loadcolumns!(fip)
     end
 
     # Regardless of update method for column, update the anomalies!
@@ -48,8 +58,6 @@ function update_diagnostics!(dudt::M, u::M, fip::FastIsoProblem{T, L, M, C, FP, 
 
     if fip.opts.deformation_model == :lv_elva
         lv_elva!(dudt, u, fip, t)
-    elseif fip.opts.deformation_model == :lv_elra
-        lv_elra!(dudt, u, fip, t)
     elseif fip.opts.deformation_model == :elra
         elra!(dudt, u, fip, t)
     end
@@ -69,9 +77,15 @@ end
 
 Update the displacement rate `dudt` of the viscous response according to LV-ELVA.
 """
-function lv_elva!(dudt::M, u::M, fip::FastIsoProblem{T, L, M, C, FP, IP}, t::T) where
-    {T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}, C<:ComplexMatrix{T},
-    FP<:ForwardPlan{T}, IP<:InversePlan{T}}
+function lv_elva!(dudt::M, u::M, fip::FastIsoProblem{T, L, M, MM, B, C, FP, IP}, t::T) where {
+    T<:AbstractFloat,
+    L<:Matrix{T},
+    M<:KernelMatrix{T},
+    MM<:KernelMatrix{Float64},
+    B<:BoolMatrix,
+    C<:ComplexMatrix{T},
+    FP<:ForwardPlan{T},
+    IP<:InversePlan{T}}
 
     Omega, P = fip.Omega, fip.tools.prealloc
     update_deformation_rhs!(fip, u)
@@ -79,9 +93,10 @@ function lv_elva!(dudt::M, u::M, fip::FastIsoProblem{T, L, M, C, FP, IP}, t::T) 
     fip.tools.pfft! * P.fftrhs
     @. P.fftrhs /= Omega.pseudodiff
     fip.tools.pifft! * P.fftrhs
-    dudt .= real.(P.fftrhs) .* years2seconds(1.0)
+    dudt .= real.(P.fftrhs)
+    dudt .*= SECONDS_PER_YEAR
 
-    apply_bc!(dudt, fip.Omega.bc_matrix, fip.Omega.nbc)
+    apply_bc!(dudt, fip.tools.prealloc.buffer_x, fip.Omega.bc_matrix, fip.Omega.nbc)
 
     return nothing
 end
@@ -91,14 +106,25 @@ end
 
 Update the displacement rate `dudt` of the viscous response according to ELRA.
 """
-function elra!(dudt::M, u::M, fip::FastIsoProblem{T, L, M, C, FP, IP}, t::T) where
-    {T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}, C<:ComplexMatrix{T},
-    FP<:ForwardPlan{T}, IP<:InversePlan{T}}
+function elra!(dudt::M, u::M, fip::FastIsoProblem{T, L, M, MM, B, C, FP, IP}, t::T) where {
+    T<:AbstractFloat,
+    L<:Matrix{T},
+    M<:KernelMatrix{T},
+    MM<:KernelMatrix{Float64},
+    B<:BoolMatrix,
+    C<:ComplexMatrix{T},
+    FP<:ForwardPlan{T},
+    IP<:InversePlan{T}}
 
     update_deformation_rhs!(fip, u)
-    fip.now.u_eq = samesize_conv( - (fip.now.columnanoms.load +
-        fip.now.columnanoms.litho) .* fip.c.g .* fip.Omega.K .^ 2,
+
+    @. fip.tools.prealloc.buffer_x = - (fip.now.columnanoms.load +
+        fip.now.columnanoms.litho) * fip.c.g * fip.Omega.K ^ 2
+    
+    samesize_conv!(fip.now.u_eq, fip.tools.prealloc.buffer_x,
         fip.tools.viscous_convo, fip.Omega)
+    # fip.now.u_eq .= samesize_conv( ,
+    #     fip.tools.viscous_convo, fip.Omega)
     @. dudt = 1 / fip.p.tau * (fip.now.u_eq - fip.now.u)
     return nothing
 end
@@ -108,9 +134,15 @@ end
 
 Update the right-hand side of the deformation equation.
 """
-function update_deformation_rhs!(fip::FastIsoProblem{T, L, M, C, FP, IP}, u::M) where
-    {T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}, C<:ComplexMatrix{T},
-    FP<:ForwardPlan{T}, IP<:InversePlan{T}}
+function update_deformation_rhs!(fip::FastIsoProblem{T, L, M, MM, B, C, FP, IP}, u::M) where {
+    T<:AbstractFloat,
+    L<:Matrix{T},
+    M<:KernelMatrix{T},
+    MM<:KernelMatrix{Float64},
+    B<:BoolMatrix,
+    C<:ComplexMatrix{T},
+    FP<:ForwardPlan{T},
+    IP<:InversePlan{T}}
 
     Omega, P = fip.Omega, fip.tools.prealloc
     @. P.rhs = -fip.c.g * fip.now.columnanoms.full
@@ -133,17 +165,17 @@ end
 
 Compute the horizontal displacement field from the vertical displacement field `u`.
 Equation used for this can be found at [https://en.wikipedia.org/wiki/Plate_theory].
-Since we assume an isotropic material, the in-plane displacement is 0.
+Since we assume an isotropic material under pure bending, the in-plane displacement is 0.
 The mid-surface of the thin plate is assumed to be at `litho_thickness / 2`.
 """
-function get_horizontal_displacement(u, litho_thickness, Omega)
+function thinplate_horizontal_displacement(u, litho_thickness, Omega)
     u_x = null(Omega)
     u_y = null(Omega)
-    update_horizontal_displacement!(u_x, u_y, u, litho_thickness, Omega)
+    thinplate_horizontal_displacement!(u_x, u_y, u, litho_thickness, Omega)
     return u_x, u_y
 end
 
-function update_horizontal_displacement!(u_x, u_y, u, litho_thickness, Omega)
+function thinplate_horizontal_displacement!(u_x, u_y, u, litho_thickness, Omega)
     dx!(u_x, u, Omega)
     dy!(u_y, u, Omega)
     @. u_x *= -litho_thickness / 2
@@ -157,13 +189,20 @@ end
 A generic function to update `u` such that the boundary conditions are respected
 on average, which is the only way to impose them for Fourier collocation.
 """
-function apply_bc!(u::M, bcm::M, nbc::T) where {T <: AbstractFloat, M<:KernelMatrix{T}}
-    u .-= sum(u .* bcm) / nbc
+function apply_bc!(u::M, bcm::M, nbc::T) where {T<:AbstractFloat, M<:Matrix{T}}
+    u .= u .- (sum(u .* bcm) / nbc)
+    return nothing
+end
+
+function apply_bc!(u::M, buffer::M, bcm::M, nbc::T) where {T<:AbstractFloat, M<:KernelMatrix{T}}
+    @. buffer = u * bcm
+    u .-= (sum(buffer) / nbc)
+    return nothing
 end
 
 function no_mean_bc!(u::KernelMatrix{<:AbstractFloat}, Nx::Int, Ny::Int)
     u .-= mean(u)
-    return u
+    return nothing
 end
 
 #####################################################
@@ -175,11 +214,21 @@ end
 Update the elastic response by convoluting the Green's function with the load anom.
 To use coefficients differing from [^Farrell1972], see [FastIsoTools](@ref).
 """
-function update_elasticresponse!(fip::FastIsoProblem{T, L, M, C, FP, IP}) where
-    {T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}, C<:ComplexMatrix{T},
-    FP<:ForwardPlan{T}, IP<:InversePlan{T}}
-    fip.now.ue .= samesize_conv(fip.now.columnanoms.load .* fip.Omega.K .^ 2,
+function update_elasticresponse!(fip::FastIsoProblem{T, L, M, MM, B, C, FP, IP}) where {
+    T<:AbstractFloat,
+    L<:Matrix{T},
+    M<:KernelMatrix{T},
+    MM<:KernelMatrix{Float64},
+    B<:BoolMatrix,
+    C<:ComplexMatrix{T},
+    FP<:ForwardPlan{T},
+    IP<:InversePlan{T}}
+
+    @. fip.tools.prealloc.buffer_x = fip.now.columnanoms.load * fip.Omega.K ^ 2
+    samesize_conv!(fip.now.ue, fip.tools.prealloc.buffer_x,
         fip.tools.elastic_convo, fip.Omega)
+    # fip.now.ue .= samesize_conv(fip.now.columnanoms.load .* fip.Omega.K .^ 2,
+    #     fip.tools.elastic_convo, fip.Omega)
     return nothing
 end
 

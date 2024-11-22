@@ -2,19 +2,23 @@
 # Options
 #########################################################
 
+@kwdef struct DiffEqOptions
+    alg::Tsit5 = Tsit5()    # For now we limit the options
+    reltol::Float64 = 1e-3
+end
+
 """
     Options
 
 Return a struct containing the options relative to solving a [`FastIsoProblem`](@ref).
 """
-Base.@kwdef struct SolverOptions
+@kwdef struct SolverOptions
     deformation_model::Symbol = :lv_elva  # :lv_elva! or :lv_elra! or :lv_elra
     interactive_sealevel::Bool = false
     internal_loadupdate::Bool = true
     internal_bsl_update::Bool = true
-    bsl_itp::Any = linear_interpolation([-Inf, Inf], [0.0, 0.0], extrapolation_bc = Flat())
-    diffeq::NamedTuple = (alg = Tsit5(), reltol = 1e-3)
-    dt_diagnostics::Real = years2seconds(10.0)
+    diffeq::DiffEqOptions = DiffEqOptions()
+    dt_diagnostics::Float64 = 10.0
     verbose::Bool = false
 end
 
@@ -31,16 +35,25 @@ Return a struct containing all the other structs needed for the forward integrat
 model over `Omega::ComputationDomain` with parameters `c::PhysicalConstants` and
 `p::LayeredEarth`. The outputs are stored at `t_out::Vector{<:AbstractFloat}`.
 """
-struct FastIsoProblem{T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}, C<:ComplexMatrix{T},
-    FP<:ForwardPlan{T}, IP<:InversePlan{T}, O<:Output}
+struct FastIsoProblem{
+    T<:AbstractFloat,
+    L<:Matrix{T},
+    M<:KernelMatrix{T},
+    MM<:KernelMatrix{Float64},
+    B<:BoolMatrix,
+    C<:ComplexMatrix{T},
+    FP<:ForwardPlan{T},
+    IP<:InversePlan{T},
+    O<:Output}
+
     Omega::ComputationDomain{T, L, M}
     c::PhysicalConstants{T}
     p::LayeredEarth{T, M}
     opts::SolverOptions
-    tools::FastIsoTools{T, M, C, FP, IP}
-    ref::ReferenceState{T, M}
-    now::CurrentState{T, M}
-    ncout::NetcdfOutput{<:AbstractFloat}
+    tools::FastIsoTools{T, M, MM, C, FP, IP}
+    ref::ReferenceState{T, M, B}
+    now::CurrentState{T, M, B}
+    ncout::NetcdfOutput{Float32}
     out::O
 end
 
@@ -71,7 +84,8 @@ function FastIsoProblem(
     return FastIsoProblem(Omega, c, p, t_out, t_Hice_snapshots, Hice_snapshots; kwargs...)
 end
 
-zero_bsl(T, t) = linear_interpolation(T.([extrema(t)...]), T.([0.0, 0.0]))
+zero_bsl(T, t) = linear_interpolation(T.([extrema(t)...]), T.([0.0, 0.0]),
+    extrapolation_bc = Flat())
 
 function FastIsoProblem(
     Omega::ComputationDomain{T, L, M},
@@ -115,8 +129,9 @@ function FastIsoProblem(
         maskocean = collect(get_maskocean(z_ss_0, b_0, maskgrounded))
     end
 
+    H_af_0 = height_above_floatation(H_ice_0, b_0, z_ss_0, c)
     H_water_0 = watercolumn(H_ice_0, maskgrounded, b_0, z_ss_0, c)
-    ref = ReferenceState(u_0, ue_0, H_ice_0, H_water_0, b_0, bsl_0, z_ss_0,
+    ref = ReferenceState(u_0, ue_0, H_ice_0, H_af_0, H_water_0, b_0, bsl_0, z_ss_0,
         T(0.0), T(0.0), T(0.0), maskgrounded, maskocean, Omega.arraykernel(maskactive))
     now = CurrentState(Omega, ref)
     ncout = NetcdfOutput(Omega, t_out, output_file)
@@ -155,9 +170,30 @@ end
 
 Solve the isostatic adjustment problem defined in `fip::FastIsoProblem`.
 """
-function solve!(fip::FastIsoProblem)
-    prob, nc_callback, t1 = init_problem(fip)
-    solve(prob, fip.opts.diffeq.alg, reltol=fip.opts.diffeq.reltol, saveat=fip.out.t,
+function solve!(fip::FastIsoProblem{T, L, M, MM, B, C, FP, IP}) where {
+    T<:AbstractFloat,
+    L<:Matrix{T},
+    M<:KernelMatrix{T},
+    MM<:KernelMatrix{Float64},
+    B<:BoolMatrix,
+    C<:ComplexMatrix{T},
+    FP<:ForwardPlan{T},
+    IP<:InversePlan{T}}
+
+    if !(fip.opts.internal_loadupdate)
+        error("`solve!` does not support external updating of the load. Use `step!` instead.")
+    end
+
+    if fip.opts.deformation_model == :lv_elra
+        throw(ArgumentError("LV-ELRA is not implemented yet."))
+    end
+    
+    t1 = time()
+    update_diagnostics!(fip.now.dudt, fip.now.u, fip, fip.out.t[1])
+    (length(fip.ncout.filename) > 3) && write_nc!(fip.ncout, fip.now, fip.now.k)
+    prob = ODEProblem(update_diagnostics!, fip.now.u, extrema(fip.out.t), fip)
+    nc_callback = DiscreteCallback(nc_condition, nc_affect!)
+    solve(prob, fip.opts.diffeq.alg, reltol=fip.opts.diffeq.reltol, saveat=[],
         tstops=fip.out.t, callback=nc_callback)
     fip.ncout.computation_time += time()-t1
     return nothing
@@ -183,9 +219,15 @@ end
 nc_condition(_, t, integrator) = t in integrator.p.out.t
 
 function nc_affect!(integrator)
+    fip = integrator.p
     println("Saving at $(integrator.t) years...")
-    integrator.p.now.k += 1
+    fip.now.k += 1
 
+    if fip.Omega.use_cuda == false
+        thinplate_horizontal_displacement!(fip.now.u_x, fip.now.u_y,
+            fip.now.u + fip.now.ue, fip.p.litho_thickness, fip.Omega)
+    end
+    
     if length(integrator.p.ncout.filename) > 3
         write_nc!(integrator.p.ncout, integrator.p.now, integrator.p.now.k)
     end

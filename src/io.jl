@@ -3,14 +3,14 @@
 ################################################################################
 
 mutable struct NetcdfOutput{T<:AbstractFloat}
-    t::Vector{<:AbstractFloat}
+    t::Vector{T}
     filename::String
     buffer::Matrix{T}
     varsfi3D::Vector{Symbol}
     varnames3D::Vector{String}
     varsfi1D::Vector{Symbol}
     varnames1D::Vector{String}
-    computation_time::Float64
+    computation_time::T
 end
 
 function NetcdfOutput(Omega::ComputationDomain{T, L, M}, t, filename;
@@ -53,8 +53,8 @@ function NetcdfOutput(Omega::ComputationDomain{T, L, M}, t, filename;
     end
     
     buffer = Matrix{Tout}(undef, Omega.Nx, Omega.Ny)
-    return NetcdfOutput(t, filename, buffer, varsfi3D, varnames3D,
-        varsfi1D, varnames1D, 0.0)
+    return NetcdfOutput(Tout.(t), filename, buffer, varsfi3D, varnames3D,
+        varsfi1D, varnames1D, Tout(0.0))
 end
 
 interm_varsfi3D = [:u, :ue, :dudt, :b, :dz_ss, :z_ss, :maskgrounded, :H_ice,
@@ -71,7 +71,6 @@ interm_varsfi1D = [:bsl]
 interm_varnames1D = ["bsl"]
 interm_varlongnames1D = ["Barystatic sea level"]
 interm_varunits1D = ["m"]
-
 
 function write_nc!(ncout::NetcdfOutput{Tout}, state::CurrentState{T, M}, k::Int) where {
     T<:AbstractFloat, M<:KernelMatrix{T}, Tout<:AbstractFloat}
@@ -126,6 +125,8 @@ mutable struct IntermediateOutput{T<:AbstractFloat} <: Output
     bsl::Vector{T}
     u::Vector{Matrix{T}}
     ue::Vector{Matrix{T}}
+    u_x::Vector{Matrix{T}}
+    u_y::Vector{Matrix{T}}
     dudt::Vector{Matrix{T}}
     dz_ss::Vector{Matrix{T}}
 end
@@ -136,9 +137,11 @@ function IntermediateOutput(Omega::ComputationDomain{T, L, M}, t_out::Vector{T})
     placeholder = null(Omega)
     u = [copy(placeholder) for t in t_out]
     ue = [copy(placeholder) for t in t_out]
+    u_x = [copy(placeholder) for t in t_out]
+    u_y = [copy(placeholder) for t in t_out]
     dudt = [copy(placeholder) for t in t_out]
     dz_ss = [copy(placeholder) for t in t_out]
-    return IntermediateOutput(t_out, T[], bsl, u, ue, dudt, dz_ss)
+    return IntermediateOutput(t_out, T[], bsl, u, ue, u_x, u_y, dudt, dz_ss)
 end
 
 """
@@ -158,6 +161,8 @@ function write_out!(out::IntermediateOutput{T}, now::CurrentState{T, M}, k::Int)
     out.bsl[k] = now.bsl
     out.u[k] .= copy(Array(now.u))
     out.ue[k] .= copy(Array(now.ue))
+    out.u_x[k] .= copy(Array(now.u_x))
+    out.u_y[k] .= copy(Array(now.u_y))
     out.dudt[k] .= copy(Array(now.dudt))
     out.dz_ss[k] .= copy(Array(now.dz_ss))
     return nothing

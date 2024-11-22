@@ -13,7 +13,7 @@ c = PhysicalConstants(rho_ice = 0.93)   # (kg/m^3)
 
 All constants are given in SI units (kilogram, meter, second).
 """
-Base.@kwdef struct PhysicalConstants{T<:AbstractFloat}
+@kwdef struct PhysicalConstants{T<:AbstractFloat}
     type = Float64
     mE::T = type(5.972e24)                        # Earth's mass (kg)
     r_equator::T = type(6371e3)                   # Earth radius at equator (m)

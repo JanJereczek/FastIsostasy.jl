@@ -73,7 +73,7 @@ export CurrentState, ReferenceState
 export NetcdfOutput, write_nc!, write_out!
 
 # solve.jl
-export SolverOptions, FastIsoProblem, solve!, init_integrator, step!
+export DiffEqOptions, SolverOptions, FastIsoProblem, solve!, init_integrator, step!
 
 # utils.jl
 export years2seconds, seconds2years, m_per_sec2mm_per_yr
@@ -82,7 +82,7 @@ export reinit_structs_cpu, meshgrid, kernelcollect
 
 export get_quad_coeffs, get_r, gauss_distr, generate_gaussian_field, samesize_conv, blur
 export uniform_ice_cylinder, stereo_ice_cylinder, stereo_ice_cap
-export remake!, null, not, cudainfo
+export remake!, null, not, cudainfo, kernelpromote, kernelnull
 
 # derivatives.jl
 export update_second_derivatives!
@@ -99,7 +99,7 @@ export maxwelltime_scaling!, get_shearmodulus, get_rigidity, load_prem
 # mechanics.jl
 export elra!, lv_elva!, update_diagnostics!
 export update_deformation_rhs!, build_greenintegrand, get_elasticgreen
-export get_horizontal_displacement
+export thinplate_horizontal_displacement
 
 # elra.jl
 export get_flexural_lengthscale, get_kei, calc_kei_value, calc_viscous_green
@@ -120,4 +120,5 @@ export InversionConfig, InversionData, InversionProblem, ParameterReduction,
     ViscositySnippet, extract_viscous_displacement, extract_elastic_displacement,
     extract_total_displacement
 
+export apply_bc!, update_bedrock!, update_loadcolumns!, columnanom_load, update_elastic_response!, columnanom_litho, update_dz_ss!, update_maskocean!, update_bsl!, update_z_ss!, update_maskgrounded!
 end

@@ -15,7 +15,7 @@ abstract type AbstractLayering{T<:AbstractFloat} end
 """
 @kwdef struct UniformLayering{T} <: AbstractLayering{T}
     n_layers::Int = 2
-    boundaries::Vector{T} = [88.0, 400.0]
+    boundaries::Vector{T} = [88e3, 400e3]
 end
 
 """
@@ -23,7 +23,7 @@ end
 """
 @kwdef struct ParallelLayering{T} <: AbstractLayering{T}
     n_layers::Int = 5
-    layer_thickness::Vector{T} = fill(20.0, n_layers)
+    layer_thickness::Vector{T} = fill(20e3, n_layers)
     tol::T = 0.0
 end
 
@@ -31,9 +31,15 @@ end
 """
     EqualizedLayering{T} <: AbstractLayering{T}
 """
+# @kwdef struct EqualizedLayering{T} <: AbstractLayering{T}
+#     n_layers::Int = 3
+#     layer_thickness::Vector{T} = fill(20e3, n_layers)
+#     tol::T = 0.0
+# end
+
 @kwdef struct EqualizedLayering{T} <: AbstractLayering{T}
     n_layers::Int = 3
-    layer_thickness::Vector{T} = fill(20.0, n_layers)
+    boundaries::Vector{T} = [88e3, 400e3]
     tol::T = 0.0
 end
 
@@ -87,7 +93,9 @@ function get_layer_boundaries(
     layer_boundaries = zeros(T, n_x, n_y, layering.n_layers)
     layer_boundaries[:, :, 1] .= litho_thickness .+ layering.tol
     for l in 2:layering.n_layers
-        layer_boundaries[:, :, l] .= layer_boundaries[:, :, l-1] .+ layering.thickness[l]
+        # layer_boundaries[:, :, l] .= maximum(layer_boundaries[:, :, l-1]) .+
+        #     layering.thickness[l]
+        layer_boundaries[:, :, l] .= layering.boundaries[l]
     end
     return layer_boundaries
 end
@@ -167,7 +175,7 @@ function LayeredEarth(
 
     if isnothing(litho_thickness)
         if layering isa UniformLayering
-            println("Using a uniform lithosphere thickness.")
+            # println("Using a uniform lithosphere thickness.")
             litho_thickness = zeros(T, Omega.Nx, Omega.Ny)
             litho_thickness .= layering.boundaries[1]
         else
@@ -180,8 +188,8 @@ function LayeredEarth(
     effective_viscosity = get_effective_viscosity(Omega, layer_viscosities,
         layer_boundaries, mantle_poissonratio)
 
-    litho_rigidity, effective_viscosity = kernelpromote(
-        [litho_rigidity, effective_viscosity], Omega.arraykernel)
+    litho_thickness, litho_rigidity, effective_viscosity = kernelpromote(
+        [litho_thickness, litho_rigidity, effective_viscosity], Omega.arraykernel)
     
     litho_shearmodulus = litho_youngmodulus / (2 * (1 + litho_poissonratio))
 

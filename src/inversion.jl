@@ -43,27 +43,24 @@ Struct containing configuration parameters for a [`InversionProblem`].
 - `update_freq::Int`: Update frequency for the inversion.
 1 : approximate posterior cov matrix with an uninformative prior.
 0 : weighted average between posterior cov matrix with an uninformative prior and prior.
-- `n_samples::Int`: Number of samples for the inversion.
 - `scale_obscov::Real`: Scaling factor for the observational covariance matrix.
 """
 struct InversionConfig{T<:AbstractFloat}
     method::Any
+    N_ens::Int
     N_iter::Int
+    n_samples::Int
     α_reg::T
     update_freq::Int
-    n_samples::Int
     scale_obscov::T
 end
 
 function InversionConfig(
-    method;
-    N_iter = 5,
-    α_reg = 1.0,
-    update_freq = 1,
-    n_samples = 100,
-    scale_obscov = 1_000.0,
+    method, N_ens, N_iter, n_samples;
+    α_reg = 1.0, update_freq = 1, scale_obscov = 1_000.0,
 )
-    return InversionConfig(method, N_iter, α_reg, update_freq, n_samples, scale_obscov)
+    return InversionConfig(method, N_ens, N_iter, n_samples,
+        α_reg, update_freq, scale_obscov)
 end
 
 """
@@ -74,19 +71,23 @@ Struct containing the inversion data.
 # Fields
 
 - `t::Vector{T}`: Time vector.
-- `nt::Int`: Number of time steps.
-- `X::Vector{M}`: Ground truth input (forcing).
 - `Y::Vector{M}`: Ground truth response.
+- `nY::Int`: Number of output time steps used for inversion.
 - `mask::BitMatrix`: Region of interest.
 - `countmask::Int`: count(mask) = number of cells used for inversion.
 """
 struct InversionData{T<:AbstractFloat, M<:Matrix{T}}
     t::Vector{T}        # Time vector
-    nt::Int             # number of time steps
-    X::Vector{M}        # Ground truth input (forcing)
     Y::Vector{M}        # Ground truth response
+    nY::Int             # number of time steps
     mask::BitMatrix     # Region of interest
     countmask::Int      # count(mask) = number of cells used for inversion
+end
+
+function InversionData(t, Y, mask)
+    nY = length(Y)
+    countmask = count(mask)
+    return InversionData(t, Y, nY, mask, countmask)
 end
 
 """
@@ -110,7 +111,7 @@ is the only method available.
 """
 struct InversionProblem{T<:AbstractFloat, V<:Vector{T}, M<:Matrix{T},
     R<:ParameterReduction{T}, PD, EKP}
-    fip::FastIsoProblem{T, <:Any, M, <:Any, <:Any, <:Any, <:Any}
+    fip::FastIsoProblem{T, <:Any, M, <:Any, <:Any, <:Any, <:Any, <:Any}
     config::InversionConfig# {T}
     data::InversionData{T, M}
     reduction::R
@@ -120,6 +121,7 @@ struct InversionProblem{T<:AbstractFloat, V<:Vector{T}, M<:Matrix{T},
     out::Vector{V}
     G_ens::M
 end
+
 
 """
     inversion_problem(fip, config, data, reduction, priors; save_stride_iter::Int = 1)

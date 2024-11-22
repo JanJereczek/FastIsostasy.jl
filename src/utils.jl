@@ -231,8 +231,8 @@ kernelpromote(X::Vector, arraykernel) = [arraykernel(x) for x in X]
 Reinitialize `Omega::ComputationDomain` and `p::LayeredEarth` on the CPU, mostly
 for post-processing purposes.
 """
-function reinit_structs_cpu(Omega::ComputationDomain{T, M}, p::LayeredEarth{T, M}
-    ) where {T<:AbstractFloat, M<:KernelMatrix{T}}
+function reinit_structs_cpu(Omega::ComputationDomain{T, L, M}, p::LayeredEarth{T, M}
+    ) where {T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}}
 
     Omega_cpu = ComputationDomain(Omega.Wx, Omega.Wy, Omega.Nx, Omega.Ny, use_cuda = false)
     p_cpu = LayeredEarth(
@@ -241,17 +241,6 @@ function reinit_structs_cpu(Omega::ComputationDomain{T, M}, p::LayeredEarth{T, M
         layer_viscosities = Array(p.layer_viscosities),
     )
     return Omega_cpu, p_cpu
-end
-
-function choose_fft_plans(X, use_cuda)
-    if use_cuda
-        pfft! = CUFFT.plan_fft!(complex.(X))
-        pifft! = CUFFT.plan_ifft!(complex.(X))
-    else
-        pfft! = plan_fft!(complex.(X))
-        pifft! = plan_ifft!(complex.(X))
-    end
-    return pfft!, pifft!
 end
 
 function remake!(fip::FastIsoProblem)

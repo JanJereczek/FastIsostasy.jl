@@ -4,7 +4,12 @@
 Update the SSH perturbation `dz_ss` by convoluting the Green's function with the load anom.
 """
 function update_dz_ss!(fip::FastIsoProblem)
-    fip.now.dz_ss .= samesize_conv(mass_anom(fip), fip.tools.dz_ss_convo, fip.Omega)
+
+    # fip.tools.prealloc.buffer_x .= mass_anom(fip)
+    @. fip.tools.prealloc.buffer_x = mass_anom(fip.Omega.A, fip.now.columnanoms.full)
+    samesize_conv!(fip.now.dz_ss, fip.tools.prealloc.buffer_x,
+        fip.tools.dz_ss_convo, fip.Omega)
+    # fip.now.dz_ss .= samesize_conv(mass_anom(fip), fip.tools.dz_ss_convo, fip.Omega)
     return nothing
 end
 
@@ -60,19 +65,19 @@ function mass_anom(fip::FastIsoProblem)
         fip.c.rho_seawater .* fip.now.bsl .* fip.now.maskocean .* fip.ref.maskactive )
 end
 
+function mass_anom(A, canom_full)
+    return A * canom_full
+end
+
 """
     update_loadcolumns!(fip::FastIsoProblem, u::KernelMatrix{T}, H_ice::KernelMatrix{T})
 
 Update the load columns of a `::CurrentState`.
 """
-function update_loadcolumns!(fip::FastIsoProblem{T, L, M, C, FP, IP}, H_ice::M) where
-    {T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}, C<:ComplexMatrix{T},
-    FP<:ForwardPlan{T}, IP<:InversePlan{T}}
-
-    fip.now.H_ice .= H_ice
+function update_loadcolumns!(fip::FastIsoProblem)
     # fip.now.H_sed .= H_sed
+    update_maskgrounded!(fip)
     if fip.opts.interactive_sealevel
-        update_maskgrounded!(fip)
         update_maskocean!(fip)
         fip.now.H_water .= watercolumn(fip)
     end
@@ -86,17 +91,13 @@ end
 
 function watercolumn(H_ice, maskgrounded, b, z_ss, c)
     wcl = max.(z_ss .- b, 0)
-    return (H_ice .<= 1) .* wcl + not.(maskgrounded) .* (H_ice .> 1) .* (wcl .-
-        (H_ice .* c.rho_ice ./ c.rho_seawater))
+    return (H_ice .<= 1) .* wcl + not.(maskgrounded) .* (H_ice .> 1) .*
+        (wcl .- (H_ice .* c.rho_ice ./ c.rho_seawater))
 end
 
 function update_maskgrounded!(fip::FastIsoProblem)
-    now = fip.now
-    if fip.Omega.use_cuda
-        now.maskgrounded .= get_maskgrounded(now, fip.c)
-    else
-        fip.now.maskgrounded .= collect(get_maskgrounded(now, fip.c))
-    end
+    fip.now.maskgrounded .= fip.now.H_af .> 0
+    return nothing
 end
 
 get_maskgrounded(state, c) = height_above_floatation(state, c) .> 0
@@ -105,7 +106,11 @@ function get_maskgrounded(H_ice, b, z_ss, c)
     return height_above_floatation(H_ice, b, z_ss, c) .> 0
 end
 
-function height_above_floatation(state::GeoState, c::PhysicalConstants)
+function get_maskocean(z_ss, b, maskgrounded)
+    return ((z_ss - b) .> 0) .& not.(maskgrounded)
+end
+
+function height_above_floatation(state::AbstractState, c::PhysicalConstants)
     return height_above_floatation(state.H_ice, state.b,
         state.z_ss, c)
 end
@@ -115,21 +120,20 @@ function height_above_floatation(H_ice, b, z_ss, c)
 end
 
 function update_maskocean!(fip)
-    now = fip.now
-    if fip.Omega.use_cuda
-        now.maskocean .= get_maskocean(now.z_ss, now.b, now.maskgrounded)
-    else
-        now.maskocean .= collect(get_maskocean(now.z_ss, now.b, now.maskgrounded))
-    end
+    @. fip.now.maskocean = (fip.now.z_ss - fip.now.b) > 0
+    @. fip.now.maskocean = fip.now.maskocean .& not.(fip.now.maskgrounded)
 end
 
-function get_maskocean(z_ss, b, maskgrounded)
-    return ((z_ss - b) .> 0) .& not.(maskgrounded)
-end
+function update_bedrock!(fip::FastIsoProblem{T, L, M, MM, B, C, FP, IP}, u::M) where {
+    T<:AbstractFloat,
+    L<:Matrix{T},
+    M<:KernelMatrix{T},
+    MM<:KernelMatrix{Float64},
+    B<:BoolMatrix,
+    C<:ComplexMatrix{T},
+    FP<:ForwardPlan{T},
+    IP<:InversePlan{T}}
 
-function update_bedrock!(fip::FastIsoProblem{T, L, M, C, FP, IP}, u::M) where
-    {T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}, C<:ComplexMatrix{T},
-    FP<:ForwardPlan{T}, IP<:InversePlan{T}}
     fip.now.u .= u
     @. fip.now.b = fip.ref.b + fip.now.ue + fip.now.u
     return nothing
@@ -182,9 +186,7 @@ Note: we do not use (eq. 1) as it is only a special case of (eq. 13) that does n
 allow a correct representation of external sea-level forcings.
 """
 function update_V_af!(fip::FastIsoProblem)
-    fip.now.V_af = sum( 
-        (height_above_floatation(fip.now, fip.c) -
-        height_above_floatation(fip.ref, fip.c)) .* fip.Omega.A )
+    fip.now.V_af = sum( (fip.now.H_af - fip.ref.H_af) .* fip.Omega.A )
     return nothing
 end
 

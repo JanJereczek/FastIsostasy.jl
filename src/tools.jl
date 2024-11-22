@@ -23,21 +23,28 @@ This includes the Green's functions for the computation of the lithosphere and t
 perturbation, plans for FFTs, interpolators of the load and the viscosity over time and
 preallocated arrays.
 """
-struct FastIsoTools{T<:AbstractFloat, M<:KernelMatrix{T}, C<:ComplexMatrix{T},
-    FP<:ForwardPlan{T}, IP<:InversePlan{T}}
+struct FastIsoTools{
+    T<:AbstractFloat,
+    M<:KernelMatrix{T},
+    MM<:KernelMatrix{Float64},
+    C<:ComplexMatrix{T},
+    FP<:ForwardPlan{T},
+    IP<:InversePlan{T},
+}
+
     viscous_convo::InplaceConvolution{T, M, C, FP, IP}
     elastic_convo::InplaceConvolution{T, M, C, FP, IP}
     dz_ss_convo::InplaceConvolution{T, M, C, FP, IP}
     pfft!::FP
     pifft!::IP
-    Hice::Interpolations.Extrapolation{Matrix{Float64}, 1,
-        Interpolations.GriddedInterpolation{Matrix{Float64}, 1, Vector{M},
+    Hice::Interpolations.Extrapolation{MM, 1,
+        Interpolations.GriddedInterpolation{MM, 1, Vector{M},
         Gridded{Linear{Throw{OnGrid}}}, Tuple{Vector{T}}},
-        Gridded{Linear{Throw{OnGrid}}}, <:Any}
+        Gridded{Linear{Throw{OnGrid}}}, Flat{Nothing}}
     bsl::Interpolations.Extrapolation{T, 1,
         Interpolations.GriddedInterpolation{T, 1, Vector{T},
         Gridded{Linear{Throw{OnGrid}}}, Tuple{Vector{T}}},
-        Gridded{Linear{Throw{OnGrid}}}, <:Any}
+        Gridded{Linear{Throw{OnGrid}}}, Flat{Nothing}}
     prealloc::PreAllocated{T, M, C}
 end
 
@@ -75,11 +82,24 @@ function FastIsoTools(
         kernelpromote(Hice_snapshots, Omega.arraykernel); extrapolation_bc=Flat())
 
     n_cplx_matrices = 1
-    realmatrices = [null(Omega) for _ in 
+    realmatrices = [kernelnull(Omega) for _ in 
         eachindex(fieldnames(PreAllocated))[1:end-n_cplx_matrices]]
-    cplxmatrices = [complex.(null(Omega)) for _ in 1:n_cplx_matrices]
+    cplxmatrices = [complex.(kernelnull(Omega)) for _ in 1:n_cplx_matrices]
     prealloc = PreAllocated(realmatrices..., cplxmatrices...)
     
+    # @show typeof(Hice) typeof(bsl_itp)
     return FastIsoTools(viscous_convo, elastic_convo, dz_ss_convo, pfft!, pifft!,
         Hice, bsl_itp, prealloc)
+end
+
+
+function choose_fft_plans(X, use_cuda)
+    if use_cuda
+        pfft! = CUFFT.plan_fft!(complex.(X))
+        pifft! = CUFFT.plan_ifft!(complex.(X))
+    else
+        pfft! = plan_fft!(complex.(X))
+        pifft! = plan_ifft!(complex.(X))
+    end
+    return pfft!, pifft!
 end
