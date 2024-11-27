@@ -1,10 +1,106 @@
 """
+    AbstractOceanSurface
+
+Abstract type for ocean surface. Available subtypes are:
+- [`ConstantOceanSurface`](@ref)
+- [`PiecewiseConstantOceanSurface`](@ref)
+- [`PiecewiseLinearOceanSurface`](@ref), which is only available if `using NLsolve`.
+"""
+abstract type AbstractOceanSurface{T<:AbstractFloat} end
+
+const A_OCEAN_PD = 3.625e14     # Ocean surface (m^2) as in Goelzer (2020, before Eq. (9))
+
+"""
+    ConstantOceanSurface{T}
+
+A `mutable struct` containing:
+- `z`: the BSL at current time step.
+- `A`: the ocean surface at current time step.
+
+The BSL can be updated by running:
+```julia
+os = ConstantOceanSurface{T}()
+update_bsl!(os, delta_V)
+```
+"""
+@kwdef mutable struct ConstantOceanSurface{T} <: AbstractOceanSurface{T}
+    z::T = 0
+    A::T = A_OCEAN_PD
+end
+
+"""
+    PiecewiseConstantOceanSurface{T}
+
+A `mutable struct` containing:
+- `z`: the BSL at current time step.
+- `A`: the ocean surface at current time step.
+- `A_itp`: an interpolator of ocean surface over BSL.
+- `A_pd`: the present-day ocean surface.
+
+The BSL can be updated by running:
+```julia
+os = PiecewiseConstantOceanSurface{T}()
+update_bsl!(os, delta_V)
+```
+"""
+mutable struct PiecewiseConstantOceanSurface{T} <: AbstractOceanSurface{T}
+    z::T
+    A::T
+    A_itp::TimeInterpolation0D{T}
+    A_pd::T
+end
+
+function PiecewiseConstantOceanSurface(; A_ocean_pd = A_OCEAN_PD, z0 = 0.0)
+    z, A = load_oceansurfacefunction(verbose = false)
+    A_itp = TimeInterpolation0D(z, A)
+    return PiecewiseConstantOceanSurface(z0, A_itp(z0), A_itp, A_ocean_pd)
+end
+
+"""
+    PiecewiseLinearOceanSurface{T}
+
+A `mutable struct` containing:
+- `z`: the BSL at current time step.
+- `A`: the ocean surface at current time step.
+- `A_itp`: an interpolator of ocean surface over BSL.
+- `A_pd`: the present-day ocean surface.
+- `residual`: residual of the nonlinear equation solved numerically.
+
+The BSL can be updated by running:
+```julia
+using NLsolve
+os = PiecewiseLinearOceanSurface{T}()
+update_bsl!(os, delta_V)
+```
+
+Note that, unlike [`ConstantOceanSurface`](@ref) and [`PiecewiseConstantOceanSurface`](@ref), this will only work if `using NLsolve`.
+"""
+mutable struct PiecewiseLinearOceanSurface{T} <: AbstractOceanSurface{T}
+    z::T
+    A::T
+    A_itp::TimeInterpolation0D{T}
+    A_pd::T
+    residual::T
+end
+
+function update_bsl!(os::ConstantOceanSurface{T}, delta_V::T) where {T<:AbstractFloat}
+    os.z_k += delta_V / os.A_k
+    return nothing
+end
+
+function update_bsl!(os::PiecewiseConstantOceanSurface{T}, delta_V::T) where {T<:AbstractFloat}
+    os.z += delta_V / os.A
+    os.A = os.A_itp(os.z)
+    return nothing
+end
+
+"""
     OceanSurfaceChange(; z0 = 0.0)
 
-Return a `mutable struct OceanSurfaceChange` containing:
-- `z_k`: the GMSL at current time step `k`.
+A `mutable struct` containing:
+- `z_k`: the BSL at current time step `k`.
 - `A_k`: the ocean surface at current time step `k`.
-- `z`: a vector of GMSL values used as knots for interpolation.
+- `z`: a vector of BSL values used as knots for interpolation.
 - `A`: a vector of ocean surface values used as knots for interpolation.
 - `A_itp`: an interpolator of ocean surface over depth. Bias-free for present-day.
 - `A_pd`: the present-day ocean surface.
@@ -34,49 +130,8 @@ function OceanSurfaceChange(; T = Float64, A_ocean_pd = T(3.625e14), z0 = T(0.0)
 end
 
 function (osc::OceanSurfaceChange{T})(delta_V::T) where {T<:AbstractFloat}
-    scr!(Vresidual, z) = surfacechange_residual!(Vresidual, z, osc.z_k, osc.A_itp,
-        delta_V)
-    mcp_opts = (reformulation = :smooth, autodiff = :forward, iterations = 100_000,
-        ftol = 1e-5, xtol = 1e-5)
-
-    # Update ocean surface within reasonable bounds defined by z_max_update and
-    # only if sea-level contribution is nonzero.
     if delta_V != 0
-        if delta_V > 0
-            sol = mcpsolve(scr!, [osc.z_k], [maximum(osc.z)], [osc.z_k]; mcp_opts...)
-        elseif delta_V < 0
-            sol = mcpsolve(scr!, [minimum(osc.z)], [osc.z_k], [osc.z_k]; mcp_opts...)
-        end
-
-        surfacechange_residual!(osc, sol.zero[1], delta_V)
-
-        # Residual must be less than 10 μm sea level in piecewise linear approximation.
-        # Otherwise, use piecewise constant approximation = very rare exception.
-        if osc.residual < 1e-5 * osc.A_pd
-            osc.z_k = sol.zero[1]
-            osc.A_k = osc.A_itp(osc.z_k)
-        else
-            osc.z_k += delta_V / osc.A_itp(osc.z_k)
-            osc.A_k = osc.A_itp(osc.z_k)
-        end
+        osc.z_k += delta_V / osc.A_itp(osc.z_k)
+        osc.A_k = osc.A_itp(osc.z_k)
     end
-end
-
-
-"""
-    surfacechange_residual!(osc, z, delta_V)
-    surfacechange_residual!(Vresidual, z, z_k, A_itp, delta_V)
-
-Update the residual of the piecewise linear approximation, used to solve the
-sea-level/ocean-surface nonlinearity.
-"""
-function surfacechange_residual!(Vresidual::Vector, z::Vector, z_k::T,
-    A_itp, delta_V::T) where {T<:AbstractFloat}
-    Vresidual[1] = (z[1] - z_k) * mean([A_itp(z[1]), A_itp(z_k)]) - delta_V
-end
-
-function surfacechange_residual!(osc::OceanSurfaceChange{T}, z::T, delta_V::T) where
-    {T<:AbstractFloat}
-    osc.residual = (z - osc.z_k) * mean([osc.A_itp(z), osc.A_itp(osc.z_k)]) - delta_V
-    return nothing
 end
