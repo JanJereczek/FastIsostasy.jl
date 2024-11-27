@@ -26,7 +26,6 @@ preallocated arrays.
 struct FastIsoTools{
     T<:AbstractFloat,
     M<:KernelMatrix{T},
-    MM<:KernelMatrix{Float64},
     C<:ComplexMatrix{T},
     FP<:ForwardPlan{T},
     IP<:InversePlan{T},
@@ -37,10 +36,7 @@ struct FastIsoTools{
     dz_ss_convo::InplaceConvolution{T, M, C, FP, IP}
     pfft!::FP
     pifft!::IP
-    Hice::Interpolations.Extrapolation{MM, 1,
-        Interpolations.GriddedInterpolation{MM, 1, Vector{M},
-        Gridded{Linear{Throw{OnGrid}}}, Tuple{Vector{T}}},
-        Gridded{Linear{Throw{OnGrid}}}, Flat{Nothing}}
+    Hice::TimeInterpolation2D{T, M}
     bsl::Interpolations.Extrapolation{T, 1,
         Interpolations.GriddedInterpolation{T, 1, Vector{T},
         Gridded{Linear{Throw{OnGrid}}}, Tuple{Vector{T}}},
@@ -77,10 +73,8 @@ function FastIsoTools(
     # FFT plans depening on CPU vs. GPU usage
     pfft!, pifft! = choose_fft_plans(Omega.K, Omega.use_cuda)
 
-    # rhog = p.uppermantle_density .* c.g
-    Hice = linear_interpolation(t_Hice_snapshots,
-        kernelpromote(Hice_snapshots, Omega.arraykernel); extrapolation_bc=Flat())
-
+    Hice = TimeInterpolation2D(
+        t_Hice_snapshots, kernelpromote(Hice_snapshots, Omega.arraykernel))
     n_cplx_matrices = 1
     realmatrices = [kernelnull(Omega) for _ in 
         eachindex(fieldnames(PreAllocated))[1:end-n_cplx_matrices]]

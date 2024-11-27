@@ -39,7 +39,6 @@ struct FastIsoProblem{
     T<:AbstractFloat,
     L<:Matrix{T},
     M<:KernelMatrix{T},
-    MM<:KernelMatrix{Float64},
     B<:BoolMatrix,
     C<:ComplexMatrix{T},
     FP<:ForwardPlan{T},
@@ -50,7 +49,7 @@ struct FastIsoProblem{
     c::PhysicalConstants{T}
     p::LayeredEarth{T, M}
     opts::SolverOptions
-    tools::FastIsoTools{T, M, MM, C, FP, IP}
+    tools::FastIsoTools{T, M, C, FP, IP}
     ref::ReferenceState{T, M, B}
     now::CurrentState{T, M, B}
     ncout::NetcdfOutput{Float32}
@@ -117,7 +116,10 @@ function FastIsoProblem(
     tools = FastIsoTools(Omega, c, p, t_Hice_snapshots, Hice_snapshots, bsl_itp)
 
     # Initialise the reference state
-    H_ice_0, bsl_0 = tools.Hice(t_out[1]), tools.bsl(t_out[1])
+    H_ice_0 = kernelnull(Omega)
+    piecewise_linear_interpolate!(H_ice_0, t_out[1], tools.Hice)
+    # H_ice_0 = tools.Hice(t_out[1])
+    bsl_0 = tools.bsl(t_out[1])
     u_0, ue_0, z_ss_0, b_0, H_ice_0 = kernelpromote([u_0, ue_0,
         z_ss_0, b_0, H_ice_0], Omega.arraykernel)
 
@@ -170,11 +172,10 @@ end
 
 Solve the isostatic adjustment problem defined in `fip::FastIsoProblem`.
 """
-function solve!(fip::FastIsoProblem{T, L, M, MM, B, C, FP, IP}) where {
+function solve!(fip::FastIsoProblem{T, L, M, B, C, FP, IP}) where {
     T<:AbstractFloat,
     L<:Matrix{T},
     M<:KernelMatrix{T},
-    MM<:KernelMatrix{Float64},
     B<:BoolMatrix,
     C<:ComplexMatrix{T},
     FP<:ForwardPlan{T},
@@ -193,7 +194,7 @@ function solve!(fip::FastIsoProblem{T, L, M, MM, B, C, FP, IP}) where {
     (length(fip.ncout.filename) > 3) && write_nc!(fip.ncout, fip.now, fip.now.k)
     prob = ODEProblem(update_diagnostics!, fip.now.u, extrema(fip.out.t), fip)
     nc_callback = DiscreteCallback(nc_condition, nc_affect!)
-    solve(prob, fip.opts.diffeq.alg, reltol=fip.opts.diffeq.reltol, saveat=[],
+    solve(prob, fip.opts.diffeq.alg, reltol=fip.opts.diffeq.reltol, saveat=fip.out.t,
         tstops=fip.out.t, callback=nc_callback)
     fip.ncout.computation_time += time()-t1
     return nothing
@@ -242,6 +243,7 @@ end
 """
 function init_integrator(fip::FastIsoProblem)
     prob, _, _ = init_problem(fip)
-    integrator = init(prob, fip.opts.diffeq.alg, reltol=fip.opts.diffeq.reltol, saveat=[])
+    integrator = init(prob, fip.opts.diffeq.alg, reltol=fip.opts.diffeq.reltol,
+        saveat=fip.out.t)
     return integrator
 end

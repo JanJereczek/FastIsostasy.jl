@@ -4,12 +4,11 @@
 Update all the diagnotisc variables, i.e. all fields of `fip.now` apart
 from the displacement, which requires an integrator.
 """
-function update_diagnostics!(dudt::M, u::M, fip::FastIsoProblem{T, L, M, MM, B, C, FP, IP},
+function update_diagnostics!(dudt::M, u::M, fip::FastIsoProblem{T, L, M, B, C, FP, IP},
     t::T) where {
         T<:AbstractFloat,
         L<:Matrix{T},
         M<:KernelMatrix{T},
-        MM<:KernelMatrix{Float64},
         B<:BoolMatrix,
         C<:ComplexMatrix{T},
         FP<:ForwardPlan{T},
@@ -24,7 +23,8 @@ function update_diagnostics!(dudt::M, u::M, fip::FastIsoProblem{T, L, M, MM, B, 
 
     # Update load columns if interpolator available
     if fip.opts.internal_loadupdate
-        fip.now.H_ice .= fip.tools.Hice(t)
+        # fip.now.H_ice .= fip.tools.Hice(t)
+        piecewise_linear_interpolate!(fip.now.H_ice, t, fip.tools.Hice)
         @. fip.now.H_af = max(fip.now.H_ice + min.(fip.now.b - fip.now.z_ss, 0), 0) *
             (fip.c.rho_seawater / fip.c.rho_ice)
         update_loadcolumns!(fip)
@@ -34,9 +34,11 @@ function update_diagnostics!(dudt::M, u::M, fip::FastIsoProblem{T, L, M, MM, B, 
     columnanom_load!(fip)
 
     # As integration requires smaller time steps than diagnostics,
-    # only update diagnostics every fip.opts.dt_diagnostics
-    if (((t - fip.ncout.t[fip.now.k]) / fip.opts.dt_diagnostics) >= fip.now.countupdates) ||
-        t ≈ fip.ncout.t[fip.now.k + 1]
+    # only update diagnostics every fip.opts.dt_diagnostics or fip.ncout.t
+    update_diagnostics = (((t - fip.ncout.t[fip.now.k]) / fip.opts.dt_diagnostics) >=
+        fip.now.countupdates) || t ≈ fip.ncout.t[fip.now.k + 1]
+
+    if update_diagnostics
         # if elastic update placed after dz_ss, worse match with (Spada et al. 2011)
         update_elasticresponse!(fip)
         columnanom_litho!(fip)
@@ -77,11 +79,10 @@ end
 
 Update the displacement rate `dudt` of the viscous response according to LV-ELVA.
 """
-function lv_elva!(dudt::M, u::M, fip::FastIsoProblem{T, L, M, MM, B, C, FP, IP}, t::T) where {
+function lv_elva!(dudt::M, u::M, fip::FastIsoProblem{T, L, M, B, C, FP, IP}, t::T) where {
     T<:AbstractFloat,
     L<:Matrix{T},
     M<:KernelMatrix{T},
-    MM<:KernelMatrix{Float64},
     B<:BoolMatrix,
     C<:ComplexMatrix{T},
     FP<:ForwardPlan{T},
@@ -94,7 +95,7 @@ function lv_elva!(dudt::M, u::M, fip::FastIsoProblem{T, L, M, MM, B, C, FP, IP},
     @. P.fftrhs /= Omega.pseudodiff
     fip.tools.pifft! * P.fftrhs
     dudt .= real.(P.fftrhs)
-    dudt .*= SECONDS_PER_YEAR
+    dudt .*= fip.c.seconds_per_year
 
     apply_bc!(dudt, fip.tools.prealloc.buffer_x, fip.Omega.bc_matrix, fip.Omega.nbc)
 
@@ -106,11 +107,10 @@ end
 
 Update the displacement rate `dudt` of the viscous response according to ELRA.
 """
-function elra!(dudt::M, u::M, fip::FastIsoProblem{T, L, M, MM, B, C, FP, IP}, t::T) where {
+function elra!(dudt::M, u::M, fip::FastIsoProblem{T, L, M, B, C, FP, IP}, t::T) where {
     T<:AbstractFloat,
     L<:Matrix{T},
     M<:KernelMatrix{T},
-    MM<:KernelMatrix{Float64},
     B<:BoolMatrix,
     C<:ComplexMatrix{T},
     FP<:ForwardPlan{T},
@@ -134,11 +134,10 @@ end
 
 Update the right-hand side of the deformation equation.
 """
-function update_deformation_rhs!(fip::FastIsoProblem{T, L, M, MM, B, C, FP, IP}, u::M) where {
+function update_deformation_rhs!(fip::FastIsoProblem{T, L, M, B, C, FP, IP}, u::M) where {
     T<:AbstractFloat,
     L<:Matrix{T},
     M<:KernelMatrix{T},
-    MM<:KernelMatrix{Float64},
     B<:BoolMatrix,
     C<:ComplexMatrix{T},
     FP<:ForwardPlan{T},
@@ -214,11 +213,10 @@ end
 Update the elastic response by convoluting the Green's function with the load anom.
 To use coefficients differing from [^Farrell1972], see [FastIsoTools](@ref).
 """
-function update_elasticresponse!(fip::FastIsoProblem{T, L, M, MM, B, C, FP, IP}) where {
+function update_elasticresponse!(fip::FastIsoProblem{T, L, M, B, C, FP, IP}) where {
     T<:AbstractFloat,
     L<:Matrix{T},
     M<:KernelMatrix{T},
-    MM<:KernelMatrix{Float64},
     B<:BoolMatrix,
     C<:ComplexMatrix{T},
     FP<:ForwardPlan{T},
