@@ -180,7 +180,8 @@ const DEFAULT_LITHO_YOUNGMODULUS = 6.6e10
 const DEFAULT_LITHO_POISSONRATIO = 0.28
 const DEFAULT_LITHO_THICKNESS = 88e3
 const DEFAULT_RHO_UPPERMANTLE = 3.4e3
-const DEFAULT_TAU = 855.0
+const DEFAULT_MANTLE_POISSONRATIO = 0.28
+const DEFAULT_MANTLE_TAU = 855.0
 
 struct ELRA{T} <: RelaxedEarthModel{T}
     rho_litho::T
@@ -198,7 +199,7 @@ function ELRA(;
     litho_poissonratio::T = DEFAULT_LITHO_POISSONRATIO,
     litho_thickness::T = DEFAULT_LITHO_THICKNESS,
     rho_uppermantle::T = DEFAULT_RHO_UPPERMANTLE,
-    tau::T = DEFAULT_TAU,
+    tau::T = DEFAULT_MANTLE_TAU,
 ) where T<:AbstractFloat
     litho_rigidity = get_rigidity(litho_thickness, litho_youngmodulus, litho_poissonratio)
     return ELRA(rho_litho, litho_youngmodulus, litho_poissonratio,
@@ -323,14 +324,13 @@ end
 function LayeredEarth(
     Omega::ComputationDomain{T, L, M};
     layer_boundaries::A = T.([88e3, 400e3]),
-    layer_viscosities::B = T.([1e19, 1e21]),    # (Pa*s) (Bueler 2007, Ivins 2022, Fig 12 WAIS)
-    litho_youngmodulus::T = T(6.6e10),          # (N/m^2)
-    litho_poissonratio::T = T(0.28),
-    mantle_poissonratio::T = T(0.28),
-    tau::T = T(years2seconds(855.0)),
-    rho_uppermantle::T = T(3.4e3),                 # Mean density of topmost upper mantle (kg m^-3)
-    rho_litho::T = T(3.2e3),                       # Mean density of lithosphere (kg m^-3)
-    layering::AbstractLayering{T} = UniformLayering{T}(),
+    layer_viscosities::B = T.([1e19, 1e21]),        # (Pa*s) (Bueler 2007, Ivins 2022, Fig 12 WAIS)
+    litho_youngmodulus::T = DEFAULT_LITHO_YOUNGMODULUS,              # (N/m^2)
+    litho_poissonratio::T = DEFAULT_LITHO_POISSONRATIO,
+    mantle_poissonratio::T = DEFAULT_MANTLE_POISSONRATIO,
+    tau::T = DEFAULT_MANTLE_TAU,
+    rho_uppermantle::T = DEFAULT_RHO_UPPERMANTLE,   # Mean density of topmost upper mantle (kg m^-3)
+    rho_litho::T = DEFAULT_RHO_LITHO,               # Mean density of lithosphere (kg m^-3)
 ) where {
     T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T},
     A<:Union{Vector{T}, Array{T, 3}},
