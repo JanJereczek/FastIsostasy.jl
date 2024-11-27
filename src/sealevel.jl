@@ -1,3 +1,12 @@
+abstract type AbstractSealevelModel end
+
+struct RegionalSealevelModel <: AbstractSealevelModel
+end
+
+struct GlobalSealevelModel <: AbstractSealevelModel
+end
+
+
 """
     update_dz_ss!(fip::FastIsoProblem)
 
@@ -5,11 +14,9 @@ Update the SSH perturbation `dz_ss` by convoluting the Green's function with the
 """
 function update_dz_ss!(fip::FastIsoProblem)
 
-    # fip.tools.prealloc.buffer_x .= mass_anom(fip)
     @. fip.tools.prealloc.buffer_x = mass_anom(fip.Omega.A, fip.now.columnanoms.full)
     samesize_conv!(fip.now.dz_ss, fip.tools.prealloc.buffer_x,
         fip.tools.dz_ss_convo, fip.Omega)
-    # fip.now.dz_ss .= samesize_conv(mass_anom(fip), fip.tools.dz_ss_convo, fip.Omega)
     return nothing
 end
 
@@ -124,11 +131,10 @@ function update_maskocean!(fip)
     @. fip.now.maskocean = fip.now.maskocean .& not.(fip.now.maskgrounded)
 end
 
-function update_bedrock!(fip::FastIsoProblem{T, L, M, MM, B, C, FP, IP}, u::M) where {
+function update_bedrock!(fip::FastIsoProblem{T, L, M, B, C, FP, IP}, u::M) where {
     T<:AbstractFloat,
     L<:Matrix{T},
     M<:KernelMatrix{T},
-    MM<:KernelMatrix{Float64},
     B<:BoolMatrix,
     C<:ComplexMatrix{T},
     FP<:ForwardPlan{T},
@@ -198,7 +204,7 @@ sea water, as in [goelzer-brief-2020](@cite) (eq. 10).
 """
 function update_V_den!(fip::FastIsoProblem)
     density_factor = fip.c.rho_ice / fip.c.rho_water - fip.c.rho_ice / fip.c.rho_seawater
-    fip.now.V_den = sum( (fip.now.H_ice .- fip.ref.H_ice) .* density_factor .* fip.Omega.A )
+    fip.now.V_den = sum( (fip.now.H_ice .- fip.ref.H_ice) .* fip.Omega.A ) * density_factor
     return nothing
 end
 
