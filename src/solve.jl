@@ -118,7 +118,6 @@ function FastIsoProblem(
     # Initialise the reference state
     H_ice_0 = kernelnull(Omega)
     piecewise_linear_interpolate!(H_ice_0, t_out[1], tools.Hice)
-    # H_ice_0 = tools.Hice(t_out[1])
     bsl_0 = tools.bsl(t_out[1])
     u_0, ue_0, z_ss_0, b_0, H_ice_0 = kernelpromote([u_0, ue_0,
         z_ss_0, b_0, H_ice_0], Omega.arraykernel)
@@ -181,26 +180,30 @@ function solve!(fip::FastIsoProblem{T, L, M, B, C, FP, IP}) where {
     FP<:ForwardPlan{T},
     IP<:InversePlan{T}}
 
-    if !(fip.opts.internal_loadupdate)
-        error("`solve!` does not support external updating of the load. Use `step!` instead.")
-    end
-
-    if fip.opts.deformation_model == :lv_elra
-        throw(ArgumentError("LV-ELRA is not implemented yet."))
-    end
-    
+    init_problem!(fip)
     t1 = time()
-    update_diagnostics!(fip.now.dudt, fip.now.u, fip, fip.out.t[1])
-    (length(fip.ncout.filename) > 3) && write_nc!(fip.ncout, fip.now, fip.now.k)
     prob = ODEProblem(update_diagnostics!, fip.now.u, extrema(fip.out.t), fip)
     nc_callback = DiscreteCallback(nc_condition, nc_affect!)
-    solve(prob, fip.opts.diffeq.alg, reltol=fip.opts.diffeq.reltol, saveat=fip.out.t,
-        tstops=fip.out.t, callback=nc_callback)
-    fip.ncout.computation_time += time()-t1
+    solve(prob, fip.opts.diffeq.alg, reltol=fip.opts.diffeq.reltol,
+        saveat=fip.out.t[end:end], tstops=fip.out.t, callback=nc_callback)
+    fip.ncout.computation_time = time()-t1
     return nothing
 end
 
-function init_problem(fip::FastIsoProblem)
+
+"""
+    init_integrator(fip)
+"""
+function init_integrator(fip::FastIsoProblem)
+    init_problem!(fip)
+    prob = ODEProblem(update_diagnostics!, fip.now.u, extrema(fip.out.t), fip)
+    nc_callback = DiscreteCallback(nc_condition, nc_affect!)
+    integrator = init(prob, fip.opts.diffeq.alg, reltol=fip.opts.diffeq.reltol,
+        saveat=fip.out.t[end:end], tstops=fip.out.t, callback=nc_callback)
+    return integrator
+end
+
+function init_problem!(fip::FastIsoProblem)
     if !(fip.opts.internal_loadupdate)
         error("`solve!` does not support external updating of the load. Use `step!` instead.")
     end
@@ -209,12 +212,9 @@ function init_problem(fip::FastIsoProblem)
         throw(ArgumentError("LV-ELRA is not implemented yet."))
     end
     
-    t1 = time()
     update_diagnostics!(fip.now.dudt, fip.now.u, fip, fip.out.t[1])
     (length(fip.ncout.filename) > 3) && write_nc!(fip.ncout, fip.now, fip.now.k)
-    prob = ODEProblem(update_diagnostics!, fip.now.u, extrema(fip.out.t), fip)
-    nc_callback = DiscreteCallback(nc_condition, nc_affect!)
-    return prob, nc_callback, t1
+    return nothing
 end
 
 nc_condition(_, t, integrator) = t in integrator.p.out.t
@@ -236,14 +236,4 @@ function nc_affect!(integrator)
     if !(integrator.p.out isa MinimalOutput)
         write_out!(integrator.p.out, integrator.p.now, integrator.p.now.k)
     end
-end
-
-"""
-    init_integrator(fip)
-"""
-function init_integrator(fip::FastIsoProblem)
-    prob, _, _ = init_problem(fip)
-    integrator = init(prob, fip.opts.diffeq.alg, reltol=fip.opts.diffeq.reltol,
-        saveat=fip.out.t)
-    return integrator
 end
