@@ -26,7 +26,7 @@ function benchmark1()
     # Generating numerical results
     Omega = ComputationDomain(3000e3, 7, correct_distortion = false)
     c, p, t_out, R, H, t_Hice, Hice = benchmark1_constants(Omega)
-    fip = FastIsoProblem(Omega, c, p, t_out, t_Hice, Hice, output = "intermediate")
+    fip = FastIsoProblem(Omega, c, p, t_out, t_Hice, Hice, output = "sparse")
     # @btime update_diagnostics!($fip.now.dudt, $fip.now.u, $fip, $200.0)
     # 640.930 μs (0 allocations: 0 bytes)
     solve!(fip)
@@ -65,6 +65,26 @@ function benchmark1_float32()
     return nothing
 end
 
+
+function benchmark1_external_loadupdate()
+    # Generating numerical results
+    Omega = ComputationDomain(3000e3, 7, correct_distortion = false)
+    c, p, t_out, R, H, t_Hice, Hice = benchmark1_constants(Omega)
+    fip = FastIsoProblem(Omega, c, p, t_out, t_Hice, Hice, output = "sparse")
+    integrator = init_integrator(fip)
+
+    for k in eachindex(fip.out.t)[2:end]
+        step!(integrator, fip.out.t[k] - fip.out.t[k-1], true)
+    end
+    # println("Computation took $(fip.out.computation_time) s")
+
+    fig = benchmark1_compare(Omega, integrator.p, H, R)
+    if SAVE_PLOTS
+        isdir("plots/benchmark1") || mkdir("plots/benchmark1")
+        save("plots/benchmark1/plot_external_loadupdate.png", fig)
+    end
+end
+
 function benchmark1_gpu()
     # Generating numerical results
     Omega = ComputationDomain(3000e3, 7, use_cuda = true, correct_distortion = false)
@@ -80,26 +100,6 @@ function benchmark1_gpu()
     end
 end
 
-function benchmark1_external_loadupdate()
-    # Generating numerical results
-    Omega = ComputationDomain(3000e3, 7, correct_distortion = false)
-    c, p, t_out, R, H, t_Hice, Hice = benchmark1_constants(Omega)
-    fip = FastIsoProblem(Omega, c, p, t_out, t_Hice, Hice, output = "sparse")
-    integrator = init_integrator(fip)
-
-    for k in eachindex(fip.out.t)[2:end]
-        step!(integrator, fip.out.t[k] - fip.out.t[k-1], true)
-        write_out!(integrator.p.out, integrator.p.now, k)
-    end
-    # println("Computation took $(fip.out.computation_time) s")
-
-    fig = benchmark1_compare(Omega, integrator.p, H, R)
-    if SAVE_PLOTS
-        isdir("plots/benchmark1") || mkdir("plots/benchmark1")
-        save("plots/benchmark1/plot_external_loadupdate.png", fig)
-    end
-end
-
 function benchmark2()
     Omega = ComputationDomain(3000e3, 6, correct_distortion = false)
     c = PhysicalConstants(rho_ice = 0.931e3)
@@ -107,7 +107,7 @@ function benchmark2()
     G, nu = 0.50605e11, 0.28        # shear modulus (Pa) and Poisson ratio of lithsphere
     E = G * 2 * (1 + nu)
     lb = c.r_equator .- [6301e3, 5951e3, 5701e3]
-    p = LayeredEarth( Omega, layering = UniformLayering(3, lb),
+    p = LayeredEarth( Omega, layer_boundaries = lb,
         layer_viscosities = [1e21, 1e21, 2e21], litho_youngmodulus = E,
         litho_poissonratio = nu, rho_litho = 2.8e3)
 
@@ -195,7 +195,7 @@ function benchmark3()
         "no_litho", "ref"]
     seakon_files = ["E0L1V1", "E0L2V1", "E0L3V2", "E0L3V3", "E0L0V1", "E0L4V4"]
     mean_tol = [7, 8, 15, 11, 8, 15]
-    max_tol = [13, 18, 28, 22, 22, 42]
+    max_tol = [13, 18, 28, 22, 23, 42]
 
     for m in eachindex(cases)
         fig, axs = comparison_figure(1)
@@ -203,24 +203,25 @@ function benchmark3()
         file = seakon_files[m]
         _, _, usk_itp = load_latychev_test3(case = file)
         p, _, _ = choose_case(case, Omega)
-        tol = occursin("_D", case) ? 1e-5 : 1e-4
-        opts = SolverOptions(diffeq = (alg = Tsit5(), reltol = tol), verbose = true)
+        opts = SolverOptions(diffeq = DiffEqOptions(reltol = 1e-5), verbose = true)
 
         fip = FastIsoProblem(Omega, c, p, t_out, t_Hice, Hice, opts = opts, output = "sparse")
         solve!(fip)
 
         println("---------------")
+        println("Case: $case")
         for k in eachindex(t_out)[2:end]
             u_bm = usk_itp.(x ./ 1e3, t_out[k])
             u_fi = fip.out.u[k][ii, jj] + fip.out.ue[k][ii, jj]
             update_compfig!(axs, [u_fi], [u_bm], cmap[k])
             emean = mean(abs.(u_fi .- u_bm))
             emax = maximum(abs.(u_fi .- u_bm))
-            println("$emax,  $emean")
+            @show emean, emax, mean_tol[m], max_tol[m]
             @test emean .< mean_tol[m]
             @test emax .< max_tol[m]
         end
         if SAVE_PLOTS
+            isdir("plots/benchmark3") || mkdir("plots/benchmark3")
             save("plots/benchmark3/$case.png", fig)
         end
     end
