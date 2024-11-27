@@ -8,7 +8,6 @@ using FastGaussQuadrature: gausslegendre
 using FFTW: fft, ifft, plan_fft!, plan_ifft!, cFFTWPlan
 using LinearAlgebra: Diagonal, det, diagm, norm
 using NetCDF
-using NLsolve: mcpsolve
 using OrdinaryDiffEqTsit5: init, Tsit5, ODEProblem, solve, DiscreteCallback
 using ParallelStencil: ParallelStencil, @init_parallel_stencil, @parallel,
                        @parallel_indices
@@ -29,6 +28,7 @@ include("domain.jl")
 include("constants.jl")
 include("layering.jl")
 include("convolution.jl")
+include("interpolations.jl")
 include("tools.jl")
 include("adaptive_ocean.jl")
 include("state.jl")
@@ -54,7 +54,7 @@ export PhysicalConstants, ReferenceEarthModel
 
 # layering.jl
 export AbstractLayering, UniformLayering, ParallelLayering, EqualizedLayering
-export FoldedLayering, get_layer_boundaries
+export FoldedLayering, get_layer_boundaries, interpolate2layers
 export LayeredEarth
 
 # convolution.jl
