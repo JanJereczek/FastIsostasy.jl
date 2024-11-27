@@ -27,9 +27,11 @@ function benchmark1()
     Omega = ComputationDomain(3000e3, 7, correct_distortion = false)
     c, p, t_out, R, H, t_Hice, Hice = benchmark1_constants(Omega)
     fip = FastIsoProblem(Omega, c, p, t_out, t_Hice, Hice, output = "intermediate")
+    # @btime update_diagnostics!($fip.now.dudt, $fip.now.u, $fip, $200.0)
+    # 640.930 μs (0 allocations: 0 bytes)
     solve!(fip)
     
-    # println("Computation took $(fip.out.computation_time) s")
+    println("Computation took $(fip.ncout.computation_time) s")
     fig = benchmark1_compare(Omega, fip, H, R)
     if SAVE_PLOTS
         isdir("plots/benchmark1") || mkdir("plots/benchmark1")
@@ -40,7 +42,7 @@ end
 function benchmark1_float32()
     T = Float32
     Omega = ComputationDomain(3000f3, 7, correct_distortion = false)
-    c = PhysicalConstants(type = T)
+    c = PhysicalConstants{T}()
     p = LayeredEarth(Omega, rho_litho = 0f0)
     t_out = T.([0.0, 100.0, 500.0, 1500.0, 5000.0, 10_000.0, 50_000.0])
     
@@ -53,6 +55,8 @@ function benchmark1_float32()
     Hice = [zeros(T, Omega.Nx, Omega.Ny), Hcylinder, Hcylinder]
     fip = FastIsoProblem(Omega, c, p, t_out, t_Hice, Hice, output = "sparse")
     solve!(fip)
+    println("Computation took $(fip.ncout.computation_time) s")
+
     fig = benchmark1_compare(Omega, fip, H, R)
     if SAVE_PLOTS
         isdir("plots/benchmark1") || mkdir("plots/benchmark1")

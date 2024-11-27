@@ -13,7 +13,7 @@ include("helpers/plot.jl")
 include("../publication_v1.0/test3/cases.jl")
 include("../publication_v1.0/helpers_computation.jl")
 
-const SAVE_PLOTS = false
+const SAVE_PLOTS = true
 
 include("test_adaptive_ocean.jl")
 include("test_convolution.jl")
