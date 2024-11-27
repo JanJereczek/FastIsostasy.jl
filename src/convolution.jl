@@ -8,9 +8,12 @@ struct InplaceConvolution{T<:AbstractFloat, M<:KernelMatrix{T}, C<:ComplexMatrix
     buffer::M
     Nx::Int
     Ny::Int
+    filler::T
 end
 
-function InplaceConvolution(kernel::M, use_cuda::Bool) where {T<:AbstractFloat, M<:KernelMatrix{T}}
+function InplaceConvolution(kernel::M, use_cuda::Bool; filler::T = T(0)) where
+    {T<:AbstractFloat, M<:KernelMatrix{T}}
+
     Nx, Ny = size(kernel)
     kernel_fft = zeros(Complex{T}, 2*Nx-1, 2*Ny-1)
     buffer = zeros(T, 2*Nx-1, 2*Ny-1)
@@ -22,13 +25,16 @@ function InplaceConvolution(kernel::M, use_cuda::Bool) where {T<:AbstractFloat, 
     pfft!, pifft! = choose_fft_plans(kernel_fft, use_cuda)
     pfft! * kernel_fft
     return InplaceConvolution(pfft!, pifft!, kernel_fft, copy(kernel_fft), real.(kernel_fft),
-        buffer, Nx, Ny)
+        buffer, Nx, Ny, filler)
 end
 
-function (ipconv::InplaceConvolution{T, M, C, FP, IP})(B::M) where {T<:AbstractFloat,
-    M<:KernelMatrix{T}, C<:ComplexMatrix{T}, FP<:ForwardPlan{T}, IP<:InversePlan{T}}
+function convolution!(
+    ipconv::InplaceConvolution{T, M, C, FP, IP},
+    B::M) where {T<:AbstractFloat, M<:KernelMatrix{T},
+    C<:ComplexMatrix{T}, FP<:ForwardPlan{T}, IP<:InversePlan{T}}
+
     (; pfft!, pifft!, kernel_fft, out_fft, out, Nx, Ny) = ipconv
-    out_fft .= 0
+    out_fft .= ipconv.filler #background_value
     view(out_fft, 1:Nx, 1:Ny) .= complex.(B)
     pfft! * out_fft
     out_fft .*= kernel_fft
@@ -42,20 +48,21 @@ end
 
 Perform convolution of `X` with `ipc` and crop the result to the same size as `X`.
 """
-function samesize_conv(X::M, ipc::InplaceConvolution{T, M, C, FP, IP},
-    Omega::ComputationDomain{T, L, M}) where {T<:AbstractFloat, L<:Matrix{T},
-    M<:KernelMatrix{T}, C<:ComplexMatrix{T}, FP<:ForwardPlan{T}, IP<:InversePlan{T}}
-    ipc(X)
-    apply_bc!(ipc.out, Omega.extended_bc_matrix, Omega.extended_nbc)
-    return view(ipc.out,
-        Omega.i1+Omega.convo_offset:Omega.i2+Omega.convo_offset,
-        Omega.j1-Omega.convo_offset:Omega.j2-Omega.convo_offset)
-end
+# function samesize_conv(X::M, ipc::InplaceConvolution{T, M, C, FP, IP},
+#     Omega::ComputationDomain{T, L, M}) where {T<:AbstractFloat, L<:Matrix{T},
+#     M<:KernelMatrix{T}, C<:ComplexMatrix{T}, FP<:ForwardPlan{T}, IP<:InversePlan{T}}
+#     ipc(X)
+#     apply_bc!(ipc.out, Omega.extended_bc_matrix, Omega.extended_nbc)
+#     return view(ipc.out,
+#         Omega.i1+Omega.convo_offset:Omega.i2+Omega.convo_offset,
+#         Omega.j1-Omega.convo_offset:Omega.j2-Omega.convo_offset)
+# end
 
 function samesize_conv!(Y::M, X::M, ipc::InplaceConvolution{T, M, C, FP, IP},
     Omega::ComputationDomain{T, L, M}) where {T<:AbstractFloat, L<:Matrix{T},
     M<:KernelMatrix{T}, C<:ComplexMatrix{T}, FP<:ForwardPlan{T}, IP<:InversePlan{T}}
-    ipc(X)
+    
+    convolution!(ipc, X)
     # @show size(ipc.out) size(ipc.buffer) size(Omega.extended_bc_matrix) Omega.extended_nbc
     apply_bc!(ipc.out, ipc.buffer, Omega.extended_bc_matrix, Omega.extended_nbc)
     Y .= view(ipc.out,
@@ -66,28 +73,29 @@ end
 
 # Just a helper for blur! Not performant but we only blur at preprocessing
 # so we do not care :)
-function samesize_conv(X::M, Y::M, Omega::ComputationDomain) where
-    {T<:AbstractFloat, M<:KernelMatrix{T}}
+function samesize_conv(X::L, Y::M, Omega::ComputationDomain, filler::T;
+    on_gpu = false) where {T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}}
     (; i1, i2, j1, j2, convo_offset) = Omega
-    ipc = InplaceConvolution(X, false)
+    ipc = InplaceConvolution(X, on_gpu; filler=filler)
     return samesize_conv(Y, ipc, i1, i2, j1, j2, convo_offset)
 end
-function samesize_conv(Y, ipc, i1, i2, j1, j2, convo_offset)
-    ipc(Y)
+function samesize_conv(Y, ipc::InplaceConvolution, i1, i2, j1, j2, convo_offset)
+    convolution!(ipc, Y)
     return view(ipc.out, i1+convo_offset:i2+convo_offset,
         j1-convo_offset:j2-convo_offset)
 end
 
-function blur(X::AbstractMatrix, Omega::ComputationDomain, level::Real)
+function blur(X::AbstractMatrix, Omega::ComputationDomain, level::Real, filler;
+    on_gpu::Bool = false)
     if not(0 <= level <= 1)
         error("Blurring level must be a value between 0 and 1.")
     end
     T = eltype(X)
-    sigma = diagm([(level * Omega.Wx)^2, (level * Omega.Wy)^2])
-    kernel = T.(generate_gaussian_field(Omega, 0.0, [0.0, 0.0], 1.0, sigma))
+    sigma = T.(diagm([(level * Omega.Wx)^2, (level * Omega.Wy)^2]))
+    kernel = generate_gaussian_field(Omega, T(0.0), T.([0.0, 0.0]), T(1.0), sigma)
     kernel ./= sum(kernel)
     # return copy(samesize_conv(Omega.arraykernel(kernel), Omega.arraykernel(X), Omega))
-    return samesize_conv(kernel, X, Omega)
+    return samesize_conv(kernel, X, Omega, filler; on_gpu = on_gpu)
 end
 
 """
