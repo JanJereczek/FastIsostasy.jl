@@ -58,7 +58,7 @@ export FoldedLayering, get_layer_boundaries, interpolate2layers
 export LayeredEarth
 
 # convolution.jl
-export InplaceConvolution
+export InplaceConvolution, convolution!, blur, samesize_conv, samesize_conv!
 
 # tools.jl
 export FastIsoTools
@@ -80,7 +80,7 @@ export years2seconds, seconds2years, m_per_sec2mm_per_yr
 export lon360tolon180
 export reinit_structs_cpu, meshgrid, kernelcollect
 
-export get_quad_coeffs, get_r, gauss_distr, generate_gaussian_field, samesize_conv, blur
+export get_quad_coeffs, get_r, gauss_distr, generate_gaussian_field
 export uniform_ice_cylinder, stereo_ice_cylinder, stereo_ice_cap
 export remake!, null, not, cudainfo, kernelpromote, kernelnull
 
