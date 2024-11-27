@@ -47,11 +47,12 @@ function get_effective_viscosity(
 
     # Recursion has to start with half space = n-th layer:
     effective_viscosity = layer_viscosities[:, :, end]
-    channel_viscosity = layer_viscosities[:, :, end - 1]
-    channel_thickness = layer_boundaries[:, :, end] - layer_boundaries[:, :, end - 1]
-    viscosity_ratio = channel_viscosity ./ effective_viscosity
 
     if size(layer_viscosities, 3) > 1
+        channel_viscosity = layer_viscosities[:, :, end - 1]
+        channel_thickness = layer_boundaries[:, :, end] - layer_boundaries[:, :, end - 1]
+        viscosity_ratio = channel_viscosity ./ effective_viscosity
+        
         @inbounds for l in axes(layer_viscosities, 3)[1:end-1]
             channel_viscosity .= layer_viscosities[:, :, end - l]
             channel_thickness .= layer_boundaries[:, :, end - l + 1] -
