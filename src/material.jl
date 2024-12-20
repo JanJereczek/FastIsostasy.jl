@@ -38,7 +38,8 @@ function get_effective_viscosity(
     Omega::ComputationDomain{T, M},
     layer_viscosities::Array{T, 3},
     layer_boundaries::Array{T, 3},
-    mantle_poissonratio::T;
+    mantle_poissonratio::T,
+    characteristic_loadlength::T;
     correct_shearmoduluschange::Bool = true,
 ) where {T<:AbstractFloat, M<:KernelMatrix{T}}
 
@@ -59,7 +60,7 @@ function get_effective_viscosity(
                 layer_boundaries[:, :, end - l]
             viscosity_ratio = channel_viscosity ./ effective_viscosity
             effective_viscosity .*= three_layer_scaling(Omega, viscosity_ratio,
-                channel_thickness)
+                channel_thickness, characteristic_loadlength)
         end
     end
     effective_compressible_viscosity = effective_viscosity .* compressibility_scaling
@@ -88,11 +89,12 @@ function three_layer_scaling(
     Omega::ComputationDomain{T, M},
     visc_ratio::Matrix{T},
     channel_thickness::Matrix{T},
+    characteristic_loadlength::T,
 ) where {T<:AbstractFloat, M<:KernelMatrix{T}}
 
     # kappa is the wavenumber of the harmonic load. (see Cathles 1975, p.43)
-    # we assume this is related to the size of the domain!
-    kappa = T(π) / mean([Omega.Wx, Omega.Wy])
+    # for the default value, we assume this is related to the size of the domain!
+    kappa = T(π) / characteristic_loadlength
 
     C = cosh.(channel_thickness .* kappa)
     S = sinh.(channel_thickness .* kappa)
