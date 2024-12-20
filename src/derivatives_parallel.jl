@@ -34,15 +34,28 @@ function dxy!(ux::M, uxy::M, u::M, Dx::M, Dy::M, Nx::Int, Ny::Int) where
     @parallel (1:Nx) flatbcy!(uxy, Ny)
     return nothing
 end
+
+function dx!(du, u, Dx, Nx, Ny)
+    @parallel (2:Nx-1, 1:Ny) dx!(du, u, Dx)
+    @parallel (1:Ny) flatbcx!(du, Nx)
+    return nothing
+end
+
+function dy!(du, u, Dy, Nx, Ny)
+    @parallel (1:Nx, 2:Ny-1) dy!(du, u, Dy)
+    @parallel (1:Nx) flatbcy!(du, Ny)
+    return nothing
+end
+
 @parallel_indices (ix, iy) function dx!(du, u, Dx)
     du[ix, iy] = (u[ix+1, iy] - u[ix-1, iy]) / (2 * Dx[ix, iy])
     return nothing
 end
+
 @parallel_indices (ix, iy) function dy!(du, u, Dy)
     du[ix, iy] = (u[ix, iy+1] - u[ix, iy-1]) / (2 * Dy[ix, iy])
     return nothing
 end
-
 
 @parallel_indices (iy) function flatbcx!(u, Nx)
     u[1, iy] = u[2, iy]
