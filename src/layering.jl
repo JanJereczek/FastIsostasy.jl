@@ -325,12 +325,13 @@ function LayeredEarth(
     Omega::ComputationDomain{T, L, M};
     layer_boundaries::A = T.([88e3, 400e3]),
     layer_viscosities::B = T.([1e19, 1e21]),        # (Pa*s) (Bueler 2007, Ivins 2022, Fig 12 WAIS)
-    litho_youngmodulus::T = DEFAULT_LITHO_YOUNGMODULUS,              # (N/m^2)
-    litho_poissonratio::T = DEFAULT_LITHO_POISSONRATIO,
-    mantle_poissonratio::T = DEFAULT_MANTLE_POISSONRATIO,
-    tau::T = DEFAULT_MANTLE_TAU,
-    rho_uppermantle::T = DEFAULT_RHO_UPPERMANTLE,   # Mean density of topmost upper mantle (kg m^-3)
-    rho_litho::T = DEFAULT_RHO_LITHO,               # Mean density of lithosphere (kg m^-3)
+    litho_youngmodulus::T = T(DEFAULT_LITHO_YOUNGMODULUS),              # (N/m^2)
+    litho_poissonratio::T = T(DEFAULT_LITHO_POISSONRATIO),
+    mantle_poissonratio::T = T(DEFAULT_MANTLE_POISSONRATIO),
+    tau::T = T(DEFAULT_MANTLE_TAU),
+    rho_uppermantle::T = T(DEFAULT_RHO_UPPERMANTLE),   # Mean density of topmost upper mantle (kg m^-3)
+    rho_litho::T = T(DEFAULT_RHO_LITHO),               # Mean density of lithosphere (kg m^-3)
+    characteristic_loadlength::T = mean([Omega.Wx, Omega.Wy]),
 ) where {
     T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T},
     A<:Union{Vector{T}, Array{T, 3}},
@@ -355,7 +356,7 @@ function LayeredEarth(
 
     litho_rigidity = get_rigidity.(litho_thickness, litho_youngmodulus, litho_poissonratio)
     effective_viscosity = get_effective_viscosity(Omega, layer_viscosities,
-        layer_boundaries, mantle_poissonratio)
+        layer_boundaries, mantle_poissonratio, characteristic_loadlength)
 
     litho_thickness, litho_rigidity, effective_viscosity = kernelpromote(
         [litho_thickness, litho_rigidity, effective_viscosity], Omega.arraykernel)
