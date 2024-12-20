@@ -13,15 +13,15 @@ mutable struct NetcdfOutput{T<:AbstractFloat}
     computation_time::T
 end
 
-function NetcdfOutput(Omega::ComputationDomain{T, L, M}, t, filename;
-    varsfi3D = interm_varsfi3D,
-    varnames3D = interm_varnames3D,
-    varlongnames3D = interm_varlongnames3D,
-    varunits3D = interm_varunits3D,
-    varsfi1D = interm_varsfi1D,
-    varnames1D = interm_varnames1D,
-    varlongnames1D = interm_varlongnames1D,
-    varunits1D = interm_varunits1D,
+function NetcdfOutput(Omega::ComputationDomain{T, L, M}, t, filename, preconfig;
+    varsfi3D = select_preconfig(preconfig, interm_varsfi3D, sparse_varsfi3D),
+    varnames3D = select_preconfig(preconfig, interm_varnames3D, sparse_varnames3D),
+    varlongnames3D = select_preconfig(preconfig, interm_varlongnames3D, sparse_varlongnames3D),
+    varunits3D = select_preconfig(preconfig, interm_varunits3D, sparse_varunits3D),
+    varsfi1D = select_preconfig(preconfig, interm_varsfi1D, sparse_varsfi1D),
+    varnames1D = select_preconfig(preconfig, interm_varnames1D, sparse_varnames1D),
+    varlongnames1D = select_preconfig(preconfig, interm_varlongnames1D, sparse_varlongnames1D),
+    varunits1D = select_preconfig(preconfig, interm_varunits1D, sparse_varunits1D),
     Tout = Float32,
 ) where {T<:AbstractFloat, L, M}
 
@@ -36,6 +36,7 @@ function NetcdfOutput(Omega::ComputationDomain{T, L, M}, t, filename;
     tdim = NcDim("t", t, tatts)
 
     vars = NcVar[]
+    # @show varsfi3D, varnames3D, varlongnames3D, varunits3D, varsfi1D, varnames1D, varlongnames1D, varunits1D
     for i in eachindex(varnames3D)
         varatts = Dict("longname" => varlongnames3D[i], "units" => varunits3D[i])
         push!(vars, NcVar(varnames3D[i], [xdim, ydim, tdim]; atts = varatts, t = Tout))
@@ -57,20 +58,44 @@ function NetcdfOutput(Omega::ComputationDomain{T, L, M}, t, filename;
         varsfi1D, varnames1D, Tout(0.0))
 end
 
-interm_varsfi3D = [:u, :ue, :dudt, :b, :dz_ss, :z_ss, :maskgrounded, :H_ice,
-    :H_water, :u_x, :u_y]
-interm_varnames3D = ["u", "ue", "dudt", "b", "dz_ss", "z_ss",
-    "maskgrounded", "Hice", "Hwater", "u_x", "u_y"]
-interm_varlongnames3D = ["Viscous displacement", "Elastic displacement",
-    "Viscous displacement rate", "Bedrock position", "SSH parturbation",
-    "Sea-surface height (SSH)", "Mask for grounded ice", "Ice thickness", "Water depth",
-    "Horizontal displacement in x", "Horizontal displacement in y"]
-interm_varunits3D = ["m", "m", "m/yr", "m", "m", "m", "1", "m", "m", "m", "m"]
+function select_preconfig(preconfig, intermediate, sparse)
+    if preconfig == :intermediate
+        return intermediate
+    elseif preconfig == :sparse
+        return sparse
+    else
+        error("Unknown preconfiguration")
+    end
+end
 
-interm_varsfi1D = [:bsl]
-interm_varnames1D = ["bsl"]
-interm_varlongnames1D = ["Barystatic sea level"]
-interm_varunits1D = ["m"]
+const sparse_varsfi3D = [:u, :ue, :b, :z_ss]
+const interm_varsfi3D = vcat(sparse_varsfi3D, [:dudt, :dz_ss, :maskgrounded, :H_ice,
+    :H_water, :u_x, :u_y])
+
+const sparse_varnames3D = ["u", "ue", "b", "z_ss"]
+const interm_varnames3D = vcat(sparse_varnames3D, ["dudt", "dz_ss",
+    "maskgrounded", "Hice", "Hwater", "u_x", "u_y"])
+
+const sparse_varlongnames3D = ["Viscous displacement", "Elastic displacement",
+    "Bedrock elevation", "Sea-surface height (SSH)"]
+const interm_varlongnames3D = vcat(sparse_varlongnames3D, 
+    ["Viscous displacement rate", "SSH perturbation",
+    "Mask for grounded ice", "Ice thickness", "Water depth",
+    "Horizontal displacement in x", "Horizontal displacement in y"])
+
+const sparse_varunits3D = ["m", "m", "m", "m"]
+const interm_varunits3D = vcat(sparse_varunits3D, ["m/yr", "m", "1", "m",
+    "m", "m", "m"])
+
+const sparse_varsfi1D = [:bsl]
+const sparse_varnames1D = ["bsl"]
+const sparse_varlongnames1D = ["Barystatic sea level"]
+const sparse_varunits1D = ["m"]
+
+const interm_varsfi1D = sparse_varsfi1D
+const interm_varnames1D = sparse_varnames1D
+const interm_varlongnames1D = sparse_varlongnames1D
+const interm_varunits1D = sparse_varunits1D
 
 function write_nc!(ncout::NetcdfOutput{Tout}, state::CurrentState{T, M}, k::Int) where {
     T<:AbstractFloat, M<:KernelMatrix{T}, Tout<:AbstractFloat}

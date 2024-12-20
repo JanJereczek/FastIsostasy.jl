@@ -101,6 +101,7 @@ function FastIsoProblem(
     bsl_itp = zero_bsl(T, t_out),
     maskactive::BoolMatrix = kernelcollect(Omega.K .< Inf, Omega),
     output_file::String = "",
+    nc_preconfig::Symbol = :sparse,
     output::String = "nothing",
 ) where {T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}}
 
@@ -135,7 +136,7 @@ function FastIsoProblem(
     ref = ReferenceState(u_0, ue_0, H_ice_0, H_af_0, H_water_0, b_0, bsl_0, z_ss_0,
         T(0.0), T(0.0), T(0.0), maskgrounded, maskocean, Omega.arraykernel(maskactive))
     now = CurrentState(Omega, ref)
-    ncout = NetcdfOutput(Omega, t_out, output_file)
+    ncout = NetcdfOutput(Omega, t_out, output_file, nc_preconfig)
 
     if output == "sparse"
         out = SparseOutput(Omega, t_out)
@@ -224,10 +225,8 @@ function nc_affect!(integrator)
     println("Saving at $(integrator.t) years...")
     fip.now.k += 1
 
-    if fip.Omega.use_cuda == false
-        thinplate_horizontal_displacement!(fip.now.u_x, fip.now.u_y,
-            fip.now.u + fip.now.ue, fip.p.litho_thickness, fip.Omega)
-    end
+    thinplate_horizontal_displacement!(fip.now.u_x, fip.now.u_y,
+        fip.now.u + fip.now.ue, fip.p.litho_thickness, fip.Omega)
     
     if length(integrator.p.ncout.filename) > 3
         write_nc!(integrator.p.ncout, integrator.p.now, integrator.p.now.k)
