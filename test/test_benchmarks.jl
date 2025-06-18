@@ -52,7 +52,7 @@ function benchmark1_float32()
 
     R, H = 1000f3, 1f3
     Hcylinder = uniform_ice_cylinder(Omega, R, H)
-    Hice = [zeros(T, Omega.Nx, Omega.Ny), Hcylinder, Hcylinder]
+    Hice = [zeros(T, Omega.nx, Omega.ny), Hcylinder, Hcylinder]
     fip = FastIsoProblem(Omega, c, p, t_out, t_Hice, Hice, output = "sparse")
     solve!(fip)
     println("Computation took $(fip.ncout.computation_time) s")
@@ -92,7 +92,7 @@ function benchmark1_gpu()
     fip = FastIsoProblem(Omega, c, p, t_out, t_Hice, Hice, output = "sparse")
     solve!(fip)
     # println("Computation took $(fip.ncout.computation_time) s")
-    Omega_cpu = ComputationDomain(Omega.Wx, Omega.Wy, Omega.Nx, Omega.Ny, use_cuda = false)
+    Omega_cpu = ComputationDomain(Omega.Wx, Omega.Wy, Omega.nx, Omega.ny, use_cuda = false)
 
     fig = benchmark1_compare(Omega_cpu, fip, H, R)
     if SAVE_PLOTS
@@ -114,7 +114,7 @@ function benchmark2()
     εt = 1e-8
     t_out = [-εt, 0.0, 1.0, 1e3, 2e3, 5e3, 1e4, 1e5]
     t_Hice = [-εt, 0.0, t_out[end]]
-    b = fill(1e6, Omega.Nx, Omega.Ny)
+    b = fill(1e6, Omega.nx, Omega.ny)
     ii, jj = slice_along_x(Omega)
     theta = rad2deg.(Omega.Theta[ii, jj])
     ii = ii[theta .< 20]
@@ -135,7 +135,7 @@ function benchmark2()
             Hmax = 1500.0
             H_ice = stereo_ice_cap(Omega, alpha, Hmax)
         end
-        Hice = [zeros(Omega.Nx, Omega.Ny), H_ice, H_ice]
+        Hice = [zeros(Omega.nx, Omega.ny), H_ice, H_ice]
         mask = collect(H_ice .> 1e-8)
         fip = FastIsoProblem(Omega, c, p, t_out, t_Hice, Hice, opts = opts, b_0 = b,
             maskactive = mask, output = "intermediate")
@@ -180,7 +180,7 @@ function benchmark3()
     R = 1000e3                  # ice disc radius (m)
     H = 1e3                     # ice disc thickness (m)
     Hcylinder = uniform_ice_cylinder(Omega, R, H)
-    Hice = [zeros(Omega.Nx, Omega.Ny), Hcylinder, Hcylinder]
+    Hice = [zeros(Omega.nx, Omega.ny), Hcylinder, Hcylinder]
 
     t_out = [0.0, 100.0, 500.0, 1500.0, 5000.0, 10_000.0, 50_000.0]
     εt = 1e-8

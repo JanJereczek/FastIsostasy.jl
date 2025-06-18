@@ -9,7 +9,7 @@ function benchmark5()
     R, H = 1000e3, 1e3
     Hcylinder = uniform_ice_cylinder(Omega, R, H, center = [-1000e3, -1000e3])
     t_Hice = [0.0, 1e-8, t_out[end]]
-    Hice = [zeros(Omega.Nx, Omega.Ny), Hcylinder, Hcylinder]
+    Hice = [zeros(Omega.nx, Omega.ny), Hcylinder, Hcylinder]
     t_out = collect(1e3:1e3:2e3)
     fip = FastIsoProblem(Omega, c, p, t_out, t_Hice, Hice, output = "sparse")
     solve!(fip)

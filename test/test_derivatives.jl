@@ -31,7 +31,7 @@ X, Y, K = Omega.X, Omega.Y, Omega.K
 # F = sin.(X) + 4 .* cos.(Y) + (X .* Y) .^ 2
 F = 2 .* X .+ 4 .* Y
 dF = real.(ifft(Omega.pseudodiff .* fft(F)))
-# x = Omega.X[:, Omega.My]
+# x = Omega.X[:, Omega.my]
 
 OmegaK = ComputationDomain(3000e3, 7, correct_distortion = true)
 X, Y, K = OmegaK.X, OmegaK.Y, OmegaK.K

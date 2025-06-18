@@ -8,7 +8,7 @@ function benchmark1_constants(Omega)
 
     R, H = 1000e3, 1e3
     Hcylinder = uniform_ice_cylinder(Omega, R, H)
-    Hice = [zeros(Omega.Nx, Omega.Ny), Hcylinder, Hcylinder]
+    Hice = [zeros(Omega.nx, Omega.ny), Hcylinder, Hcylinder]
 
     return c, p, t_out, R, H, t_Hice, Hice
 end

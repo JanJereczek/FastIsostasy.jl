@@ -1,14 +1,14 @@
 # See derivatives.jl for multiple dispatch
 function update_second_derivatives!(uxx::M, uyy::M, ux::M, uxy::M, u1::M, u2::M, u3::M,
     Omega::ComputationDomain{T, L, M}) where {T<:AbstractFloat, L<:Matrix{T}, M<:CuMatrix{T}}
-    dxx!(uxx, u1, Omega.Dx, Omega.Nx, Omega.Ny)
-    dyy!(uyy, u2, Omega.Dy, Omega.Nx, Omega.Ny)
-    dxy!(ux, uxy, u3, Omega.Dx, Omega.Dy, Omega.Nx, Omega.Ny)
+    dxx!(uxx, u1, Omega.Dx, Omega.nx, Omega.ny)
+    dyy!(uyy, u2, Omega.Dy, Omega.nx, Omega.ny)
+    dxy!(ux, uxy, u3, Omega.Dx, Omega.Dy, Omega.nx, Omega.ny)
 end
 
-function dxx!(uxx::M, u::M, Dx::M, Nx::Int, Ny::Int) where {T<:AbstractFloat, M<:CuMatrix{T}}
-    @parallel (2:Nx-1, 1:Ny) dxx!(uxx, u, Dx)
-    @parallel (1:Ny) flatbcx!(uxx, Nx)
+function dxx!(uxx::M, u::M, Dx::M, nx::Int, ny::Int) where {T<:AbstractFloat, M<:CuMatrix{T}}
+    @parallel (2:nx-1, 1:ny) dxx!(uxx, u, Dx)
+    @parallel (1:ny) flatbcx!(uxx, nx)
     return nothing
 end
 @parallel_indices (ix, iy) function dxx!(du, u, Dx)
@@ -16,9 +16,9 @@ end
     return nothing
 end
 
-function dyy!(uyy::M, u::M, Dy::M, Nx::Int, Ny::Int) where {T<:AbstractFloat, M<:CuMatrix{T}}
-    @parallel (1:Nx, 2:Ny-1) dyy!(uyy, u, Dy)
-    @parallel (1:Nx) flatbcy!(uyy, Ny)
+function dyy!(uyy::M, u::M, Dy::M, nx::Int, ny::Int) where {T<:AbstractFloat, M<:CuMatrix{T}}
+    @parallel (1:nx, 2:ny-1) dyy!(uyy, u, Dy)
+    @parallel (1:nx) flatbcy!(uyy, ny)
     return nothing
 end
 @parallel_indices (ix, iy) function dyy!(du, u, Dy)
@@ -26,24 +26,24 @@ end
     return nothing
 end
 
-function dxy!(ux::M, uxy::M, u::M, Dx::M, Dy::M, Nx::Int, Ny::Int) where
+function dxy!(ux::M, uxy::M, u::M, Dx::M, Dy::M, nx::Int, ny::Int) where
     {T<:AbstractFloat, M<:CuMatrix{T}}
-    @parallel (2:Nx-1, 1:Ny) dx!(ux, u, Dx)
-    @parallel (1:Ny) flatbcx!(ux, Nx)
-    @parallel (1:Nx, 2:Ny-1) dy!(uxy, ux, Dy)
-    @parallel (1:Nx) flatbcy!(uxy, Ny)
+    @parallel (2:nx-1, 1:ny) dx!(ux, u, Dx)
+    @parallel (1:ny) flatbcx!(ux, nx)
+    @parallel (1:nx, 2:ny-1) dy!(uxy, ux, Dy)
+    @parallel (1:nx) flatbcy!(uxy, ny)
     return nothing
 end
 
-function dx!(du, u, Dx, Nx, Ny)
-    @parallel (2:Nx-1, 1:Ny) dx!(du, u, Dx)
-    @parallel (1:Ny) flatbcx!(du, Nx)
+function dx!(du, u, Dx, nx, ny)
+    @parallel (2:nx-1, 1:ny) dx!(du, u, Dx)
+    @parallel (1:ny) flatbcx!(du, nx)
     return nothing
 end
 
-function dy!(du, u, Dy, Nx, Ny)
-    @parallel (1:Nx, 2:Ny-1) dy!(du, u, Dy)
-    @parallel (1:Nx) flatbcy!(du, Ny)
+function dy!(du, u, Dy, nx, ny)
+    @parallel (1:nx, 2:ny-1) dy!(du, u, Dy)
+    @parallel (1:nx) flatbcy!(du, ny)
     return nothing
 end
 
@@ -57,14 +57,14 @@ end
     return nothing
 end
 
-@parallel_indices (iy) function flatbcx!(u, Nx)
+@parallel_indices (iy) function flatbcx!(u, nx)
     u[1, iy] = u[2, iy]
-    u[Nx, iy] = u[Nx-1, iy]
+    u[nx, iy] = u[nx-1, iy]
     return nothing
 end
 
-@parallel_indices (ix) function flatbcy!(u, Ny)
+@parallel_indices (ix) function flatbcy!(u, ny)
     u[ix, 1] = u[ix, 2]
-    u[ix, Ny] = u[ix, Ny-1]
+    u[ix, ny] = u[ix, ny-1]
     return nothing
 end

@@ -32,6 +32,6 @@ end
 ################################################
 
 function slice_along_x(Omega)
-    Nx, Ny = Omega.Nx, Omega.Ny
-    return Nx÷2:Nx, Ny÷2
+    nx, ny = Omega.nx, Omega.ny
+    return nx÷2:nx, ny÷2
 end

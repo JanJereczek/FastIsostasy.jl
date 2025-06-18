@@ -40,18 +40,18 @@ end
 
 not(x::Bool) = !x
 Base.fill(x::Real, fip::FastIsoProblem) = fill(x, fip.Omega)
-Base.fill(x::Real, Omega::ComputationDomain) = Omega.arraykernel(fill(x, Omega.Nx, Omega.Ny))
+Base.fill(x::Real, Omega::ComputationDomain) = Omega.arraykernel(fill(x, Omega.nx, Omega.ny))
 
 approx_in(item, collection, tol) = any(abs.(collection .- item) .< tol)
 
-function corner_matrix(T, Nx, Ny)
-    M = zeros(T, Nx, Ny)
-    M[1, 1], M[Nx, 1], M[1, Ny], M[Nx, Ny] = T.([1, 1, 1, 1])
+function corner_matrix(T, nx, ny)
+    M = zeros(T, nx, ny)
+    M[1, 1], M[nx, 1], M[1, ny], M[nx, ny] = T.([1, 1, 1, 1])
     return M
 end
 
 """
-    matrify(x, Nx, Ny)
+    matrify(x, nx, ny)
 
 Generate a vector of constant matrices from a vector of constants.
 """
@@ -59,11 +59,11 @@ function matrify(x::Vector{<:Real}, N::Int)
     return matrify(x, N, N)
 end
 
-function matrify(x::Vector{T}, Nx::Int, Ny::Int) where {T<:Real}
-    # X = Array{T, 3}(undef, Nx, Ny, length(x))
-    X = zeros(T, Nx, Ny, length(x))
+function matrify(x::Vector{T}, nx::Int, ny::Int) where {T<:Real}
+    # X = Array{T, 3}(undef, nx, ny, length(x))
+    X = zeros(T, nx, ny, length(x))
     @inbounds for i in eachindex(x)
-        X[:, :, i] = fill(x[i], Nx, Ny)
+        X[:, :, i] = fill(x[i], nx, ny)
     end
     return X
 end
@@ -99,8 +99,8 @@ function generate_gaussian_field(
     z_peak::T,
     sigma::Matrix{T},
 ) where {T<:AbstractFloat, M<:Matrix{T}}
-    if Omega.Nx == Omega.Ny
-        N = Omega.Nx
+    if Omega.nx == Omega.ny
+        N = Omega.nx
     else
         error("Automated generation of Gaussian parameter fields only supported for" *
             "square domains.")
@@ -196,7 +196,7 @@ end
 #####################################################
 
 function null(Omega::ComputationDomain{T, L, M}) where {T, L, M}
-    return zeros(T, Omega.Nx, Omega.Ny)
+    return zeros(T, Omega.nx, Omega.ny)
 end
 
 kernelnull(Omega) = Omega.arraykernel(null(Omega))
@@ -234,7 +234,7 @@ for post-processing purposes.
 function reinit_structs_cpu(Omega::ComputationDomain{T, L, M}, p::LayeredEarth{T, M}
     ) where {T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}}
 
-    Omega_cpu = ComputationDomain(Omega.Wx, Omega.Wy, Omega.Nx, Omega.Ny, use_cuda = false)
+    Omega_cpu = ComputationDomain(Omega.Wx, Omega.Wy, Omega.nx, Omega.ny, use_cuda = false)
     p_cpu = LayeredEarth(
         Omega_cpu;
         layer_boundaries = Array(p.layer_boundaries),
@@ -276,8 +276,8 @@ end
 # BC utils
 #####################################################
 
-function periodic_extension(M::Matrix{T}, Nx::Int, Ny::Int) where {T<:AbstractFloat}
-    M_periodic = zeropad_extension(M, Nx, Ny)
+function periodic_extension(M::Matrix{T}, nx::Int, ny::Int) where {T<:AbstractFloat}
+    M_periodic = zeropad_extension(M, nx, ny)
     M_periodic[1, 2:end-1] .= M[end, :]
     M_periodic[end, 2:end-1] .= M[1, :]
     M_periodic[2:end-1, 1] .= M[:, end]
@@ -285,8 +285,8 @@ function periodic_extension(M::Matrix{T}, Nx::Int, Ny::Int) where {T<:AbstractFl
     return M_periodic
 end
 
-function zeropad_extension(M::Matrix{T}, Nx::Int, Ny::Int) where {T<:AbstractFloat}
-    M_zeropadded = fill(T(0), Nx+2, Ny+2)
+function zeropad_extension(M::Matrix{T}, nx::Int, ny::Int) where {T<:AbstractFloat}
+    M_zeropadded = fill(T(0), nx+2, ny+2)
     M_zeropadded[2:end-1, 2:end-1] .= M
     return M_zeropadded
 end

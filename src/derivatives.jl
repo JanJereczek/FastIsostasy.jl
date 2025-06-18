@@ -19,12 +19,12 @@ end
 function dxx!(du::M, u::M, Omega::ComputationDomain{T, L, M}) where
     {T<:AbstractFloat, L<:Matrix{T}, M<:Matrix{T}}
     @inbounds for j in axes(du, 2)
-        for i in axes(du, 1)[2:Omega.Nx-1]
+        for i in axes(du, 1)[2:Omega.nx-1]
             du[i, j] = (u[i+1, j] - 2*u[i, j] + u[i-1, j]) / (Omega.Dx[i, j] ^ 2)
         end
         du[1, j] = (u[3, j] - 2*u[2, j] + u[1, j]) / (Omega.Dx[1, j] ^ 2)
-        du[Omega.Nx, j] = (u[Omega.Nx, j] - 2*u[Omega.Nx-1, j] + u[Omega.Nx-2, j]) /
-            (Omega.Dx[Omega.Nx, j] ^ 2)
+        du[Omega.nx, j] = (u[Omega.nx, j] - 2*u[Omega.nx-1, j] + u[Omega.nx-2, j]) /
+            (Omega.Dx[Omega.nx, j] ^ 2)
     end
 end
 
@@ -38,12 +38,12 @@ end
 function dyy!(du::M, u::M, Omega::ComputationDomain{T, L, M}) where
     {T<:AbstractFloat, L<:Matrix{T}, M<:Matrix{T}}
     @inbounds for i in axes(du, 1)
-        for j in axes(du, 2)[2:Omega.Ny-1]
+        for j in axes(du, 2)[2:Omega.ny-1]
             du[i, j] = (u[i, j+1] - 2*u[i, j] + u[i, j-1]) / (Omega.Dy[i, j] ^ 2)
         end
         du[i, 1] = (u[i, 3] - 2*u[i, 2] + u[i, 1]) / (Omega.Dy[i, 1] ^ 2)
-        du[i, Omega.Ny] = (u[i, Omega.Ny] - 2*u[i, Omega.Ny-1] + u[i, Omega.Ny-2]) /
-            (Omega.Dy[i, Omega.Ny] ^ 2)
+        du[i, Omega.ny] = (u[i, Omega.ny] - 2*u[i, Omega.ny-1] + u[i, Omega.ny-2]) /
+            (Omega.Dy[i, Omega.ny] ^ 2)
     end
 end
 
@@ -64,22 +64,22 @@ end
 function dx!(du::M, u::M, Omega::ComputationDomain{T, L, M}) where
     {T<:AbstractFloat, L<:Matrix{T}, M<:Matrix{T}}
     @inbounds for j in axes(du, 2)
-        for i in axes(du, 1)[2:Omega.Nx-1]
+        for i in axes(du, 1)[2:Omega.nx-1]
             du[i,j] = (u[i+1, j] - u[i-1, j]) / (2 * Omega.Dx[i, j])
         end
         du[1, j] = (u[2, j] - u[1, j]) / Omega.Dx[1, j]
-        du[Omega.Nx, j] = (u[Omega.Nx, j] - u[Omega.Nx-1, j]) / Omega.Dx[Omega.Nx, j]
+        du[Omega.nx, j] = (u[Omega.nx, j] - u[Omega.nx-1, j]) / Omega.Dx[Omega.nx, j]
     end
 end
 
 function dy!(du::M, u::M, Omega::ComputationDomain{T, L, M}) where
     {T<:AbstractFloat, L<:Matrix{T}, M<:Matrix{T}}
     @inbounds for i in axes(du, 1)
-        for j in axes(du, 2)[2:Omega.Ny-1]
+        for j in axes(du, 2)[2:Omega.ny-1]
             du[i, j] = (u[i,j+1] - u[i,j-1]) / (2 * Omega.Dy[i, j])
         end
         du[i, 1] = (u[i, 2] - u[i, 1]) / Omega.Dy[i, 1]
-        du[i, Omega.Ny] = (u[i, Omega.Ny] - u[i, Omega.Ny-1]) / Omega.Dy[i, Omega.Ny]
+        du[i, Omega.ny] = (u[i, Omega.ny] - u[i, Omega.ny-1]) / Omega.Dy[i, Omega.ny]
     end
 end
 
@@ -91,14 +91,14 @@ end
 
 Compute the matrices representing the differential operators in the fourier space.
 """
-get_differential_fourier(Omega) = get_differential_fourier(Omega.Wx, Omega.Wy, Omega.Nx,
-    Omega.Ny)
+get_differential_fourier(Omega) = get_differential_fourier(Omega.Wx, Omega.Wy, Omega.nx,
+    Omega.ny)
 
-function get_differential_fourier(Wx::T, Wy::T, Nx::Int, Ny::Int) where {T<:Real}
+function get_differential_fourier(Wx::T, Wy::T, nx::Int, ny::Int) where {T<:Real}
     mu_x = π / Wx
     mu_y = π / Wy
-    x_coeffs = mu_x .* fftint(Nx)
-    y_coeffs = mu_y .* fftint(Ny)
+    x_coeffs = mu_x .* fftint(nx)
+    y_coeffs = mu_y .* fftint(ny)
     X_coeffs, Y_coeffs = meshgrid(x_coeffs, y_coeffs)
     harmonic_coeffs = X_coeffs .^ 2 + Y_coeffs .^ 2
     pseudodiff_coeffs = sqrt.(harmonic_coeffs)

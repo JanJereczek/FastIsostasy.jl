@@ -15,11 +15,11 @@ Calculate the Kelvin filter in 2D.
 function get_kei(Omega::ComputationDomain{T, <:Any, <:Any}, L_w) where
     {T<:AbstractFloat}
 
-    (;Nx, Ny, dx, dy) = Omega
-    if Nx != Ny
+    (;nx, ny, dx, dy) = Omega
+    if nx != ny
         error("The Kelvin filter is only implemented for square domains.")
     end
-    n2 = (Nx-1) ÷ 2
+    n2 = (nx-1) ÷ 2
 
     # Load tabulated values and init filt before filling with loop
     rn_vals, kei_vals = load_viscous_kelvin_function(T)

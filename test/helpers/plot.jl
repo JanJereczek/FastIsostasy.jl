@@ -81,7 +81,7 @@ function plot_response(
             width = Relative(0.8),
         )
     end
-    plotname = "plots/test1/2D/$(case)_Nx$(Omega.Nx)_Ny$(Omega.Ny)"
+    plotname = "plots/test1/2D/$(case)_Nx$(Omega.nx)_ny$(Omega.ny)"
     save("$plotname.png", fig)
     save("$plotname.pdf", fig)
     return fig

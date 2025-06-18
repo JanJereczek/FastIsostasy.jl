@@ -1,6 +1,6 @@
 using FastIsostasy
 W = 3000e3      # (m) half-width of the domain Wx = Wy
-n = 7           # implies an Nx x Ny grid with Nx = Ny = 2^n = 128.
+n = 7           # implies an nx x ny grid with nx = ny = 2^n = 128.
 Omega = ComputationDomain(W, n, correct_distortion = true)
 c = PhysicalConstants()
 layering = UniformLayering(2, [88e3, 400e3])
@@ -18,7 +18,7 @@ H = 1e3                                         # ice disc thickness (m)
 Hcylinder = uniform_ice_cylinder(Omega, R, H)   # field representing ice disk
 
 t_Hice = [-εt, 0.0, t_out[end]]                 # ice history = Heaviside at t=0
-Hice = [zeros(Omega.Nx, Omega.Ny), Hcylinder, Hcylinder]
+Hice = [zeros(Omega.nx, Omega.ny), Hcylinder, Hcylinder]
 
 fip = FastIsoProblem(Omega, c, p, t_out, t_Hice, Hice, output = "intermediate")
 @time solve!(fip)
@@ -32,8 +32,8 @@ u_h = sqrt.(u_x.^2 .+ u_y.^2)
 extrema(u_h)
 # Very much in line with Spada (2011) fig 9.
 
-lines(u_x[Omega.Mx:end, Omega.My], color = :black, linewidth = 1)
-lines(u_y[Omega.Mx:end, Omega.My], color = :black, linewidth = 1)
+lines(u_x[Omega.mx:end, Omega.my], color = :black, linewidth = 1)
+lines(u_y[Omega.mx:end, Omega.my], color = :black, linewidth = 1)
 s = 4
 arrows(Omega.x[1:s:end], Omega.y[1:s:end], u_x[1:s:end, 1:s:end],
     u_y[1:s:end, 1:s:end], arrowsize = 3, lengthscale = 1e4,
