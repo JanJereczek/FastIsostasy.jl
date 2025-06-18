@@ -112,10 +112,7 @@ function precompute_bc(bc::DistanceWeightedBC, sp::RegularBCSpace, Omega::Comput
 end
 
 function precompute_bc(bc::DistanceWeightedBC, sp::ExtendedBCSpace, Omega::ComputationDomain)
-    W = border_ones(eltype(Omega.R), 2*Omega.nx-1, 2*Omega.ny-1)
-    W .= W .* Omega.R
-    norm!(W)
-    return OffsetBC(bc.space, bc.x_border, Omega.arraykernel(W))
+    error("DistanceWeightedBC is not implemented for ExtendedBCSpace")
 end
 
 function precompute_bc(bc::MeanBC, sp::RegularBCSpace, Omega::ComputationDomain)
