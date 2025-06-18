@@ -11,7 +11,6 @@ function update_diagnostics!(dudt, u, fip::FastIsoProblem, t)
     # CAUTION: Order really matters here!
 
     # Make sure that integrated viscous displacement satisfies BC.
-    # apply_bc!(u, fip.tools.prealloc.buffer_x, fip.Omega.bc_matrix, fip.Omega.nbc)
     apply_bc!(u, fip.bcs.u)
 
     # Update load columns if interpolator available
@@ -32,6 +31,8 @@ function update_diagnostics!(dudt, u, fip::FastIsoProblem, t)
         fip.now.countupdates) # || t ≈ fip.ncout.t[fip.now.k + 1]
 
     if update_diagnostics
+        # @show t
+
         # if elastic update placed after dz_ss, worse match with (Spada et al. 2011)
         update_elasticresponse!(fip)
         columnanom_litho!(fip)
@@ -51,11 +52,7 @@ function update_diagnostics!(dudt, u, fip::FastIsoProblem, t)
     end
     columnanom_full!(fip)
 
-    if fip.opts.deformation_model == :lv_elva
-        lv_elva!(dudt, u, fip, t)
-    elseif fip.opts.deformation_model == :elra
-        elra!(dudt, u, fip, t)
-    end
+    update_dudt!(dudt, u, fip, t, fip.em)
     fip.now.dudt .= dudt
     columnanom_mantle!(fip)
     update_bedrock!(fip, u)
@@ -68,12 +65,44 @@ end
 #####################################################
 
 """
-    lv_elva!(dudt, u, fip, t)
+    update_dudt!(dudt, u, fip, t, model::EarthModel)
 
-Update the displacement rate `dudt` of the viscous response according to LV-ELVA.
+Update the time derivative of the viscous displacement `dudt` based on an [`EarthModel`](@ref).
 """
-function lv_elva!(dudt, u, fip::FastIsoProblem, t)
+function update_dudt!(dudt, u, fip, t, model::EarthModel)
+    update_dudt!(dudt, u, fip, t, model.rheology, model.lithosphere)
+end
 
+function update_dudt!(dudt, u, fip, t, rheo::RelaxedRheology, lithosphere::LaterallyConstantLithosphere)
+    
+    update_deformation_rhs!(fip, u)
+
+    @. fip.tools.prealloc.buffer_x = - (fip.now.columnanoms.load +
+        fip.now.columnanoms.litho) * fip.c.g * fip.Omega.K ^ 2
+    
+    samesize_conv!(fip.now.u_eq, fip.tools.prealloc.buffer_x,
+        fip.tools.viscous_convo, fip.Omega, fip.bcs.u, fip.bcs.u.space)
+
+    @. dudt = 1 / fip.p.tau * (fip.now.u_eq - fip.now.u)
+    return nothing
+    
+end
+
+function update_dudt!(dudt, u, fip, t, rheo::RelaxedRheology, lithosphere::LaterallyVariableLithosphere)
+    error("Relaxed rheology is not implemented for laterally variable lithosphere.")
+end
+
+function update_dudt!(dudt, u, fip, t, rheo::ViscousRheology, lithosphere::LaterallyConstantLithosphere)
+    error("Viscous rheology is not implemented for laterally constant lithosphere.")
+    # fft(load, t + dt/2)
+    # U_now = fft(u_now)
+    # U_next = (2 * eta * mu * kappa - dt/2*beta) * U_now +
+    #     dt * load
+    # U_next ./= (2 * eta * mu * kappa + dt/2*beta)
+    # u_next = fftinv(U_next)
+end
+
+function update_dudt!(dudt, u, fip, t, rheo::ViscousRheology, lithosphere::LaterallyVariableLithosphere)
     Omega, P = fip.Omega, fip.tools.prealloc
     update_deformation_rhs!(fip, u)
     @. P.fftrhs = complex(P.rhs * Omega.K / (2 * fip.p.effective_viscosity))
@@ -83,37 +112,8 @@ function lv_elva!(dudt, u, fip::FastIsoProblem, t)
     dudt .= real.(P.fftrhs)
     dudt .*= fip.c.seconds_per_year
 
-    # apply_bc!(dudt, fip.tools.prealloc.buffer_x, fip.Omega.bc_matrix, fip.Omega.nbc)
     apply_bc!(dudt, fip.bcs.u)
-
     return nothing
-end
-
-
-function update_dudt!(dudt, u, fip, t, model::LVELVA)
-end
-
-"""
-    elra!(dudt, u, fip, t)
-
-Update the displacement rate `dudt` of the viscous response according to ELRA.
-"""
-function elra!(dudt, u, fip::FastIsoProblem, t)
-
-    update_deformation_rhs!(fip, u)
-
-    @. fip.tools.prealloc.buffer_x = - (fip.now.columnanoms.load +
-        fip.now.columnanoms.litho) * fip.c.g * fip.Omega.K ^ 2
-    
-    samesize_conv!(fip.now.u_eq, fip.tools.prealloc.buffer_x,
-        fip.tools.viscous_convo, fip.Omega, fip.bcs.u, fip.bcs.u.space)
-    # fip.now.u_eq .= samesize_conv( ,
-    #     fip.tools.viscous_convo, fip.Omega)
-    @. dudt = 1 / fip.p.tau * (fip.now.u_eq - fip.now.u)
-    return nothing
-end
-
-function update_dudt!(dudt, u, fip, t, model::ELRA)
 end
 
 """

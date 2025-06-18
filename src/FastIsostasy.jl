@@ -52,11 +52,18 @@ include("elra.jl")
 include("inversion.jl")
 include("coordinates.jl")
 
+# convenience_types.jl
+export EarthModel, AbstractLithosphere, AbstractMantle, AbstractRheology,
+       LaterallyConstantLithosphere, LaterallyVariableLithosphere,
+       LaterallyConstantMantle, LaterallyVariableMantle, RelaxedRheology,
+       ViscousRheology
+
 # domain.jl
 export ComputationDomain
 
 # boundary_conditions.jl
-export CornerBC, BorderBC, DistanceWeightedBC, ProblemBCs
+export CornerBC, BorderBC, DistanceWeightedBC, ProblemBCs, RegularBCSpace,
+       ExtendedBCSpace
 
 # constants.jl
 export PhysicalConstants, ReferenceEarthModel

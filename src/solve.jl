@@ -43,11 +43,16 @@ struct FastIsoProblem{
     C<:ComplexMatrix{T},
     FP<:ForwardPlan{T},
     IP<:InversePlan{T},
-    O<:Output}
+    O<:Output,
+    LL<:AbstractLithosphere,
+    MM<:AbstractMantle,
+    RR<:AbstractRheology,
+}
 
     Omega::ComputationDomain{T, L, M}
     c::PhysicalConstants{T}
     bcs::ProblemBCs{T}
+    em::EarthModel{LL, MM, RR}
     p::LayeredEarth{T, M}
     opts::SolverOptions
     tools::FastIsoTools{T, M, C, FP, IP}
@@ -61,6 +66,7 @@ function FastIsoProblem(
     Omega::ComputationDomain{T, L, M},
     c::PhysicalConstants{T},
     bcs::ProblemBCs,
+    em::EarthModel,
     p::LayeredEarth{T, M},
     t_out::Vector{<:Real};
     kwargs...,
@@ -75,6 +81,7 @@ function FastIsoProblem(
     Omega::ComputationDomain{T, L, M},
     c::PhysicalConstants{T},
     bcs::ProblemBCs,
+    em::EarthModel,
     p::LayeredEarth{T, M},
     t_out::Vector{<:Real},
     Hice::KernelMatrix{T};
@@ -93,6 +100,7 @@ function FastIsoProblem(
     Omega::ComputationDomain{T, L, M},
     c::PhysicalConstants{T},
     bcs::ProblemBCs,
+    em::EarthModel,
     p::LayeredEarth{T, M},
     t_out::Vector{<:Real},
     t_Hice_snapshots::Vector{T},
@@ -143,7 +151,7 @@ function FastIsoProblem(
     else
         out = MinimalOutput(t_out, T[])
     end
-    return FastIsoProblem(Omega, c, bcs, p, opts, tools, ref, now, ncout, out)
+    return FastIsoProblem(Omega, c, bcs, em, p, opts, tools, ref, now, ncout, out)
 end
 
 
