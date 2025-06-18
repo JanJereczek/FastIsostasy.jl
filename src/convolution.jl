@@ -90,7 +90,7 @@ function samesize_conv!(Y::M, X::M, ipc::InplaceConvolution{T, M, C, FP, IP},
     Y .= view(ipc.out,
         Omega.i1+Omega.convo_offset:Omega.i2+Omega.convo_offset,
         Omega.j1-Omega.convo_offset:Omega.j2-Omega.convo_offset)
-    apply_bc!(ipc.out, bc)
+    apply_bc!(Y, bc)
     return nothing
 end
 
