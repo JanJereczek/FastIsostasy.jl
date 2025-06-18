@@ -16,7 +16,7 @@ function update_dz_ss!(fip::FastIsoProblem)
 
     @. fip.tools.prealloc.buffer_x = mass_anom(fip.Omega.A, fip.now.columnanoms.full)
     samesize_conv!(fip.now.dz_ss, fip.tools.prealloc.buffer_x,
-        fip.tools.dz_ss_convo, fip.Omega)
+        fip.tools.dz_ss_convo, fip.Omega, fip.bcs.dz_ss, fip.bcs.dz_ss.space)
     return nothing
 end
 
@@ -68,8 +68,8 @@ function columnanom_full!(fip::FastIsoProblem)
 end
 
 function mass_anom(fip::FastIsoProblem)
-    return fip.Omega.A .* (fip.now.columnanoms.full .-
-        fip.c.rho_seawater .* fip.now.bsl .* fip.now.maskocean .* fip.ref.maskactive )
+    return fip.Omega.A .* (fip.now.columnanoms.full)# .-
+        # fip.c.rho_seawater .* fip.now.bsl .* fip.now.maskocean .* fip.ref.maskactive )
 end
 
 function mass_anom(A, canom_full)

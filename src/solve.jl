@@ -2,8 +2,8 @@
 # Options
 #########################################################
 
-@kwdef struct DiffEqOptions
-    alg::Tsit5 = Tsit5()    # For now we limit the options
+@kwdef struct DiffEqOptions{S<:ODEsolvers}
+    alg::S = Tsit5()    # For now we limit the options
     reltol::Float64 = 1e-3
 end
 
@@ -47,6 +47,7 @@ struct FastIsoProblem{
 
     Omega::ComputationDomain{T, L, M}
     c::PhysicalConstants{T}
+    bcs::ProblemBCs{T}
     p::LayeredEarth{T, M}
     opts::SolverOptions
     tools::FastIsoTools{T, M, C, FP, IP}
@@ -59,6 +60,7 @@ end
 function FastIsoProblem(
     Omega::ComputationDomain{T, L, M},
     c::PhysicalConstants{T},
+    bcs::ProblemBCs,
     p::LayeredEarth{T, M},
     t_out::Vector{<:Real};
     kwargs...,
@@ -66,12 +68,13 @@ function FastIsoProblem(
     # Creating some placeholders in case of an external update of the load.
     t_Hice_snapshots = [extrema(t_out)...]
     Hice_snapshots = [null(Omega), null(Omega)]
-    return FastIsoProblem(Omega, c, p, t_out, t_Hice_snapshots, Hice_snapshots; kwargs...)
+    return FastIsoProblem(Omega, c, bcs, p, t_out, t_Hice_snapshots, Hice_snapshots; kwargs...)
 end
 
 function FastIsoProblem(
     Omega::ComputationDomain{T, L, M},
     c::PhysicalConstants{T},
+    bcs::ProblemBCs,
     p::LayeredEarth{T, M},
     t_out::Vector{<:Real},
     Hice::KernelMatrix{T};
@@ -80,7 +83,7 @@ function FastIsoProblem(
     # Constant interpolator in case viscosity is fixed over time.
     t_Hice_snapshots = [extrema(t_out)...]
     Hice_snapshots = [Hice, Hice]
-    return FastIsoProblem(Omega, c, p, t_out, t_Hice_snapshots, Hice_snapshots; kwargs...)
+    return FastIsoProblem(Omega, c, bcs, p, t_out, t_Hice_snapshots, Hice_snapshots; kwargs...)
 end
 
 zero_bsl(T, t) = linear_interpolation(T.([extrema(t)...]), T.([0.0, 0.0]),
@@ -89,6 +92,7 @@ zero_bsl(T, t) = linear_interpolation(T.([extrema(t)...]), T.([0.0, 0.0]),
 function FastIsoProblem(
     Omega::ComputationDomain{T, L, M},
     c::PhysicalConstants{T},
+    bcs::ProblemBCs,
     p::LayeredEarth{T, M},
     t_out::Vector{<:Real},
     t_Hice_snapshots::Vector{T},
@@ -100,16 +104,11 @@ function FastIsoProblem(
     b_0::KernelMatrix{T} = null(Omega),
     bsl_itp = zero_bsl(T, t_out),
     maskactive::BoolMatrix = kernelcollect(Omega.K .< Inf, Omega),
-    output_file::String = "",
-    nc_preconfig::Symbol = :sparse,
+    ncout::NetcdfOutput = NetcdfOutput(Omega, t_out, ""),
     output::String = "nothing",
 ) where {T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}}
 
-    if !isa(opts.diffeq.alg, Tsit5) && !isa(opts.diffeq.alg, SimpleEuler)
-        error("Provided algorithm for solving ODE is not supported.")
-    end
-
-    if opts.interactive_sealevel & (sum(maskactive) > 0.6 * Omega.Nx * Omega.Ny)
+    if opts.interactive_sealevel & (sum(maskactive) > 0.6 * Omega.nx * Omega.ny)
         error("Mask defining regions of active load must not cover more than 60%"*
             " of the cells when using an interactive sea level.")
     end
@@ -136,7 +135,6 @@ function FastIsoProblem(
     ref = ReferenceState(u_0, ue_0, H_ice_0, H_af_0, H_water_0, b_0, bsl_0, z_ss_0,
         T(0.0), T(0.0), T(0.0), maskgrounded, maskocean, Omega.arraykernel(maskactive))
     now = CurrentState(Omega, ref)
-    ncout = NetcdfOutput(Omega, t_out, output_file, nc_preconfig)
 
     if output == "sparse"
         out = SparseOutput(Omega, t_out)
@@ -145,7 +143,7 @@ function FastIsoProblem(
     else
         out = MinimalOutput(t_out, T[])
     end
-    return FastIsoProblem(Omega, c, p, opts, tools, ref, now, ncout, out)
+    return FastIsoProblem(Omega, c, bcs, p, opts, tools, ref, now, ncout, out)
 end
 
 
@@ -218,11 +216,13 @@ function init_problem!(fip::FastIsoProblem)
     return nothing
 end
 
-nc_condition(_, t, integrator) = t in integrator.p.out.t
+nc_condition(_, t, integrator) = (t in integrator.p.ncout.t) && 
+    (integrator.p.now.k < length(integrator.p.ncout.t))
+
 
 function nc_affect!(integrator)
     fip = integrator.p
-    println("Saving at $(integrator.t) years...")
+    println("Saving at index $(fip.now.k), simulation year $(integrator.t)...")
     fip.now.k += 1
 
     thinplate_horizontal_displacement!(fip.now.u_x, fip.now.u_y,

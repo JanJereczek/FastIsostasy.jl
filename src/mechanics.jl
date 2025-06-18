@@ -4,22 +4,15 @@
 Update all the diagnotisc variables, i.e. all fields of `fip.now` apart
 from the displacement, which requires an integrator.
 """
-function update_diagnostics!(dudt::M, u::M, fip::FastIsoProblem{T, L, M, B, C, FP, IP},
-    t::T) where {
-        T<:AbstractFloat,
-        L<:Matrix{T},
-        M<:KernelMatrix{T},
-        B<:BoolMatrix,
-        C<:ComplexMatrix{T},
-        FP<:ForwardPlan{T},
-        IP<:InversePlan{T}}
+function update_diagnostics!(dudt, u, fip::FastIsoProblem, t)
 
     # @show t, extrema(u), extrema(fip.now.ue)
 
     # CAUTION: Order really matters here!
 
     # Make sure that integrated viscous displacement satisfies BC.
-    apply_bc!(u, fip.tools.prealloc.buffer_x, fip.Omega.bc_matrix, fip.Omega.nbc)
+    # apply_bc!(u, fip.tools.prealloc.buffer_x, fip.Omega.bc_matrix, fip.Omega.nbc)
+    apply_bc!(u, fip.bcs.u)
 
     # Update load columns if interpolator available
     if fip.opts.internal_loadupdate
@@ -36,7 +29,7 @@ function update_diagnostics!(dudt::M, u::M, fip::FastIsoProblem{T, L, M, B, C, F
     # As integration requires smaller time steps than diagnostics,
     # only update diagnostics every fip.opts.dt_diagnostics or fip.ncout.t
     update_diagnostics = (((t - fip.ncout.t[fip.now.k]) / fip.opts.dt_diagnostics) >=
-        fip.now.countupdates) || t ≈ fip.ncout.t[fip.now.k + 1]
+        fip.now.countupdates) # || t ≈ fip.ncout.t[fip.now.k + 1]
 
     if update_diagnostics
         # if elastic update placed after dz_ss, worse match with (Spada et al. 2011)
@@ -79,14 +72,7 @@ end
 
 Update the displacement rate `dudt` of the viscous response according to LV-ELVA.
 """
-function lv_elva!(dudt::M, u::M, fip::FastIsoProblem{T, L, M, B, C, FP, IP}, t::T) where {
-    T<:AbstractFloat,
-    L<:Matrix{T},
-    M<:KernelMatrix{T},
-    B<:BoolMatrix,
-    C<:ComplexMatrix{T},
-    FP<:ForwardPlan{T},
-    IP<:InversePlan{T}}
+function lv_elva!(dudt, u, fip::FastIsoProblem, t)
 
     Omega, P = fip.Omega, fip.tools.prealloc
     update_deformation_rhs!(fip, u)
@@ -97,9 +83,14 @@ function lv_elva!(dudt::M, u::M, fip::FastIsoProblem{T, L, M, B, C, FP, IP}, t::
     dudt .= real.(P.fftrhs)
     dudt .*= fip.c.seconds_per_year
 
-    apply_bc!(dudt, fip.tools.prealloc.buffer_x, fip.Omega.bc_matrix, fip.Omega.nbc)
+    # apply_bc!(dudt, fip.tools.prealloc.buffer_x, fip.Omega.bc_matrix, fip.Omega.nbc)
+    apply_bc!(dudt, fip.bcs.u)
 
     return nothing
+end
+
+
+function update_dudt!(dudt, u, fip, t, model::LVELVA)
 end
 
 """
@@ -107,14 +98,7 @@ end
 
 Update the displacement rate `dudt` of the viscous response according to ELRA.
 """
-function elra!(dudt::M, u::M, fip::FastIsoProblem{T, L, M, B, C, FP, IP}, t::T) where {
-    T<:AbstractFloat,
-    L<:Matrix{T},
-    M<:KernelMatrix{T},
-    B<:BoolMatrix,
-    C<:ComplexMatrix{T},
-    FP<:ForwardPlan{T},
-    IP<:InversePlan{T}}
+function elra!(dudt, u, fip::FastIsoProblem, t)
 
     update_deformation_rhs!(fip, u)
 
@@ -122,11 +106,14 @@ function elra!(dudt::M, u::M, fip::FastIsoProblem{T, L, M, B, C, FP, IP}, t::T) 
         fip.now.columnanoms.litho) * fip.c.g * fip.Omega.K ^ 2
     
     samesize_conv!(fip.now.u_eq, fip.tools.prealloc.buffer_x,
-        fip.tools.viscous_convo, fip.Omega)
+        fip.tools.viscous_convo, fip.Omega, fip.bcs.u, fip.bcs.u.space)
     # fip.now.u_eq .= samesize_conv( ,
     #     fip.tools.viscous_convo, fip.Omega)
     @. dudt = 1 / fip.p.tau * (fip.now.u_eq - fip.now.u)
     return nothing
+end
+
+function update_dudt!(dudt, u, fip, t, model::ELRA)
 end
 
 """
@@ -134,28 +121,26 @@ end
 
 Update the right-hand side of the deformation equation.
 """
-function update_deformation_rhs!(fip::FastIsoProblem{T, L, M, B, C, FP, IP}, u::M) where {
-    T<:AbstractFloat,
-    L<:Matrix{T},
-    M<:KernelMatrix{T},
-    B<:BoolMatrix,
-    C<:ComplexMatrix{T},
-    FP<:ForwardPlan{T},
-    IP<:InversePlan{T}}
+function update_deformation_rhs!(fip::FastIsoProblem, u)
 
     Omega, P = fip.Omega, fip.tools.prealloc
     @. P.rhs = -fip.c.g * fip.now.columnanoms.full
     update_second_derivatives!(P.buffer_xx, P.buffer_yy, P.buffer_x,
         P.buffer_xy, u, Omega)
-    @. P.Mxx = -fip.p.litho_rigidity * (P.buffer_xx +
-        fip.p.litho_poissonratio * P.buffer_yy)
-    @. P.Myy = -fip.p.litho_rigidity * (P.buffer_yy +
-        fip.p.litho_poissonratio * P.buffer_xx)
-    @. P.Mxy = -fip.p.litho_rigidity * (1 - fip.p.litho_poissonratio) * P.buffer_xy
+    # @. P.Mxx = -fip.p.litho_rigidity * (P.buffer_xx +
+    #     fip.p.litho_poissonratio * P.buffer_yy)
+    # @. P.Myy = -fip.p.litho_rigidity * (P.buffer_yy +
+    #     fip.p.litho_poissonratio * P.buffer_xx)
+    # @. P.Mxy = -fip.p.litho_rigidity * (1 - fip.p.litho_poissonratio) * P.buffer_xy
 
+    @. P.Mxx = -fip.p.litho_rigidity *
+        muladd(fip.p.litho_poissonratio, P.buffer_yy, P.buffer_xx)
+    @. P.Myy = -fip.p.litho_rigidity *
+        muladd(fip.p.litho_poissonratio, P.buffer_xx, P.buffer_yy)
+    @. P.Mxy = -fip.p.litho_rigidity * (1 - fip.p.litho_poissonratio) * P.buffer_xy
     update_second_derivatives!(P.buffer_xx, P.buffer_yy, P.buffer_x, P.buffer_xy,
         P.Mxx, P.Myy, P.Mxy, Omega)
-    @. P.rhs += P.buffer_xx + P.buffer_yy + 2 * P.buffer_xy
+    @. P.rhs += P.buffer_xx + muladd( 2, P.buffer_xy, P.buffer_yy)
     return nothing
 end
 
@@ -185,13 +170,12 @@ end
 
 function thinplate_horizontal_displacement!(u_x::M, u_y::M, u::M, litho_thickness::M,
     Omega) where {T<:AbstractFloat, M<:CuMatrix{T}}
-    dx!(u_x, u, Omega.Dx, Omega.Nx, Omega.Ny)
-    dy!(u_y, u, Omega.Dx, Omega.Nx, Omega.Ny)
+    dx!(u_x, u, Omega.Dx, Omega.nx, Omega.ny)
+    dy!(u_y, u, Omega.Dx, Omega.nx, Omega.ny)
     @. u_x *= T(30e3)   #-litho_thickness / 2
     @. u_y *= T(30e3)   #-litho_thickness / 2
     return nothing
 end
-
 
 """
     apply_bc!(u::M, bcm::M, nbc::T)
@@ -209,7 +193,7 @@ function apply_bc!(u::M, buffer::M, bcm::M, nbc::T) where {T<:AbstractFloat, M<:
     return nothing
 end
 
-function no_mean_bc!(u::KernelMatrix{<:AbstractFloat}, Nx::Int, Ny::Int)
+function no_mean_bc!(u::KernelMatrix{<:AbstractFloat}, nx::Int, ny::Int)
     u .-= mean(u)
     return nothing
 end
@@ -223,18 +207,11 @@ end
 Update the elastic response by convoluting the Green's function with the load anom.
 To use coefficients differing from [^Farrell1972], see [FastIsoTools](@ref).
 """
-function update_elasticresponse!(fip::FastIsoProblem{T, L, M, B, C, FP, IP}) where {
-    T<:AbstractFloat,
-    L<:Matrix{T},
-    M<:KernelMatrix{T},
-    B<:BoolMatrix,
-    C<:ComplexMatrix{T},
-    FP<:ForwardPlan{T},
-    IP<:InversePlan{T}}
+function update_elasticresponse!(fip::FastIsoProblem)
 
     @. fip.tools.prealloc.buffer_x = fip.now.columnanoms.load * fip.Omega.K ^ 2
     samesize_conv!(fip.now.ue, fip.tools.prealloc.buffer_x,
-        fip.tools.elastic_convo, fip.Omega)
+        fip.tools.elastic_convo, fip.Omega, fip.bcs.u_e, fip.bcs.u_e.space)
     # fip.now.ue .= samesize_conv(fip.now.columnanoms.load .* fip.Omega.K .^ 2,
     #     fip.tools.elastic_convo, fip.Omega)
     return nothing
@@ -298,11 +275,11 @@ function get_elasticgreen(
 ) where {T<:AbstractFloat, M<:KernelMatrix{T}}
 
     dx, dy = Omega.dx, Omega.dy
-    elasticgreen = fill(T(0), Omega.Nx, Omega.Ny)
+    elasticgreen = fill(T(0), Omega.nx, Omega.ny)
 
-    @inbounds for i = 1:Omega.Nx, j = 1:Omega.Ny
-        p = i - Omega.Mx - 1
-        q = j - Omega.My - 1
+    @inbounds for i = 1:Omega.nx, j = 1:Omega.ny
+        p = i - Omega.mx - 1
+        q = j - Omega.my - 1
         elasticgreen[j, i] = quadrature2D(
             greenintegrand_function,
             quad_support,

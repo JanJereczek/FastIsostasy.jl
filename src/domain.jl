@@ -4,7 +4,7 @@
 """
     ComputationDomain
     ComputationDomain(W, n)
-    ComputationDomain(Wx, Wy, Nx, Ny)
+    ComputationDomain(Wx, Wy, nx, ny)
 
 Return a struct containing all information related to geometry of the domain
 and potentially used parallelism. To initialize one with `2*W` and `2^n` grid cells:
@@ -16,16 +16,16 @@ Omega = ComputationDomain(W, n)
 If a rectangular domain is needed, run:
 
 ```julia
-Omega = ComputationDomain(Wx, Wy, Nx, Ny)
+Omega = ComputationDomain(Wx, Wy, nx, ny)
 ```
 """
 struct ComputationDomain{T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}}
     Wx::T                       # Domain half-width in x (m)
     Wy::T                       # Domain half-width in y (m)
-    Nx::Int                     # Number of grid points in x-dimension
-    Ny::Int                     # Number of grid points in y-dimension
-    Mx::Int                     # Nx/2
-    My::Int                     # Ny/2
+    nx::Int                     # Number of grid points in x-dimension
+    ny::Int                     # Number of grid points in y-dimension
+    mx::Int                     # nx/2
+    my::Int                     # ny/2
     dx::T                       # Spatial discretization in x
     dy::T                       # Spatial discretization in y
     x::Vector{T}                # spanning vector in x-dimension
@@ -46,38 +46,35 @@ struct ComputationDomain{T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}}
     Dy::M                       # dy matrix accounting for distortion.  TODO: macro
     A::M                        # area (accounting for distortion).     TODO: macro
     correct_distortion::Bool
-    null::M                     # a zero matrix of size Nx x Ny
+    null::M                     # a zero matrix of size nx x ny
     pseudodiff::M               # pseudodiff operator as matrix (Hadamard product)
+    # pseudodiff_inv::M
     use_cuda::Bool
     arraykernel::Any            # Array or CuArray depending on chosen hardware
-    bc_matrix::M
-    nbc::T
-    extended_bc_matrix::M
-    extended_nbc::T
 end
 
 function ComputationDomain(W::T, n::Int; kwargs...) where {T<:AbstractFloat}
     Wx, Wy = W, W
-    Nx, Ny = 2^n, 2^n
-    return ComputationDomain(Wx, Wy, Nx, Ny; kwargs...)
+    nx, ny = 2^n, 2^n
+    return ComputationDomain(Wx, Wy, nx, ny; kwargs...)
 end
 
-function ComputationDomain(Wx::T, Wy::T, Nx::Int, Ny::Int; kwargs...) where {T<:AbstractFloat}
-    Mx, My = Nx ÷ 2, Ny ÷ 2
-    dx = 2*Wx / Nx
-    dy = 2*Wy / Ny
+function ComputationDomain(Wx::T, Wy::T, nx::Int, ny::Int; kwargs...) where {T<:AbstractFloat}
+    mx, my = nx ÷ 2, ny ÷ 2
+    dx = 2*Wx / nx
+    dy = 2*Wy / ny
     # x = collect(-Wx+dx:dx:Wx)
     # y = collect(-Wy+dy:dy:Wy)
-    x = collect(range(-Wx+dx, stop = Wx, length = Nx))
-    y = collect(range(-Wy+dy, stop = Wy, length = Ny))
-    return ComputationDomain(x, y, dx, dy, Wx, Wy, Nx, Ny, Mx, My; kwargs...)
+    x = collect(range(-Wx+dx, stop = Wx, length = nx))
+    y = collect(range(-Wy+dy, stop = Wy, length = ny))
+    return ComputationDomain(x, y, dx, dy, Wx, Wy, nx, ny, mx, my; kwargs...)
 end
 
 
 function ComputationDomain(x::Vector{T}, y::Vector{T}; kwargs...) where {T<:AbstractFloat}
-    Nx = length(x)
-    Ny = length(y)
-    Mx, My = Nx ÷ 2, Ny ÷ 2
+    nx = length(x)
+    ny = length(y)
+    mx, my = nx ÷ 2, ny ÷ 2
 
     centering_tolerance = 1e3
     if mean(x) > centering_tolerance || mean(y) > centering_tolerance
@@ -92,7 +89,7 @@ function ComputationDomain(x::Vector{T}, y::Vector{T}; kwargs...) where {T<:Abst
     dx = mean(diff(x))
     dy = mean(diff(y))
 
-    return ComputationDomain(x, y, dx, dy, Wx, Wy, Nx, Ny, Mx, My; kwargs...)
+    return ComputationDomain(x, y, dx, dy, Wx, Wy, nx, ny, mx, my; kwargs...)
 end
 
 function ComputationDomain(
@@ -102,10 +99,10 @@ function ComputationDomain(
     dy::T,
     Wx::T,
     Wy::T,
-    Nx::Int,
-    Ny::Int,
-    Mx::Int,
-    My::Int;
+    nx::Int,
+    ny::Int,
+    mx::Int,
+    my::Int;
     use_cuda::Bool = false,
     lat_ref::T = T(-71.0),      # Reference latitude for scale factor
     lon_ref::T = T(0.0),        # Reference longitude for scale factor
@@ -117,7 +114,7 @@ function ComputationDomain(
 ) where {T<:AbstractFloat}
 
     X, Y = meshgrid(x, y)
-    null = fill(T(0), Nx, Ny)
+    null = fill(T(0), nx, ny)
     R = get_r.(X, Y)
 
     lonlat2target = Proj.Transformation(proj_lonlat,
@@ -129,17 +126,17 @@ function ComputationDomain(
     Lat = T.(map(x -> x[2], coords))
 
     if correct_distortion
-        K = scalefactor(Lat, lat_ref)
+        K = T.(scalefactor(Lat, lat_ref))
         if approx_in(0.0, x, 1e3) || approx_in(0.0, y, 1e3)
-            K[Mx, My] = mean([K[Mx-1, My], K[Mx+1, My], K[Mx, My-1], K[Mx, My+1]])
+            K[mx, my] = mean([K[mx-1, my], K[mx+1, my], K[mx, my-1], K[mx, my+1]])
         end
     else
-        K = fill(T(1), Nx, Ny)
+        K = fill(T(1), nx, ny)
     end
     Theta = dist2angulardist.(K .* R)
 
     # Differential operators in Fourier space
-    pseudodiff, _, _ = get_differential_fourier(Wx, Wy, Nx, Ny)
+    pseudodiff, _, _ = get_differential_fourier(Wx, Wy, nx, ny)
 
     # Avoid division by zero. Tolerance ϵ of the order of the neighboring terms.
     # Tests show that it does not lead to errors wrt analytical or benchmark solutions.
@@ -148,17 +145,11 @@ function ComputationDomain(
     arraykernel = use_cuda ? CuArray : Array
     null, K, pseudodiff = kernelpromote([null, K, pseudodiff], arraykernel)
 
-    i1, i2 = samesize_conv_indices(Nx, Mx)
-    j1, j2 = samesize_conv_indices(Ny, My)
-    convo_offset = (Ny - Nx) ÷ 2
+    i1, i2 = samesize_conv_indices(nx, mx)
+    j1, j2 = samesize_conv_indices(ny, my)
+    convo_offset = (ny - nx) ÷ 2
 
-    bc_matrix = arraykernel(corner_matrix(T, Nx, Ny))
-    nbc = sum(bc_matrix)
-    extended_bc_matrix = arraykernel(corner_matrix(T, 2*Nx-1, 2*Ny-1))
-    extended_nbc = sum(bc_matrix)
-
-    return ComputationDomain(Wx, Wy, Nx, Ny, Mx, My, dx, dy, x, y, X, Y, i1, i2, j1, j2, convo_offset,
+    return ComputationDomain(Wx, Wy, nx, ny, mx, my, dx, dy, x, y, X, Y, i1, i2, j1, j2, convo_offset,
         R, Theta, Lat, Lon, K, K .* dx, K .* dy, (dx * dy) .* K .^ 2, correct_distortion,
-        null, pseudodiff, use_cuda, arraykernel, bc_matrix, nbc, extended_bc_matrix,
-        extended_nbc)
+        null, pseudodiff, use_cuda, arraykernel)
 end
