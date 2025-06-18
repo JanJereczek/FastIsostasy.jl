@@ -23,8 +23,8 @@ Hticks = (-1500:500:500, latexify(-1500:500:500))
 uticks = (-100:100:500, latexify(-100:100:500))
 dudtticks = (-4:2:10, latexify(-4:2:10))
 
-Nx, Ny = fip.Omega.Nx, fip.Omega.Ny
-xx, yy = 20:Nx-20, 40:Ny-40
+nx, ny = fip.Omega.nx, fip.Omega.ny
+xx, yy = 20:nx-20, 40:ny-40
 fig = Figure(size = (1800, 700), fontsize = 32)
 axs = [Axis(fig[1, j], aspect = DataAspect()) for j in 1:3]
 [hidedecorations!(ax) for ax in axs]

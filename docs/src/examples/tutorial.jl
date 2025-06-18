@@ -11,7 +11,7 @@ FastIsostasy relies on a (polar) stereographic projection. Let's first create `O
 using CairoMakie, FastIsostasy
 
 W = 3000e3      # (m) half-width of the domain Wx = Wy
-n = 7           # implies an Nx x Ny grid with Nx = Ny = 2^n = 128.
+n = 7           # implies an nx x ny grid with nx = ny = 2^n = 128.
 Omega = ComputationDomain(W, n)
 fig = Figure(size = (1600, 800), fontsize = 24)
 ax1 = Axis3(fig[1, 1], title = "Original grid")
@@ -66,7 +66,7 @@ H = 1e3                                         # ice disc thickness (m)
 Hcylinder = uniform_ice_cylinder(Omega, R, H)   # field representing ice disk
 
 t_Hice = [-εt, 0.0, t_out[end]]                 # ice history = Heaviside at t=0
-Hice = [zeros(Omega.Nx, Omega.Ny), Hcylinder, Hcylinder]
+Hice = [zeros(Omega.nx, Omega.ny), Hcylinder, Hcylinder]
 
 fip = FastIsoProblem(Omega, c, p, t_out, t_Hice, Hice, output = "sparse")
 solve!(fip)
@@ -93,7 +93,7 @@ The figure above shows the total displacement at $$t = 0.6 \, \mathrm{kyr}$$ and
 fig = Figure()
 ax = Axis(fig[1, 1])
 cmap = cgrad(:jet, length(t_out), categorical = true)
-ii, jj = Omega.Mx:Omega.Nx, Omega.My
+ii, jj = Omega.mx:Omega.nx, Omega.my
 x = Omega.X[ii, jj]
 r = Omega.R[ii, jj]
 

@@ -51,7 +51,7 @@ function main(N, isl; use_cuda = false, mask_bsl = true)
     println("Computation took $(fip.out.computation_time) s")
 
     dir = @__DIR__
-    path = "$dir/../../data/test4/ICE6G/elra-interactivesl=$isl-maskbsl=$mask_bsl-N=$(Omega.Nx)"
+    path = "$dir/../../data/test4/ICE6G/elra-interactivesl=$isl-maskbsl=$mask_bsl-N=$(Omega.nx)"
     savefip("$path.nc", fip)
 end
 

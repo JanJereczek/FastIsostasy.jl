@@ -16,7 +16,7 @@ function main(N, maxdepth, isl; nlayers = 3, use_cuda = false, mask_bsl = true)
     Tlitho = Titp.(Lon, Lat) .* 1e3
     mindepth = maximum(Tlitho) + 1e3
     lb_vec = range(mindepth, stop = maxdepth, length = nlayers)
-    lb = cat(Tlitho, [fill(lbval, Omega.Nx, Omega.Ny) for lbval in lb_vec]..., dims=3)
+    lb = cat(Tlitho, [fill(lbval, Omega.nx, Omega.ny) for lbval in lb_vec]..., dims=3)
     rlb = c.r_equator .- lb
     nlb = size(rlb, 3)
 
@@ -63,7 +63,7 @@ function main(N, maxdepth, isl; nlayers = 3, use_cuda = false, mask_bsl = true)
 
     dir = @__DIR__
     path = "$dir/../../data/test4/ICE6G/3D-interactivesl=$isl-maskbsl=$mask_bsl-"*
-        "N=$(Omega.Nx)"
+        "N=$(Omega.nx)"
     @save "$path.jld2" t fip Hitp Hice_vec
     savefip("$path.nc", fip)
 end

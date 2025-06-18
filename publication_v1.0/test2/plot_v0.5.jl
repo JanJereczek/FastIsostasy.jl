@@ -123,12 +123,12 @@ function main(
 )
 
     N = 2^n
-    suffix = "Nx=$(N)_Ny=$(N)"
+    suffix = "nx=$(N)_ny=$(N)"
     filename = "disc_$suffix"
     @load "../data/test2/$filename.jld2" fip
     fipdisc = deepcopy(fip)
 
-    filename = "cap_Nx=$(N)_Ny=$(N)"
+    filename = "cap_Nx=$(N)_ny=$(N)"
     @load "../data/test2/$filename.jld2" fip
     fipcap = deepcopy(fip)
     Hcap = fip.out.Hice[end]

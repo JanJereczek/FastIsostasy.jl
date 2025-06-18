@@ -8,7 +8,7 @@ include("cases.jl")
 function main(n::Int;  kernel = "cpu")
 
     N = 2^n
-    suffix = "$(kernel)_Nx$(N)_Ny$(N)_dense"
+    suffix = "$(kernel)_Nx$(N)_ny$(N)_dense"
     prefixes = ["gaussian_lo_D", "gaussian_hi_D", "gaussian_lo_η", "gaussian_hi_η"]
     nf = length(prefixes)
 

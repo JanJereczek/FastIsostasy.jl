@@ -39,9 +39,9 @@ function anim(path::String, target::String)
     # grmask = [Union{Float64, missing}.(mask) for mask in fip.out.maskgrounded]
     # flmask = [Float64.(mask) for mask in fip.out.maskgrounded]
     Omega = fip.Omega
-    null = zeros(Omega.Nx, Omega.Ny)
-    grmask = [zeros(Union{Float64, Missing}, Omega.Nx, Omega.Ny) for _ in fip.out.t]
-    flmask = [zeros(Union{Float64, Missing}, Omega.Nx, Omega.Ny) for _ in fip.out.t]
+    null = zeros(Omega.nx, Omega.ny)
+    grmask = [zeros(Union{Float64, Missing}, Omega.nx, Omega.ny) for _ in fip.out.t]
+    flmask = [zeros(Union{Float64, Missing}, Omega.nx, Omega.ny) for _ in fip.out.t]
 
     for k in eachindex(grmask)
         mask = fip.out.maskgrounded[k]
@@ -85,9 +85,9 @@ end
 
 # Example 1
 #=
-filenames = ["../data/test1/Nx=64_Ny=64_cpu_interactive_sl=false-dense.jld2",
+filenames = ["../data/test1/nx=64_Ny=64_cpu_interactive_sl=false-dense.jld2",
     "../data/test4/ICE6G/heterogeneous-interactivesl=true-N=128.jld2"]
-targets = ["Nx=64_Ny=64_cpu_interactive_sl=false-dense",
+targets = ["nx=64_Ny=64_cpu_interactive_sl=false-dense",
     "test4/heterogeneous-interactivesl=true-N=128"]
 simple_anim(filenames[2], targets[2])
 =#

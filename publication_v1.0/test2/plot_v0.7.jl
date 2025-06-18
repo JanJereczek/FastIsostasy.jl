@@ -167,7 +167,7 @@ function main(
 )
 
     N = 2^n
-    suffix = "Nx=$(N)_Ny=$(N)"
+    suffix = "nx=$(N)_ny=$(N)"
     if solver == :elva
         prefix = ""
         label = "FastIsostasy"

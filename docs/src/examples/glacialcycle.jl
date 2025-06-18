@@ -45,7 +45,7 @@ The number of layers and the depth of viscous half-space are arbitrary parameter
 
 mindepth = maximum(Tlitho) + 1e3
 lb_vec = range(mindepth, stop = 300e3, length = 3)
-lb = cat(Tlitho, [fill(lbval, Omega.Nx, Omega.Ny) for lbval in lb_vec]..., dims=3)
+lb = cat(Tlitho, [fill(lbval, Omega.nx, Omega.ny) for lbval in lb_vec]..., dims=3)
 
 rlb = c.r_equator .- lb
 nlb = size(rlb, 3)

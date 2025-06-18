@@ -49,7 +49,7 @@ function main(n, earthtype, timescale)
     println("Took $(fip.out.computation_time) seconds!")
     println("----------------------------------------")
 
-    filename = "../data/test3b/$earthtype-$timescale-N$(Omega.Nx)"
+    filename = "../data/test3b/$earthtype-$timescale-N$(Omega.nx)"
     savefip("$filename.nc", fip)
     @save "$filename.jld2" fip Hice
 end

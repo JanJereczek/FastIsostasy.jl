@@ -16,13 +16,13 @@ function main(N, isl; use_cuda = false, mask_bsl = true)
     (_, _), _, Titp = load_lithothickness_pan2022()
     Tlitho = Titp.(Lon, Lat) .* 1e3
     mindepth = maximum(Tlitho) + 1e3
-    lb = cat(Tlitho, fill(mindepth, Omega.Nx, Omega.Ny), dims=3)
+    lb = cat(Tlitho, fill(mindepth, Omega.nx, Omega.ny), dims=3)
 
     # Define upper-mantle ralxation time scale
     tau_wais, tau_eais = 2.0, 3.0
     _, _, mask_itp = load_dataset("Antarctic3RegionMask")
     mask_eais = mask_itp.(Omega.X .* 1e-3, Omega.Y .* 1e-3) .== 5
-    sharp_tau = fill(tau_wais, Omega.Nx, Omega.Ny)
+    sharp_tau = fill(tau_wais, Omega.nx, Omega.ny)
     sharp_tau[mask_eais] .= tau_eais
     tau = blur(sharp_tau, Omega, 0.2)
     tau[tau .< 2.0] .= tau_wais
@@ -65,7 +65,7 @@ function main(N, isl; use_cuda = false, mask_bsl = true)
 
     dir = @__DIR__
     path = "$dir/../../data/test4/ICE6G/lvelra-interactivesl=$isl-maskbsl=$mask_bsl-"*
-        "N=$(Omega.Nx)"
+        "N=$(Omega.nx)"
     @save "$path.jld2" t fip Hitp Hice_vec
     savefip("$path.nc", fip)
 end
@@ -78,7 +78,7 @@ main(256, true, use_cuda = true)
 # Omega = ComputationDomain(3500e3, 3500e3, N, N, use_cuda = use_cuda)
 # (x, y), mask, mask_itp = load_dataset("Antarctic3RegionMask")
 # mask_eais = mask_itp.(Omega.X .* 1e-3, Omega.Y .* 1e-3) .== 5
-# sharp_tau = fill(1e2, Omega.Nx, Omega.Ny)
+# sharp_tau = fill(1e2, Omega.nx, Omega.ny)
 # sharp_tau[mask_eais] .= 3e3
 # tau = blur(sharp_tau, Omega, 0.1)
 # heatmap(tau)

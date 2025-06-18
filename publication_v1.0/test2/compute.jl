@@ -10,7 +10,7 @@ function main(n::Int, case::String)
     # c = PhysicalConstants(rho_ice = 0.931e3, rho_uppermantle = 3.3e3)
     c = PhysicalConstants(rho_ice = 0.931e3, rho_litho = 2.8e3)
     # layer_densities = [3.438e3, 3.871e3],
-    b = fill(1e6, Omega.Nx, Omega.Ny)   # elevated bedrock to prevent any load from ocean
+    b = fill(1e6, Omega.nx, Omega.ny)   # elevated bedrock to prevent any load from ocean
 
     G = 0.50605e11              # shear modulus (Pa)
     nu = 0.28
@@ -24,7 +24,7 @@ function main(n::Int, case::String)
         litho_poissonratio = nu,
     )
 
-    println("Computing on $(Omega.Nx) x $(Omega.Ny) grid...")
+    println("Computing on $(Omega.nx) x $(Omega.ny) grid...")
     if occursin("disc", case)
         alpha = T(10)                       # max latitude (°) of uniform ice disc
         Hmax = T(1000)                      # uniform ice thickness (m)
@@ -39,7 +39,7 @@ function main(n::Int, case::String)
     εt = 1e-8
     t_out = years2seconds.([-εt, 0.0, 1.0, 1e3, 2e3, 5e3, 1e4, 1e5])
     t_Hice = [-εt, 0.0, t_out[end]]
-    Hice = [zeros(Omega.Nx, Omega.Ny), H_ice, H_ice]
+    Hice = [zeros(Omega.nx, Omega.ny), H_ice, H_ice]
     mask = collect(H_ice .> 1e-8)
 
     opts = SolverOptions(interactive_sealevel = true, verbose = true,
@@ -50,7 +50,7 @@ function main(n::Int, case::String)
     println("Computation took $(fip.out.computation_time) seconds!")
     println("-------------------------------------")
 
-    filename = "$(case)_Nx=$(Omega.Nx)_Ny=$(Omega.Ny)"
+    filename = "$(case)_Nx=$(Omega.nx)_ny=$(Omega.ny)"
     path = "../data/test2/$filename"
     @save "$path.jld2" fip
     savefip("$path.nc", fip)

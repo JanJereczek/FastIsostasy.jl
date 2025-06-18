@@ -15,7 +15,7 @@ Since FastIsostasy relies on simplifications of the full GIA problem, applying s
 We demonstrate the tuning of the effective viscosity in a region that is being forced by a circular ice load. We emphasise that the highlighted tools provided by FastIsostasy are not limited to this case. As it will be made clear throughout the example, the user merely needs to define their own [`ParameterReduction`](@ref) and the associated behaviours of [`reconstruct!`](@ref) and [`extract_output`](@ref) to adapt the inversion procedure to their needs (e.g. tune lithospheric thickness throughout the whole domain).
 
 !!! note "Resolution"
-    We perform the following analysis on a low-resolution grid. High resolutions (ca. `Omega.Nx = Omega.Ny > 200`) are difficult to achieve since the underlying unscented Kalman filter requires many simulations. This is however typically not a problem, since the parametric fields (here the viscosity) are smooth and can be downsampled without significant loss of information.
+    We perform the following analysis on a low-resolution grid. High resolutions (ca. `Omega.nx = Omega.ny > 200`) are difficult to achieve since the underlying unscented Kalman filter requires many simulations. This is however typically not a problem, since the parametric fields (here the viscosity) are smooth and can be downsampled without significant loss of information.
 
 We first load the necessary packages, initialize the [`ComputationDomain`](@ref) and assign laterally-variable viscosity profiles to a [`LayeredEarth`](@ref) by loading the fields estimated in [wiens-seismic-2022](@citet):
 =#
@@ -41,7 +41,7 @@ To make this problem more exciting, we place the center of the ice load to $$(-1
 
 R, H = 1000e3, 1e3
 Hcylinder = uniform_ice_cylinder(Omega, R, H, center = [-1000e3, -1000e3])
-Hice = [zeros(Omega.Nx, Omega.Ny), Hcylinder, Hcylinder]
+Hice = [zeros(Omega.nx, Omega.ny), Hcylinder, Hcylinder]
 t_out = collect(1e3:1e3:2e3)
 pushfirst!(t_out, t_out[1]-1e-8)
 t_Hice = copy(t_out)

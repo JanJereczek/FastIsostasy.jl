@@ -35,8 +35,8 @@ function anim(path::String, target::String)
     # grmask = [Union{Float64, missing}.(mask) for mask in fip.out.maskgrounded]
     # flmask = [Float64.(mask) for mask in fip.out.maskgrounded]
     Omega = fip.Omega
-    grmask = [zeros(Union{Float64, Missing}, Omega.Nx, Omega.Ny) for _ in fip.out.t]
-    flmask = [zeros(Union{Float64, Missing}, Omega.Nx, Omega.Ny) for _ in fip.out.t]
+    grmask = [zeros(Union{Float64, Missing}, Omega.nx, Omega.ny) for _ in fip.out.t]
+    flmask = [zeros(Union{Float64, Missing}, Omega.nx, Omega.ny) for _ in fip.out.t]
 
     for k in eachindex(grmask)
         mask = fip.out.maskgrounded[k]

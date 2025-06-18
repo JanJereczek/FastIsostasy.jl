@@ -58,7 +58,7 @@ function main(N, isl; use_cuda = false, mask_bsl = true)
 
     dir = @__DIR__
     path = "$dir/../../data/test4/ICE6G/elva-interactivesl=$isl-maskbsl=$mask_bsl-"*
-        "N=$(Omega.Nx)"
+        "N=$(Omega.nx)"
     println("Saving to $path.nc")
     savefip("$path.nc", fip)
 end

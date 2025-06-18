@@ -29,7 +29,7 @@ function benchmark1_constants(Omega)
 
     R, H = 1000e3, 1e3
     Hcylinder = uniform_ice_cylinder(Omega, R, H)
-    Hice = [zeros(Omega.Nx, Omega.Ny), Hcylinder, Hcylinder]
+    Hice = [zeros(Omega.nx, Omega.ny), Hcylinder, Hcylinder]
 
     return c, p, t_out, R, H, t_Hice, Hice
 end
@@ -53,8 +53,8 @@ end
 
 
 function slice_along_x(Omega::ComputationDomain)
-    Nx, Ny = Omega.Nx, Omega.Ny
-    return Nx÷2:Nx, Ny÷2
+    nx, ny = Omega.nx, Omega.ny
+    return nx÷2:nx, ny÷2
 end
 
 function benchmark1(dm)

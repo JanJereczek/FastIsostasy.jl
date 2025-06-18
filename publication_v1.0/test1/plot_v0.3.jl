@@ -13,7 +13,7 @@ function main()
 
     H, R = 1e3, 1000e3
     N = 256
-    filename = "Nx=$(N)_Ny=$(N)_cpu_interactive_sl=false-dense"
+    filename = "nx=$(N)_ny=$(N)_cpu_interactive_sl=false-dense"
     @load "../data/test1/$filename.jld2" fip Hice
     Omega, c, p, t_out = fip.Omega, fip.c, fip.p, fip.out.t
 
@@ -97,7 +97,7 @@ function main()
     t_end = years2seconds(t_plot[end])
     for n in eachindex(Nvec)
         Ni = Nvec[n]
-        fname = "Nx=$(Ni)_Ny=$(Ni)_cpu_interactive_sl=false-dense"
+        fname = "nx=$(Ni)_ny=$(Ni)_cpu_interactive_sl=false-dense"
         @load "../data/test1/$fname.jld2" fip
         Omega, c, p, t_out = fip.Omega, fip.c, fip.p, fip.out.t
 
@@ -158,7 +158,7 @@ function main()
         kernel = kernels[k]
         for j in eachindex(Nvec)
             N = Nvec[j]
-            fname = "Nx=$(N)_Ny=$(N)_$(kernel)_interactive_sl=false-dense"
+            fname = "nx=$(N)_ny=$(N)_$(kernel)_interactive_sl=false-dense"
             @load "../data/test1/$fname.jld2" fip
 
             runtime[k][j] = fip.out.computation_time
