@@ -332,6 +332,7 @@ function LayeredEarth(
     rho_uppermantle::T = T(DEFAULT_RHO_UPPERMANTLE),   # Mean density of topmost upper mantle (kg m^-3)
     rho_litho::T = T(DEFAULT_RHO_LITHO),               # Mean density of lithosphere (kg m^-3)
     characteristic_loadlength::T = mean([Omega.Wx, Omega.Wy]),
+    reference_viscosity::T = T(1e21),
 ) where {
     T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T},
     A<:Union{Vector{T}, Array{T, 3}},
@@ -339,24 +340,25 @@ function LayeredEarth(
 }
 
     if tau isa Real
-        tau = fill(tau, Omega.Nx, Omega.Ny)
+        tau = fill(tau, Omega.nx, Omega.ny)
     end
     tau = kernelpromote(tau, Omega.arraykernel)
 
     if layer_boundaries isa Vector{<:Real}
-        layer_boundaries = matrify(layer_boundaries, Omega.Nx, Omega.Ny)
+        layer_boundaries = matrify(layer_boundaries, Omega.nx, Omega.ny)
     end
 
     if layer_viscosities isa Vector{<:Real}
-        layer_viscosities = matrify(layer_viscosities, Omega.Nx, Omega.Ny)
+        layer_viscosities = matrify(layer_viscosities, Omega.nx, Omega.ny)
     end
 
-    litho_thickness = zeros(T, Omega.Nx, Omega.Ny)
+    litho_thickness = zeros(T, Omega.nx, Omega.ny)
     litho_thickness .= view(layer_boundaries, :, :, 1)
 
     litho_rigidity = get_rigidity.(litho_thickness, litho_youngmodulus, litho_poissonratio)
     effective_viscosity = get_effective_viscosity(Omega, layer_viscosities,
-        layer_boundaries, mantle_poissonratio, characteristic_loadlength)
+        layer_boundaries, mantle_poissonratio, characteristic_loadlength,
+        reference_viscosity)
 
     litho_thickness, litho_rigidity, effective_viscosity = kernelpromote(
         [litho_thickness, litho_rigidity, effective_viscosity], Omega.arraykernel)

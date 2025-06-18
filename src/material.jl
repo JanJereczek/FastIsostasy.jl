@@ -39,7 +39,8 @@ function get_effective_viscosity(
     layer_viscosities::Array{T, 3},
     layer_boundaries::Array{T, 3},
     mantle_poissonratio::T,
-    characteristic_loadlength::T;
+    characteristic_loadlength::T,
+    reference_viscosity::T = 1e21;
     correct_shearmoduluschange::Bool = true,
 ) where {T<:AbstractFloat, M<:KernelMatrix{T}}
 
@@ -66,15 +67,16 @@ function get_effective_viscosity(
     effective_compressible_viscosity = effective_viscosity .* compressibility_scaling
 
     if correct_shearmoduluschange
-        corrected_viscosity = seakon_calibration(effective_compressible_viscosity)
+        corrected_viscosity = seakon_calibration(effective_compressible_viscosity,
+            reference_viscosity)
     else
         corrected_viscosity = effective_compressible_viscosity
     end
     return corrected_viscosity
 end
 
-function seakon_calibration(eta::Matrix{T}) where {T<:AbstractFloat}
-    return exp.(log10.(T(1e21) ./ eta)) .* eta
+function seakon_calibration(eta::Matrix{T}, eta_ref) where {T<:AbstractFloat}
+    return exp.(log10.(T(eta_ref) ./ eta)) .* eta
 end
 
 """
