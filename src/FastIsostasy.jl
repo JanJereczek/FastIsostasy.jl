@@ -8,7 +8,8 @@ using FastGaussQuadrature: gausslegendre
 using FFTW: fft, ifft, plan_fft!, plan_ifft!, cFFTWPlan
 using LinearAlgebra: Diagonal, det, diagm, norm
 using NetCDF
-using OrdinaryDiffEqTsit5: init, Tsit5, ODEProblem, solve, DiscreteCallback
+using OrdinaryDiffEqTsit5: init, ODEProblem, solve, DiscreteCallback
+
 using ParallelStencil: ParallelStencil, @init_parallel_stencil, @parallel,
                        @parallel_indices
 using Statistics: mean, cov, std
@@ -21,10 +22,15 @@ allowscalar(false)
 using Reexport: Reexport, @reexport
 @reexport using Interpolations
 @reexport using Proj
-@reexport using OrdinaryDiffEqTsit5: step!
+@reexport using OrdinaryDiffEqTsit5: step!, Tsit5
+@reexport using OrdinaryDiffEqLowOrderRK: Euler, SplitEuler, Heun, Ralston,
+    Midpoint, RK4, BS3, OwrenZen3, OwrenZen4, OwrenZen5, BS5, DP5, Anas5,
+    RKO65, FRK65, RKM, MSRK5, MSRK6, PSRK4p7q6, PSRK3p5q4, PSRK3p6q5, Stepanov5,
+    SIR54, Alshina2, Alshina3, Alshina6
 
 include("convenience_types.jl")
 include("domain.jl")
+include("boundary_conditions.jl")
 include("constants.jl")
 include("layering.jl")
 include("convolution.jl")
@@ -48,6 +54,9 @@ include("coordinates.jl")
 
 # domain.jl
 export ComputationDomain
+
+# boundary_conditions.jl
+export CornerBC, BorderBC, DistanceWeightedBC, ProblemBCs
 
 # constants.jl
 export PhysicalConstants, ReferenceEarthModel
