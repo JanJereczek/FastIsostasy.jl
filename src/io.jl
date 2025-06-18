@@ -2,26 +2,92 @@
 # NetCDF output
 ################################################################################
 
+io_dict = Dict{Symbol, Dict{String, String}}()
+io_dict[:u] = Dict(
+    "shortname" => "u",
+    "longname" => "Viscous displacement",
+    "units" => "m",
+    "dims" => "x y t",
+)
+io_dict[:ue] = Dict(
+    "shortname" => "ue",
+    "longname" => "Elastic displacement",
+    "units" => "m",
+    "dims" => "x y t",
+)
+io_dict[:b] = Dict(
+    "shortname" => "b",
+    "longname" => "Bedrock elevation",
+    "units" => "m",
+    "dims" => "x y t",
+)
+io_dict[:z_ss] = Dict(
+    "shortname" => "z_ss",
+    "longname" => "Sea-surface height (SSH)",
+    "units" => "m",
+    "dims" => "x y t",
+)
+io_dict[:dudt] = Dict(
+    "shortname" => "dudt",
+    "longname" => "Viscous displacement rate",
+    "units" => "m/yr",
+    "dims" => "x y t",
+)
+io_dict[:dz_ss] = Dict(
+    "shortname" => "dz_ss",
+    "longname" => "SSH perturbation",
+    "units" => "m",
+    "dims" => "x y t",
+)
+io_dict[:maskgrounded] = Dict(
+    "shortname" => "maskgrounded",
+    "longname" => "Mask for grounded ice",
+    "units" => "1",
+    "dims" => "x y t",
+)
+io_dict[:H_ice] = Dict(
+    "shortname" => "Hice",
+    "longname" => "Ice thickness",
+    "units" => "m",
+    "dims" => "x y t",
+)
+io_dict[:H_water] = Dict(
+    "shortname" => "Hwater",
+    "longname" => "Water depth",
+    "units" => "m",
+    "dims" => "x y t",
+)
+io_dict[:u_x] = Dict(
+    "shortname" => "u_x",
+    "longname" => "Horizontal displacement in x",
+    "units" => "m",
+    "dims" => "x y t",
+)
+io_dict[:u_y] = Dict(
+    "shortname" => "u_y",
+    "longname" => "Horizontal displacement in y",
+    "units" => "m",
+    "dims" => "x y t",
+)
+io_dict[:bsl] = Dict(
+    "shortname" => "bsl",
+    "longname" => "Barystatic sea level",
+    "units" => "m",
+    "dims" => "t",
+)
+
 mutable struct NetcdfOutput{T<:AbstractFloat}
     t::Vector{T}
     filename::String
     buffer::Matrix{T}
-    varsfi3D::Vector{Symbol}
-    varnames3D::Vector{String}
-    varsfi1D::Vector{Symbol}
-    varnames1D::Vector{String}
+    vars3D::Vector{Symbol}
+    vars1D::Vector{Symbol}
     computation_time::T
 end
 
-function NetcdfOutput(Omega::ComputationDomain{T, L, M}, t, filename, preconfig;
-    varsfi3D = select_preconfig(preconfig, interm_varsfi3D, sparse_varsfi3D),
-    varnames3D = select_preconfig(preconfig, interm_varnames3D, sparse_varnames3D),
-    varlongnames3D = select_preconfig(preconfig, interm_varlongnames3D, sparse_varlongnames3D),
-    varunits3D = select_preconfig(preconfig, interm_varunits3D, sparse_varunits3D),
-    varsfi1D = select_preconfig(preconfig, interm_varsfi1D, sparse_varsfi1D),
-    varnames1D = select_preconfig(preconfig, interm_varnames1D, sparse_varnames1D),
-    varlongnames1D = select_preconfig(preconfig, interm_varlongnames1D, sparse_varlongnames1D),
-    varunits1D = select_preconfig(preconfig, interm_varunits1D, sparse_varunits1D),
+function NetcdfOutput(Omega::ComputationDomain{T, L, M}, t, filename;
+    vars3D = [:u, :ue, :b, :dz_ss],
+    vars1D = [:bsl],
     Tout = Float32,
 ) where {T<:AbstractFloat, L, M}
 
@@ -36,14 +102,22 @@ function NetcdfOutput(Omega::ComputationDomain{T, L, M}, t, filename, preconfig;
     tdim = NcDim("t", t, tatts)
 
     vars = NcVar[]
-    # @show varsfi3D, varnames3D, varlongnames3D, varunits3D, varsfi1D, varnames1D, varlongnames1D, varunits1D
-    for i in eachindex(varnames3D)
-        varatts = Dict("longname" => varlongnames3D[i], "units" => varunits3D[i])
-        push!(vars, NcVar(varnames3D[i], [xdim, ydim, tdim]; atts = varatts, t = Tout))
+    for i in eachindex(vars3D)
+        j = vars3D[i]
+        varatts = Dict(
+            "longname" => io_dict[j]["longname"],
+            "units" => io_dict[j]["units"],
+        )
+        push!(vars,
+            NcVar(io_dict[j]["shortname"], [xdim, ydim, tdim]; atts = varatts, t = Tout))
     end
-    for i in eachindex(varnames1D)
-        varatts = Dict("longname" => varlongnames1D[i], "units" => varunits1D[i])
-        push!(vars, NcVar(varnames1D[i], [tdim]; atts = varatts, t = Tout))
+    for i in eachindex(vars1D)
+        j = vars1D[i]
+        varatts = Dict(
+            "longname" => io_dict[j]["longname"],
+            "units" => io_dict[j]["units"],
+        )
+        push!(vars, NcVar(io_dict[j]["shortname"], [tdim]; atts = varatts, t = Tout))
     end
 
     if length(filename) > 0
@@ -53,9 +127,8 @@ function NetcdfOutput(Omega::ComputationDomain{T, L, M}, t, filename, preconfig;
         end
     end
     
-    buffer = Matrix{Tout}(undef, Omega.Nx, Omega.Ny)
-    return NetcdfOutput(Tout.(t), filename, buffer, varsfi3D, varnames3D,
-        varsfi1D, varnames1D, Tout(0.0))
+    buffer = Matrix{Tout}(undef, Omega.nx, Omega.ny)
+    return NetcdfOutput(Tout.(t), filename, buffer, vars3D, vars1D, Tout(0.0))
 end
 
 function select_preconfig(preconfig, intermediate, sparse)
@@ -68,52 +141,25 @@ function select_preconfig(preconfig, intermediate, sparse)
     end
 end
 
-const sparse_varsfi3D = [:u, :ue, :b, :z_ss]
-const interm_varsfi3D = vcat(sparse_varsfi3D, [:dudt, :dz_ss, :maskgrounded, :H_ice,
-    :H_water, :u_x, :u_y])
-
-const sparse_varnames3D = ["u", "ue", "b", "z_ss"]
-const interm_varnames3D = vcat(sparse_varnames3D, ["dudt", "dz_ss",
-    "maskgrounded", "Hice", "Hwater", "u_x", "u_y"])
-
-const sparse_varlongnames3D = ["Viscous displacement", "Elastic displacement",
-    "Bedrock elevation", "Sea-surface height (SSH)"]
-const interm_varlongnames3D = vcat(sparse_varlongnames3D, 
-    ["Viscous displacement rate", "SSH perturbation",
-    "Mask for grounded ice", "Ice thickness", "Water depth",
-    "Horizontal displacement in x", "Horizontal displacement in y"])
-
-const sparse_varunits3D = ["m", "m", "m", "m"]
-const interm_varunits3D = vcat(sparse_varunits3D, ["m/yr", "m", "1", "m",
-    "m", "m", "m"])
-
-const sparse_varsfi1D = [:bsl]
-const sparse_varnames1D = ["bsl"]
-const sparse_varlongnames1D = ["Barystatic sea level"]
-const sparse_varunits1D = ["m"]
-
-const interm_varsfi1D = sparse_varsfi1D
-const interm_varnames1D = sparse_varnames1D
-const interm_varlongnames1D = sparse_varlongnames1D
-const interm_varunits1D = sparse_varunits1D
-
 function write_nc!(ncout::NetcdfOutput{Tout}, state::CurrentState{T, M}, k::Int) where {
     T<:AbstractFloat, M<:KernelMatrix{T}, Tout<:AbstractFloat}
-    for i in eachindex(ncout.varnames3D)
+    for i in eachindex(ncout.vars3D)
+        j = ncout.vars3D[i]
         if M == Matrix{T}
-            ncout.buffer .= Tout.(getfield(state, ncout.varsfi3D[i]))
+            ncout.buffer .= Tout.(getfield(state, ncout.vars3D[i]))
         else
-            ncout.buffer .= Tout.(Array(getfield(state, ncout.varsfi3D[i])))
+            ncout.buffer .= Tout.(Array(getfield(state, ncout.vars3D[i])))
         end
         NetCDF.open(ncout.filename, mode = NC_WRITE) do nc
-            NetCDF.putvar(nc, ncout.varnames3D[i], ncout.buffer,
+            NetCDF.putvar(nc, io_dict[j]["shortname"], ncout.buffer,
                 start = [1, 1, k], count = [-1, -1, 1])
         end
     end
-    for i in eachindex(ncout.varnames1D)
-        val = Tout(getfield(state, ncout.varsfi1D[i]))
+    for i in eachindex(ncout.vars1D)
+        j = ncout.vars1D[i]
+        val = Tout(getfield(state, ncout.vars1D[i]))
         NetCDF.open(ncout.filename, mode = NC_WRITE) do nc
-            NetCDF.putvar(nc, ncout.varnames1D[i], [val], start = [k], count = [1])
+            NetCDF.putvar(nc, io_dict[j]["shortname"], [val], start = [k], count = [1])
         end
     end
 end
