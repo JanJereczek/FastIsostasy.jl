@@ -2,7 +2,7 @@
 
 FastIsostasy.jl is validated by severals tests, which are required to run fast.
 Their aim is to detect large errors, not to test the highest level of accuracy.
-Therefore, we use a standard resolution of n = 6, Nx = Ny = 64, dx = dy ≈ 100km.
+Therefore, we use a standard resolution of n = 6, nx = ny = 64, dx = dy ≈ 100km.
 
 We here make a text explanation of the different set-ups for the automated tests:
 
