@@ -74,7 +74,8 @@ function load_oceansurfacefunction(; T = Float64, verbose = true)
     tmp = download(link)
     data = readdlm(tmp)
     z, A = T.(data[:, 1]), T.(data[:, 2])
-    itp = linear_interpolation(z, A, extrapolation_bc = Flat())
+    # itp = linear_interpolation(z, A, extrapolation_bc = Flat())
+    itp = Interpolation0D(z, A, flat_bc = true)
     if verbose
         println("returning: z, A, interpolator")
     end
