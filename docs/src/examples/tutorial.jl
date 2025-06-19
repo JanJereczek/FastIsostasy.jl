@@ -135,11 +135,11 @@ p = LayeredEarth(Omega)
 fip = FastIsoProblem(Omega, c, p, t_out, t_Hice, Hice, output = "sparse")
 
 update_diagnostics!(fip.now.dudt, fip.now.u, fip, 0.0)
-write_out!(fip.out, fip.now, 1)
+write_out!(fip.nout, fip.now)
 ode = init(fip)
 @inbounds for k in eachindex(fip.out.t)[2:end]
     step!(fip, ode, (fip.out.t[k-1], fip.out.t[k]))
-    write_out!(fip.out, fip.now, k)
+    write_out!(fip.nout, fip.now)
 end
 fig = plot3D(fip, [lastindex(t_out) ÷ 2, lastindex(t_out)])
 
