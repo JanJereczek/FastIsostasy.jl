@@ -48,7 +48,7 @@ struct ComputationDomain{T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}}
     correct_distortion::Bool
     null::M                     # a zero matrix of size nx x ny
     pseudodiff::M               # pseudodiff operator as matrix (Hadamard product)
-    # pseudodiff_inv::M
+    pseudodiff_inv::M           # inverse of pseudodiff operator
     use_cuda::Bool
     arraykernel::Any            # Array or CuArray depending on chosen hardware
 end
@@ -63,8 +63,6 @@ function ComputationDomain(Wx::T, Wy::T, nx::Int, ny::Int; kwargs...) where {T<:
     mx, my = nx ÷ 2, ny ÷ 2
     dx = 2*Wx / nx
     dy = 2*Wy / ny
-    # x = collect(-Wx+dx:dx:Wx)
-    # y = collect(-Wy+dy:dy:Wy)
     x = collect(range(-Wx+dx, stop = Wx, length = nx))
     y = collect(range(-Wy+dy, stop = Wy, length = ny))
     return ComputationDomain(x, y, dx, dy, Wx, Wy, nx, ny, mx, my; kwargs...)
@@ -151,5 +149,5 @@ function ComputationDomain(
 
     return ComputationDomain(Wx, Wy, nx, ny, mx, my, dx, dy, x, y, X, Y, i1, i2, j1, j2, convo_offset,
         R, Theta, Lat, Lon, K, K .* dx, K .* dy, (dx * dy) .* K .^ 2, correct_distortion,
-        null, pseudodiff, use_cuda, arraykernel)
+        null, pseudodiff, 1 ./ pseudodiff, use_cuda, arraykernel)
 end
