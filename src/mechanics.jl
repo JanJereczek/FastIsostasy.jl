@@ -27,12 +27,13 @@ function update_diagnostics!(dudt, u, fip::FastIsoProblem, t)
 
     # As integration requires smaller time steps than diagnostics,
     # only update diagnostics every fip.opts.dt_diagnostics or fip.ncout.t
-    update_diagnostics = (((t - fip.ncout.t[fip.now.k]) / fip.opts.dt_diagnostics) >=
-        fip.now.countupdates) # || t ≈ fip.ncout.t[fip.now.k + 1]
+    # update_diagnostics = (((t - fip.ncout.t[fip.now.k]) / fip.opts.dt_diagnostics) >=
+    #     fip.now.countupdates) || t ≈ fip.ncout.t[fip.now.k + 1]
+    update_diagnostics = ((t / fip.opts.dt_diagnostics) >= fip.now.countupdates + 1)
 
     if update_diagnostics
-        # @show t
-
+        @show t
+        
         # if elastic update placed after dz_ss, worse match with (Spada et al. 2011)
         update_elasticresponse!(fip)
         columnanom_litho!(fip)
@@ -73,7 +74,8 @@ function update_dudt!(dudt, u, fip, t, model::EarthModel)
     update_dudt!(dudt, u, fip, t, model.rheology, model.lithosphere)
 end
 
-function update_dudt!(dudt, u, fip, t, rheo::RelaxedRheology, lithosphere::LaterallyConstantLithosphere)
+function update_dudt!(dudt, u, fip, t, rheo::RelaxedRheology, 
+    lithosphere::LaterallyConstantLithosphere)
     
     update_deformation_rhs!(fip, u)
 
@@ -88,11 +90,13 @@ function update_dudt!(dudt, u, fip, t, rheo::RelaxedRheology, lithosphere::Later
     
 end
 
-function update_dudt!(dudt, u, fip, t, rheo::RelaxedRheology, lithosphere::LaterallyVariableLithosphere)
+function update_dudt!(dudt, u, fip, t, rheo::RelaxedRheology,
+    lithosphere::LaterallyVariableLithosphere)
     error("Relaxed rheology is not implemented for laterally variable lithosphere.")
 end
 
-function update_dudt!(dudt, u, fip, t, rheo::ViscousRheology, lithosphere::LaterallyConstantLithosphere)
+function update_dudt!(dudt, u, fip, t, rheo::ViscousRheology,
+    lithosphere::LaterallyConstantLithosphere)
     error("Viscous rheology is not implemented for laterally constant lithosphere.")
     # fft(load, t + dt/2)
     # U_now = fft(u_now)
@@ -102,12 +106,13 @@ function update_dudt!(dudt, u, fip, t, rheo::ViscousRheology, lithosphere::Later
     # u_next = fftinv(U_next)
 end
 
-function update_dudt!(dudt, u, fip, t, rheo::ViscousRheology, lithosphere::LaterallyVariableLithosphere)
+function update_dudt!(dudt, u, fip, t, rheo::ViscousRheology,
+    lithosphere::LaterallyVariableLithosphere)
     Omega, P = fip.Omega, fip.tools.prealloc
     update_deformation_rhs!(fip, u)
     @. P.fftrhs = complex(P.rhs * Omega.K / (2 * fip.p.effective_viscosity))
     fip.tools.pfft! * P.fftrhs
-    @. P.fftrhs /= Omega.pseudodiff
+    @. P.fftrhs *= Omega.pseudodiff_inv
     fip.tools.pifft! * P.fftrhs
     dudt .= real.(P.fftrhs)
     dudt .*= fip.c.seconds_per_year
@@ -140,7 +145,7 @@ function update_deformation_rhs!(fip::FastIsoProblem, u)
     @. P.Mxy = -fip.p.litho_rigidity * (1 - fip.p.litho_poissonratio) * P.buffer_xy
     update_second_derivatives!(P.buffer_xx, P.buffer_yy, P.buffer_x, P.buffer_xy,
         P.Mxx, P.Myy, P.Mxy, Omega)
-    @. P.rhs += P.buffer_xx + muladd( 2, P.buffer_xy, P.buffer_yy)
+    @. P.rhs += P.buffer_xx + muladd(2, P.buffer_xy, P.buffer_yy)
     return nothing
 end
 
@@ -159,8 +164,8 @@ function thinplate_horizontal_displacement(u, litho_thickness, Omega)
     return u_x, u_y
 end
 
-function thinplate_horizontal_displacement!(u_x::M, u_y::M, u::M, litho_thickness::M,
-    Omega) where {M<:Matrix}
+function thinplate_horizontal_displacement!(u_x::M, u_y::M, u::M,
+    litho_thickness::M, Omega) where {M<:Matrix}
     dx!(u_x, u, Omega)
     dy!(u_y, u, Omega)
     @. u_x *= -litho_thickness / 2
@@ -168,33 +173,12 @@ function thinplate_horizontal_displacement!(u_x::M, u_y::M, u::M, litho_thicknes
     return nothing
 end
 
-function thinplate_horizontal_displacement!(u_x::M, u_y::M, u::M, litho_thickness::M,
-    Omega) where {T<:AbstractFloat, M<:CuMatrix{T}}
+function thinplate_horizontal_displacement!(u_x::M, u_y::M, u::M,
+    litho_thickness::M, Omega) where {T<:AbstractFloat, M<:CuMatrix{T}}
     dx!(u_x, u, Omega.Dx, Omega.nx, Omega.ny)
     dy!(u_y, u, Omega.Dx, Omega.nx, Omega.ny)
     @. u_x *= T(30e3)   #-litho_thickness / 2
     @. u_y *= T(30e3)   #-litho_thickness / 2
-    return nothing
-end
-
-"""
-    apply_bc!(u::M, bcm::M, nbc::T)
-A generic function to update `u` such that the boundary conditions are respected
-on average, which is the only way to impose them for Fourier collocation.
-"""
-function apply_bc!(u::M, bcm::M, nbc::T) where {T<:AbstractFloat, M<:Matrix{T}}
-    u .= u .- (sum(u .* bcm) / nbc)
-    return nothing
-end
-
-function apply_bc!(u::M, buffer::M, bcm::M, nbc::T) where {T<:AbstractFloat, M<:KernelMatrix{T}}
-    @. buffer = u * bcm
-    u .-= (sum(buffer) / nbc)
-    return nothing
-end
-
-function no_mean_bc!(u::KernelMatrix{<:AbstractFloat}, nx::Int, ny::Int)
-    u .-= mean(u)
     return nothing
 end
 

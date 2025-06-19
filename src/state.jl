@@ -1,4 +1,3 @@
-
 #########################################################
 # Geostate
 #########################################################
@@ -9,7 +8,12 @@ abstract type AbstractState end
 
 Return a struct containing the reference state.
 """
-struct ReferenceState{T<:AbstractFloat, M<:KernelMatrix{T}, B<:BoolMatrix} <: AbstractState
+struct ReferenceState{
+    T<:AbstractFloat,
+    M<:KernelMatrix{T},
+    B<:BoolMatrix,
+} <: AbstractState
+
     u::M                    # viscous displacement
     ue::M                   # elastic displacement
     H_ice::M                # ref height of ice column
@@ -44,7 +48,14 @@ end
 Return a mutable struct containing the geostate which will be updated over the simulation.
 The geostate contains all the states of the [`FastIsoProblem`] to be solved.
 """
-mutable struct CurrentState{T<:AbstractFloat, M<:KernelMatrix{T}, B<:BoolMatrix} <: AbstractState
+mutable struct CurrentState{
+    T<:AbstractFloat,
+    M<:KernelMatrix{T},
+    B<:BoolMatrix,
+    CA <: ColumnAnomalies{T, M},
+    OS <: AbstractOceanSurface{T},
+} <: AbstractState
+
     u::M                    # viscous displacement
     ue::M                   # elastic displacement
     u_x::M                  # horizontal displacement in x
@@ -55,7 +66,7 @@ mutable struct CurrentState{T<:AbstractFloat, M<:KernelMatrix{T}, B<:BoolMatrix}
     H_ice::M                # current height of ice column
     H_af::M                 # current height of ice column above floatation
     H_water::M              # current height of water column
-    columnanoms::ColumnAnomalies{T, M}
+    columnanoms::CA         # column anomalies
     b::M                    # vertical bedrock position
     bsl::T                  # barystatic sea level
     dz_ss::M                # current z_ss perturbation
@@ -65,7 +76,7 @@ mutable struct CurrentState{T<:AbstractFloat, M<:KernelMatrix{T}, B<:BoolMatrix}
     V_den::T                # V contribution from diff between melt- and saltwater density
     maskgrounded::B         # mask for grounded ice
     maskocean::B            # mask for ocean
-    osc::OceanSurfaceChange{T}
+    osc::OS                 # ocean surface change
     countupdates::Int       # count the updates of the geostate
     k::Int                  # index of the t_out segment
 end

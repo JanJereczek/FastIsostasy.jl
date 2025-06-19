@@ -25,15 +25,14 @@ end
 
 Return the Green's function used to compute the SSH perturbation `dz_ss` as in [^Coulon2021].
 """
-function get_dz_ssgreen(Omega::ComputationDomain{T, L, M}, c::PhysicalConstants{T}
-    ) where {T<:AbstractFloat, L, M<:KernelMatrix{T}}
+function get_dz_ssgreen(Omega::ComputationDomain, c::PhysicalConstants)
     dz_ssgreen = unbounded_dz_ssgreen(Omega.R, c)
     max_dz_ssgreen = unbounded_dz_ssgreen(norm([100e3, 100e3]), c)  # tolerance = resolution on 100km
     return min.(dz_ssgreen, max_dz_ssgreen)
     # equivalent to: dz_ssgreen[dz_ssgreen .> max_dz_ssgreen] .= max_dz_ssgreen
 end
 
-function unbounded_dz_ssgreen(R, c::PhysicalConstants{<:AbstractFloat})
+function unbounded_dz_ssgreen(R, c::PhysicalConstants)
     return c.r_pole ./ ( 2 .* c.mE .* sin.( R ./ (2 .* c.r_pole) ) )
 end
 
@@ -131,15 +130,7 @@ function update_maskocean!(fip)
     @. fip.now.maskocean = fip.now.maskocean .& not.(fip.now.maskgrounded)
 end
 
-function update_bedrock!(fip::FastIsoProblem{T, L, M, B, C, FP, IP}, u::M) where {
-    T<:AbstractFloat,
-    L<:Matrix{T},
-    M<:KernelMatrix{T},
-    B<:BoolMatrix,
-    C<:ComplexMatrix{T},
-    FP<:ForwardPlan{T},
-    IP<:InversePlan{T}}
-
+function update_bedrock!(fip::FastIsoProblem, u)
     fip.now.u .= u
     @. fip.now.b = fip.ref.b + fip.now.ue + fip.now.u
     return nothing
@@ -175,7 +166,7 @@ function update_bsl!(fip::FastIsoProblem)
     Vnew = total_volume(fip)
 
     delta_V = Vnew - Vold
-    fip.now.osc(-delta_V)
+    update_bsl!(fip.now.osc, -delta_V)
 
     fip.now.bsl = fip.now.osc.z_k
     return nothing
