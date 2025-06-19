@@ -48,16 +48,6 @@ end
 
 Perform convolution of `X` with `ipc` and crop the result to the same size as `X`.
 """
-# function samesize_conv(X::M, ipc::InplaceConvolution{T, M, C, FP, IP},
-#     Omega::ComputationDomain{T, L, M}) where {T<:AbstractFloat, L<:Matrix{T},
-#     M<:KernelMatrix{T}, C<:ComplexMatrix{T}, FP<:ForwardPlan{T}, IP<:InversePlan{T}}
-#     ipc(X)
-#     apply_bc!(ipc.out, Omega.extended_bc_matrix, Omega.extended_nbc)
-#     return view(ipc.out,
-#         Omega.i1+Omega.convo_offset:Omega.i2+Omega.convo_offset,
-#         Omega.j1-Omega.convo_offset:Omega.j2-Omega.convo_offset)
-# end
-
 function samesize_conv!(Y::M, X::M, ipc::InplaceConvolution{T, M, C, FP, IP},
     Omega::ComputationDomain{T, L, M}, bc::OffsetBC, bc_space::ExtendedBCSpace) where {
         T<:AbstractFloat,
@@ -68,7 +58,6 @@ function samesize_conv!(Y::M, X::M, ipc::InplaceConvolution{T, M, C, FP, IP},
         IP<:InversePlan{T}}
     
     convolution!(ipc, X)
-    # apply_bc!(ipc.out, ipc.buffer, Omega.extended_bc_matrix, Omega.extended_nbc)
     apply_bc!(ipc.out, bc)
     Y .= view(ipc.out,
         Omega.i1+Omega.convo_offset:Omega.i2+Omega.convo_offset,
@@ -86,7 +75,6 @@ function samesize_conv!(Y::M, X::M, ipc::InplaceConvolution{T, M, C, FP, IP},
         IP<:InversePlan{T}}
     
     convolution!(ipc, X)
-    # apply_bc!(ipc.out, ipc.buffer, Omega.extended_bc_matrix, Omega.extended_nbc)
     Y .= view(ipc.out,
         Omega.i1+Omega.convo_offset:Omega.i2+Omega.convo_offset,
         Omega.j1-Omega.convo_offset:Omega.j2-Omega.convo_offset)
