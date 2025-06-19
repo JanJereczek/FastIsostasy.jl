@@ -157,7 +157,7 @@ function write_nc!(ncout::NetcdfOutput{Tout}, state::CurrentState{T, M}, k::Int)
     end
     for i in eachindex(ncout.vars1D)
         j = ncout.vars1D[i]
-        val = Tout(getfield(state, ncout.vars1D[i]))
+        val = Tout(getfield(state, j))
         NetCDF.open(ncout.filename, mode = NC_WRITE) do nc
             NetCDF.putvar(nc, io_dict[j]["shortname"], [val], start = [k], count = [1])
         end
@@ -168,73 +168,19 @@ end
 # Postprocessing output (only used for optimization)
 ################################################################################
 
-abstract type Output end
-struct MinimalOutput{T<:AbstractFloat} <: Output
-    t::Vector{T}
-    t_ode::Vector{T}
+struct NativeOutput{T<:AbstractFloat}
+    t::Vector{<:Real}
+    vars::Vector{Symbol}
+    vals::Dict{Symbol, Vector{Matrix{T}}}
 end
 
-mutable struct SparseOutput{T<:AbstractFloat} <: Output
-    t::Vector{T}
-    t_ode::Vector{T}
-    u::Vector{Matrix{T}}
-    ue::Vector{Matrix{T}}
+function NativeOutput(; t = Float32[], vars = Symbol[], T = Float32)
+    vals = Dict{Symbol, Vector{Matrix{T}}}()
+    return NativeOutput(t, vars, vals)
 end
 
-function SparseOutput(Omega::ComputationDomain{T, L, M}, t_out::Vector{T}) where
-    {T<:AbstractFloat, L, M<:KernelMatrix{T}}
-    # initialize with placeholders
-    placeholder = Array(null(Omega))
-    u = [copy(placeholder) for t in t_out]
-    ue = [copy(placeholder) for t in t_out]
-    return SparseOutput(t_out, T[], u, ue)
-end
-
-mutable struct IntermediateOutput{T<:AbstractFloat} <: Output
-    t::Vector{T}
-    t_ode::Vector{T}
-    bsl::Vector{T}
-    u::Vector{Matrix{T}}
-    ue::Vector{Matrix{T}}
-    u_x::Vector{Matrix{T}}
-    u_y::Vector{Matrix{T}}
-    dudt::Vector{Matrix{T}}
-    dz_ss::Vector{Matrix{T}}
-end
-
-function IntermediateOutput(Omega::ComputationDomain{T, L, M}, t_out::Vector{T}) where
-    {T<:AbstractFloat, L, M<:KernelMatrix{T}}
-    bsl = similar(t_out)
-    placeholder = null(Omega)
-    u = [copy(placeholder) for t in t_out]
-    ue = [copy(placeholder) for t in t_out]
-    u_x = [copy(placeholder) for t in t_out]
-    u_y = [copy(placeholder) for t in t_out]
-    dudt = [copy(placeholder) for t in t_out]
-    dz_ss = [copy(placeholder) for t in t_out]
-    return IntermediateOutput(t_out, T[], bsl, u, ue, u_x, u_y, dudt, dz_ss)
-end
-
-"""
-    write_out!(now, out, k)
-
-Write results in output vectors.
-"""
-function write_out!(out::SparseOutput{T}, now::CurrentState{T, M}, k::Int) where
-    {T<:AbstractFloat, M<:KernelMatrix{T}}
-    out.u[k] .= copy(Array(now.u))
-    out.ue[k] .= copy(Array(now.ue))
-    return nothing
-end
-
-function write_out!(out::IntermediateOutput{T}, now::CurrentState{T, M}, k::Int) where
-    {T<:AbstractFloat, M<:KernelMatrix{T}}
-    out.bsl[k] = now.bsl
-    out.u[k] .= copy(Array(now.u))
-    out.ue[k] .= copy(Array(now.ue))
-    out.u_x[k] .= copy(Array(now.u_x))
-    out.u_y[k] .= copy(Array(now.u_y))
-    out.dudt[k] .= copy(Array(now.dudt))
-    out.dz_ss[k] .= copy(Array(now.dz_ss))
-    return nothing
+function write_out!(nout::NativeOutput, now::CurrentState)
+    for var in nout.vars
+        push!(nout.vals[var], Array.(getfield(now, var)))
+    end
 end
