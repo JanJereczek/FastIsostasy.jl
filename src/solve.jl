@@ -3,8 +3,8 @@
 #########################################################
 
 @kwdef struct DiffEqOptions{S<:ODEsolvers}
-    alg::S = Tsit5()    # For now we limit the options
-    reltol::Float64 = 1e-3
+    alg::S = Tsit5()
+    reltol::AbstractFloat = 1f-3
 end
 
 """
@@ -13,7 +13,6 @@ end
 Return a struct containing the options relative to solving a [`FastIsoProblem`](@ref).
 """
 @kwdef struct SolverOptions
-    deformation_model::Symbol = :lv_elva  # :lv_elva! or :lv_elra! or :lv_elra
     interactive_sealevel::Bool = false
     internal_loadupdate::Bool = true
     internal_bsl_update::Bool = true
@@ -37,13 +36,14 @@ model over `Omega::ComputationDomain` with parameters `c::PhysicalConstants` and
 """
 struct FastIsoProblem{
     T<:AbstractFloat,
+    Tout<:AbstractFloat,
     L<:Matrix{T},
     M<:KernelMatrix{T},
     B<:BoolMatrix,
     C<:ComplexMatrix{T},
     FP<:ForwardPlan{T},
     IP<:InversePlan{T},
-    O<:Output,
+    O<:NativeOutput,
     LL<:AbstractLithosphere,
     MM<:AbstractMantle,
     RR<:AbstractRheology,
@@ -58,8 +58,8 @@ struct FastIsoProblem{
     tools::FastIsoTools{T, M, C, FP, IP}
     ref::ReferenceState{T, M, B}
     now::CurrentState{T, M, B}
-    ncout::NetcdfOutput{Float32}
-    out::O
+    ncout::NetcdfOutput{Tout}
+    nout::O
 end
 
 function FastIsoProblem(
@@ -113,7 +113,7 @@ function FastIsoProblem(
     bsl_itp = zero_bsl(T, t_out),
     maskactive::BoolMatrix = kernelcollect(Omega.K .< Inf, Omega),
     ncout::NetcdfOutput = NetcdfOutput(Omega, t_out, ""),
-    output::String = "nothing",
+    nout = NativeOutput(),
 ) where {T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}}
 
     if opts.interactive_sealevel & (sum(maskactive) > 0.6 * Omega.nx * Omega.ny)
@@ -144,20 +144,14 @@ function FastIsoProblem(
         T(0.0), T(0.0), T(0.0), maskgrounded, maskocean, Omega.arraykernel(maskactive))
     now = CurrentState(Omega, ref)
 
-    if output == "sparse"
-        out = SparseOutput(Omega, t_out)
-    elseif output == "intermediate"
-        out = IntermediateOutput(Omega, t_out)
-    else
-        out = MinimalOutput(t_out, T[])
-    end
-    return FastIsoProblem(Omega, c, bcs, em, p, opts, tools, ref, now, ncout, out)
+    return FastIsoProblem(Omega, c, bcs, em, p, opts, tools, ref, now, ncout, nout)
 end
 
 
 function Base.show(io::IO, ::MIME"text/plain", fip::FastIsoProblem)
     Omega, p = fip.Omega, fip.p
     println(io, "FastIsoProblem")
+    println(io, "Type: ", "$(typeof(fip))")
     descriptors = [
         "Wx, Wy" => [Omega.Wx, Omega.Wy],
         "dx, dy" => [Omega.dx, Omega.dy],
@@ -178,15 +172,7 @@ end
 
 Solve the isostatic adjustment problem defined in `fip::FastIsoProblem`.
 """
-function solve!(fip::FastIsoProblem{T, L, M, B, C, FP, IP}) where {
-    T<:AbstractFloat,
-    L<:Matrix{T},
-    M<:KernelMatrix{T},
-    B<:BoolMatrix,
-    C<:ComplexMatrix{T},
-    FP<:ForwardPlan{T},
-    IP<:InversePlan{T}}
-
+function solve!(fip::FastIsoProblem)
     init_problem!(fip)
     t1 = time()
     prob = ODEProblem(update_diagnostics!, fip.now.u, extrema(fip.out.t), fip)
@@ -204,19 +190,16 @@ end
 function init_integrator(fip::FastIsoProblem)
     init_problem!(fip)
     prob = ODEProblem(update_diagnostics!, fip.now.u, extrema(fip.out.t), fip)
-    nc_callback = DiscreteCallback(nc_condition, nc_affect!)
+    ncout_callback = DiscreteCallback(nc_condition, nc_affect!)
+    nout_callback = DiscreteCallback(nout_condition, nout_affect!)
     integrator = init(prob, fip.opts.diffeq.alg, reltol=fip.opts.diffeq.reltol,
-        saveat=fip.out.t[end:end], tstops=fip.out.t, callback=nc_callback)
+        saveat=fip.out.t[end:end], tstops=fip.out.t, callback=ncout_callback)
     return integrator
 end
 
 function init_problem!(fip::FastIsoProblem)
     if !(fip.opts.internal_loadupdate)
         error("`solve!` does not support external updating of the load. Use `step!` instead.")
-    end
-
-    if fip.opts.deformation_model == :lv_elra
-        throw(ArgumentError("LV-ELRA is not implemented yet."))
     end
     
     update_diagnostics!(fip.now.dudt, fip.now.u, fip, fip.out.t[1])
@@ -227,20 +210,31 @@ end
 nc_condition(_, t, integrator) = (t in integrator.p.ncout.t) && 
     (integrator.p.now.k < length(integrator.p.ncout.t))
 
+nout_condition(_, t, integrator) = (t in integrator.p.nout.t)
 
 function nc_affect!(integrator)
     fip = integrator.p
-    println("Saving at index $(fip.now.k), simulation year $(integrator.t)...")
+    println("Saving at nc output at index $(fip.now.k), simulation year $(integrator.t)...")
     fip.now.k += 1
 
-    thinplate_horizontal_displacement!(fip.now.u_x, fip.now.u_y,
-        fip.now.u + fip.now.ue, fip.p.litho_thickness, fip.Omega)
-    
+    if (:u_x in fip.ncout.vars3D) || (:u_y in fip.ncout.vars3D)
+        thinplate_horizontal_displacement!(fip.now.u_x, fip.now.u_y,
+            fip.now.u + fip.now.ue, fip.p.litho_thickness, fip.Omega)
+    end
+
     if length(integrator.p.ncout.filename) > 3
         write_nc!(integrator.p.ncout, integrator.p.now, integrator.p.now.k)
     end
+end
 
-    if !(integrator.p.out isa MinimalOutput)
-        write_out!(integrator.p.out, integrator.p.now, integrator.p.now.k)
+function nout_affect!(integrator)
+    fip = integrator.p
+    println("Saving native output at simulation year $(integrator.t)...")
+
+    if (:u_x in fip.nout.vars3D) || (:u_y in fip.nout.vars3D)
+        thinplate_horizontal_displacement!(fip.now.u_x, fip.now.u_y,
+            fip.now.u + fip.now.ue, fip.p.litho_thickness, fip.Omega)
     end
+
+    write_out!(fip.nout, fip.now)
 end
