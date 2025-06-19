@@ -46,13 +46,13 @@ update_bsl!(os, delta_V)
 mutable struct PiecewiseConstantOceanSurface{T} <: AbstractOceanSurface{T}
     z::T
     A::T
-    A_itp::TimeInterpolation0D{T}
+    A_itp::Interpolation0D{T}
     A_pd::T
 end
 
 function PiecewiseConstantOceanSurface(; A_ocean_pd = A_OCEAN_PD, z0 = 0.0)
     z, A = load_oceansurfacefunction(verbose = false)
-    A_itp = TimeInterpolation0D(z, A)
+    A_itp = Interpolation0D(z, A)
     return PiecewiseConstantOceanSurface(z0, A_itp(z0), A_itp, A_ocean_pd)
 end
 
@@ -60,8 +60,10 @@ end
     PiecewiseLinearOceanSurface{T}
 
 A `mutable struct` containing:
-- `z`: the BSL at current time step.
-- `A`: the ocean surface at current time step.
+- `z_k`: the BSL at current time step `k`.
+- `A_k`: the ocean surface at current time step `k`.
+- `z`: a vector of BSL values used as knots for interpolation.
+- `A`: a vector of ocean surface values used as knots for interpolation.
 - `A_itp`: an interpolator of ocean surface over BSL.
 - `A_pd`: the present-day ocean surface.
 - `residual`: residual of the nonlinear equation solved numerically.
@@ -76,13 +78,27 @@ update_bsl!(os, delta_V)
 Note that, unlike [`ConstantOceanSurface`](@ref) and [`PiecewiseConstantOceanSurface`](@ref), this will only work if `using NLsolve`.
 """
 mutable struct PiecewiseLinearOceanSurface{T} <: AbstractOceanSurface{T}
-    z::T
-    A::T
-    A_itp::TimeInterpolation0D{T}
+    z_k::T
+    A_k::T
+    z::Vector{T}
+    A::Vector{T}
+    A_itp::Interpolation0D{T}
     A_pd::T
     residual::T
 end
 
+function PiecewiseLinearOceanSurface(; A_ocean_pd = A_OCEAN_PD, z0 = 0.0)
+    z, A, itp = load_oceansurfacefunction(T = T, verbose = false)
+    A_itp(z) = A_ocean_pd / itp(T(0.0)) * itp(z)
+    return PiecewiseLinearOceanSurface(z0, A_itp(z0), z, A, A_itp, A_ocean_pd, T(1e10))
+end
+
+"""
+    update_bsl!(os::AbstractOceanSurface{T}, delta_V::T) where {T<:AbstractFloat}
+
+Update the BSL and ocean surface based on the input `delta_V` (in m^3).
+This function is defined for all subtypes of [`AbstractOceanSurface`](@ref).
+"""
 function update_bsl!(os::ConstantOceanSurface{T}, delta_V::T) where {T<:AbstractFloat}
     os.z_k += delta_V / os.A_k
     return nothing
@@ -94,42 +110,7 @@ function update_bsl!(os::PiecewiseConstantOceanSurface{T}, delta_V::T) where {T<
     return nothing
 end
 
-"""
-    OceanSurfaceChange(; z0 = 0.0)
-
-A `mutable struct` containing:
-- `z_k`: the BSL at current time step `k`.
-- `A_k`: the ocean surface at current time step `k`.
-- `z`: a vector of BSL values used as knots for interpolation.
-- `A`: a vector of ocean surface values used as knots for interpolation.
-- `A_itp`: an interpolator of ocean surface over depth. Bias-free for present-day.
-- `A_pd`: the present-day ocean surface.
-- `res`: residual of the nonlinear equation solved numerically.
-
-An `osc::OceanSurfaceChange` can be used as function to update `osc.z_k` and `osc.A_k`
-based on `osc.A_itp` and an input `delta_V` by running:
-
-```julia
-osc(delta_V)
-```
-"""
-mutable struct OceanSurfaceChange{T<:AbstractFloat}
-    z_k::T
-    A_k::T
-    z::Vector{T}
-    A::Vector{T}
-    A_itp::Any
-    A_pd::T
-    residual::T
-end
-
-function OceanSurfaceChange(; T = Float64, A_ocean_pd = T(3.625e14), z0 = T(0.0))
-    z, A, itp = load_oceansurfacefunction(T = T, verbose = false)
-    A_itp(z) = A_ocean_pd / itp(T(0.0)) * itp(z)
-    return OceanSurfaceChange(z0, A_itp(z0), z, A, A_itp, A_ocean_pd, T(1e10))
-end
-
-function (osc::OceanSurfaceChange{T})(delta_V::T) where {T<:AbstractFloat}
+function update_bsl!(osc::OceanSurfaceChange{T}, delta_V::T) where {T<:AbstractFloat}
     if delta_V != 0
         osc.z_k += delta_V / osc.A_itp(osc.z_k)
         osc.A_k = osc.A_itp(osc.z_k)
