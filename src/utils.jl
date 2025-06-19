@@ -1,4 +1,3 @@
-
 cudainfo() = CUDA.versioninfo()
 
 #####################################################
@@ -60,7 +59,6 @@ function matrify(x::Vector{<:Real}, N::Int)
 end
 
 function matrify(x::Vector{T}, nx::Int, ny::Int) where {T<:Real}
-    # X = Array{T, 3}(undef, nx, ny, length(x))
     X = zeros(T, nx, ny, length(x))
     @inbounds for i in eachindex(x)
         X[:, :, i] = fill(x[i], nx, ny)
@@ -221,9 +219,7 @@ function kernelpromote(X::M, arraykernel) where {M<:AbstractArray{T}} where {T<:
         return arraykernel(X)
     end
 end
-
 kernelpromote(X::Vector, arraykernel) = [arraykernel(x) for x in X]
-
 
 """
     reinit_structs_cpu(Omega, p)
@@ -243,34 +239,34 @@ function reinit_structs_cpu(Omega::ComputationDomain{T, L, M}, p::LayeredEarth{T
     return Omega_cpu, p_cpu
 end
 
-function remake!(fip::FastIsoProblem)
+# function remake!(fip::FastIsoProblem)
 
-    T = Float64
-    (; Omega, ref, now) = fip
+#     T = Float64
+#     (; Omega, ref, now) = fip
 
-    now.u .= ref.u
-    now.dudt .= T.(0.0)
-    now.ue .= ref.ue
-    now.u_eq .= ref.u
-    now.ucorner = T(0.0)
-    now.H_ice .= ref.H_ice
-    now.H_water .= ref.H_water
-    now.columnanoms = ColumnAnomalies(Omega)
-    now.b .= ref.b
-    now.bsl = ref.bsl
-    now.dz_ss .= T.(0.0)
-    now.z_ss .= ref.z_ss
-    now.V_af = ref.V_af
-    now.V_pov = ref.V_pov
-    now.V_den = ref.V_den
-    now.maskgrounded .= ref.maskgrounded
-    now.maskocean .= ref.maskocean
-    now.osc = OceanSurfaceChange(T = T, z0 = ref.bsl)
-    now.countupdates = 0
-    now.k = 1
+#     now.u .= ref.u
+#     now.dudt .= T.(0.0)
+#     now.ue .= ref.ue
+#     now.u_eq .= ref.u
+#     now.ucorner = T(0.0)
+#     now.H_ice .= ref.H_ice
+#     now.H_water .= ref.H_water
+#     now.columnanoms = ColumnAnomalies(Omega)
+#     now.b .= ref.b
+#     now.bsl = ref.bsl
+#     now.dz_ss .= T.(0.0)
+#     now.z_ss .= ref.z_ss
+#     now.V_af = ref.V_af
+#     now.V_pov = ref.V_pov
+#     now.V_den = ref.V_den
+#     now.maskgrounded .= ref.maskgrounded
+#     now.maskocean .= ref.maskocean
+#     now.osc = OceanSurfaceChange(T = T, z0 = ref.bsl)
+#     now.countupdates = 0
+#     now.k = 1
 
-    return nothing
-end
+#     return nothing
+# end
 
 #####################################################
 # BC utils
