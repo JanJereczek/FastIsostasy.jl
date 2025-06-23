@@ -11,6 +11,13 @@ abstract type AbstractOceanSurface{T<:AbstractFloat} end
 const A_OCEAN_PD = 3.625e14     # Ocean surface (m^2) as in Goelzer (2020, before Eq. (9))
 
 """
+    ConstantBSL
+"""
+mutable struct ConstantBSL{T<:AbstractFloat}
+    z::T = 0.0
+end
+
+"""
     ConstantOceanSurface{T}
 
 A `mutable struct` containing:
@@ -99,6 +106,11 @@ end
 Update the BSL and ocean surface based on the input `delta_V` (in m^3).
 This function is defined for all subtypes of [`AbstractOceanSurface`](@ref).
 """
+function update_bsl!(os::ConstantBSL{T}, delta_V::T) where {T<:AbstractFloat}
+    os.z = os.z_ref
+    return nothing
+end
+
 function update_bsl!(os::ConstantOceanSurface{T}, delta_V::T) where {T<:AbstractFloat}
     os.z_k += delta_V / os.A_k
     return nothing
