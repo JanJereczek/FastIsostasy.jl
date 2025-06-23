@@ -29,6 +29,7 @@ using Reexport: Reexport, @reexport
     SIR54, Alshina2, Alshina3, Alshina6
 
 include("convenience_types.jl")
+include("earth_models.jl")
 include("domain.jl")
 include("boundary_conditions.jl")
 include("constants.jl")
@@ -52,11 +53,11 @@ include("elra.jl")
 include("inversion.jl")
 include("coordinates.jl")
 
-# convenience_types.jl
+# earth_models.jl
 export EarthModel, AbstractLithosphere, AbstractMantle, AbstractRheology,
        LaterallyConstantLithosphere, LaterallyVariableLithosphere,
        LaterallyConstantMantle, LaterallyVariableMantle, RelaxedRheology,
-       ViscousRheology
+       MaxwellRheology
 
 # domain.jl
 export ComputationDomain
