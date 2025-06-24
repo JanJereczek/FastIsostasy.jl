@@ -1,130 +1,136 @@
+const A_OCEAN_PD = 3.625e14     # Ocean surface (m^2) as in Goelzer (2020, before Eq. (9))
+
+"""
+    ReferenceOcean{T<:AbstractFloat, I<:Interpolations.Extrapolation}
+    ReferenceOcean(z = 0; T = Float32, itp_kwargs = (extrapolation_bc = Flat()))
+
+A `struct` used in all subtypes of `AbstractOceanSurface` to define a fixed
+reference of barystatic sea level and ocean surface area. Contains:
+- `z`: the reference BSL (m), which defaults to 0 (reference year 2020).
+- `A`: the reference ocean surface area (m^2).
+- `z_vec`: a vector of BSL values (m) used for interpolation.
+- `A_vec`: a vector of ocean surface area values (m^2) used for interpolation.
+- `A_itp`: an interpolator function for ocean surface area over BSL.
+
+In the constructor, `T` determines the floating point arithmetic used in all
+computations, and `itp_kwargs` allows customization of the interpolation.
+
+Example usage:
+```julia
+ref = ReferenceOcean()              # assume BSL = 0
+```
+
+Custom:
+```julia
+ref = ReferenceOcean(z = 0.1)       # assume BSL = 0.1 m and compute A accordingly
+```
+"""
+struct ReferenceOcean{T<:AbstractFloat, I<:Interpolations.Extrapolation}
+    z::T
+    A::T
+    z_vec::Vector{T}
+    A_vec::Vector{T}
+    A_itp::I
+end
+
+function ReferenceOcean(z; T = Float32, itp_kwargs = (extrapolation_bc = Flat()))
+    z_vec, A_vec = load_oceansurface_data(T = T, verbose = false)
+    itp = linear_interpolation(z_vec, A_vec; itp_kwargs...)
+    A_itp(zz) = T(A_OCEAN_PD) / itp(T(0)) * itp(zz)
+    A = A_itp(z)
+    return ReferenceOcean(T(z), T(A), z_vec, A_vec, A_itp)
+end
+
+ReferenceOcean() = ReferenceOcean(0)
+
+Base.eltype(ref::ReferenceOcean{T}) where {T<:AbstractFloat} = T
+
 """
     AbstractOceanSurface
 
 Abstract type for ocean surface. Available subtypes are:
+- [`ConstantBSL`](@ref)
 - [`ConstantOceanSurface`](@ref)
 - [`PiecewiseConstantOceanSurface`](@ref)
-- [`PiecewiseLinearOceanSurface`](@ref), which is only available if `using NLsolve`.
+- [`PiecewiseLinearOceanSurface`](@ref)
+
+All subtypes implement the `update_bsl!` function:
+```julia
+T, delta_V = Float64, 1.0e9                 # Example values
+os = PiecewiseConstantOceanSurface{T}()     # or any other subtype!
+update_bsl!(os, delta_V)
+```
 """
 abstract type AbstractOceanSurface{T<:AbstractFloat} end
 
-const A_OCEAN_PD = 3.625e14     # Ocean surface (m^2) as in Goelzer (2020, before Eq. (9))
+"""
+    ConstantSeaLevel
 
+A `mutable struct` containing:
+- `ref`: an instance of [`ReferenceOcean`](@ref).
+- `z`: the BSL, considered constant in time.
+- `A`: the ocean surface area, considered constant in time.
 """
-    ConstantBSL
-"""
-mutable struct ConstantBSL{T<:AbstractFloat}
-    z::T = 0.0
+mutable struct ConstantSeaLevel{T, R<:ReferenceOcean{T}} <: AbstractOceanSurface{T}
+    ref::R
+    z::T
+    A::T
 end
+
+ConstantSeaLevel(; ref = ReferenceOcean()) = ConstantSeaLevel(ref, ref.z, ref.A)
 
 """
     ConstantOceanSurface{T}
 
 A `mutable struct` containing:
+- `ref`: an instance of [`ReferenceOcean`](@ref).
 - `z`: the BSL at current time step.
-- `A`: the ocean surface at current time step.
-
-The BSL can be updated by running:
-```julia
-os = ConstantOceanSurface{T}()
-update_bsl!(os, delta_V)
-```
+- `A`: the ocean surface area, considered constant in time.
 """
-@kwdef mutable struct ConstantOceanSurface{T} <: AbstractOceanSurface{T}
-    z::T = 0
-    A::T = A_OCEAN_PD
+mutable struct ConstantOceanSurface{T, R<:ReferenceOcean{T}} <: AbstractOceanSurface{T}
+    ref::R
+    z::T
+    A::T
 end
+
+ConstantOceanSurface(; ref = ReferenceOcean()) = ConstantOceanSurface(ref, ref.z, ref.A)
 
 """
     PiecewiseConstantOceanSurface{T}
 
 A `mutable struct` containing:
+- `ref`: an instance of [`ReferenceOcean`](@ref).
 - `z`: the BSL at current time step.
 - `A`: the ocean surface at current time step.
-- `A_itp`: an interpolator of ocean surface over BSL.
-- `A_pd`: the present-day ocean surface.
-
-The BSL can be updated by running:
-```julia
-os = PiecewiseConstantOceanSurface{T}()
-update_bsl!(os, delta_V)
-```
 """
-mutable struct PiecewiseConstantOceanSurface{T} <: AbstractOceanSurface{T}
+mutable struct PiecewiseConstantOceanSurface{T, R<:ReferenceOcean{T}} <: AbstractOceanSurface{T}
+    ref::R
     z::T
     A::T
-    A_itp::Interpolation0D{T}
-    A_pd::T
 end
 
-function PiecewiseConstantOceanSurface(; A_ocean_pd = A_OCEAN_PD, z0 = 0.0)
-    z, A = load_oceansurfacefunction(verbose = false)
-    A_itp = Interpolation0D(z, A)
-    return PiecewiseConstantOceanSurface(z0, A_itp(z0), A_itp, A_ocean_pd)
-end
+PiecewiseConstantOceanSurface(; ref = ReferenceOcean()) = 
+    PiecewiseConstantOceanSurface(ref, ref.z, ref.A)
 
 """
-    PiecewiseLinearOceanSurface{T}
+    update_bsl!(os::AbstractOceanSurface, delta_V)
 
-A `mutable struct` containing:
-- `z_k`: the BSL at current time step `k`.
-- `A_k`: the ocean surface at current time step `k`.
-- `z`: a vector of BSL values used as knots for interpolation.
-- `A`: a vector of ocean surface values used as knots for interpolation.
-- `A_itp`: an interpolator of ocean surface over BSL.
-- `A_pd`: the present-day ocean surface.
-- `residual`: residual of the nonlinear equation solved numerically.
-
-The BSL can be updated by running:
-```julia
-using NLsolve
-os = PiecewiseLinearOceanSurface{T}()
-update_bsl!(os, delta_V)
-```
-
-Note that, unlike [`ConstantOceanSurface`](@ref) and [`PiecewiseConstantOceanSurface`](@ref), this will only work if `using NLsolve`.
+Update the BSL and ocean surface based on the input `delta_V` (in m^3) and
+on a subtype of [`AbstractOceanSurface`](@ref).
 """
-mutable struct PiecewiseLinearOceanSurface{T} <: AbstractOceanSurface{T}
-    z_k::T
-    A_k::T
-    z::Vector{T}
-    A::Vector{T}
-    A_itp::Interpolation0D{T}
-    A_pd::T
-    residual::T
-end
-
-function PiecewiseLinearOceanSurface(; A_ocean_pd = A_OCEAN_PD, z0 = 0.0)
-    z, A, itp = load_oceansurfacefunction(T = T, verbose = false)
-    A_itp(z) = A_ocean_pd / itp(T(0.0)) * itp(z)
-    return PiecewiseLinearOceanSurface(z0, A_itp(z0), z, A, A_itp, A_ocean_pd, T(1e10))
-end
-
-"""
-    update_bsl!(os::AbstractOceanSurface{T}, delta_V::T) where {T<:AbstractFloat}
-
-Update the BSL and ocean surface based on the input `delta_V` (in m^3).
-This function is defined for all subtypes of [`AbstractOceanSurface`](@ref).
-"""
-function update_bsl!(os::ConstantBSL{T}, delta_V::T) where {T<:AbstractFloat}
-    os.z = os.z_ref
+function update_bsl!(os::ConstantSeaLevel, delta_V)
+    os.z = os.ref.z
     return nothing
 end
 
-function update_bsl!(os::ConstantOceanSurface{T}, delta_V::T) where {T<:AbstractFloat}
-    os.z_k += delta_V / os.A_k
-    return nothing
-end
-
-function update_bsl!(os::PiecewiseConstantOceanSurface{T}, delta_V::T) where {T<:AbstractFloat}
+function update_bsl!(os::ConstantOceanSurface, delta_V)
+    os.A = os.ref.A
     os.z += delta_V / os.A
-    os.A = os.A_itp(os.z)
     return nothing
 end
 
-function update_bsl!(osc::OceanSurfaceChange{T}, delta_V::T) where {T<:AbstractFloat}
-    if delta_V != 0
-        osc.z_k += delta_V / osc.A_itp(osc.z_k)
-        osc.A_k = osc.A_itp(osc.z_k)
-    end
+function update_bsl!(os::PiecewiseConstantOceanSurface, delta_V)
+    os.z += delta_V / os.A
+    os.A = os.ref.A_itp(os.z)
+    return nothing
 end
