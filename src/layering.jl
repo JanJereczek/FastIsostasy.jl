@@ -1,4 +1,3 @@
-
 const DEFAULT_RHO_LITHO = 3.2e3
 const DEFAULT_LITHO_YOUNGMODULUS = 6.6e10
 const DEFAULT_LITHO_POISSONRATIO = 0.28
@@ -170,8 +169,7 @@ end
 Compute the layer boundaries for a given [`AbstractLayering`](@ref).
 Output is typically passed to [`LayeredEarth`](@ref) to create a layered Earth model.
 """
-function get_layer_boundaries(n_x, n_y, litho_thickness::Matrix{T},
-    layering::UniformLayering{T}) where {T<:AbstractFloat}
+function get_layer_boundaries(n_x, n_y, litho_thickness, layering::UniformLayering)
 
     layer_boundaries = zeros(T, n_x, n_y, layering.n_layers)
     for l in 1:layering.n_layers
@@ -180,8 +178,7 @@ function get_layer_boundaries(n_x, n_y, litho_thickness::Matrix{T},
     return layer_boundaries
 end
 
-function get_layer_boundaries(n_x, n_y, litho_thickness::Matrix{T},
-    layering::UniformLayering{T}) where {T<:AbstractFloat}
+function get_layer_boundaries(n_x, n_y, litho_thickness, layering::ParallelLayering)
 
     layer_boundaries = zeros(T, n_x, n_y, layering.n_layers)
     view(layer_boundaries, :, :, 1) .= litho_thickness .+ layering.tol
@@ -191,22 +188,18 @@ function get_layer_boundaries(n_x, n_y, litho_thickness::Matrix{T},
     return layer_boundaries
 end
 
-function get_layer_boundaries(n_x, n_y, litho_thickness::Matrix{T},
-    layering::UniformLayering{T}) where {T<:AbstractFloat}
+function get_layer_boundaries(n_x, n_y, litho_thickness, layering::EqualizedLayering)
 
     layer_boundaries = zeros(T, n_x, n_y, layering.n_layers)
     view(layer_boundaries, :, :, 1) .= litho_thickness .+ layering.tol
     for l in 2:layering.n_layers
-        # layer_boundaries[:, :, l] .= maximum(layer_boundaries[:, :, l-1]) .+
-        #     layering.thickness[l]
         view(layer_boundaries, :, :, l) .= layering.boundaries[l]
     end
     return layer_boundaries
 end
 
-function get_layer_boundaries(n_x, n_y, litho_thickness::Matrix{T},
-    layering::UniformLayering{T}) where {T<:AbstractFloat}
-    
+function get_layer_boundaries(n_x, n_y, litho_thickness, layering::FoldedLayering)
+
     layer_boundaries = zeros(T, n_x, n_y, layering.n_layers)
     for I in CartesianIndices(litho_thickness)
         view(layer_boundaries, I, :) .= range(litho_thickness[I] + layering.tol,
