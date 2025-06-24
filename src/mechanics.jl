@@ -95,7 +95,7 @@ function update_dudt!(dudt, u, fip, t, rheo::RelaxedRheology,
     error("Relaxed rheology is not implemented for laterally variable lithosphere.")
 end
 
-function update_dudt!(dudt, u, fip, t, rheo::ViscousRheology,
+function update_dudt!(dudt, u, fip, t, rheo::MaxwellRheology,
     lithosphere::LaterallyConstantLithosphere)
     error("Viscous rheology is not implemented for laterally constant lithosphere.")
     # fft(load, t + dt/2)
@@ -106,7 +106,7 @@ function update_dudt!(dudt, u, fip, t, rheo::ViscousRheology,
     # u_next = fftinv(U_next)
 end
 
-function update_dudt!(dudt, u, fip, t, rheo::ViscousRheology,
+function update_dudt!(dudt, u, fip, t, rheo::MaxwellRheology,
     lithosphere::LaterallyVariableLithosphere)
     Omega, P = fip.Omega, fip.tools.prealloc
     update_deformation_rhs!(fip, u)
