@@ -1,12 +1,3 @@
-abstract type AbstractSealevelModel end
-
-struct RegionalSealevelModel <: AbstractSealevelModel
-end
-
-struct GlobalSealevelModel <: AbstractSealevelModel
-end
-
-
 """
     update_dz_ss!(fip::FastIsoProblem)
 
@@ -25,7 +16,7 @@ end
 
 Return the Green's function used to compute the SSH perturbation `dz_ss` as in [^Coulon2021].
 """
-function get_dz_ssgreen(Omega::ComputationDomain, c::PhysicalConstants)
+function get_dz_ssgreen(Omega::RegionalComputationDomain, c::PhysicalConstants)
     dz_ssgreen = unbounded_dz_ssgreen(Omega.R, c)
     max_dz_ssgreen = unbounded_dz_ssgreen(norm([100e3, 100e3]), c)  # tolerance = resolution on 100km
     return min.(dz_ssgreen, max_dz_ssgreen)
@@ -67,8 +58,8 @@ function columnanom_full!(fip::FastIsoProblem)
 end
 
 function mass_anom(fip::FastIsoProblem)
-    return fip.Omega.A .* (fip.now.columnanoms.full)# .-
-        # fip.c.rho_seawater .* fip.now.bsl .* fip.now.maskocean .* fip.ref.maskactive )
+    return fip.Omega.A .* (fip.now.columnanoms.full) .-
+        fip.c.rho_seawater .* fip.now.bsl .* fip.now.maskocean .* fip.ref.maskactive
 end
 
 function mass_anom(A, canom_full)
@@ -80,19 +71,27 @@ end
 
 Update the load columns of a `::CurrentState`.
 """
-function update_loadcolumns!(fip::FastIsoProblem)
-    # fip.now.H_sed .= H_sed
+function update_loadcolumns!(fip::FastIsoProblem, bcs_z_ss::InteractiveSeaLevel)
     update_maskgrounded!(fip)
-    if fip.opts.interactive_sealevel
-        update_maskocean!(fip)
-        fip.now.H_water .= watercolumn(fip)
-    end
+    update_maskocean!(fip)
+    fip.now.H_water .= watercolumn(fip)
+    return nothing
+end
+
+function update_loadcolumns!(fip::FastIsoProblem, bcs_z_ss::EvolvingSeaLevel)
+    update_maskgrounded!(fip)
+    update_maskocean!(fip)
+    return nothing
+end
+
+function update_loadcolumns!(fip::FastIsoProblem, bcs_z_ss::ConstantSeaLevel)
+    update_maskgrounded!(fip)
     return nothing
 end
 
 function watercolumn(fip)
     now = fip.now
-    return watercolumn(now.H_ice, now.maskgrounded, now.b, now.z_ss, fip.c)
+    return watercolumn(now.H_ice, now.maskgrounded, now.z_b, now.z_ss, fip.c)
 end
 
 function watercolumn(H_ice, maskgrounded, b, z_ss, c)
@@ -117,7 +116,7 @@ function get_maskocean(z_ss, b, maskgrounded)
 end
 
 function height_above_floatation(state::AbstractState, c::PhysicalConstants)
-    return height_above_floatation(state.H_ice, state.b,
+    return height_above_floatation(state.H_ice, state.z_b,
         state.z_ss, c)
 end
 
@@ -126,13 +125,30 @@ function height_above_floatation(H_ice, b, z_ss, c)
 end
 
 function update_maskocean!(fip)
-    @. fip.now.maskocean = (fip.now.z_ss - fip.now.b) > 0
+    @. fip.now.maskocean = (fip.now.z_ss - fip.now.z_b) > 0
     @. fip.now.maskocean = fip.now.maskocean .& not.(fip.now.maskgrounded)
 end
 
 function update_bedrock!(fip::FastIsoProblem, u)
     fip.now.u .= u
-    @. fip.now.b = fip.ref.b + fip.now.ue + fip.now.u
+    @. fip.now.z_b = fip.ref.z_b + fip.now.ue + fip.now.u
+    return nothing
+end
+
+function update_Haf!(fip::FastIsoProblem)
+    @. fip.now.H_af = max(fip.now.H_ice + min.(fip.now.z_b - fip.now.z_ss, 0), 0) *
+        (fip.c.rho_seawater / fip.c.rho_ice)
+    return nothing
+end
+
+function update_sealevel!(fip::FastIsoProblem, sl::ConstantSeaLevel)
+    return nothing
+end
+
+function update_sealevel!(fip::FastIsoProblem, sl::InteractiveSeaLevel)
+    update_dz_ss!(fip)
+    update_z_ss!(fip)
+    update_maskocean!(fip)
     return nothing
 end
 
@@ -166,9 +182,7 @@ function update_bsl!(fip::FastIsoProblem)
     Vnew = total_volume(fip)
 
     delta_V = Vnew - Vold
-    update_bsl!(fip.now.osc, -delta_V)
-
-    fip.now.bsl = fip.now.osc.z_k
+    update_bsl!(fip.now.bsl, -delta_V)
     return nothing
 end
 
@@ -208,7 +222,7 @@ Note: we do not use eq. (8) as it is only a special case of eq. (14) that does n
 allow a correct representation of external sea-level forcings.
 """
 function update_V_pov!(fip::FastIsoProblem)
-    fip.now.V_pov = sum( max.(fip.ref.b - fip.now.b, 0) .*
-        (fip.now.b .< fip.now.z_ss) .* fip.Omega.A )
+    fip.now.V_pov = sum( max.(fip.ref.z_b - fip.now.z_b, 0) .*
+        (fip.now.z_b .< fip.now.z_ss) .* fip.Omega.A )
     return nothing
 end
