@@ -6,58 +6,37 @@ from the displacement, which requires an integrator.
 """
 function update_diagnostics!(dudt, u, fip::FastIsoProblem, t)
 
-    # @show t, extrema(u), extrema(fip.now.ue)
+    push!(fip.nout.t_steps_ode, t)
 
     # CAUTION: Order really matters here!
 
     # Make sure that integrated viscous displacement satisfies BC.
     apply_bc!(u, fip.bcs.u)
-
-    # Update load columns if interpolator available
-    if fip.opts.internal_loadupdate
-        # fip.now.H_ice .= fip.tools.Hice(t)
-        piecewise_linear_interpolate!(fip.now.H_ice, t, fip.tools.Hice)
-        @. fip.now.H_af = max(fip.now.H_ice + min.(fip.now.b - fip.now.z_ss, 0), 0) *
-            (fip.c.rho_seawater / fip.c.rho_ice)
-        update_loadcolumns!(fip)
-    end
-
-    # Regardless of update method for column, update the anomalies!
+    apply_bc!(fip.now.H_ice, t, fip.bcs.h_ice)
+    update_Haf!(fip)
+    update_loadcolumns!(fip, fip.bcs.z_ss)
     columnanom_load!(fip)
 
     # As integration requires smaller time steps than diagnostics,
     # only update diagnostics every fip.opts.dt_diagnostics or fip.ncout.t
-    # update_diagnostics = (((t - fip.ncout.t[fip.now.k]) / fip.opts.dt_diagnostics) >=
-    #     fip.now.countupdates) || t ≈ fip.ncout.t[fip.now.k + 1]
     update_diagnostics = ((t / fip.opts.dt_diagnostics) >= fip.now.countupdates + 1)
 
     if update_diagnostics
-        @show t
+        # @show t
         
         # if elastic update placed after dz_ss, worse match with (Spada et al. 2011)
-        update_elasticresponse!(fip)
+        update_elasticresponse!(fip, fip.em.lithosphere)
         columnanom_litho!(fip)
-
-        # Only update the dz_ss and sea level if now is interactive.
-        if fip.opts.interactive_sealevel
-            if fip.opts.internal_bsl_update
-                update_bsl!(fip)
-            else
-                fip.now.bsl = fip.tools.bsl(t)
-            end
-            update_dz_ss!(fip)
-            update_z_ss!(fip)
-            update_maskocean!(fip)
-        end
+        update_bsl!(fip)
+        update_sealevel!(fip, fip.bcs.z_ss)
         fip.now.countupdates += 1
     end
-    columnanom_full!(fip)
 
+    columnanom_full!(fip)
     update_dudt!(dudt, u, fip, t, fip.em)
     fip.now.dudt .= dudt
     columnanom_mantle!(fip)
     update_bedrock!(fip, u)
-    # @show t, extrema(fip.now.u)
     return nothing
 end
 
@@ -96,7 +75,7 @@ function update_dudt!(dudt, u, fip, t, rheo::RelaxedRheology,
 end
 
 function update_dudt!(dudt, u, fip, t, rheo::MaxwellRheology,
-    lithosphere::LaterallyConstantLithosphere)
+    lithosphere::L) where {L<:LaterallyConstantLithosphere}
     error("Viscous rheology is not implemented for laterally constant lithosphere.")
     # fft(load, t + dt/2)
     # U_now = fft(u_now)
@@ -107,7 +86,7 @@ function update_dudt!(dudt, u, fip, t, rheo::MaxwellRheology,
 end
 
 function update_dudt!(dudt, u, fip, t, rheo::MaxwellRheology,
-    lithosphere::LaterallyVariableLithosphere)
+    lithosphere::L) where {L<:AbstractLithosphere}
     Omega, P = fip.Omega, fip.tools.prealloc
     update_deformation_rhs!(fip, u)
     @. P.fftrhs = complex(P.rhs * Omega.K / (2 * fip.p.effective_viscosity))
@@ -191,13 +170,18 @@ end
 Update the elastic response by convoluting the Green's function with the load anom.
 To use coefficients differing from [^Farrell1972], see [FastIsoTools](@ref).
 """
-function update_elasticresponse!(fip::FastIsoProblem)
+function update_elasticresponse!(fip::FastIsoProblem, lith::L) where {L<:AbstractLithosphere}
 
     @. fip.tools.prealloc.buffer_x = fip.now.columnanoms.load * fip.Omega.K ^ 2
     samesize_conv!(fip.now.ue, fip.tools.prealloc.buffer_x,
         fip.tools.elastic_convo, fip.Omega, fip.bcs.u_e, fip.bcs.u_e.space)
     # fip.now.ue .= samesize_conv(fip.now.columnanoms.load .* fip.Omega.K .^ 2,
     #     fip.tools.elastic_convo, fip.Omega)
+    return nothing
+end
+
+function update_elasticresponse!(fip::FastIsoProblem, lith::RigidLithosphere)
+    fip.now.ue .= 0
     return nothing
 end
 
@@ -252,7 +236,7 @@ Integrate load response over field by using 2D quadrature with specified
 support points and associated coefficients.
 """
 function get_elasticgreen(
-    Omega::ComputationDomain{T, M},
+    Omega::RegionalComputationDomain{T, M},
     greenintegrand_function::Function,
     quad_support::Vector{T},
     quad_coeffs::Vector{T},
