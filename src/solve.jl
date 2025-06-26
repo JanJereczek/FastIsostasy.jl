@@ -1,9 +1,8 @@
 #########################################################
 # Options
 #########################################################
-
 @kwdef struct DiffEqOptions{S<:ODEsolvers}
-    alg::S = Tsit5()
+    alg::S = BS3()
     reltol::AbstractFloat = 1f-3
 end
 
@@ -13,9 +12,6 @@ end
 Return a struct containing the options relative to solving a [`FastIsoProblem`](@ref).
 """
 @kwdef struct SolverOptions
-    interactive_sealevel::Bool = false
-    internal_loadupdate::Bool = true
-    internal_bsl_update::Bool = true
     diffeq::DiffEqOptions = DiffEqOptions()
     dt_diagnostics::Float64 = 10.0
     verbose::Bool = false
@@ -31,130 +27,105 @@ end
     FastIsoProblem(Omega, c, p, t_out, t_Hice, Hice)
 
 Return a struct containing all the other structs needed for the forward integration of the
-model over `Omega::ComputationDomain` with parameters `c::PhysicalConstants` and
+model over `Omega::RegionalComputationDomain` with parameters `c::PhysicalConstants` and
 `p::LayeredEarth`. The outputs are stored at `t_out::Vector{<:AbstractFloat}`.
 """
 struct FastIsoProblem{
-    T<:AbstractFloat,
-    Tout<:AbstractFloat,
-    L<:Matrix{T},
-    M<:KernelMatrix{T},
-    B<:BoolMatrix,
-    C<:ComplexMatrix{T},
-    FP<:ForwardPlan{T},
-    IP<:InversePlan{T},
-    O<:NativeOutput,
-    LL<:AbstractLithosphere,
-    MM<:AbstractMantle,
-    RR<:AbstractRheology,
+    CD,     # <:AbstractComputationDomain
+    PC,     # <:PhysicalConstants
+    BCS,    # <:ProblemBCs
+    EM,     # <:EarthModel
+    LE,     # <:LayeredEarth
+    SO,     # <:SolverOptions
+    FIT,    # <:FastIsoTools
+    RS,     # <:ReferenceState
+    CS,     # <:CurrentState
+    NCO,    # <:NetcdfOutput
+    NO,     # <:NativeOutput
 }
-
-    Omega::ComputationDomain{T, L, M}
-    c::PhysicalConstants{T}
-    bcs::ProblemBCs{T}
-    em::EarthModel{LL, MM, RR}
-    p::LayeredEarth{T, M}
-    opts::SolverOptions
-    tools::FastIsoTools{T, M, C, FP, IP}
-    ref::ReferenceState{T, M, B}
-    now::CurrentState{T, M, B}
-    ncout::NetcdfOutput{Tout}
-    nout::O
+    Omega::CD
+    c::PC
+    bcs::BCS
+    em::EM
+    p::LE
+    opts::SO
+    tools::FIT
+    ref::RS
+    now::CS
+    ncout::NCO
+    nout::NO
 end
 
 function FastIsoProblem(
-    Omega::ComputationDomain{T, L, M},
-    c::PhysicalConstants{T},
-    bcs::ProblemBCs,
-    em::EarthModel,
-    p::LayeredEarth{T, M},
-    t_out::Vector{<:Real};
-    kwargs...,
-) where {T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}}
-    # Creating some placeholders in case of an external update of the load.
-    t_Hice_snapshots = [extrema(t_out)...]
-    Hice_snapshots = [null(Omega), null(Omega)]
-    return FastIsoProblem(Omega, c, bcs, p, t_out, t_Hice_snapshots, Hice_snapshots; kwargs...)
-end
+    Omega,  # RegionalComputationDomain
+    em,     # EarthModel
+    p;      # LayeredEarth
+    T = eltype(Omega.R),
+    bcs = ProblemBCs(Omega),
+    opts = SolverOptions(),
+    u_0 = null(Omega),
+    ue_0 = null(Omega),
+    z_ss_0 = null(Omega),
+    z_b_0 = null(Omega),
+    maskactive = kernelcollect(Omega.K .< Inf, Omega),
+    ncout = NetcdfOutput(Omega, T[], ""),
+    nout = NativeOutput(t = T[]),
+    c = PhysicalConstants{T}(),
+    bsl = ConstantBSL(),
+)
 
-function FastIsoProblem(
-    Omega::ComputationDomain{T, L, M},
-    c::PhysicalConstants{T},
-    bcs::ProblemBCs,
-    em::EarthModel,
-    p::LayeredEarth{T, M},
-    t_out::Vector{<:Real},
-    Hice::KernelMatrix{T};
-    kwargs...,
-) where {T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}}
-    # Constant interpolator in case viscosity is fixed over time.
-    t_Hice_snapshots = [extrema(t_out)...]
-    Hice_snapshots = [Hice, Hice]
-    return FastIsoProblem(Omega, c, bcs, p, t_out, t_Hice_snapshots, Hice_snapshots; kwargs...)
-end
-
-zero_bsl(T, t) = linear_interpolation(T.([extrema(t)...]), T.([0.0, 0.0]),
-    extrapolation_bc = Flat())
-
-function FastIsoProblem(
-    Omega::ComputationDomain{T, L, M},
-    c::PhysicalConstants{T},
-    bcs::ProblemBCs,
-    em::EarthModel,
-    p::LayeredEarth{T, M},
-    t_out::Vector{<:Real},
-    t_Hice_snapshots::Vector{T},
-    Hice_snapshots::Vector{<:KernelMatrix{T}};
-    opts::SolverOptions = SolverOptions(),
-    u_0::KernelMatrix{T} = null(Omega),
-    ue_0::KernelMatrix{T} = null(Omega),
-    z_ss_0::KernelMatrix{T} = null(Omega),
-    b_0::KernelMatrix{T} = null(Omega),
-    bsl_itp = zero_bsl(T, t_out),
-    maskactive::BoolMatrix = kernelcollect(Omega.K .< Inf, Omega),
-    ncout::NetcdfOutput = NetcdfOutput(Omega, t_out, ""),
-    nout = NativeOutput(),
-) where {T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}}
-
-    if opts.interactive_sealevel & (sum(maskactive) > 0.6 * Omega.nx * Omega.ny)
+    if (bcs.z_ss isa ConstantSeaLevel)
+        nothing
+    elseif (sum(maskactive) > 0.6 * Omega.nx * Omega.ny)
         error("Mask defining regions of active load must not cover more than 60%"*
             " of the cells when using an interactive sea level.")
     end
 
-    tools = FastIsoTools(Omega, c, p, t_Hice_snapshots, Hice_snapshots, bsl_itp)
+    tools = FastIsoTools(Omega, c, p)
 
     # Initialise the reference state
     H_ice_0 = kernelnull(Omega)
-    piecewise_linear_interpolate!(H_ice_0, t_out[1], tools.Hice)
-    bsl_0 = tools.bsl(t_out[1])
-    u_0, ue_0, z_ss_0, b_0, H_ice_0 = kernelpromote([u_0, ue_0,
-        z_ss_0, b_0, H_ice_0], Omega.arraykernel)
+    apply_bc!(H_ice_0, nout.t[1], bcs.h_ice)
+
+    u_0, ue_0, z_ss_0, z_b_0, H_ice_0 = kernelpromote([u_0, ue_0,
+        z_ss_0, z_b_0, H_ice_0], Omega.arraykernel)
 
     if Omega.use_cuda
-        maskgrounded = get_maskgrounded(H_ice_0, b_0, z_ss_0, c)
-        maskocean = get_maskocean(z_ss_0, b_0, maskgrounded)
+        maskgrounded = get_maskgrounded(H_ice_0, z_b_0, z_ss_0, c)
+        maskocean = get_maskocean(z_ss_0, z_b_0, maskgrounded)
     else
-        maskgrounded = collect(get_maskgrounded(H_ice_0, b_0, z_ss_0, c))
-        maskocean = collect(get_maskocean(z_ss_0, b_0, maskgrounded))
+        maskgrounded = collect(get_maskgrounded(H_ice_0, z_b_0, z_ss_0, c))
+        maskocean = collect(get_maskocean(z_ss_0, z_b_0, maskgrounded))
     end
 
-    H_af_0 = height_above_floatation(H_ice_0, b_0, z_ss_0, c)
-    H_water_0 = watercolumn(H_ice_0, maskgrounded, b_0, z_ss_0, c)
-    ref = ReferenceState(u_0, ue_0, H_ice_0, H_af_0, H_water_0, b_0, bsl_0, z_ss_0,
-        T(0.0), T(0.0), T(0.0), maskgrounded, maskocean, Omega.arraykernel(maskactive))
-    now = CurrentState(Omega, ref)
+    H_af_0 = height_above_floatation(H_ice_0, z_b_0, z_ss_0, c)
+    H_water_0 = watercolumn(H_ice_0, maskgrounded, z_b_0, z_ss_0, c)
+    ref = ReferenceState(u_0, ue_0, H_ice_0, H_af_0, H_water_0, z_b_0, z_ss_0,
+        T(0), T(0), T(0), maskgrounded, maskocean, Omega.arraykernel(maskactive))
+    now = CurrentState(Omega, ref, bsl)
 
     return FastIsoProblem(Omega, c, bcs, em, p, opts, tools, ref, now, ncout, nout)
 end
 
-
 function Base.show(io::IO, ::MIME"text/plain", fip::FastIsoProblem)
     Omega, p = fip.Omega, fip.p
-    println(io, "FastIsoProblem")
-    println(io, "Type: ", "$(typeof(fip))")
     descriptors = [
-        "Wx, Wy" => [Omega.Wx, Omega.Wy],
+        "Computation domain" => typeof(Omega),
+        "Physical constants" => typeof(fip.c),
+        "Problem BCs" => typeof(fip.bcs),
+        "Earth model" => typeof(fip.em),
+        "Layered Earth" => typeof(p),
+        "Ice thickness" => typeof(fip.bcs.h_ice),
+        "Solver options" => typeof(fip.opts),
+        "FastIsoTools" => typeof(fip.tools),
+        "Reference state" => typeof(fip.ref),
+        "Current state" => typeof(fip.now),
+        "Netcdf output" => typeof(fip.ncout),
+        "Native output" => typeof(fip.nout),
+        "t_out" => fip.nout.t,
+        "nx, ny" => [Omega.nx, Omega.ny],
         "dx, dy" => [Omega.dx, Omega.dy],
+        "Wx, Wy" => [Omega.Wx, Omega.Wy],
         "extrema(effective viscosity)" => extrema(p.effective_viscosity),
         "extrema(lithospheric thickness)" => extrema(p.litho_thickness),
     ]
@@ -165,8 +136,52 @@ function Base.show(io::IO, ::MIME"text/plain", fip::FastIsoProblem)
 end
 
 #####################################################
+# I/O Callbacks
+#####################################################
+
+nc_condition(_, t, integrator) = (t in integrator.p.ncout.t) && 
+    (integrator.p.now.k < length(integrator.p.ncout.t))
+
+nout_condition(_, t, integrator) = (t in integrator.p.nout.t)
+
+function nc_affect!(integrator)
+    fip = integrator.p
+
+    if occursin(".nc", fip.ncout.filename)
+        println("Saving at nc output at index $(fip.now.k), simulation year $(integrator.t)...")
+        fip.now.k += 1
+
+        if (:u_x in fip.ncout.vars3D) || (:u_y in fip.ncout.vars3D)
+            thinplate_horizontal_displacement!(fip.now.u_x, fip.now.u_y,
+                fip.now.u + fip.now.ue, fip.p.litho_thickness, fip.Omega)
+        end
+
+        write_nc!(fip)
+    end
+end
+
+function nout_affect!(integrator)
+    fip = integrator.p
+    println("Saving native output at simulation year $(integrator.t)...")
+
+    if (:u_x in fip.nout.vars) || (:u_y in fip.nout.vars)
+        thinplate_horizontal_displacement!(fip.now.u_x, fip.now.u_y,
+            fip.now.u + fip.now.ue, fip.p.litho_thickness, fip.Omega)
+    end
+
+    write_out!(fip.nout, fip.now)
+end
+
+function write_nc!(fip::FastIsoProblem)
+    if occursin(".nc", fip.ncout.filename) > 3
+        write_nc!(fip.ncout, fip.now, fip.now.k)
+    end
+end
+
+#####################################################
 # Forward integration
 #####################################################
+
 """
     solve!(fip)
 
@@ -175,11 +190,13 @@ Solve the isostatic adjustment problem defined in `fip::FastIsoProblem`.
 function solve!(fip::FastIsoProblem)
     init_problem!(fip)
     t1 = time()
-    prob = ODEProblem(update_diagnostics!, fip.now.u, extrema(fip.out.t), fip)
-    nc_callback = DiscreteCallback(nc_condition, nc_affect!)
+    prob = ODEProblem(update_diagnostics!, fip.now.u, extrema(fip.nout.t), fip)
+    ncout_callback = DiscreteCallback(nc_condition, nc_affect!)
+    nout_callback = DiscreteCallback(nout_condition, nout_affect!)
+    out_callback = CallbackSet(ncout_callback, nout_callback)
     solve(prob, fip.opts.diffeq.alg, reltol=fip.opts.diffeq.reltol,
-        saveat=fip.out.t[end:end], tstops=fip.out.t, callback=nc_callback)
-    fip.ncout.computation_time = time()-t1
+        saveat=fip.nout.t[end:end], tstops=fip.nout.t, callback=out_callback)
+    fip.nout.computation_time = time()-t1
     return nothing
 end
 
@@ -189,52 +206,17 @@ end
 """
 function init_integrator(fip::FastIsoProblem)
     init_problem!(fip)
-    prob = ODEProblem(update_diagnostics!, fip.now.u, extrema(fip.out.t), fip)
+    prob = ODEProblem(update_diagnostics!, fip.now.u, extrema(fip.nout.t), fip)
     ncout_callback = DiscreteCallback(nc_condition, nc_affect!)
     nout_callback = DiscreteCallback(nout_condition, nout_affect!)
+    out_callback = CallbackSet(ncout_callback, nout_callback)
     integrator = init(prob, fip.opts.diffeq.alg, reltol=fip.opts.diffeq.reltol,
-        saveat=fip.out.t[end:end], tstops=fip.out.t, callback=ncout_callback)
+        saveat=fip.nout.t[end:end], tstops=fip.nout.t, callback=out_callback)
     return integrator
 end
 
 function init_problem!(fip::FastIsoProblem)
-    if !(fip.opts.internal_loadupdate)
-        error("`solve!` does not support external updating of the load. Use `step!` instead.")
-    end
-    
-    update_diagnostics!(fip.now.dudt, fip.now.u, fip, fip.out.t[1])
-    (length(fip.ncout.filename) > 3) && write_nc!(fip.ncout, fip.now, fip.now.k)
+    update_diagnostics!(fip.now.dudt, fip.now.u, fip, fip.nout.t[1])
+    write_nc!(fip)
     return nothing
-end
-
-nc_condition(_, t, integrator) = (t in integrator.p.ncout.t) && 
-    (integrator.p.now.k < length(integrator.p.ncout.t))
-
-nout_condition(_, t, integrator) = (t in integrator.p.nout.t)
-
-function nc_affect!(integrator)
-    fip = integrator.p
-    println("Saving at nc output at index $(fip.now.k), simulation year $(integrator.t)...")
-    fip.now.k += 1
-
-    if (:u_x in fip.ncout.vars3D) || (:u_y in fip.ncout.vars3D)
-        thinplate_horizontal_displacement!(fip.now.u_x, fip.now.u_y,
-            fip.now.u + fip.now.ue, fip.p.litho_thickness, fip.Omega)
-    end
-
-    if length(integrator.p.ncout.filename) > 3
-        write_nc!(integrator.p.ncout, integrator.p.now, integrator.p.now.k)
-    end
-end
-
-function nout_affect!(integrator)
-    fip = integrator.p
-    println("Saving native output at simulation year $(integrator.t)...")
-
-    if (:u_x in fip.nout.vars3D) || (:u_y in fip.nout.vars3D)
-        thinplate_horizontal_displacement!(fip.now.u_x, fip.now.u_y,
-            fip.now.u + fip.now.ue, fip.p.litho_thickness, fip.Omega)
-    end
-
-    write_out!(fip.nout, fip.now)
 end
