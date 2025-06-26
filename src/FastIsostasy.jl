@@ -4,18 +4,19 @@ using AbstractFFTs: AbstractFFTs
 using CUDA: CuArray, CuMatrix, CUFFT, allowscalar
 using DelimitedFiles: readdlm
 using Downloads: download
+using FiniteDifferences: central_fdm, forward_fdm, backward_fdm
 using FastGaussQuadrature: gausslegendre
 using FFTW: fft, ifft, plan_fft!, plan_ifft!, cFFTWPlan
 using LinearAlgebra: Diagonal, det, diagm, norm
 using NetCDF
-using OrdinaryDiffEqTsit5: init, ODEProblem, solve, DiscreteCallback
+using OrdinaryDiffEqTsit5: init, ODEProblem, solve, DiscreteCallback, CallbackSet
 
 using ParallelStencil: ParallelStencil, @init_parallel_stencil, @parallel,
                        @parallel_indices
 using Statistics: mean, cov, std
 using SpecialFunctions: besselj0, besselj1
 
-# Init stencil on GPU. Will only be used if specified in ComputationDomain.
+# Init stencil on GPU. Will only be used if specified in RegionalComputationDomain.
 allowscalar(false)
 @init_parallel_stencil(CUDA, Float64, 3);
 
@@ -29,15 +30,15 @@ using Reexport: Reexport, @reexport
     SIR54, Alshina2, Alshina3, Alshina6
 
 include("convenience_types.jl")
+include("interpolations.jl")
 include("earth_models.jl")
 include("domain.jl")
 include("boundary_conditions.jl")
 include("constants.jl")
 include("layering.jl")
 include("convolution.jl")
-include("interpolations.jl")
 include("tools.jl")
-include("adaptive_ocean.jl")
+include("barystatic_sealevel.jl")
 include("state.jl")
 include("io.jl")
 include("solve.jl")
@@ -54,40 +55,49 @@ include("inversion.jl")
 include("coordinates.jl")
 
 # earth_models.jl
-export EarthModel, AbstractLithosphere, AbstractMantle, AbstractRheology,
-       LaterallyConstantLithosphere, LaterallyVariableLithosphere,
-       LaterallyConstantMantle, LaterallyVariableMantle, RelaxedRheology,
-       MaxwellRheology
+export EarthModel
+export AbstractLithosphere, AbstractMantle, AbstractRheology
+export LaterallyConstantLithosphere, LaterallyVariableLithosphere, RigidLithosphere
+export LaterallyConstantMantle, LaterallyVariableMantle, RigidMantle
+export RelaxedRheology, MaxwellRheology
 
 # domain.jl
-export ComputationDomain
+export RegionalComputationDomain, GlobalComputationDomain
 
 # boundary_conditions.jl
-export CornerBC, BorderBC, DistanceWeightedBC, ProblemBCs, RegularBCSpace,
-       ExtendedBCSpace
+export AbstractIceThickness, TimeInterpolatedIceThickness, ExternallyUpdatedIceThickness
+export ConstantSeaLevel, EvolvingSeaLevel, InteractiveSeaLevel
+export RegularBCSpace, ExtendedBCSpace
+export CornerBC, BorderBC, DistanceWeightedBC, ProblemBCs
+export update_ice!, apply_bc!
 
 # constants.jl
 export PhysicalConstants, ReferenceEarthModel
 
 # layering.jl
-export AbstractLayering, UniformLayering, ParallelLayering, EqualizedLayering
-export FoldedLayering, get_layer_boundaries, interpolate2layers
-export LayeredEarth
+export AbstractLayering, LayeredEarth
+export UniformLayering, ParallelLayering, EqualizedLayering, FoldedLayering
+export get_layer_boundaries, interpolate2layers
 
 # convolution.jl
 export InplaceConvolution, convolution!, blur, samesize_conv, samesize_conv!
 
+# interpolations.jl
+export TimeInterpolation0D, TimeInterpolation2D, interpolate!
+
 # tools.jl
 export FastIsoTools
 
-# adaptive_ocean.jl
-export OceanSurfaceChange
+# barystatic_sealevel.jl
+export ReferenceBSL, AbstractBSL
+export ConstantBSL, ConstantOceanSurfaceBSL, PiecewiseConstantOceanSurfaceBSL
+export update_bsl!
 
 # state.jl
 export CurrentState, ReferenceState
 
 # io.jl
-export NetcdfOutput, write_nc!, write_out!
+export NetcdfOutput, NativeOutput, write_nc!, write_out!
 
 # solve.jl
 export DiffEqOptions, SolverOptions, FastIsoProblem, solve!, init_integrator, step!
@@ -102,19 +112,21 @@ export uniform_ice_cylinder, stereo_ice_cylinder, stereo_ice_cap
 export remake!, null, not, cudainfo, kernelpromote, kernelnull
 
 # derivatives.jl
-export update_second_derivatives!
+export update_second_derivatives!, dxx!, dyy!, FiniteDiffParams
 
 # sealevel.jl
 export update_loadcolumns!, update_elasticresponse!, update_dz_ss!, get_dz_ssgreen
 export columnanom_load!, columnanom_full!, columnanom_ice, columnanom_water
 export columnanom_litho!, columnanom_mantle!, update_z_ss!, total_volume
 export update_V_af!, update_V_den!, update_V_pov!, height_above_floatation
+export update_bedrock!, columnanom_load, update_elastic_response!, columnanom_litho
+export update_maskocean!, update_z_ss!, update_maskgrounded!
 
 # material.jl
 export maxwelltime_scaling!, get_shearmodulus, get_rigidity, load_prem
 
 # mechanics.jl
-export elra!, lv_elva!, update_diagnostics!
+export update_diagnostics!
 export update_deformation_rhs!, build_greenintegrand, get_elasticgreen
 export thinplate_horizontal_displacement
 
@@ -133,9 +145,7 @@ export load_spada2011, spada_cases
 export load_latychev_test3, load_latychev2023_ICE6G
 
 # inversion.jl
-export InversionConfig, InversionData, InversionProblem, ParameterReduction,
-    ViscositySnippet, extract_viscous_displacement, extract_elastic_displacement,
-    extract_total_displacement
+export InversionConfig, InversionData, InversionProblem, ParameterReduction
+export ViscositySnippet
 
-export apply_bc!, update_bedrock!, update_loadcolumns!, columnanom_load, update_elastic_response!, columnanom_litho, update_dz_ss!, update_maskocean!, update_bsl!, update_z_ss!, update_maskgrounded!
 end
