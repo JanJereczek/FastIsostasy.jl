@@ -24,34 +24,24 @@ perturbation, plans for FFTs, interpolators of the load and the viscosity over t
 preallocated arrays.
 """
 struct FastIsoTools{
-    T<:AbstractFloat,
-    M<:KernelMatrix{T},
-    C<:ComplexMatrix{T},
-    FP<:ForwardPlan{T},
-    IP<:InversePlan{T},
+    I1<:InplaceConvolution,
+    I2<:InplaceConvolution,
+    I3<:InplaceConvolution,
+    FP<:ForwardPlan,
+    IP<:InversePlan,
+    PA<:PreAllocated,
 }
-
-    viscous_convo::InplaceConvolution{T, M, C, FP, IP}
-    elastic_convo::InplaceConvolution{T, M, C, FP, IP}
-    dz_ss_convo::InplaceConvolution{T, M, C, FP, IP}
+    viscous_convo::I1
+    elastic_convo::I2
+    dz_ss_convo::I3
     pfft!::FP
     pifft!::IP
-    Hice::TimeInterpolation2D{T, M}
-    bsl::Interpolations.Extrapolation{T, 1,
-        Interpolations.GriddedInterpolation{T, 1, Vector{T},
-        Gridded{Linear{Throw{OnGrid}}}, Tuple{Vector{T}}},
-        Gridded{Linear{Throw{OnGrid}}}, Flat{Nothing}}
-    prealloc::PreAllocated{T, M, C}
+    prealloc::PA
 end
 
-function FastIsoTools(
-    Omega::ComputationDomain{T, L, M},
-    c::PhysicalConstants{T},
-    p::LayeredEarth{T, M},
-    t_Hice_snapshots::Vector{T},
-    Hice_snapshots::Vector{<:KernelMatrix{T}},
-    bsl_itp; quad_precision::Int = 4,
-) where {T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}}
+function FastIsoTools(Omega, c, p; quad_precision::Int = 4)
+
+    T = eltype(Omega.R)
 
     # Build in-place convolution for viscous response (only used in ELRA)
     L_w = get_flexural_lengthscale(mean(p.litho_rigidity), p.rho_uppermantle, c.g)
@@ -73,17 +63,13 @@ function FastIsoTools(
     # FFT plans depening on CPU vs. GPU usage
     pfft!, pifft! = choose_fft_plans(Omega.K, Omega.use_cuda)
 
-    Hice = TimeInterpolation2D(
-        t_Hice_snapshots, kernelpromote(Hice_snapshots, Omega.arraykernel))
     n_cplx_matrices = 1
     realmatrices = [kernelnull(Omega) for _ in 
         eachindex(fieldnames(PreAllocated))[1:end-n_cplx_matrices]]
     cplxmatrices = [complex.(kernelnull(Omega)) for _ in 1:n_cplx_matrices]
     prealloc = PreAllocated(realmatrices..., cplxmatrices...)
     
-    # @show typeof(Hice) typeof(bsl_itp)
-    return FastIsoTools(viscous_convo, elastic_convo, dz_ss_convo, pfft!, pifft!,
-        Hice, bsl_itp, prealloc)
+    return FastIsoTools(viscous_convo, elastic_convo, dz_ss_convo, pfft!, pifft!, prealloc)
 end
 
 

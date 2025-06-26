@@ -19,8 +19,7 @@ struct ReferenceState{
     H_ice::M                # ref height of ice column
     H_af::M                 # ref height of ice column above floatation
     H_water::M              # ref height of water column
-    b::M                    # ref bedrock position
-    bsl::T                  # ref barystatic sea level
+    z_b::M                  # ref bedrock position
     z_ss::M                 # ref z_ss field
     V_af::T                 # ref sl-equivalent of ice volume above floatation
     V_pov::T                # ref potential ocean volume
@@ -52,8 +51,7 @@ mutable struct CurrentState{
     T<:AbstractFloat,
     M<:KernelMatrix{T},
     B<:BoolMatrix,
-    CA <: ColumnAnomalies{T, M},
-    OS <: AbstractOceanSurface{T},
+    OS<:AbstractBSL,
 } <: AbstractState
 
     u::M                    # viscous displacement
@@ -62,13 +60,11 @@ mutable struct CurrentState{
     u_y::M                  # horizontal displacement in y
     dudt::M                 # viscous displacement rate
     u_eq::M                 # equilibrium dispalcement
-    ucorner::T              # corner displacement of the domain
     H_ice::M                # current height of ice column
     H_af::M                 # current height of ice column above floatation
     H_water::M              # current height of water column
-    columnanoms::CA         # column anomalies
-    b::M                    # vertical bedrock position
-    bsl::T                  # barystatic sea level
+    columnanoms::ColumnAnomalies{T, M}         # column anomalies
+    z_b::M                  # vertical bedrock position
     dz_ss::M                # current z_ss perturbation
     z_ss::M                 # current z_ss field
     V_af::T                 # V contribution from ice above floatation
@@ -76,22 +72,21 @@ mutable struct CurrentState{
     V_den::T                # V contribution from diff between melt- and saltwater density
     maskgrounded::B         # mask for grounded ice
     maskocean::B            # mask for ocean
-    osc::OS                 # ocean surface change
+    bsl::OS                  # ocean surface change
     countupdates::Int       # count the updates of the geostate
     k::Int                  # index of the t_out segment
 end
 
 # Initialise CurrentState from ReferenceState
-function CurrentState(Omega::ComputationDomain{T, L, M}, ref::ReferenceState{T, M}) where
-    {T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}}
+function CurrentState(Omega::RegionalComputationDomain, ref::ReferenceState, bsl)
     return CurrentState(
         copy(ref.u), copy(ref.ue), kernelnull(Omega), kernelnull(Omega),
-        kernelnull(Omega), copy(ref.u), T(0.0),
+        kernelnull(Omega), copy(ref.u),
         copy(ref.H_ice), copy(ref.H_af), copy(ref.H_water),
-        ColumnAnomalies(Omega), copy(ref.b),
-        copy(ref.bsl), kernelnull(Omega), copy(ref.z_ss),
+        ColumnAnomalies(Omega), copy(ref.z_b),
+        kernelnull(Omega), copy(ref.z_ss),
         copy(ref.V_af), copy(ref.V_pov), copy(ref.V_den),
         copy(ref.maskgrounded), copy(ref.maskocean),
-        OceanSurfaceChange(T = T, z0 = ref.bsl), 0, 1,
+        bsl, 0, 1,
     )
 end
