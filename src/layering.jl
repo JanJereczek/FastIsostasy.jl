@@ -6,7 +6,6 @@ const DEFAULT_RHO_UPPERMANTLE = 3.4e3
 const DEFAULT_MANTLE_POISSONRATIO = 0.28
 const DEFAULT_MANTLE_TAU = 855.0
 
-
 """
     LayeredEarth(Omega; layer_boundaries, layer_viscosities)
 
@@ -14,7 +13,7 @@ Return a struct containing all information related to the lateral variability of
 solid-Earth parameters. To initialize with values other than default, run:
 
 ```julia
-Omega = ComputationDomain(3000e3, 7)
+Omega = RegionalComputationDomain(3000e3, 7)
 lb = [100e3, 300e3]
 lv = [1e19, 1e21]
 p = LayeredEarth(Omega, layer_boundaries = lb, layer_viscosities = lv)
@@ -24,7 +23,7 @@ which initializes a lithosphere of thickness ``T_1 = 100 \\mathrm{km}``, a visco
 channel between ``T_1``and ``T_2 = 300 \\mathrm{km}``and a viscous halfspace starting
 at ``T_2``. This represents a homogenous case. For heterogeneous ones, simply make
 `lb::Vector{Matrix}`, `lv::Vector{Matrix}` such that the vector elements represent the
-lateral variability of each layer on the grid of `Omega::ComputationDomain`.
+lateral variability of each layer on the grid of `Omega::RegionalComputationDomain`.
 """
 mutable struct LayeredEarth{T<:AbstractFloat, M<:KernelMatrix{T}}
     effective_viscosity::M
@@ -40,7 +39,7 @@ mutable struct LayeredEarth{T<:AbstractFloat, M<:KernelMatrix{T}}
 end
 
 function LayeredEarth(
-    Omega::ComputationDomain{T, L, M};
+    Omega::RegionalComputationDomain{T, L, M};
     layer_boundaries::A = T.([88e3, 400e3]),
     layer_viscosities::B = T.([1e19, 1e21]),        # (Pa*s) (Bueler 2007, Ivins 2022, Fig 12 WAIS)
     litho_youngmodulus::T = T(DEFAULT_LITHO_YOUNGMODULUS),              # (N/m^2)

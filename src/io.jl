@@ -82,10 +82,9 @@ mutable struct NetcdfOutput{T<:AbstractFloat}
     buffer::Matrix{T}
     vars3D::Vector{Symbol}
     vars1D::Vector{Symbol}
-    computation_time::T
 end
 
-function NetcdfOutput(Omega::ComputationDomain{T, L, M}, t, filename;
+function NetcdfOutput(Omega::RegionalComputationDomain{T, L, M}, t, filename;
     vars3D = [:u, :ue, :b, :dz_ss],
     vars1D = [:bsl],
     Tout = Float32,
@@ -120,15 +119,18 @@ function NetcdfOutput(Omega::ComputationDomain{T, L, M}, t, filename;
         push!(vars, NcVar(io_dict[j]["shortname"], [tdim]; atts = varatts, t = Tout))
     end
 
-    if length(filename) > 0
+    if occursin(".nc", filename)
         isfile(filename) && rm(filename)
         NetCDF.create(filename, vars) do nc
             nothing
         end
+        println("NetCDF file $filename was created correctly.")
+    else
+        @warn "NetCDF filename does not end with '.nc' and is therefore ignored."
     end
     
     buffer = Matrix{Tout}(undef, Omega.nx, Omega.ny)
-    return NetcdfOutput(Tout.(t), filename, buffer, vars3D, vars1D, Tout(0.0))
+    return NetcdfOutput(Tout.(t), filename, buffer, vars3D, vars1D)
 end
 
 function select_preconfig(preconfig, intermediate, sparse)
@@ -168,19 +170,32 @@ end
 # Postprocessing output (only used for optimization)
 ################################################################################
 
-struct NativeOutput{T<:AbstractFloat}
-    t::Vector{<:Real}
+"""
+
+    NativeOutput{T<:AbstractFloat}
+
+Return a mutable struct containing the native output which will be updated over the simulation.
+
+Initialization example:
+```julia
+nout = NativeOutput(vars = [:u, :ue, :b, :dz_ss, :H_ice, :H_water, :u_x, :u_y])
+```
+"""
+mutable struct NativeOutput{T<:AbstractFloat}
+    t::Vector{T}
+    t_steps_ode::Vector{T}
     vars::Vector{Symbol}
     vals::Dict{Symbol, Vector{Matrix{T}}}
+    computation_time::T
 end
 
 function NativeOutput(; t = Float32[], vars = Symbol[], T = Float32)
-    vals = Dict{Symbol, Vector{Matrix{T}}}()
-    return NativeOutput(t, vars, vals)
+    vals = Dict{Symbol, Vector{Matrix{T}}}(var => Matrix{T}[] for var in vars)
+    return NativeOutput(t, T[], vars, vals, T(0))
 end
 
 function write_out!(nout::NativeOutput, now::CurrentState)
     for var in nout.vars
-        push!(nout.vals[var], Array.(getfield(now, var)))
+        push!(nout.vals[var], Array(getfield(now, var)))
     end
 end

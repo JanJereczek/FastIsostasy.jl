@@ -28,14 +28,14 @@ end
     get_effective_viscosity(
         layer_viscosities::Vector{KernelMatrix{T}},
         layers_thickness::Vector{T},
-        Omega::ComputationDomain{T, M},
+        Omega::RegionalComputationDomain{T, M},
     ) where {T<:AbstractFloat}
 
 Compute equivalent viscosity for multilayer model by recursively applying
 the formula for a halfspace and a channel from Lingle and Clark (1975).
 """
 function get_effective_viscosity(
-    Omega::ComputationDomain{T, M},
+    Omega::RegionalComputationDomain{T, M},
     layer_viscosities::Array{T, 3},
     layer_boundaries::Array{T, 3},
     mantle_poissonratio::T,
@@ -80,7 +80,7 @@ function seakon_calibration(eta::Matrix{T}, eta_ref) where {T<:AbstractFloat}
 end
 
 """
-    three_layer_scaling(Omega::ComputationDomain, kappa::T, visc_ratio::T,
+    three_layer_scaling(Omega::RegionalComputationDomain, kappa::T, visc_ratio::T,
         channel_thickness::T)
 
 Return the viscosity scaling for a three-layer model and based on a the wave
@@ -88,7 +88,7 @@ number `kappa`, the `visc_ratio` and the `channel_thickness`.
 Reference: Bueler et al. 2007, below equation 15.
 """
 function three_layer_scaling(
-    Omega::ComputationDomain{T, M},
+    Omega::RegionalComputationDomain{T, M},
     visc_ratio::Matrix{T},
     channel_thickness::Matrix{T},
     characteristic_loadlength::T,

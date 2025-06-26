@@ -39,7 +39,7 @@ end
 
 not(x::Bool) = !x
 Base.fill(x::Real, fip::FastIsoProblem) = fill(x, fip.Omega)
-Base.fill(x::Real, Omega::ComputationDomain) = Omega.arraykernel(fill(x, Omega.nx, Omega.ny))
+Base.fill(x::Real, Omega::RegionalComputationDomain) = Omega.arraykernel(fill(x, Omega.nx, Omega.ny))
 
 approx_in(item, collection, tol) = any(abs.(collection .- item) .< tol)
 
@@ -91,7 +91,7 @@ function gauss_distr(X::M, Y::M, mu::Vector{T}, sigma::Matrix{T}) where
 end
 
 function generate_gaussian_field(
-    Omega::ComputationDomain{T, M},
+    Omega::RegionalComputationDomain{T, M},
     z_background::T,
     xy_peak::Vector{T},
     z_peak::T,
@@ -193,7 +193,7 @@ end
 # Kernel utils
 #####################################################
 
-function null(Omega::ComputationDomain{T, L, M}) where {T, L, M}
+function null(Omega::RegionalComputationDomain{T, L, M}) where {T, L, M}
     return zeros(T, Omega.nx, Omega.ny)
 end
 
@@ -224,13 +224,13 @@ kernelpromote(X::Vector, arraykernel) = [arraykernel(x) for x in X]
 """
     reinit_structs_cpu(Omega, p)
 
-Reinitialize `Omega::ComputationDomain` and `p::LayeredEarth` on the CPU, mostly
+Reinitialize `Omega::RegionalComputationDomain` and `p::LayeredEarth` on the CPU, mostly
 for post-processing purposes.
 """
-function reinit_structs_cpu(Omega::ComputationDomain{T, L, M}, p::LayeredEarth{T, M}
+function reinit_structs_cpu(Omega::RegionalComputationDomain{T, L, M}, p::LayeredEarth{T, M}
     ) where {T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}}
 
-    Omega_cpu = ComputationDomain(Omega.Wx, Omega.Wy, Omega.nx, Omega.ny, use_cuda = false)
+    Omega_cpu = RegionalComputationDomain(Omega.Wx, Omega.Wy, Omega.nx, Omega.ny, use_cuda = false)
     p_cpu = LayeredEarth(
         Omega_cpu;
         layer_boundaries = Array(p.layer_boundaries),
@@ -252,7 +252,7 @@ end
 #     now.H_ice .= ref.H_ice
 #     now.H_water .= ref.H_water
 #     now.columnanoms = ColumnAnomalies(Omega)
-#     now.b .= ref.b
+#     now.z_b .= ref.z_b
 #     now.bsl = ref.bsl
 #     now.dz_ss .= T.(0.0)
 #     now.z_ss .= ref.z_ss
@@ -300,14 +300,14 @@ function mask_disc(r::KernelMatrix{T}, R::T) where {T<:AbstractFloat}
     return T.(r .< R)
 end
 
-function uniform_ice_cylinder(Omega::ComputationDomain, R::T, H::T;
+function uniform_ice_cylinder(Omega::RegionalComputationDomain, R::T, H::T;
     center::Vector{T} = T.([0.0, 0.0])) where {T<:AbstractFloat}
     M = mask_disc(Omega.X, Omega.Y, R, center = center)
     return T.(M .* H)
 end
 
 function stereo_ice_cylinder(
-    Omega::ComputationDomain,
+    Omega::RegionalComputationDomain,
     R::T,
     H::T,
 ) where {T<:AbstractFloat}
@@ -316,7 +316,7 @@ function stereo_ice_cylinder(
 end
 
 function stereo_ice_cap(
-    Omega::ComputationDomain,
+    Omega::RegionalComputationDomain,
     alpha_deg::T,
     H::T,
 ) where {T<:AbstractFloat}

@@ -12,7 +12,7 @@ Calculate the Kelvin filter in 2D.
 # Returns
 - `filt::Matrix{T}`: The filter array filled with Kelvin function values.
 """
-function get_kei(Omega::ComputationDomain{T, <:Any, <:Any}, L_w) where
+function get_kei(Omega::RegionalComputationDomain{T, <:Any, <:Any}, L_w) where
     {T<:AbstractFloat}
 
     (;nx, ny, dx, dy) = Omega

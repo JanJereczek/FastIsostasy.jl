@@ -8,7 +8,7 @@ by an elastic plate overlaying a viscous half space. Parameters are provided in
 to the center of the domain. The time at which the solution is computed is specified
 by `t`.
 """
-function analytic_solution(r::T, t::T, c, p,
+function analytic_solution(r::T, t::T, c::PhysicalConstants, p::LayeredEarth,
     H0::T, R0::T; n_quad_support=5::Int) where {T<:AbstractFloat}
 
     support = T.(vcat(1e-14, 10 .^ (-10:0.05:-3), 1.0))     # support vector for quadrature

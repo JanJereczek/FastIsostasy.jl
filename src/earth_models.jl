@@ -118,7 +118,7 @@ struct BurgersRheology <: AbstractRheology end
 # EarthModel
 ################################################################
 
-struct EarthModel{L<:AbstractLithosphere, M<:AbstractMantle, R<:AbstractRheology}
+@kwdef struct EarthModel{L<:AbstractLithosphere, M<:AbstractMantle, R<:AbstractRheology}
     lithosphere::L      # lc or lv
     mantle::M           # lc or lv
     rheology::R         # relaxed, maxwell or burgers

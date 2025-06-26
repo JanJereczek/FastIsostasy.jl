@@ -49,7 +49,7 @@ end
 Perform convolution of `X` with `ipc` and crop the result to the same size as `X`.
 """
 function samesize_conv!(Y::M, X::M, ipc::InplaceConvolution{T, M, C, FP, IP},
-    Omega::ComputationDomain{T, L, M}, bc::OffsetBC, bc_space::ExtendedBCSpace) where {
+    Omega::RegionalComputationDomain{T, L, M}, bc::OffsetBC, bc_space::ExtendedBCSpace) where {
         T<:AbstractFloat,
         L<:Matrix{T},
         M<:KernelMatrix{T},
@@ -66,7 +66,7 @@ function samesize_conv!(Y::M, X::M, ipc::InplaceConvolution{T, M, C, FP, IP},
 end
 
 function samesize_conv!(Y::M, X::M, ipc::InplaceConvolution{T, M, C, FP, IP},
-    Omega::ComputationDomain{T, L, M}, bc::OffsetBC, bc_space::RegularBCSpace) where {
+    Omega::RegionalComputationDomain{T, L, M}, bc::OffsetBC, bc_space::RegularBCSpace) where {
         T<:AbstractFloat,
         L<:Matrix{T},
         M<:KernelMatrix{T},
@@ -84,7 +84,7 @@ end
 
 # Just a helper for blur! Not performant but we only blur at preprocessing
 # so we do not care :)
-function samesize_conv(X::L, Y::M, Omega::ComputationDomain, filler::T;
+function samesize_conv(X::L, Y::M, Omega::RegionalComputationDomain, filler::T;
     on_gpu = false) where {T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}}
     (; i1, i2, j1, j2, convo_offset) = Omega
     ipc = InplaceConvolution(X, on_gpu; filler=filler)
@@ -96,7 +96,7 @@ function samesize_conv(Y, ipc::InplaceConvolution, i1, i2, j1, j2, convo_offset)
         j1-convo_offset:j2-convo_offset)
 end
 
-function blur(X::AbstractMatrix, Omega::ComputationDomain, level::Real, filler;
+function blur(X::AbstractMatrix, Omega::RegionalComputationDomain, level::Real, filler;
     on_gpu::Bool = false)
     if not(0 <= level <= 1)
         error("Blurring level must be a value between 0 and 1.")

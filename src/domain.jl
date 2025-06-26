@@ -1,25 +1,31 @@
+abstract type AbstractComputationDomain end
+
+struct GlobalComputationDomain <: AbstractComputationDomain end
+
 #########################################################
 # Computation domain
 #########################################################
 """
-    ComputationDomain
-    ComputationDomain(W, n)
-    ComputationDomain(Wx, Wy, nx, ny)
+    RegionalComputationDomain
+    RegionalComputationDomain(W, n)
+    RegionalComputationDomain(Wx, Wy, nx, ny)
 
 Return a struct containing all information related to geometry of the domain
 and potentially used parallelism. To initialize one with `2*W` and `2^n` grid cells:
 
 ```julia
-Omega = ComputationDomain(W, n)
+Omega = RegionalComputationDomain(W, n)
 ```
 
 If a rectangular domain is needed, run:
 
 ```julia
-Omega = ComputationDomain(Wx, Wy, nx, ny)
+Omega = RegionalComputationDomain(Wx, Wy, nx, ny)
 ```
 """
-struct ComputationDomain{T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}}
+struct RegionalComputationDomain{T<:AbstractFloat, L<:Matrix{T},
+    M<:KernelMatrix{T}} <: AbstractComputationDomain
+
     Wx::T                       # Domain half-width in x (m)
     Wy::T                       # Domain half-width in y (m)
     nx::Int                     # Number of grid points in x-dimension
@@ -53,23 +59,23 @@ struct ComputationDomain{T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}}
     arraykernel::Any            # Array or CuArray depending on chosen hardware
 end
 
-function ComputationDomain(W::T, n::Int; kwargs...) where {T<:AbstractFloat}
+function RegionalComputationDomain(W::T, n::Int; kwargs...) where {T<:AbstractFloat}
     Wx, Wy = W, W
     nx, ny = 2^n, 2^n
-    return ComputationDomain(Wx, Wy, nx, ny; kwargs...)
+    return RegionalComputationDomain(Wx, Wy, nx, ny; kwargs...)
 end
 
-function ComputationDomain(Wx::T, Wy::T, nx::Int, ny::Int; kwargs...) where {T<:AbstractFloat}
+function RegionalComputationDomain(Wx::T, Wy::T, nx::Int, ny::Int; kwargs...) where {T<:AbstractFloat}
     mx, my = nx ÷ 2, ny ÷ 2
     dx = 2*Wx / nx
     dy = 2*Wy / ny
     x = collect(range(-Wx+dx, stop = Wx, length = nx))
     y = collect(range(-Wy+dy, stop = Wy, length = ny))
-    return ComputationDomain(x, y, dx, dy, Wx, Wy, nx, ny, mx, my; kwargs...)
+    return RegionalComputationDomain(x, y, dx, dy, Wx, Wy, nx, ny, mx, my; kwargs...)
 end
 
 
-function ComputationDomain(x::Vector{T}, y::Vector{T}; kwargs...) where {T<:AbstractFloat}
+function RegionalComputationDomain(x::Vector{T}, y::Vector{T}; kwargs...) where {T<:AbstractFloat}
     nx = length(x)
     ny = length(y)
     mx, my = nx ÷ 2, ny ÷ 2
@@ -87,10 +93,10 @@ function ComputationDomain(x::Vector{T}, y::Vector{T}; kwargs...) where {T<:Abst
     dx = mean(diff(x))
     dy = mean(diff(y))
 
-    return ComputationDomain(x, y, dx, dy, Wx, Wy, nx, ny, mx, my; kwargs...)
+    return RegionalComputationDomain(x, y, dx, dy, Wx, Wy, nx, ny, mx, my; kwargs...)
 end
 
-function ComputationDomain(
+function RegionalComputationDomain(
     x::Vector{T},
     y::Vector{T},
     dx::T,
@@ -147,7 +153,7 @@ function ComputationDomain(
     j1, j2 = samesize_conv_indices(ny, my)
     convo_offset = (ny - nx) ÷ 2
 
-    return ComputationDomain(Wx, Wy, nx, ny, mx, my, dx, dy, x, y, X, Y, i1, i2, j1, j2, convo_offset,
+    return RegionalComputationDomain(Wx, Wy, nx, ny, mx, my, dx, dy, x, y, X, Y, i1, i2, j1, j2, convo_offset,
         R, Theta, Lat, Lon, K, K .* dx, K .* dy, (dx * dy) .* K .^ 2, correct_distortion,
         null, pseudodiff, 1 ./ pseudodiff, use_cuda, arraykernel)
 end
