@@ -1,3 +1,75 @@
+@inline function _zeropad!(
+    padded::AbstractArray,
+    u::AbstractArray,
+    padded_axes = axes(padded),
+    data_dest::Tuple = first.(padded_axes),
+    data_region = CartesianIndices(u),
+)
+    fill!(padded, zero(eltype(padded)))
+    dest_axes = UnitRange.(data_dest, data_dest .+ size(data_region) .- 1)
+    dest_region = CartesianIndices(dest_axes)
+    copyto!(padded, dest_region, u, data_region)
+
+    padded
+end
+
+"""
+    _zeropad(u, padded_size, [data_dest, data_region])
+
+Creates and returns a new base-1 index array of size `padded_size`, with the
+section of `u` specified by `data_region` copied into the region of the new
+ array as specified by `data_dest`. All other values will be initialized to
+ zero.
+
+If either `data_dest` or `data_region` is not specified, then the defaults
+described in [`_zeropad!`](@ref) will be used.
+"""
+function _zeropad(u, padded_size, args...)
+    padded = similar(u, padded_size)
+    _zeropad!(padded, u, axes(padded), args...)
+end
+
+const FAST_FFT_SIZES = (2, 3, 5, 7)
+nextfastfft(n::Integer) = nextprod(FAST_FFT_SIZES, n)
+nextfastfft(ns::Tuple{Vararg{Integer}}) = nextfastfft.(ns)
+
+struct FastConvPlan{
+    T<:AbstractFloat,
+    M<:KernelMatrix{T},
+    C<:ComplexMatrix{T},
+    FP<:rFFTWPlan,
+    IP<:AbstractFFTs.ScaledPlan}
+
+    p_rfft::FP
+    p_irfft::IP
+    nffts::Tuple{Int64, Int64}
+    kernel_padded::M
+    input_padded::M
+    kernel_fft::C
+    input_fft::C
+end
+
+function FastConvPlan(kernel::KernelMatrix{T}) where T
+    nx, ny = size(kernel)
+    outsize = (2*nx-1, 2*ny-1)
+    nffts = nextfastfft(outsize)
+    kernel_padded = _zeropad!(similar(kernel, T, nffts), kernel)
+    input_padded = similar(kernel_padded)
+    p_rfft = plan_rfft(kernel_padded)
+    kernel_fft = p_rfft * kernel_padded
+    input_fft = similar(kernel_fft)
+    p_irfft = plan_irfft(kernel_fft, nffts[1])
+    return FastConvPlan(p_rfft, p_irfft, nffts, kernel_padded, input_padded, kernel_fft, input_fft)
+end
+
+function convo!(out, v, p::FastConvPlan)
+    _zeropad!(p.input_padded, v)
+    mul!(p.input_fft, p.p_rfft, p.input_padded)
+    p.input_fft .*= p.kernel_fft
+    mul!(out, p.p_irfft, p.input_fft)
+    return nothing
+end
+
 struct InplaceConvolution{T<:AbstractFloat, M<:KernelMatrix{T}, C<:ComplexMatrix{T},
     FP<:ForwardPlan{T}, IP<:InversePlan{T}}
     pfft!::FP
