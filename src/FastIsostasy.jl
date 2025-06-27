@@ -4,11 +4,10 @@ using AbstractFFTs: AbstractFFTs
 using CUDA: CuArray, CuMatrix, CUFFT, allowscalar
 using DelimitedFiles: readdlm
 using Downloads: download
-using DSP: conv!
 using FiniteDifferences: central_fdm, forward_fdm, backward_fdm
 using FastGaussQuadrature: gausslegendre
-using FFTW: fft, ifft, plan_fft!, plan_ifft!, cFFTWPlan
-using LinearAlgebra: Diagonal, det, diagm, norm
+using FFTW: fft, ifft, plan_fft!, plan_ifft!, cFFTWPlan, rFFTWPlan, plan_rfft, plan_irfft
+using LinearAlgebra: Diagonal, det, diagm, norm, mul!
 using NetCDF
 using OrdinaryDiffEqTsit5: init, ODEProblem, solve, DiscreteCallback, CallbackSet
 
@@ -37,7 +36,7 @@ include("domain.jl")
 include("boundary_conditions.jl")
 include("constants.jl")
 include("layering.jl")
-include("convolution.jl")
+include("convolutions.jl")
 include("tools.jl")
 include("barystatic_sealevel.jl")
 include("state.jl")
@@ -56,11 +55,10 @@ include("inversion.jl")
 include("coordinates.jl")
 
 # earth_models.jl
-export EarthModel
-export AbstractLithosphere, AbstractMantle, AbstractRheology
-export LaterallyConstantLithosphere, LaterallyVariableLithosphere, RigidLithosphere
-export LaterallyConstantMantle, LaterallyVariableMantle, RigidMantle
-export RelaxedRheology, MaxwellRheology
+export SolidEarthModel
+export AbstractLithosphere, AbstractMantle
+export RigidLithosphere, LaterallyConstantLithosphere, LaterallyVariableLithosphere
+export RigidMantle, RelaxedMantle, MaxwellMantle
 
 # domain.jl
 export RegionalComputationDomain, GlobalComputationDomain
@@ -73,15 +71,16 @@ export CornerBC, BorderBC, DistanceWeightedBC, ProblemBCs
 export update_ice!, apply_bc!
 
 # constants.jl
-export PhysicalConstants, ReferenceEarthModel
+export PhysicalConstants, ReferenceSolidEarthModel
 
 # layering.jl
-export AbstractLayering, LayeredEarth
+export AbstractLayering, SolidEarthParameters
 export UniformLayering, ParallelLayering, EqualizedLayering, FoldedLayering
 export get_layer_boundaries, interpolate2layers
 
-# convolution.jl
+# convolutions.jl
 export InplaceConvolution, convolution!, blur, samesize_conv, samesize_conv!
+export FastConvPlan, convo!, nextfastfft, _zeropad!
 
 # interpolations.jl
 export TimeInterpolation0D, TimeInterpolation2D, interpolate!
