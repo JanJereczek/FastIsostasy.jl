@@ -5,14 +5,10 @@ Update all the diagnotisc variables, i.e. all fields of `fip.now` apart
 from the displacement, which requires an integrator.
 """
 function update_diagnostics!(dudt, u, fip::FastIsoProblem, t)
-
-    push!(fip.nout.t_steps_ode, t)
-
     # CAUTION: Order really matters here!
-
-    # Make sure that integrated viscous displacement satisfies BC.
-    apply_bc!(u, fip.bcs.u)
-    apply_bc!(fip.now.H_ice, t, fip.bcs.h_ice)
+    push!(fip.nout.t_steps_ode, t)                  # Add time step to output.
+    apply_bc!(u, fip.bcs.u)                         # Make sure that u satisfies BC.
+    apply_bc!(fip.now.H_ice, t, fip.bcs.h_ice)      # Apply ice thickness BC.
     update_Haf!(fip)
     update_loadcolumns!(fip, fip.bcs.z_ss)
     columnanom_load!(fip)
@@ -23,7 +19,6 @@ function update_diagnostics!(dudt, u, fip::FastIsoProblem, t)
 
     if update_diagnostics
         # @show t
-        
         # if elastic update placed after dz_ss, worse match with (Spada et al. 2011)
         update_elasticresponse!(fip, fip.em.lithosphere)
         columnanom_litho!(fip)
@@ -89,7 +84,7 @@ function update_dudt!(dudt, u, fip, t, rheo::MaxwellRheology,
     lithosphere::L) where {L<:AbstractLithosphere}
     Omega, P = fip.Omega, fip.tools.prealloc
     update_deformation_rhs!(fip, u)
-    @. P.fftrhs = complex(P.rhs * Omega.K / (2 * fip.p.effective_viscosity))
+    @. P.fftrhs = P.rhs * Omega.K / (2 * fip.p.effective_viscosity)
     fip.tools.pfft! * P.fftrhs
     @. P.fftrhs *= Omega.pseudodiff_inv
     fip.tools.pifft! * P.fftrhs

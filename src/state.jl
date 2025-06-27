@@ -30,9 +30,12 @@ struct ReferenceState{
 end
 
 mutable struct ColumnAnomalies{T<:AbstractFloat, M<:KernelMatrix{T}}
-    load::M
+    ice::M
+    seawater::M
+    sediment::M
     litho::M
     mantle::M
+    load::M
     full::M
 end
 

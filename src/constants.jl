@@ -24,6 +24,7 @@ All constants are given in SI units (kilogram, meter, second).
     rho_ice::T = 0.910e3                    # (kg/m^3)
     rho_water::T = 1e3                      # (kg/m^3)
     rho_seawater::T = 1.023e3               # (kg/m^3)
+    rho_sw_ice::T = rho_seawater / rho_ice  # (dimensionless)
 end
 
 #########################################################

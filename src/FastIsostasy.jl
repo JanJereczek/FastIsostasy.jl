@@ -4,6 +4,7 @@ using AbstractFFTs: AbstractFFTs
 using CUDA: CuArray, CuMatrix, CUFFT, allowscalar
 using DelimitedFiles: readdlm
 using Downloads: download
+using DSP: conv!
 using FiniteDifferences: central_fdm, forward_fdm, backward_fdm
 using FastGaussQuadrature: gausslegendre
 using FFTW: fft, ifft, plan_fft!, plan_ifft!, cFFTWPlan
@@ -120,13 +121,14 @@ export columnanom_load!, columnanom_full!, columnanom_ice, columnanom_water
 export columnanom_litho!, columnanom_mantle!, update_z_ss!, total_volume
 export update_V_af!, update_V_den!, update_V_pov!, height_above_floatation
 export update_bedrock!, columnanom_load, update_elastic_response!, columnanom_litho
-export update_maskocean!, update_z_ss!, update_maskgrounded!
+export update_maskocean!, update_z_ss!, update_maskgrounded!, update_Haf!
+export update_sealevel!
 
 # material.jl
 export maxwelltime_scaling!, get_shearmodulus, get_rigidity, load_prem
 
 # mechanics.jl
-export update_diagnostics!
+export update_diagnostics!, update_dudt!
 export update_deformation_rhs!, build_greenintegrand, get_elasticgreen
 export thinplate_horizontal_displacement
 

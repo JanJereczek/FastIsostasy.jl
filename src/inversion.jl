@@ -7,28 +7,6 @@ values to `fip::FastIsoProblem`.
 """
 abstract type ParameterReduction{T} end
 
-
-"""
-    extract_viscous_displacement(fip::FastIsoProblem{T, L, M})
-
-Extract the viscous displacement field from the `fip::FastIsoProblem` object.
-"""
-extract_viscous_displacement(fip) = fip.out.u
-
-"""
-    extract_elastic_displacement(fip::FastIsoProblem{T, L, M})
-
-Extract the elastic displacement field from the `fip::FastIsoProblem` object.
-"""
-extract_elastic_displacement(fip) = fip.out.ue
-
-"""
-    extract_total_displacement(fip::FastIsoProblem{T, L, M})
-
-Extract the total displacement field from the `fip::FastIsoProblem` object.
-"""
-extract_total_displacement(fip) = fip.out.u .+ fip.out.ue
-
 """
     InversionConfig
 

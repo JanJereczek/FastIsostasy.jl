@@ -45,9 +45,10 @@ function columnanom_litho!(fip::FastIsoProblem)
 end
 
 function columnanom_load!(fip::FastIsoProblem)
-    @. fip.now.columnanoms.load = fip.ref.maskactive * (fip.c.rho_ice *
-        (fip.now.H_ice - fip.ref.H_ice) + fip.c.rho_seawater * (fip.now.H_water
-        - fip.ref.H_water))
+    anom!(fip.now.columnanoms.ice, fip.c.rho_ice, fip.now.H_ice, fip.ref.H_ice)
+    anom!(fip.now.columnanoms.seawater, fip.c.rho_seawater, fip.now.H_water, fip.ref.H_water)
+    @. fip.now.columnanoms.load .= fip.ref.maskactive * (
+        fip.now.columnanoms.ice + fip.now.columnanoms.seawater)
     return nothing
 end
 
@@ -136,8 +137,8 @@ function update_bedrock!(fip::FastIsoProblem, u)
 end
 
 function update_Haf!(fip::FastIsoProblem)
-    @. fip.now.H_af = max(fip.now.H_ice + min.(fip.now.z_b - fip.now.z_ss, 0), 0) *
-        (fip.c.rho_seawater / fip.c.rho_ice)
+    @. fip.now.H_af = max(fip.now.H_ice + min(fip.now.z_b - fip.now.z_ss, 0), 0) 
+    fip.now.H_af .*= fip.c.rho_sw_ice
     return nothing
 end
 
@@ -197,7 +198,8 @@ Note: we do not use (eq. 1) as it is only a special case of (eq. 13) that does n
 allow a correct representation of external sea-level forcings.
 """
 function update_V_af!(fip::FastIsoProblem)
-    fip.now.V_af = sum( (fip.now.H_af - fip.ref.H_af) .* fip.Omega.A )
+    fip.tools.prealloc.buffer_x .= (fip.now.H_af .- fip.ref.H_af) .* fip.Omega.A 
+    fip.now.V_af = sum(fip.tools.prealloc.buffer_x)
     return nothing
 end
 
@@ -209,7 +211,8 @@ sea water, as in [goelzer-brief-2020](@cite) (eq. 10).
 """
 function update_V_den!(fip::FastIsoProblem)
     density_factor = fip.c.rho_ice / fip.c.rho_water - fip.c.rho_ice / fip.c.rho_seawater
-    fip.now.V_den = sum( (fip.now.H_ice .- fip.ref.H_ice) .* fip.Omega.A ) * density_factor
+    fip.tools.prealloc.buffer_x .= (fip.now.H_water .- fip.ref.H_water) .* fip.Omega.A
+    fip.now.V_den = sum( fip.tools.prealloc.buffer_x ) * density_factor
     return nothing
 end
 
@@ -222,7 +225,9 @@ Note: we do not use eq. (8) as it is only a special case of eq. (14) that does n
 allow a correct representation of external sea-level forcings.
 """
 function update_V_pov!(fip::FastIsoProblem)
-    fip.now.V_pov = sum( max.(fip.ref.z_b - fip.now.z_b, 0) .*
-        (fip.now.z_b .< fip.now.z_ss) .* fip.Omega.A )
+    fip.tools.prealloc.buffer_x .= fip.now.z_b .- fip.now.z_ss
+    fip.tools.prealloc.buffer_x .= max.(fip.tools.prealloc.buffer_x, 0) .* fip.Omega.A
+    fip.tools.prealloc.buffer_x .= fip.tools.prealloc.buffer_x .* (fip.now.z_b .< fip.now.z_ss)
+    fip.now.V_pov = sum( fip.tools.prealloc.buffer_x )
     return nothing
 end

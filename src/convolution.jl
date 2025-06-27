@@ -2,6 +2,7 @@ struct InplaceConvolution{T<:AbstractFloat, M<:KernelMatrix{T}, C<:ComplexMatrix
     FP<:ForwardPlan{T}, IP<:InversePlan{T}}
     pfft!::FP
     pifft!::IP
+    kernel::M
     kernel_fft::C
     out_fft::C
     out::M
@@ -24,22 +25,21 @@ function InplaceConvolution(kernel::M, use_cuda::Bool; filler::T = T(0)) where
     end
     pfft!, pifft! = choose_fft_plans(kernel_fft, use_cuda)
     pfft! * kernel_fft
-    return InplaceConvolution(pfft!, pifft!, kernel_fft, copy(kernel_fft), real.(kernel_fft),
-        buffer, nx, ny, filler)
+    return InplaceConvolution(pfft!, pifft!, kernel, kernel_fft, copy(kernel_fft),
+        real.(kernel_fft), buffer, nx, ny, filler)
 end
 
-function convolution!(
-    ipconv::InplaceConvolution{T, M, C, FP, IP},
-    B::M) where {T<:AbstractFloat, M<:KernelMatrix{T},
-    C<:ComplexMatrix{T}, FP<:ForwardPlan{T}, IP<:InversePlan{T}}
+function convolution!(ipconv::I, B::M) where {I<:InplaceConvolution, M<:KernelMatrix}
 
-    (; pfft!, pifft!, kernel_fft, out_fft, out, nx, ny) = ipconv
-    out_fft .= ipconv.filler #background_value
-    view(out_fft, 1:nx, 1:ny) .= complex.(B)
-    pfft! * out_fft
-    out_fft .*= kernel_fft
-    pifft! * out_fft
-    @. out = real(out_fft)
+    # (; pfft!, pifft!, kernel_fft, out_fft, out, nx, ny) = ipconv
+    # out_fft .= ipconv.filler #background_value
+    # view(out_fft, 1:nx, 1:ny) .= B
+    # pfft! * out_fft
+    # out_fft .*= kernel_fft
+    # pifft! * out_fft
+    # @. out = real(out_fft)
+
+    conv!(out, ipconv.kernel, B)
     return nothing
 end
 
