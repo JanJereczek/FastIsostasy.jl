@@ -37,24 +37,24 @@ We want to render a situation similar to the one depicted below:
 
 ![Schematic representation of the three-layer set-up.](../assets/sketch_nlayer_model.png)
 
-Initializing a [`LayeredEarth`](@ref) with parameters corresponding to this situation automatically computes the conversion from a 3D to a 2D problem. Since we will compare our solution to an analytical one of a flat Earth, we exceptionally switch off the distortion correction, which accounts for the distortion factor `Omega.K` in the computation. This can be simply executed by running:
+Initializing a [`SolidEarthParameters`](@ref) with parameters corresponding to this situation automatically computes the conversion from a 3D to a 2D problem. Since we will compare our solution to an analytical one of a flat Earth, we exceptionally switch off the distortion correction, which accounts for the distortion factor `Omega.K` in the computation. This can be simply executed by running:
 =#
 
 Omega = ComputationDomain(W, n, correct_distortion = false)
 c = PhysicalConstants()
 lv = [1e19, 1e21]       # viscosity layers (Pa s)
 lb = [88e3, 400e3]      # depth of layer boundaries (m)
-p = LayeredEarth(Omega, layer_viscosities = lv, layer_boundaries = lb, rho_litho = 0.0)
+p = SolidEarthParameters(Omega, layer_viscosities = lv, layer_boundaries = lb, rho_litho = 0.0)
 extrema(p.effective_viscosity)
 
 #=
 As expected, the effective viscosity is a homogeneous field. It corresponds to a nonlinear mean of the layered values provided by the user. Note that we have set $$\rho_{litho} = 0$$ to prevent the lithosphere from contributing to the hydrostatic pressure term, such that the numerical solution obtained here is comparable with the analytical one provided in [bueler-fast-2007](@citet). The default value however yields $$\rho_{litho} = 3200 \, \mathrm{kg/m^3}$$ and contributes to the hydrostatic pressure term.
 
-The next section shows how to use the now obtained `p::LayeredEarth` for actual GIA computation.
+The next section shows how to use the now obtained `p::SolidEarthParameters` for actual GIA computation.
 
 ## Simple load and geometry
 
-We now apply a constant load, here a cylinder of ice with radius $$R = 1000 \, \mathrm{km}$$ and thickness $$H = 1 \, \mathrm{km}$$, over `Omega::ComputationDomain` introduced in [`LayeredEarth`](@ref). To formulate the problem conviniently, we use [`FastIsoProblem`](@ref), a struct containing the variables and options that are necessary to perform the integration over time. We can then simply apply `solve!(fip::FastIsoProblem)` to perform the integration of the ODE. Under the hood, the ODE is obtained from the PDE by applying a Fourier collocation scheme contained in [`lv_elva!`](@ref). The integration is performed according to `FastIsoProblem.diffeq::NamedTuple`, which contains the algorithm and optionally tolerances, maximum iteration number... etc.
+We now apply a constant load, here a cylinder of ice with radius $$R = 1000 \, \mathrm{km}$$ and thickness $$H = 1 \, \mathrm{km}$$, over `Omega::ComputationDomain` introduced in [`SolidEarthParameters`](@ref). To formulate the problem conviniently, we use [`FastIsoProblem`](@ref), a struct containing the variables and options that are necessary to perform the integration over time. We can then simply apply `solve!(fip::FastIsoProblem)` to perform the integration of the ODE. Under the hood, the ODE is obtained from the PDE by applying a Fourier collocation scheme contained in [`lv_elva!`](@ref). The integration is performed according to `FastIsoProblem.diffeq::NamedTuple`, which contains the algorithm and optionally tolerances, maximum iteration number... etc.
 =#
 
 t_out = [0.0, 2e2, 6e2, 2e3, 5e3, 1e4, 5e4]     # vector of output time steps (yr)
@@ -119,7 +119,7 @@ For about $$n \geq 7$$, the present example can be computed even faster by using
 Omega = ComputationDomain(W, n, use_cuda = true)
 ```
 
-We then pass `Omega` to a `LayeredEarth` and a `FastIsoProblem`, which we solve as done above: that's it!
+We then pass `Omega` to a `SolidEarthParameters` and a `FastIsoProblem`, which we solve as done above: that's it!
 
 !!! info "Only CUDA supported!"
     For now only Nvidia GPUs are supported and there is no plan of extending this compatibility at this point.
@@ -131,7 +131,7 @@ As any high-level function, [`solve!`](@ref) has some limitations. An ice-sheet 
 =#
 
 Omega = ComputationDomain(3000e3, n)
-p = LayeredEarth(Omega)
+p = SolidEarthParameters(Omega)
 fip = FastIsoProblem(Omega, c, p, t_out, t_Hice, Hice, output = "sparse")
 
 update_diagnostics!(fip.now.dudt, fip.now.u, fip, 0.0)
@@ -153,7 +153,7 @@ fig = plot3D(fip, [lastindex(t_out) ÷ 2, lastindex(t_out)])
 ELRA is a GIA model that is commonly used in ice-sheet modelling. For the vast majority of applications, it is less accurate than LV-ELVA without providing any significant speed up [swierczek2024fastisostasy](@cite). However, it can be used by specifying adequate options:
 =#
 
-p = LayeredEarth(Omega, tau = 3e3)
+p = SolidEarthParameters(Omega, tau = 3e3)
 opts = SolverOptions(deformation_model = :elra)
 fip = FastIsoProblem(Omega, c, p, t_out, t_Hice, Hice, opts = opts, output = "sparse")
 solve!(fip)

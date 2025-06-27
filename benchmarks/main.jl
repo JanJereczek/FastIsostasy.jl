@@ -1,6 +1,6 @@
 using FastIsostasy
 
-W, n = 3f6, 7
+W, n = 3f6, 6
 use_cuda = false
 Omega = RegionalComputationDomain(W, n, use_cuda = use_cuda)
 
@@ -18,14 +18,13 @@ bcs = ProblemBCs(
     elastic_displacement = BorderBC(ExtendedBCSpace(), 0f0),
     geoid_perturbation = BorderBC(ExtendedBCSpace(), 0f0),
 )
-em = EarthModel(
+sem = SolidEarthModel(
     RigidLithosphere(),
-    LaterallyVariableMantle(),
-    MaxwellRheology(),
+    MaxwellMantle(),
 )
+sep = SolidEarthParameters(Omega, rho_litho = 0f0)
 nout = NativeOutput(vars = [:u, :ue, :dz_ss, :H_ice, :u_x, :u_y], t = t_ice)
-p = LayeredEarth(Omega, rho_litho = 0f0)
-fip = FastIsoProblem(Omega, em, p; bcs = bcs, nout = nout)
+fip = FastIsoProblem(Omega, sem, sep; bcs = bcs, nout = nout)
 @time solve!(fip)
 println("Computation time: ", fip.nout.computation_time)
 # Computation time: 62.86226 ==> pretty bad compared to publication. Due to type specification issues?
@@ -92,7 +91,6 @@ lc = LaterallyConstantLithosphere()
 @btime update_dudt!($dudt, $u, $fip, $t, $fip.em)
 @btime columnanom_mantle!($fip)
 @btime update_bedrock!($fip, $u)
-
 
 using Profile
 @profview_allocs update_diagnostics!(dudt, u, fip, t) sample_rate=0.1

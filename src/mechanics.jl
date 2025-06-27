@@ -40,16 +40,31 @@ end
 #####################################################
 
 """
-    update_dudt!(dudt, u, fip, t, model::EarthModel)
+    update_dudt!(dudt, u, fip, t, model::SolidEarthModel)
 
-Update the time derivative of the viscous displacement `dudt` based on an [`EarthModel`](@ref).
+Update the time derivative of the viscous displacement `dudt` based on an [`SolidEarthModel`](@ref):
+- `RigidMantle`: no deformation, `dudt` is zero.
+- `RelaxedMantle` with `LaterallyConstantLithosphere`: uses ELRA (LeMeur & Huybrechts 1996)
+  to compute the viscous response. This also works with laterally-variable relaxation time,
+  as proposed in Van Calcar et al., in rev.
+- `RelaxedMantle` with `LaterallyVariableLithosphere`: not implemented. This corresponds to
+  what is described in Coulon et al. (2021) but is not yet implemented.
+- `MaxwellMantle` with `LaterallyConstantLithosphere` or `RigidLithosphere`: not implemented.
+  This corresponds to what is described in Bueler et al. (2007) but is not yet implemented.
+- `MaxwellMantle` with `LaterallyVariableLithosphere`: This corresponds to the approach
+  of Swierczek-Jereczek et al. (2024).
 """
-function update_dudt!(dudt, u, fip, t, model::EarthModel)
+function update_dudt!(dudt, u, fip, t, model::SolidEarthModel)
     update_dudt!(dudt, u, fip, t, model.rheology, model.lithosphere)
 end
 
-function update_dudt!(dudt, u, fip, t, rheo::RelaxedRheology, 
-    lithosphere::LaterallyConstantLithosphere)
+function update_dudt!(dudt, u, fip, t, mantle::RigidMantle, litho)
+    dudt .= 0
+    return nothing
+end
+
+function update_dudt!(dudt, u, fip, t, mantle::RelaxedMantle, 
+    litho::LaterallyConstantLithosphere)
     
     update_deformation_rhs!(fip, u)
 
@@ -64,13 +79,13 @@ function update_dudt!(dudt, u, fip, t, rheo::RelaxedRheology,
     
 end
 
-function update_dudt!(dudt, u, fip, t, rheo::RelaxedRheology,
-    lithosphere::LaterallyVariableLithosphere)
+function update_dudt!(dudt, u, fip, t, mantle::RelaxedMantle,
+    litho::LaterallyVariableLithosphere)
     error("Relaxed rheology is not implemented for laterally variable lithosphere.")
 end
 
-function update_dudt!(dudt, u, fip, t, rheo::MaxwellRheology,
-    lithosphere::L) where {L<:LaterallyConstantLithosphere}
+function update_dudt!(dudt, u, fip, t, mantle::MaxwellMantle,
+    litho::L) where {L<:AbstractLithosphere}
     error("Viscous rheology is not implemented for laterally constant lithosphere.")
     # fft(load, t + dt/2)
     # U_now = fft(u_now)
@@ -80,8 +95,8 @@ function update_dudt!(dudt, u, fip, t, rheo::MaxwellRheology,
     # u_next = fftinv(U_next)
 end
 
-function update_dudt!(dudt, u, fip, t, rheo::MaxwellRheology,
-    lithosphere::L) where {L<:AbstractLithosphere}
+function update_dudt!(dudt, u, fip, t, mantle::MaxwellMantle,
+    lithosphere::LaterallyVariableLithosphere)
     Omega, P = fip.Omega, fip.tools.prealloc
     update_deformation_rhs!(fip, u)
     @. P.fftrhs = P.rhs * Omega.K / (2 * fip.p.effective_viscosity)

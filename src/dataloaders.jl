@@ -150,7 +150,7 @@ function load_prem()
     # radius, depth, density, Vpv, Vph, Vsv, Vsh, eta, Q-mu, Q-kappa
     M = readdlm(joinpath(@__DIR__, "input/PREM_1s.csv"), ',')[:, 1:7]
     M .*= 1e3
-    return ReferenceEarthModel([M[:, j] for j in axes(M, 2)]...)
+    return ReferenceSolidEarthModel([M[:, j] for j in axes(M, 2)]...)
 end
 
 

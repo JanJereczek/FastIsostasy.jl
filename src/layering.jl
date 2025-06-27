@@ -7,7 +7,7 @@ const DEFAULT_MANTLE_POISSONRATIO = 0.28
 const DEFAULT_MANTLE_TAU = 855.0
 
 """
-    LayeredEarth(Omega; layer_boundaries, layer_viscosities)
+    SolidEarthParameters(Omega; layer_boundaries, layer_viscosities)
 
 Return a struct containing all information related to the lateral variability of
 solid-Earth parameters. To initialize with values other than default, run:
@@ -16,7 +16,7 @@ solid-Earth parameters. To initialize with values other than default, run:
 Omega = RegionalComputationDomain(3000e3, 7)
 lb = [100e3, 300e3]
 lv = [1e19, 1e21]
-p = LayeredEarth(Omega, layer_boundaries = lb, layer_viscosities = lv)
+p = SolidEarthParameters(Omega, layer_boundaries = lb, layer_viscosities = lv)
 ```
 
 which initializes a lithosphere of thickness ``T_1 = 100 \\mathrm{km}``, a viscous
@@ -25,7 +25,7 @@ at ``T_2``. This represents a homogenous case. For heterogeneous ones, simply ma
 `lb::Vector{Matrix}`, `lv::Vector{Matrix}` such that the vector elements represent the
 lateral variability of each layer on the grid of `Omega::RegionalComputationDomain`.
 """
-mutable struct LayeredEarth{T<:AbstractFloat, M<:KernelMatrix{T}}
+mutable struct SolidEarthParameters{T<:AbstractFloat, M<:KernelMatrix{T}}
     effective_viscosity::M
     litho_thickness::M
     litho_rigidity::M
@@ -38,7 +38,7 @@ mutable struct LayeredEarth{T<:AbstractFloat, M<:KernelMatrix{T}}
     rho_litho::T
 end
 
-function LayeredEarth(
+function SolidEarthParameters(
     Omega::RegionalComputationDomain{T, L, M};
     layer_boundaries::A = T.([88e3, 400e3]),
     layer_viscosities::B = T.([1e19, 1e21]),        # (Pa*s) (Bueler 2007, Ivins 2022, Fig 12 WAIS)
@@ -82,7 +82,7 @@ function LayeredEarth(
     
     litho_shearmodulus = litho_youngmodulus / (2 * (1 + litho_poissonratio))
 
-    return LayeredEarth(
+    return SolidEarthParameters(
         effective_viscosity,
         litho_thickness, litho_rigidity, litho_poissonratio,
         mantle_poissonratio, tau, litho_youngmodulus, litho_shearmodulus,
@@ -166,7 +166,7 @@ end
     get_layer_boundaries(n_x, n_y, litho_thickness::Matrix{T}, layering::AbstractLayering{T})
 
 Compute the layer boundaries for a given [`AbstractLayering`](@ref).
-Output is typically passed to [`LayeredEarth`](@ref) to create a layered Earth model.
+Output is typically passed to [`SolidEarthParameters`](@ref) to create a layered Earth model.
 """
 function get_layer_boundaries(n_x, n_y, litho_thickness, layering::UniformLayering)
 

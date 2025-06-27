@@ -8,14 +8,14 @@ function get_rigidity(t::T, E::T, nu::T) where {T<:AbstractFloat}
     return (E * t^3) / (12 * (1 - nu^2))
 end
 
-get_shearmodulus(m::ReferenceEarthModel) = get_shearmodulus(m.density, m.Vsv, m.Vsh)
+get_shearmodulus(m::ReferenceSolidEarthModel) = get_shearmodulus(m.density, m.Vsv, m.Vsh)
 get_shearmodulus(ρ, Vsv, Vsh) = ρ .* (Vsv + Vsh) ./ 2
 
 function maxwelltime_scaling(layer_viscosities, layer_shearmoduli)
     return layer_shearmoduli[end] ./ layer_shearmoduli .* layer_viscosities
 end
 
-function maxwelltime_scaling!(layer_viscosities, layer_boundaries, m::ReferenceEarthModel)
+function maxwelltime_scaling!(layer_viscosities, layer_boundaries, m::ReferenceSolidEarthModel)
     mu = get_shearmodulus(m)
     layer_meandepths = (layer_boundaries[:, :, 1:end-1] + layer_boundaries[:, :, 2:end]) ./ 2
     layer_meandepths = cat(layer_meandepths, layer_boundaries[:, :, end], dims = 3)

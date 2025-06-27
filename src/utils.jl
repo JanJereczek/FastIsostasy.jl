@@ -224,14 +224,14 @@ kernelpromote(X::Vector, arraykernel) = [arraykernel(x) for x in X]
 """
     reinit_structs_cpu(Omega, p)
 
-Reinitialize `Omega::RegionalComputationDomain` and `p::LayeredEarth` on the CPU, mostly
+Reinitialize `Omega::RegionalComputationDomain` and `p::SolidEarthParameters` on the CPU, mostly
 for post-processing purposes.
 """
-function reinit_structs_cpu(Omega::RegionalComputationDomain{T, L, M}, p::LayeredEarth{T, M}
+function reinit_structs_cpu(Omega::RegionalComputationDomain{T, L, M}, p::SolidEarthParameters{T, M}
     ) where {T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}}
 
     Omega_cpu = RegionalComputationDomain(Omega.Wx, Omega.Wy, Omega.nx, Omega.ny, use_cuda = false)
-    p_cpu = LayeredEarth(
+    p_cpu = SolidEarthParameters(
         Omega_cpu;
         layer_boundaries = Array(p.layer_boundaries),
         layer_viscosities = Array(p.layer_viscosities),

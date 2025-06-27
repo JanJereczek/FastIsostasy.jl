@@ -17,7 +17,7 @@ We demonstrate the tuning of the effective viscosity in a region that is being f
 !!! note "Resolution"
     We perform the following analysis on a low-resolution grid. High resolutions (ca. `Omega.nx = Omega.ny > 200`) are difficult to achieve since the underlying unscented Kalman filter requires many simulations. This is however typically not a problem, since the parametric fields (here the viscosity) are smooth and can be downsampled without significant loss of information.
 
-We first load the necessary packages, initialize the [`ComputationDomain`](@ref) and assign laterally-variable viscosity profiles to a [`LayeredEarth`](@ref) by loading the fields estimated in [wiens-seismic-2022](@citet):
+We first load the necessary packages, initialize the [`ComputationDomain`](@ref) and assign laterally-variable viscosity profiles to a [`SolidEarthParameters`](@ref) by loading the fields estimated in [wiens-seismic-2022](@citet):
 =#
 
 using CairoMakie
@@ -33,7 +33,7 @@ lb = [100e3, 200e3, 300e3]
 _, eta, eta_itp = load_dataset("Wiens2022")
 loglv = cat([eta_itp.(Omega.X, Omega.Y, z) for z in lb]..., dims = 3)
 lv = 10 .^ loglv
-p = LayeredEarth(Omega, layer_boundaries = lb, layer_viscosities = lv)
+p = SolidEarthParameters(Omega, layer_boundaries = lb, layer_viscosities = lv)
 
 #=
 To make this problem more exciting, we place the center of the ice load to $$(-1000, -1000) \: \mathrm{km}$$ where the viscosity field displays a less uniform structure. For the sake of simplicity, the data to fit is obtained from a FastIsostasy simulation with the ground-truth viscosity field.

@@ -5,7 +5,7 @@
 ```@docs
 ComputationDomain
 PhysicalConstants
-LayeredEarth
+SolidEarthParameters
 ReferenceState
 CurrentState
 FastIsoTools

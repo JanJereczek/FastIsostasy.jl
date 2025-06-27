@@ -44,93 +44,48 @@ struct LaterallyVariableLithosphere <: AbstractLithosphere end
 
 Available subtypes are:
 - [`RigidMantle`](@ref)
-- [`LaterallyConstantMantle`](@ref)
-- [`LaterallyVariableMantle`](@ref)
+- [`RelaxedMantle`](@ref)
+- [`MaxwellMantle`](@ref)
 """
 abstract type AbstractMantle end
 
 """
     RigidMantle
 
-Assume a rigid mantle, i.e. the viscous/relaxed deformation is neglected.
+Assume a rigid mantle that does not deform.
 """
 struct RigidMantle <: AbstractMantle end
 
 """
-    LaterallyConstantMantle
+    RelaxedMantle
 
-Assume a laterally-constant mantle properties (relaxation time or viscosity
-depending on the [`AbstractRheology`](@ref) that is used) across the domain.
-This generally improves the performance of the solver, but is less realistic.
-"""
-struct LaterallyConstantMantle <: AbstractMantle end
-
-"""
-    LaterallyVariableMantle
-
-Assume a laterally-variable mantle properties (relaxation time or viscosity
-depending on the [`AbstractRheology`](@ref) that is used) across the domain.
-This generally improves the realism of the model, but is more computationally expensive.
-"""
-struct LaterallyVariableMantle <: AbstractMantle end
-
-##############################################################
-# Rheology
-##############################################################
-
-"""
-    AbstractRheology
-
-Available subtypes are:
-- [`RelaxedRheology`](@ref)
-- [`MaxwellRheology`](@ref)
-"""
-abstract type AbstractRheology end
-
-"""
-    RelaxedRheology
-
-Assume a relaxed rheology in the mantle, governed by a relaxation time.
-This generally offers worse performance and is less realistic than a viscous rheology.
+Assume a relaxed mantle that deforms according to a relaxation time.
+This is generally less realistic and offers worse performance than a viscous mantle.
 It is only included for legacy purpose (e.g. comparison among solvers).
 """
-struct RelaxedRheology <: AbstractRheology end
+struct RelaxedMantle <: AbstractMantle end
 
 """
-    MaxwellRheology
+    MaxwellMantle
 
-Assume a viscous rheology in the mantle, governed by a viscosity.
-This is the most realistic rheology and generally offers the best performance.
-It is the default rheology used in the solver.
+Assume a viscous mantle that deforms according to a viscosity.
+This is the most realistic mantle model and generally offers the best performance.
+It is the default mantle model used in the solver.
 """
-struct MaxwellRheology <: AbstractRheology end
+struct MaxwellMantle <: AbstractMantle end
 
 """
-    BurgersRheology
+    BurgersMantle
 
-Assume a Burgers rheology in the mantle, which is a combination of a Maxwell and a Kelvin-Voigt rheology.
-This is a more complex rheology that can capture both short-term and long-term viscoelastic behavior.
-It is not yet implemented in the solver.
+Not implemented yet!
 """
-struct BurgersRheology <: AbstractRheology end
+struct BurgersMantle <: AbstractMantle end
 
 ##################################################################
-# EarthModel
+# SolidEarthModel
 ################################################################
 
-@kwdef struct EarthModel{L<:AbstractLithosphere, M<:AbstractMantle, R<:AbstractRheology}
-    lithosphere::L      # lc or lv
-    mantle::M           # lc or lv
-    rheology::R         # relaxed, maxwell or burgers
+@kwdef struct SolidEarthModel{L<:AbstractLithosphere, M<:AbstractMantle}
+    lithosphere::L      # rigid, lc or lv
+    mantle::M           # rigid, relaxed or maxwell
 end
-
-# lc, lc, relaxed = ELRA
-# lv, lv, relaxed = LVELRA
-# lc, lc, viscous = ELVA
-# lv, lv, viscous = LVELVA
-
-# But we could also do:
-# lc, lv, relaxed => ELRA solver
-# lv, lc, relaxed => LVELRA solver
-# lc, lv, viscous => ELVA solver
-# lv, lc, viscous => LVELVA solver

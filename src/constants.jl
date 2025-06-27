@@ -31,7 +31,7 @@ end
 # Earth model
 #########################################################
 """
-    ReferenceEarthModel
+    ReferenceSolidEarthModel
 Return a struct with vectors containing the:
  - radius (distance from Earth center),
  - depth (distance from Earth surface),
@@ -40,7 +40,7 @@ Return a struct with vectors containing the:
  - S-wave velocities,
 which are typically used to characterize the properties of a spherically symmetrical solid Earth.
 """
-struct ReferenceEarthModel{T<:AbstractFloat}
+struct ReferenceSolidEarthModel{T<:AbstractFloat}
     radius::Vector{T}
     depth::Vector{T}
     density::Vector{T}

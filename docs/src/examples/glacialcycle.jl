@@ -53,12 +53,12 @@ lv_3D = 10 .^ cat([logeta_itp.(Lon, Lat, rlb[:, :, k]) for k in 1:nlb]..., dims=
 size(lv_3D)
 
 #=
-To prevent extreme values of the viscosity, we require it to be larger than a minimal value, fixed to be $$10^{16} \, \mathrm{Pa \, s} $$. We subsequently generate a [`LayeredEarth`](@ref) that embeds all the information that has been loaded so far:
+To prevent extreme values of the viscosity, we require it to be larger than a minimal value, fixed to be $$10^{16} \, \mathrm{Pa \, s} $$. We subsequently generate a [`SolidEarthParameters`](@ref) that embeds all the information that has been loaded so far:
 =#
 
 eta_lowerbound = 1e16
 lv_3D[lv_3D .< eta_lowerbound] .= eta_lowerbound
-p = LayeredEarth(Omega, layer_boundaries = lb, layer_viscosities = lv_3D)
+p = SolidEarthParameters(Omega, layer_boundaries = lb, layer_viscosities = lv_3D)
 nicer_heatmap(log10.(p.effective_viscosity))
 
 #=

@@ -8,7 +8,7 @@ by an elastic plate overlaying a viscous half space. Parameters are provided in
 to the center of the domain. The time at which the solution is computed is specified
 by `t`.
 """
-function analytic_solution(r::T, t::T, c::PhysicalConstants, p::LayeredEarth,
+function analytic_solution(r::T, t::T, c::PhysicalConstants, p::SolidEarthParameters,
     H0::T, R0::T; n_quad_support=5::Int) where {T<:AbstractFloat}
 
     support = T.(vcat(1e-14, 10 .^ (-10:0.05:-3), 1.0))     # support vector for quadrature
@@ -39,7 +39,7 @@ function analytic_integrand(
     r::T,
     t::T,
     c,  # PhysicalConstants
-    p,  # LayeredEarth
+    p,  # SolidEarthParameters
     R0::T,
 ) where {T<:AbstractFloat}
 
@@ -55,7 +55,7 @@ function equilibrium_integrand(
     kappa::T,
     r::T,
     c::PhysicalConstants,
-    p::LayeredEarth,
+    p::SolidEarthParameters,
     R0::T,
 ) where {T<:AbstractFloat}
     beta = p.rho_uppermantle * c.g + mean(p.litho_rigidity) * kappa ^ 4

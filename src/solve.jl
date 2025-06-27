@@ -28,14 +28,14 @@ end
 
 Return a struct containing all the other structs needed for the forward integration of the
 model over `Omega::RegionalComputationDomain` with parameters `c::PhysicalConstants` and
-`p::LayeredEarth`. The outputs are stored at `t_out::Vector{<:AbstractFloat}`.
+`p::SolidEarthParameters`. The outputs are stored at `t_out::Vector{<:AbstractFloat}`.
 """
 struct FastIsoProblem{
     CD,     # <:AbstractComputationDomain
     PC,     # <:PhysicalConstants
     BCS,    # <:ProblemBCs
-    EM,     # <:EarthModel
-    LE,     # <:LayeredEarth
+    EM,     # <:SolidEarthModel
+    LE,     # <:SolidEarthParameters
     SO,     # <:SolverOptions
     FIT,    # <:FastIsoTools
     RS,     # <:ReferenceState
@@ -58,8 +58,8 @@ end
 
 function FastIsoProblem(
     Omega,  # RegionalComputationDomain
-    em,     # EarthModel
-    p;      # LayeredEarth
+    em,     # SolidEarthModel
+    p;      # SolidEarthParameters
     T = eltype(Omega.R),
     bcs = ProblemBCs(Omega),
     opts = SolverOptions(),
