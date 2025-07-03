@@ -40,7 +40,7 @@ function update_diagnostics!(dudt, u, fip::FastIsoProblem, t)
         # Update perturbation of sea surface elevation according to new anomalies
         columnanom_load!(fip)
         columnanom_full!(fip)
-        update_dz_ss!(fip, fip.bcs.sea_surface_elevation)
+        update_dz_ss!(fip, fip.bcs.sea_surface)
 
         # Update sea surface based on perturbation and BSL
         update_z_ss!(fip)
@@ -181,6 +181,9 @@ function update_deformation_rhs!(fip::FastIsoProblem, u)
     update_second_derivatives!(P.buffer_xx, P.buffer_yy, P.buffer_x, P.buffer_xy,
         P.Mxx, P.Myy, P.Mxy, Omega)
     @. P.rhs += P.buffer_xx + muladd(2, P.buffer_xy, P.buffer_yy)
+
+    P.buffer_x .= P.rhs
+    samesize_conv!(P.rhs, P.buffer_x, fip.tools.smooth_convo, fip.Omega)
     return nothing
 end
 

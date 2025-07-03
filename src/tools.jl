@@ -27,6 +27,7 @@ struct FastIsoTools{
     I1<:ConvolutionPlan,
     I2<:ConvolutionPlan,
     I3<:ConvolutionPlan,
+    I4, # <:ConvolutionPlan or EmptyConvolution,
     FP<:ForwardPlan,
     IP<:InversePlan,
     PA<:PreAllocated,
@@ -34,12 +35,13 @@ struct FastIsoTools{
     viscous_convo::I1
     elastic_convo::I2
     dz_ss_convo::I3
+    smooth_convo::I4
     pfft!::FP
     pifft!::IP
     prealloc::PA
 end
 
-function FastIsoTools(Omega, c, p; quad_precision::Int = 4)
+function FastIsoTools(Omega, c, p; quad_precision::Int = 4, smooth_radius = 20f3)
 
     T = eltype(Omega.R)
 
@@ -60,6 +62,16 @@ function FastIsoTools(Omega, c, p; quad_precision::Int = 4)
     dz_ss_green = get_dz_ss_green(Omega, c)
     dz_ss_convo = ConvolutionPlan(T.(dz_ss_green))
 
+    # Build in-place convolution for smoothing
+    if isnothing(smooth_radius)
+        smooth_convo = EmptyConvolution()
+    else
+        sigma = T.(diagm([(smooth_radius)^2, (smooth_radius)^2]))
+        smoothing_kernel = generate_gaussian_field(Omega, T(0.0), T.([0.0, 0.0]), T(1.0), sigma)
+        norm!(smoothing_kernel)
+        smooth_convo = ConvolutionPlan(smoothing_kernel)
+    end
+
     # FFT plans depening on CPU vs. GPU usage
     pfft!, pifft! = choose_fft_plans(Omega.K, Omega.use_cuda)
 
@@ -69,7 +81,8 @@ function FastIsoTools(Omega, c, p; quad_precision::Int = 4)
     cplxmatrices = [complex.(kernelnull(Omega)) for _ in 1:n_cplx_matrices]
     prealloc = PreAllocated(realmatrices..., cplxmatrices...)
     
-    return FastIsoTools(viscous_convo, elastic_convo, dz_ss_convo, pfft!, pifft!, prealloc)
+    return FastIsoTools(viscous_convo, elastic_convo, dz_ss_convo, smooth_convo,
+        pfft!, pifft!, prealloc)
 end
 
 

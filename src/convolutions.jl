@@ -117,9 +117,25 @@ function conv(kernel, input)
     return convplan.output_padded
 end
 
+struct EmptyConvolution end
+
 """
     samesize_conv!(output, input, convplan, Omega, bc, bcspace)
 """
+function samesize_conv!(output, input, p::EmptyConvolution, Omega)
+    return nothing
+end
+
+function samesize_conv!(output::M, input::M, p::ConvolutionPlan, Omega) where
+    {T<:AbstractFloat, M<:KernelMatrix{T}}
+    
+    conv!(input, p)
+    output .= view(p.output_cropped,
+        Omega.i1+Omega.convo_offset:Omega.i2+Omega.convo_offset,
+        Omega.j1-Omega.convo_offset:Omega.j2-Omega.convo_offset)
+    return nothing
+end
+
 function samesize_conv!(output::M, input::M, p::ConvolutionPlan, Omega, bc,
     bc_space::ExtendedBCSpace) where {T<:AbstractFloat, M<:KernelMatrix{T}}
     
