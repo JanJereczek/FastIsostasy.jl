@@ -26,7 +26,7 @@ it = TimeInterpolatedIceThickness(t_ice, H_ice, Omega)
 bcs = ProblemBCs(
     Omega,
     ice_thickness = it,
-    sea_surface_elevation = LaterallyVariableSeaSurfaceElevation(),
+    sea_surface = LaterallyVariableSeaSurface(),
     viscous_displacement = BorderBC(RegularBCSpace(), 0f0),
     elastic_displacement = BorderBC(ExtendedBCSpace(), 0f0),
     sea_surface_perturbation = BorderBC(ExtendedBCSpace(), 0f0),

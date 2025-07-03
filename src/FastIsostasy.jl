@@ -66,11 +66,11 @@ export RegionalComputationDomain, GlobalComputationDomain
 # boundary_conditions.jl
 export AbstractIceThickness, TimeInterpolatedIceThickness, ExternallyUpdatedIceThickness
 export AbstractOceanLoad, NoOceanLoad, InteractiveOceanLoad
-export AbstractSeaSurfaceElevation, LaterallyConstantSeaSurfaceElevation
-export LaterallyVariableSeaSurfaceElevation
+export AbstractSeaSurfaceElevation, LaterallyConstantSeaSurface
+export LaterallyVariableSeaSurface
 export RegularBCSpace, ExtendedBCSpace
 export CornerBC, BorderBC, DistanceWeightedBC, ProblemBCs
-export update_ice!, apply_bc!
+export update_ice!, apply_bc!, precompute_bc
 
 # constants.jl
 export PhysicalConstants, ReferenceSolidEarthModel

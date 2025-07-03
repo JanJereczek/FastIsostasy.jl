@@ -279,16 +279,14 @@ end
 
 """
 """
-abstract type AbstractSeaSurfaceElevation end
+abstract type AbstractSeaSurface end
 
 """
 """
-struct LaterallyConstantSeaSurfaceElevation end
+struct LaterallyConstantSeaSurface <: AbstractSeaSurface end
 """
 """
-struct LaterallyVariableSeaSurfaceElevation
-    bc::OffsetBC
-end
+struct LaterallyVariableSeaSurface <: AbstractSeaSurface end
 
 
 
@@ -298,10 +296,10 @@ abstract type AbstractOceanLoad end
 
 """
 """
-struct NoOceanLoad end
+struct NoOceanLoad <: AbstractOceanLoad end
 """
 """
-struct InteractiveOceanLoad end
+struct InteractiveOceanLoad <: AbstractOceanLoad end
 
 #########################################################################
 # FastIsoProblem level
@@ -316,11 +314,11 @@ struct ProblemBCs{
     T,      # <:AbstractFloat,
     M,      # <:KernelMatrix{T},
     IT,     # <:AbstractIceThickness,
-    SSE,    # <:AbstractSeaSurfaceElevation
+    SS,    # <:AbstractSeaSurface
     OL,     # <:AbstractOceanLoad
 }
     ice_thickness::IT
-    sea_surface_elevation::SSE
+    sea_surface::SS
     ocean_load::OL
     viscous_displacement::OffsetBC{T, M}
     elastic_displacement::OffsetBC{T, M}
@@ -330,7 +328,7 @@ end
 function ProblemBCs(
     Omega::RegionalComputationDomain{T, L, M};
     ice_thickness = ExternallyUpdatedIceThickness(),
-    sea_surface_elevation = LaterallyConstantSeaSurfaceElevation(),
+    sea_surface = LaterallyConstantSeaSurface(),
     ocean_load = NoOceanLoad(),
     viscous_displacement = CornerBC(RegularBCSpace(), T(0)),
     elastic_displacement = CornerBC(ExtendedBCSpace(), T(0)),
@@ -341,7 +339,7 @@ function ProblemBCs(
     @assert isa(viscous_displacement.space, RegularBCSpace)
     
     return ProblemBCs(
-        ice_thickness, sea_surface_elevation, ocean_load,
+        ice_thickness, sea_surface, ocean_load,
         precompute_bc(viscous_displacement, viscous_displacement.space, Omega),
         precompute_bc(elastic_displacement, elastic_displacement.space, Omega),
         precompute_bc(sea_surface_perturbation, sea_surface_perturbation.space, Omega),

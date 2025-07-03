@@ -3,7 +3,7 @@
 
 Update the SSH perturbation `dz_ss` by convoluting the Green's function with the load anom.
 """
-function update_dz_ss!(fip::FastIsoProblem, sl::LaterallyVariableSeaSurfaceElevation)
+function update_dz_ss!(fip::FastIsoProblem, sl::LaterallyVariableSeaSurface)
 
     @. fip.tools.prealloc.buffer_x = mass_anom(fip.Omega.A, fip.now.columnanoms.full)
     samesize_conv!(fip.now.dz_ss, fip.tools.prealloc.buffer_x,
@@ -12,7 +12,7 @@ function update_dz_ss!(fip::FastIsoProblem, sl::LaterallyVariableSeaSurfaceEleva
     return nothing
 end
 
-function update_dz_ss!(fip::FastIsoProblem, sl::LaterallyConstantSeaSurfaceElevation)
+function update_dz_ss!(fip::FastIsoProblem, sl::LaterallyConstantSeaSurface)
     return nothing
 end
 
