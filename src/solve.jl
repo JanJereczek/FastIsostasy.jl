@@ -14,7 +14,7 @@ Return a struct containing the options relative to solving a [`FastIsoProblem`](
 @kwdef struct SolverOptions
     diffeq::DiffEqOptions = DiffEqOptions()
     dt_diagnostics::Float64 = 10.0
-    verbose::Bool = false
+    verbose::Bool = true
 end
 
 #########################################################
@@ -74,7 +74,7 @@ function FastIsoProblem(
     bsl = ConstantBSL(),
 )
 
-    if (bcs.z_ss isa ConstantSeaLevel)
+    if (bcs.ocean_load isa NoOceanLoad)
         nothing
     elseif (sum(maskactive) > 0.6 * Omega.nx * Omega.ny)
         error("Mask defining regions of active load must not cover more than 60%"*
@@ -85,7 +85,7 @@ function FastIsoProblem(
 
     # Initialise the reference state
     H_ice_0 = kernelnull(Omega)
-    apply_bc!(H_ice_0, nout.t[1], bcs.h_ice)
+    apply_bc!(H_ice_0, nout.t[1], bcs.ice_thickness)
 
     u_0, ue_0, z_ss_0, z_b_0, H_ice_0 = kernelpromote([u_0, ue_0,
         z_ss_0, z_b_0, H_ice_0], Omega.arraykernel)
@@ -115,7 +115,6 @@ function Base.show(io::IO, ::MIME"text/plain", fip::FastIsoProblem)
         "Problem BCs" => typeof(fip.bcs),
         "Earth model" => typeof(fip.em),
         "Layered Earth" => typeof(p),
-        "Ice thickness" => typeof(fip.bcs.h_ice),
         "Solver options" => typeof(fip.opts),
         "FastIsoTools" => typeof(fip.tools),
         "Reference state" => typeof(fip.ref),
@@ -163,6 +162,7 @@ end
 function nout_affect!(integrator)
     fip = integrator.p
     println("Saving native output at simulation year $(integrator.t)...")
+    # @show mean(vcat(fip.now.u[1, :], fip.now.u[end, :], fip.now.u[:, 1], fip.now.u[:, end]))
 
     if (:u_x in fip.nout.vars) || (:u_y in fip.nout.vars)
         thinplate_horizontal_displacement!(fip.now.u_x, fip.now.u_y,
@@ -195,7 +195,8 @@ function solve!(fip::FastIsoProblem)
     nout_callback = DiscreteCallback(nout_condition, nout_affect!)
     out_callback = CallbackSet(ncout_callback, nout_callback)
     solve(prob, fip.opts.diffeq.alg, reltol=fip.opts.diffeq.reltol,
-        saveat=fip.nout.t[end:end], tstops=fip.nout.t, callback=out_callback)
+        saveat=fip.nout.t[end:end], tstops=fip.nout.t, callback=out_callback,
+        progress = fip.opts.verbose)
     fip.nout.computation_time = time()-t1
     return nothing
 end

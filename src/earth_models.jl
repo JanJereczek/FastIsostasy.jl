@@ -86,6 +86,6 @@ struct BurgersMantle <: AbstractMantle end
 ################################################################
 
 @kwdef struct SolidEarthModel{L<:AbstractLithosphere, M<:AbstractMantle}
-    lithosphere::L      # rigid, lc or lv
-    mantle::M           # rigid, relaxed or maxwell
+    lithosphere::L = LaterallyVariableLithosphere()     # rigid, lc or lv
+    mantle::M = MaxwellMantle()                         # rigid, relaxed or maxwell
 end

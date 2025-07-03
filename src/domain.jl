@@ -153,7 +153,8 @@ function RegionalComputationDomain(
     j1, j2 = samesize_conv_indices(ny, my)
     convo_offset = (ny - nx) ÷ 2
 
-    return RegionalComputationDomain(Wx, Wy, nx, ny, mx, my, dx, dy, x, y, X, Y, i1, i2, j1, j2, convo_offset,
+    return RegionalComputationDomain(Wx, Wy, nx, ny, mx, my, dx, dy, x, y, X, Y,
+        i1, i2, j1, j2, convo_offset,
         R, Theta, Lat, Lon, K, K .* dx, K .* dy, (dx * dy) .* K .^ 2, correct_distortion,
         null, pseudodiff, 1 ./ pseudodiff, use_cuda, arraykernel)
 end

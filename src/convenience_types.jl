@@ -1,3 +1,4 @@
+# TODO almost all these types could be removed
 KernelMatrix{T} = Union{Matrix{T}, CuMatrix{T}} where {T<:AbstractFloat}
 ComplexMatrix{T} = Union{Matrix{C}, CuMatrix{C}} where {T<:AbstractFloat, C<:Complex{T}}
 BoolMatrix = Union{Matrix{Bool}, CuMatrix{Bool}}

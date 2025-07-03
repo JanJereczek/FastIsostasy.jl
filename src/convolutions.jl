@@ -1,18 +1,3 @@
-@inline function _zeropad!(
-    padded::AbstractArray,
-    u::AbstractArray,
-    padded_axes = axes(padded),
-    data_dest::Tuple = first.(padded_axes),
-    data_region = CartesianIndices(u),
-)
-    fill!(padded, zero(eltype(padded)))
-    dest_axes = UnitRange.(data_dest, data_dest .+ size(data_region) .- 1)
-    dest_region = CartesianIndices(dest_axes)
-    copyto!(padded, dest_region, u, data_region)
-
-    padded
-end
-
 """
     _zeropad(u, padded_size, [data_dest, data_region])
 
@@ -29,157 +14,158 @@ function _zeropad(u, padded_size, args...)
     _zeropad!(padded, u, axes(padded), args...)
 end
 
+"""
+    _zeropad!(padded, u, [padded_axes, data_dest, data_region])
+
+Same as [`_zeropad`](@ref) but in place.
+"""
+@inline function _zeropad!(
+    padded::AbstractArray,
+    u::AbstractArray,
+    padded_axes = axes(padded),
+    data_dest::Tuple = first.(padded_axes),
+    data_region = CartesianIndices(u),
+)
+    fill!(padded, zero(eltype(padded)))
+    dest_axes = UnitRange.(data_dest, data_dest .+ size(data_region) .- 1)
+    dest_region = CartesianIndices(dest_axes)
+    copyto!(padded, dest_region, u, data_region)
+
+    return nothing
+end
+
 const FAST_FFT_SIZES = (2, 3, 5, 7)
 nextfastfft(n::Integer) = nextprod(FAST_FFT_SIZES, n)
 nextfastfft(ns::Tuple{Vararg{Integer}}) = nextfastfft.(ns)
 
-struct FastConvPlan{
+"""
+    ConvolutionPlan
+
+A struct that contains:
+ - p_rfft: the real-valued FFT plan
+ - p_irfft: the real-valued inverse FFT plan (including scaling)
+ - nffts: 
+ - kernel_padded: the padded kernel to convolve the input with
+ - input_padded: the padded input
+ - kernel_fft: the transformed (padded) kernel
+ - input_fft: the transformed (padded) input
+
+To initialize the plan and perform a convolution based on it:
+```julia
+kernel, input = [rand(64, 64) for _ in 1:2]
+convplan = ConvolutionPlan(kernel)
+conv!(input, convplan)
+```
+
+You can retrieve the result by calling `convplan.output_padded` but the
+result will be on the padded domain. To retrieve the result on the original
+domain, use [`samesize_conv!`](@ref).
+"""
+struct ConvolutionPlan{
     T<:AbstractFloat,
     M<:KernelMatrix{T},
     C<:ComplexMatrix{T},
     FP<:rFFTWPlan,
     IP<:AbstractFFTs.ScaledPlan}
 
+    nx::Int
+    ny::Int
     p_rfft::FP
     p_irfft::IP
     nffts::Tuple{Int64, Int64}
     kernel_padded::M
     input_padded::M
+    output_padded::M
+    output_cropped::M
     kernel_fft::C
     input_fft::C
 end
 
-function FastConvPlan(kernel::KernelMatrix{T}) where T
+function ConvolutionPlan(kernel::KernelMatrix{T}) where T
     nx, ny = size(kernel)
     outsize = (2*nx-1, 2*ny-1)
     nffts = nextfastfft(outsize)
-    kernel_padded = _zeropad!(similar(kernel, T, nffts), kernel)
+    kernel_padded = similar(kernel, T, nffts)
+    _zeropad!(kernel_padded, kernel)
     input_padded = similar(kernel_padded)
+    output_padded = similar(kernel_padded)
+    output_cropped = zeros(T, outsize)
     p_rfft = plan_rfft(kernel_padded)
     kernel_fft = p_rfft * kernel_padded
     input_fft = similar(kernel_fft)
     p_irfft = plan_irfft(kernel_fft, nffts[1])
-    return FastConvPlan(p_rfft, p_irfft, nffts, kernel_padded, input_padded, kernel_fft, input_fft)
+    return ConvolutionPlan(nx, ny, p_rfft, p_irfft, nffts, kernel_padded, input_padded,
+        output_padded, output_cropped, kernel_fft, input_fft)
 end
 
-function convo!(out, v, p::FastConvPlan)
-    _zeropad!(p.input_padded, v)
+function conv!(output, input, p::ConvolutionPlan)
+    _zeropad!(p.input_padded, input)
     mul!(p.input_fft, p.p_rfft, p.input_padded)
     p.input_fft .*= p.kernel_fft
-    mul!(out, p.p_irfft, p.input_fft)
+    mul!(output, p.p_irfft, p.input_fft)
     return nothing
 end
 
-struct InplaceConvolution{T<:AbstractFloat, M<:KernelMatrix{T}, C<:ComplexMatrix{T},
-    FP<:ForwardPlan{T}, IP<:InversePlan{T}}
-    pfft!::FP
-    pifft!::IP
-    kernel::M
-    kernel_fft::C
-    out_fft::C
-    out::M
-    buffer::M
-    nx::Int
-    ny::Int
-    filler::T
+function conv!(input, p::ConvolutionPlan)
+    conv!(p.output_padded, input, p)
+    p.output_cropped .= view(p.output_padded, 1:2*p.nx-1, 1:2*p.ny-1)
 end
 
-function InplaceConvolution(kernel::M, use_cuda::Bool; filler::T = T(0)) where
-    {T<:AbstractFloat, M<:KernelMatrix{T}}
-
-    nx, ny = size(kernel)
-    kernel_fft = zeros(Complex{T}, 2*nx-1, 2*ny-1)
-    buffer = zeros(T, 2*nx-1, 2*ny-1)
-    view(kernel_fft, 1:nx, 1:ny) .= kernel
-    if use_cuda
-        kernel_fft = CuMatrix(kernel_fft)
-        buffer = CuMatrix(buffer)
-    end
-    pfft!, pifft! = choose_fft_plans(kernel_fft, use_cuda)
-    pfft! * kernel_fft
-    return InplaceConvolution(pfft!, pifft!, kernel, kernel_fft, copy(kernel_fft),
-        real.(kernel_fft), buffer, nx, ny, filler)
-end
-
-function convolution!(ipconv::I, B::M) where {I<:InplaceConvolution, M<:KernelMatrix}
-
-    # (; pfft!, pifft!, kernel_fft, out_fft, out, nx, ny) = ipconv
-    # out_fft .= ipconv.filler #background_value
-    # view(out_fft, 1:nx, 1:ny) .= B
-    # pfft! * out_fft
-    # out_fft .*= kernel_fft
-    # pifft! * out_fft
-    # @. out = real(out_fft)
-
-    conv!(out, ipconv.kernel, B)
-    return nothing
+function conv(kernel, input)
+    convplan = ConvolutionPlan(kernel)
+    conv!(input, convplan)
+    return convplan.output_padded
 end
 
 """
-    samesize_conv(X, ipc, Omega)
-
-Perform convolution of `X` with `ipc` and crop the result to the same size as `X`.
+    samesize_conv!(output, input, convplan, Omega, bc, bcspace)
 """
-function samesize_conv!(Y::M, X::M, ipc::InplaceConvolution{T, M, C, FP, IP},
-    Omega::RegionalComputationDomain{T, L, M}, bc::OffsetBC, bc_space::ExtendedBCSpace) where {
-        T<:AbstractFloat,
-        L<:Matrix{T},
-        M<:KernelMatrix{T},
-        C<:ComplexMatrix{T},
-        FP<:ForwardPlan{T},
-        IP<:InversePlan{T}}
+function samesize_conv!(output::M, input::M, p::ConvolutionPlan, Omega, bc,
+    bc_space::ExtendedBCSpace) where {T<:AbstractFloat, M<:KernelMatrix{T}}
     
-    convolution!(ipc, X)
-    apply_bc!(ipc.out, bc)
-    Y .= view(ipc.out,
+    conv!(input, p)
+    apply_bc!(p.output_cropped, bc)
+    output .= view(p.output_cropped,
         Omega.i1+Omega.convo_offset:Omega.i2+Omega.convo_offset,
         Omega.j1-Omega.convo_offset:Omega.j2-Omega.convo_offset)
     return nothing
 end
 
-function samesize_conv!(Y::M, X::M, ipc::InplaceConvolution{T, M, C, FP, IP},
-    Omega::RegionalComputationDomain{T, L, M}, bc::OffsetBC, bc_space::RegularBCSpace) where {
-        T<:AbstractFloat,
-        L<:Matrix{T},
-        M<:KernelMatrix{T},
-        C<:ComplexMatrix{T},
-        FP<:ForwardPlan{T},
-        IP<:InversePlan{T}}
+function samesize_conv!(output::M, input::M, p::ConvolutionPlan, Omega, bc,
+    bc_space::RegularBCSpace) where {T<:AbstractFloat, M<:KernelMatrix{T}}
     
-    convolution!(ipc, X)
-    Y .= view(ipc.out,
+    conv!(input, p)
+    output .= view(p.output_cropped,
         Omega.i1+Omega.convo_offset:Omega.i2+Omega.convo_offset,
         Omega.j1-Omega.convo_offset:Omega.j2-Omega.convo_offset)
-    apply_bc!(Y, bc)
+    apply_bc!(p.output_cropped, bc)
     return nothing
 end
 
+# TODO get rid of this!
 # Just a helper for blur! Not performant but we only blur at preprocessing
 # so we do not care :)
-function samesize_conv(X::L, Y::M, Omega::RegionalComputationDomain, filler::T;
-    on_gpu = false) where {T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}}
+function samesize_conv(kernel, input, Omega::RegionalComputationDomain)
     (; i1, i2, j1, j2, convo_offset) = Omega
-    ipc = InplaceConvolution(X, on_gpu; filler=filler)
-    return samesize_conv(Y, ipc, i1, i2, j1, j2, convo_offset)
+    p = convplan(kernel)
+    return samesize_conv(input, p, i1, i2, j1, j2, convo_offset)
 end
-function samesize_conv(Y, ipc::InplaceConvolution, i1, i2, j1, j2, convo_offset)
-    convolution!(ipc, Y)
-    return view(ipc.out, i1+convo_offset:i2+convo_offset,
-        j1-convo_offset:j2-convo_offset)
+function samesize_conv(input, p::ConvolutionPlan, i1, i2, j1, j2, convo_offset)
+    conv!(input, p)
+    return p.output_cropped[i1+convo_offset:i2+convo_offset, j1-convo_offset:j2-convo_offset]
 end
 
-function blur(X::AbstractMatrix, Omega::RegionalComputationDomain, level::Real, filler;
-    on_gpu::Bool = false)
+function blur(input, Omega::RegionalComputationDomain, level)
     if not(0 <= level <= 1)
         error("Blurring level must be a value between 0 and 1.")
     end
-    T = eltype(X)
+    T = eltype(input)
     sigma = T.(diagm([(level * Omega.Wx)^2, (level * Omega.Wy)^2]))
     kernel = generate_gaussian_field(Omega, T(0.0), T.([0.0, 0.0]), T(1.0), sigma)
     kernel ./= sum(kernel)
-    # return copy(samesize_conv(Omega.arraykernel(kernel), Omega.arraykernel(X), Omega))
-    return samesize_conv(kernel, X, Omega, filler; on_gpu = on_gpu)
+    return samesize_conv(kernel, input, Omega)
 end
+
 
 """
     samesize_conv_indices(N, M)

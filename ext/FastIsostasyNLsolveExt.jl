@@ -1,12 +1,12 @@
 using NLsolve: mcpsolve
 
 ###########################################################################################
-# PiecewiseLinearOceanSurface
+# PiecewiseLinearOceanSurfaceBSL
 ###########################################################################################
 
 """
-    PiecewiseLinearOceanSurface{T}
-    PiecewiseLinearOceanSurface(; ref, mcp_opts)
+    PiecewiseLinearOceanSurfaceBSL{T}
+    PiecewiseLinearOceanSurfaceBSL(; ref, mcp_opts)
 
 A `mutable struct` that is only available if `using NLsolve` and contains:
 - `ref`: a [`ReferenceBSL`](@ref).
@@ -17,7 +17,7 @@ A `mutable struct` that is only available if `using NLsolve` and contains:
 
 Note that, unlike [`ConstantOceanSurface`](@ref) and [`PiecewiseConstantOceanSurface`](@ref), this will only work if `using NLsolve`.
 """
-mutable struct PiecewiseLinearOceanSurface{T, R<:ReferenceBSL{T}} <: AbstractBSL{T}
+mutable struct PiecewiseLinearOceanSurfaceBSL{T, R<:ReferenceBSL{T}} <: AbstractBSL{T}
     ref::R
     z::T
     A::T
@@ -25,13 +25,13 @@ mutable struct PiecewiseLinearOceanSurface{T, R<:ReferenceBSL{T}} <: AbstractBSL
     mcp_opts::NamedTuple
 end
 
-function PiecewiseLinearOceanSurface(; ref = ReferenceBSL(),
+function PiecewiseLinearOceanSurfaceBSL(; ref = ReferenceBSL(),
     mcp_opts = (reformulation = :smooth, autodiff = :forward,
         iterations = 100_000, ftol = 1e-5, xtol = 1e-5) )
-    return PiecewiseLinearOceanSurface(ref, z, A, typemax(eltype(ref)), mcp_opts)
+    return PiecewiseLinearOceanSurfaceBSL(ref, z, A, typemax(eltype(ref)), mcp_opts)
 end
 
-function update_ocean!(bsl::PiecewiseLinearOceanSurface, delta_V)
+function update_ocean!(bsl::PiecewiseLinearOceanSurfaceBSL, delta_V)
     scr!(Vresidual, z) = surfacechange_residual!(Vresidual, z, bsl.z, bsl.ref.A_itp, delta_V)
 
     # Update ocean surface within reasonable bounds defined by z_max_update and

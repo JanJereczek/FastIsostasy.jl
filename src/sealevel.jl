@@ -3,20 +3,25 @@
 
 Update the SSH perturbation `dz_ss` by convoluting the Green's function with the load anom.
 """
-function update_dz_ss!(fip::FastIsoProblem)
+function update_dz_ss!(fip::FastIsoProblem, sl::LaterallyVariableSeaSurfaceElevation)
 
     @. fip.tools.prealloc.buffer_x = mass_anom(fip.Omega.A, fip.now.columnanoms.full)
     samesize_conv!(fip.now.dz_ss, fip.tools.prealloc.buffer_x,
-        fip.tools.dz_ss_convo, fip.Omega, fip.bcs.dz_ss, fip.bcs.dz_ss.space)
+        fip.tools.dz_ss_convo, fip.Omega, fip.bcs.sea_surface_perturbation,
+        fip.bcs.sea_surface_perturbation.space)
+    return nothing
+end
+
+function update_dz_ss!(fip::FastIsoProblem, sl::LaterallyConstantSeaSurfaceElevation)
     return nothing
 end
 
 """
-    get_dz_ssgreen(fip::FastIsoProblem)
+    get_dz_ss_green(fip::FastIsoProblem)
 
 Return the Green's function used to compute the SSH perturbation `dz_ss` as in [^Coulon2021].
 """
-function get_dz_ssgreen(Omega::RegionalComputationDomain, c::PhysicalConstants)
+function get_dz_ss_green(Omega::RegionalComputationDomain, c::PhysicalConstants)
     dz_ssgreen = unbounded_dz_ssgreen(Omega.R, c)
     max_dz_ssgreen = unbounded_dz_ssgreen(norm([100e3, 100e3]), c)  # tolerance = resolution on 100km
     return min.(dz_ssgreen, max_dz_ssgreen)
@@ -44,11 +49,53 @@ function columnanom_litho!(fip::FastIsoProblem)
     return nothing
 end
 
-function columnanom_load!(fip::FastIsoProblem)
+function columnanom_ice!(fip::FastIsoProblem)
     anom!(fip.now.columnanoms.ice, fip.c.rho_ice, fip.now.H_ice, fip.ref.H_ice)
+    return nothing
+end
+
+function columnanom_water!(fip::FastIsoProblem, ol::InteractiveOceanLoad)
+    watercolumn!(fip)
     anom!(fip.now.columnanoms.seawater, fip.c.rho_seawater, fip.now.H_water, fip.ref.H_water)
-    @. fip.now.columnanoms.load .= fip.ref.maskactive * (
-        fip.now.columnanoms.ice + fip.now.columnanoms.seawater)
+    return nothing
+end
+
+function columnanom_water!(fip::FastIsoProblem, ol::NoOceanLoad)
+    watercolumn!(fip)
+    fip.now.columnanoms.seawater .= 0
+    return nothing
+end
+
+function watercolumn!(fip::FastIsoProblem)
+    watercolumn!(fip.now.H_water, fip.now.H_ice, fip.now.maskgrounded, fip.now.z_b,
+        fip.now.z_ss, fip.c, fip.tools.prealloc.buffer_x)
+    return nothing
+end
+
+function watercolumn!(H_water, H_ice, maskgrounded, z_b, z_ss, c, buffer)
+    # water column height in absence of ice
+    buffer .= max.(z_ss .- z_b, 0)
+
+    # if ice thickness lesser than threshold, only impose water column
+    # if ice thickness greater than threshold, impose difference (accounting for floatation)
+    H_water .= (H_ice .<= 1) .* buffer .+
+        not.(maskgrounded) .* (H_ice .> 1) .*
+        (buffer .- (H_ice .* (c.rho_ice / c.rho_seawater)))
+    return nothing
+end
+
+function watercolumn(H_ice, maskgrounded, z_b, z_ss, c)
+    H_water, buffer = similar(H_ice), similar(H_ice)
+    watercolumn!(H_water, H_ice, maskgrounded, z_b, z_ss, c, buffer)
+    return H_water
+end
+
+function columnanom_sediment!(fip::FastIsoProblem)
+end
+
+function columnanom_load!(fip::FastIsoProblem)
+    canoms = fip.now.columnanoms
+    @. canoms.load .= fip.ref.maskactive * (canoms.ice + canoms.seawater + canoms.sediment)
     return nothing
 end
 
@@ -59,46 +106,12 @@ function columnanom_full!(fip::FastIsoProblem)
 end
 
 function mass_anom(fip::FastIsoProblem)
-    return fip.Omega.A .* (fip.now.columnanoms.full) .-
-        fip.c.rho_seawater .* fip.now.bsl .* fip.now.maskocean .* fip.ref.maskactive
+    return fip.Omega.A .* (fip.now.columnanoms.full) # .-
+        # fip.c.rho_seawater .* fip.now.bsl .* fip.now.maskocean .* fip.ref.maskactive
 end
 
 function mass_anom(A, canom_full)
     return A * canom_full
-end
-
-"""
-    update_loadcolumns!(fip::FastIsoProblem, u::KernelMatrix{T}, H_ice::KernelMatrix{T})
-
-Update the load columns of a `::CurrentState`.
-"""
-function update_loadcolumns!(fip::FastIsoProblem, bcs_z_ss::InteractiveSeaLevel)
-    update_maskgrounded!(fip)
-    update_maskocean!(fip)
-    fip.now.H_water .= watercolumn(fip)
-    return nothing
-end
-
-function update_loadcolumns!(fip::FastIsoProblem, bcs_z_ss::EvolvingSeaLevel)
-    update_maskgrounded!(fip)
-    update_maskocean!(fip)
-    return nothing
-end
-
-function update_loadcolumns!(fip::FastIsoProblem, bcs_z_ss::ConstantSeaLevel)
-    update_maskgrounded!(fip)
-    return nothing
-end
-
-function watercolumn(fip)
-    now = fip.now
-    return watercolumn(now.H_ice, now.maskgrounded, now.z_b, now.z_ss, fip.c)
-end
-
-function watercolumn(H_ice, maskgrounded, b, z_ss, c)
-    wcl = max.(z_ss .- b, 0)
-    return (H_ice .<= 1) .* wcl + not.(maskgrounded) .* (H_ice .> 1) .*
-        (wcl .- (H_ice .* c.rho_ice ./ c.rho_seawater))
 end
 
 function update_maskgrounded!(fip::FastIsoProblem)
@@ -142,17 +155,6 @@ function update_Haf!(fip::FastIsoProblem)
     return nothing
 end
 
-function update_sealevel!(fip::FastIsoProblem, sl::ConstantSeaLevel)
-    return nothing
-end
-
-function update_sealevel!(fip::FastIsoProblem, sl::InteractiveSeaLevel)
-    update_dz_ss!(fip)
-    update_z_ss!(fip)
-    update_maskocean!(fip)
-    return nothing
-end
-
 """
     update_z_ss!(fip::FastIsoProblem)
 
@@ -161,8 +163,7 @@ Here, the constant term is used to impose a zero dz_ss perturbation in the far f
 thank for mass conservation and is embedded in convolution operation.
 """
 function update_z_ss!(fip::FastIsoProblem)
-    now = fip.now
-    @. now.z_ss = fip.ref.z_ss + now.dz_ss + now.bsl
+    @. fip.now.z_ss = fip.ref.z_ss + fip.now.dz_ss + fip.now.bsl.z
     return nothing
 end
 
@@ -183,7 +184,7 @@ function update_bsl!(fip::FastIsoProblem)
     Vnew = total_volume(fip)
 
     delta_V = Vnew - Vold
-    update_bsl!(fip.now.bsl, -delta_V)
+    update_bsl!(fip.now.bsl, -delta_V, fip.nout.t_steps_ode[end])
     return nothing
 end
 

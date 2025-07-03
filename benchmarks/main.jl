@@ -13,13 +13,11 @@ it = TimeInterpolatedIceThickness(t_ice, H_ice, Omega)
 bcs = ProblemBCs(
     Omega,
     ice_thickness = it,
-    sea_level = ConstantSeaLevel(),
     viscous_displacement = DistanceWeightedBC(RegularBCSpace(), 0f0),
     elastic_displacement = BorderBC(ExtendedBCSpace(), 0f0),
-    geoid_perturbation = BorderBC(ExtendedBCSpace(), 0f0),
 )
 sem = SolidEarthModel(
-    RigidLithosphere(),
+    LaterallyVariableLithosphere(),
     MaxwellMantle(),
 )
 sep = SolidEarthParameters(Omega, rho_litho = 0f0)
@@ -52,24 +50,21 @@ update_diagnostics!(dudt, u, fip, t)
 
 # Since profview is not proviing legible output (to me), let's use @btime:
 # n = 6
-@btime apply_bc!($u, $fip.bcs.u)
+@btime apply_bc!($u, $fip.bcs.viscous_displacement)
 # 287.883 ns (0 allocations: 0 bytes)
-@btime apply_bc!($fip.now.H_ice, $t, $fip.bcs.h_ice)
+@btime apply_bc!($fip.now.H_ice, $t, $fip.bcs.ice_thickness)
 # 849.536 ns (0 allocations: 0 bytes)
 @btime update_Haf!($fip)
 # no mul with rho_sw_ice: 938.321 ns (0 allocations: 0 bytes)
 # mul with rho_sw_ice in same expression: 9.766 μs (0 allocations: 0 bytes)
 # mul with rho_sw_ice in next line: 1.124 μs (0 allocations: 0 bytes)
-@btime update_loadcolumns!($fip, $fip.bcs.z_ss)
-# 456.520 ns (0 allocations: 0 bytes)
 @btime columnanom_load!($fip)
 # one liner (previous version): about 20 μs
 # decomposed into various column anomalies: 1.751 μs (0 allocations: 0 bytes)
 lc = LaterallyConstantLithosphere()
 @btime update_elasticresponse!($fip, $lc)
 # 674.266 μs (0 allocations: 0 bytes) => huge bottleneck!
-@btime convolution!($fip.tools.elastic_convo, $fip.tools.prealloc.buffer_x)
-# 651.624 μs (0 allocations: 0 bytes)
+# After in place planned convolution: 109.584 μs (0 allocations: 0 bytes)
 
 @btime columnanom_litho!($fip)
 # 516.802 ns (0 allocations: 0 bytes)

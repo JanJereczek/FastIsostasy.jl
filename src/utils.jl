@@ -262,7 +262,7 @@ end
 #     now.maskgrounded .= ref.maskgrounded
 #     now.maskocean .= ref.maskocean
 #     now.osc = OceanSurfaceChange(T = T, z0 = ref.bsl)
-#     now.countupdates = 0
+#     now.count_sparse_updates = 0
 #     now.k = 1
 
 #     return nothing

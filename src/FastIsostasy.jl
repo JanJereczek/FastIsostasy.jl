@@ -3,6 +3,7 @@ module FastIsostasy
 using AbstractFFTs: AbstractFFTs
 using CUDA: CuArray, CuMatrix, CUFFT, allowscalar
 using DelimitedFiles: readdlm
+using DocStringExtensions
 using Downloads: download
 using FiniteDifferences: central_fdm, forward_fdm, backward_fdm
 using FastGaussQuadrature: gausslegendre
@@ -11,14 +12,13 @@ using LinearAlgebra: Diagonal, det, diagm, norm, mul!
 using NetCDF
 using OrdinaryDiffEqTsit5: init, ODEProblem, solve, DiscreteCallback, CallbackSet
 
-using ParallelStencil: ParallelStencil, @init_parallel_stencil, @parallel,
-                       @parallel_indices
+using ParallelStencil: ParallelStencil, @init_parallel_stencil, @parallel, @parallel_indices
 using Statistics: mean, cov, std
 using SpecialFunctions: besselj0, besselj1
 
 # Init stencil on GPU. Will only be used if specified in RegionalComputationDomain.
 allowscalar(false)
-@init_parallel_stencil(CUDA, Float64, 3);
+@init_parallel_stencil(CUDA, Float32, 3);
 
 using Reexport: Reexport, @reexport
 @reexport using Interpolations
@@ -65,7 +65,9 @@ export RegionalComputationDomain, GlobalComputationDomain
 
 # boundary_conditions.jl
 export AbstractIceThickness, TimeInterpolatedIceThickness, ExternallyUpdatedIceThickness
-export ConstantSeaLevel, EvolvingSeaLevel, InteractiveSeaLevel
+export AbstractOceanLoad, NoOceanLoad, InteractiveOceanLoad
+export AbstractSeaSurfaceElevation, LaterallyConstantSeaSurfaceElevation
+export LaterallyVariableSeaSurfaceElevation
 export RegularBCSpace, ExtendedBCSpace
 export CornerBC, BorderBC, DistanceWeightedBC, ProblemBCs
 export update_ice!, apply_bc!
@@ -79,8 +81,8 @@ export UniformLayering, ParallelLayering, EqualizedLayering, FoldedLayering
 export get_layer_boundaries, interpolate2layers
 
 # convolutions.jl
-export InplaceConvolution, convolution!, blur, samesize_conv, samesize_conv!
-export FastConvPlan, convo!, nextfastfft, _zeropad!
+# export InplaceConvolution, convolution!, blur, samesize_conv, samesize_conv!
+export ConvolutionPlan, convo!, nextfastfft, _zeropad!, samesize_conv!
 
 # interpolations.jl
 export TimeInterpolation0D, TimeInterpolation2D, interpolate!
@@ -115,7 +117,7 @@ export remake!, null, not, cudainfo, kernelpromote, kernelnull
 export update_second_derivatives!, dxx!, dyy!, FiniteDiffParams
 
 # sealevel.jl
-export update_loadcolumns!, update_elasticresponse!, update_dz_ss!, get_dz_ssgreen
+export update_loadcolumns!, update_elasticresponse!, update_dz_ss!, get_dz_ss_green
 export columnanom_load!, columnanom_full!, columnanom_ice, columnanom_water
 export columnanom_litho!, columnanom_mantle!, update_z_ss!, total_volume
 export update_V_af!, update_V_den!, update_V_pov!, height_above_floatation
@@ -128,7 +130,7 @@ export maxwelltime_scaling!, get_shearmodulus, get_rigidity, load_prem
 
 # mechanics.jl
 export update_diagnostics!, update_dudt!
-export update_deformation_rhs!, build_greenintegrand, get_elasticgreen
+export update_deformation_rhs!, build_greenintegrand, get_elastic_green
 export thinplate_horizontal_displacement
 
 # elra.jl
@@ -144,6 +146,10 @@ export load_lithothickness_pan2022, load_logvisc_pan2022
 export load_ice6gd
 export load_spada2011, spada_cases
 export load_latychev_test3, load_latychev2023_ICE6G
+
+# FastIsostasyMakieExt
+function plot_transect end
+export plot_transect
 
 # inversion.jl
 export InversionConfig, InversionData, InversionProblem, ParameterReduction

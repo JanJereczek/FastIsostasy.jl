@@ -57,27 +57,27 @@ mutable struct CurrentState{
     OS<:AbstractBSL,
 } <: AbstractState
 
-    u::M                    # viscous displacement
-    ue::M                   # elastic displacement
-    u_x::M                  # horizontal displacement in x
-    u_y::M                  # horizontal displacement in y
-    dudt::M                 # viscous displacement rate
-    u_eq::M                 # equilibrium dispalcement
-    H_ice::M                # current height of ice column
-    H_af::M                 # current height of ice column above floatation
-    H_water::M              # current height of water column
+    u::M                        # viscous displacement
+    ue::M                       # elastic displacement
+    u_x::M                      # horizontal displacement in x
+    u_y::M                      # horizontal displacement in y
+    dudt::M                     # viscous displacement rate
+    u_eq::M                     # equilibrium dispalcement
+    H_ice::M                    # current height of ice column
+    H_af::M                     # current height of ice column above floatation
+    H_water::M                  # current height of water column
     columnanoms::ColumnAnomalies{T, M}         # column anomalies
-    z_b::M                  # vertical bedrock position
-    dz_ss::M                # current z_ss perturbation
-    z_ss::M                 # current z_ss field
-    V_af::T                 # V contribution from ice above floatation
-    V_pov::T                # V contribution from bedrock adjustment
-    V_den::T                # V contribution from diff between melt- and saltwater density
-    maskgrounded::B         # mask for grounded ice
-    maskocean::B            # mask for ocean
-    bsl::OS                  # ocean surface change
-    countupdates::Int       # count the updates of the geostate
-    k::Int                  # index of the t_out segment
+    z_b::M                      # vertical bedrock position
+    dz_ss::M                    # current z_ss perturbation
+    z_ss::M                     # current z_ss field
+    V_af::T                     # V contribution from ice above floatation
+    V_pov::T                    # V contribution from bedrock adjustment
+    V_den::T                    # V contribution from diff between melt- and saltwater density
+    maskgrounded::B             # mask for grounded ice
+    maskocean::B                # mask for ocean
+    bsl::OS                     # ocean surface change
+    count_sparse_updates::Int   # count the updates that are sparser in time
+    k::Int                      # index of the t_out segment
 end
 
 # Initialise CurrentState from ReferenceState

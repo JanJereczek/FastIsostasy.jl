@@ -5,33 +5,65 @@ Update all the diagnotisc variables, i.e. all fields of `fip.now` apart
 from the displacement, which requires an integrator.
 """
 function update_diagnostics!(dudt, u, fip::FastIsoProblem, t)
+    
+
     # CAUTION: Order really matters here!
-    push!(fip.nout.t_steps_ode, t)                  # Add time step to output.
-    apply_bc!(u, fip.bcs.u)                         # Make sure that u satisfies BC.
-    apply_bc!(fip.now.H_ice, t, fip.bcs.h_ice)      # Apply ice thickness BC.
-    update_Haf!(fip)
-    update_loadcolumns!(fip, fip.bcs.z_ss)
-    columnanom_load!(fip)
+    push!(fip.nout.t_steps_ode, t)                          # Add time step to output
 
-    # As integration requires smaller time steps than diagnostics,
-    # only update diagnostics every fip.opts.dt_diagnostics or fip.ncout.t
-    update_diagnostics = ((t / fip.opts.dt_diagnostics) >= fip.now.countupdates + 1)
+    # Update the mantle anomaly and the bedrock elevation
+    apply_bc!(u, fip.bcs.viscous_displacement)              # Make sure that u satisfies BC
+    update_bedrock!(fip, u)
+    columnanom_mantle!(fip)
 
+    apply_bc!(fip.now.H_ice, t, fip.bcs.ice_thickness)      # Apply ice thickness BC
+    columnanom_ice!(fip)                        # Compute associated column anomaly
+
+    # apply_bc!(fip.now.H_sed, t, fip.bcs.)
+    # columnanom_sediment!(fip)
+    
+    # As integration requires smaller time steps than what we typically want
+    # for the elastic displacement and the sea-surface elevation,
+    # we only update them every fip.opts.dt_diagnostics
+    update_diagnostics = ((t / fip.opts.dt_diagnostics) >=
+        fip.now.count_sparse_updates + 1)
+
+    # if elastic update placed after dz_ss, worse match with (Spada et al. 2011)
     if update_diagnostics
-        # @show t
-        # if elastic update placed after dz_ss, worse match with (Spada et al. 2011)
+
+        # Update the elastic response and the resulting anomaly in lithospheric column
         update_elasticresponse!(fip, fip.em.lithosphere)
         columnanom_litho!(fip)
+
+        # Update barystatic sea level
         update_bsl!(fip)
-        update_sealevel!(fip, fip.bcs.z_ss)
-        fip.now.countupdates += 1
+
+        # Update perturbation of sea surface elevation according to new anomalies
+        columnanom_load!(fip)
+        columnanom_full!(fip)
+        update_dz_ss!(fip, fip.bcs.sea_surface_elevation)
+
+        # Update sea surface based on perturbation and BSL
+        update_z_ss!(fip)
+
+        # Update hieght above floatation and the resulting masks
+        update_Haf!(fip)
+        update_maskgrounded!(fip)
+        update_maskocean!(fip)
+
+        # Update the anomaly of seawater column
+        columnanom_water!(fip, fip.bcs.ocean_load)
+        
+        # Count the sparse update
+        fip.now.count_sparse_updates += 1
     end
 
+    # Include the newly updated seawater column in the full column anomaly
+    columnanom_load!(fip)
     columnanom_full!(fip)
+
+    # Update the derivative of the viscous displacement based on the new load
     update_dudt!(dudt, u, fip, t, fip.em)
     fip.now.dudt .= dudt
-    columnanom_mantle!(fip)
-    update_bedrock!(fip, u)
     return nothing
 end
 
@@ -55,7 +87,7 @@ Update the time derivative of the viscous displacement `dudt` based on an [`Soli
   of Swierczek-Jereczek et al. (2024).
 """
 function update_dudt!(dudt, u, fip, t, model::SolidEarthModel)
-    update_dudt!(dudt, u, fip, t, model.rheology, model.lithosphere)
+    update_dudt!(dudt, u, fip, t, model.mantle, model.lithosphere)
 end
 
 function update_dudt!(dudt, u, fip, t, mantle::RigidMantle, litho)
@@ -72,7 +104,8 @@ function update_dudt!(dudt, u, fip, t, mantle::RelaxedMantle,
         fip.now.columnanoms.litho) * fip.c.g * fip.Omega.K ^ 2
     
     samesize_conv!(fip.now.u_eq, fip.tools.prealloc.buffer_x,
-        fip.tools.viscous_convo, fip.Omega, fip.bcs.u, fip.bcs.u.space)
+        fip.tools.viscous_convo, fip.Omega, fip.bcs.viscous_displacement,
+        fip.bcs.viscous_displacement.space)
 
     @. dudt = 1 / fip.p.tau * (fip.now.u_eq - fip.now.u)
     return nothing
@@ -105,8 +138,21 @@ function update_dudt!(dudt, u, fip, t, mantle::MaxwellMantle,
     fip.tools.pifft! * P.fftrhs
     dudt .= real.(P.fftrhs)
     dudt .*= fip.c.seconds_per_year
+    apply_bc!(dudt, fip.bcs.viscous_displacement)
+    return nothing
+end
 
-    apply_bc!(dudt, fip.bcs.u)
+function update_dudt!(dudt, u, fip, t, mantle::MaxwellMantle,
+    lithosphere::RigidLithosphere)
+    Omega, P = fip.Omega, fip.tools.prealloc
+    update_deformation_rhs!(fip, u)
+    @. P.fftrhs = P.rhs * Omega.K / (2 * fip.p.effective_viscosity)
+    fip.tools.pfft! * P.fftrhs
+    @. P.fftrhs *= Omega.pseudodiff_inv
+    fip.tools.pifft! * P.fftrhs
+    dudt .= real.(P.fftrhs)
+    dudt .*= fip.c.seconds_per_year
+    apply_bc!(dudt, fip.bcs.viscous_displacement)
     return nothing
 end
 
@@ -166,8 +212,8 @@ function thinplate_horizontal_displacement!(u_x::M, u_y::M, u::M,
     litho_thickness::M, Omega) where {T<:AbstractFloat, M<:CuMatrix{T}}
     dx!(u_x, u, Omega.Dx, Omega.nx, Omega.ny)
     dy!(u_y, u, Omega.Dx, Omega.nx, Omega.ny)
-    @. u_x *= T(30e3)   #-litho_thickness / 2
-    @. u_y *= T(30e3)   #-litho_thickness / 2
+    @. u_x *= -litho_thickness / 2  # T(30e3)
+    @. u_y *= -litho_thickness / 2  # T(30e3)
     return nothing
 end
 
@@ -184,7 +230,8 @@ function update_elasticresponse!(fip::FastIsoProblem, lith::L) where {L<:Abstrac
 
     @. fip.tools.prealloc.buffer_x = fip.now.columnanoms.load * fip.Omega.K ^ 2
     samesize_conv!(fip.now.ue, fip.tools.prealloc.buffer_x,
-        fip.tools.elastic_convo, fip.Omega, fip.bcs.u_e, fip.bcs.u_e.space)
+        fip.tools.elastic_convo, fip.Omega, fip.bcs.elastic_displacement,
+        fip.bcs.elastic_displacement.space)
     # fip.now.ue .= samesize_conv(fip.now.columnanoms.load .* fip.Omega.K .^ 2,
     #     fip.tools.elastic_convo, fip.Omega)
     return nothing
@@ -240,12 +287,12 @@ function get_loadgreen(
 end
 
 """
-    get_elasticgreen(Omega, quad_support, quad_coeffs)
+    get_elastic_green(Omega, quad_support, quad_coeffs)
 
 Integrate load response over field by using 2D quadrature with specified
 support points and associated coefficients.
 """
-function get_elasticgreen(
+function get_elastic_green(
     Omega::RegionalComputationDomain{T, M},
     greenintegrand_function::Function,
     quad_support::Vector{T},
