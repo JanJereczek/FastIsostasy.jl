@@ -9,6 +9,7 @@ $(TYPEDSIGNATURES)
 function FastIsostasy.plot_transect(fip::FastIsoProblem, vars; analytic_cylinder_solution = false)
     Omega, c, p, t_out = fip.Omega, fip.c, fip.p, fip.nout.t[2:end]
 
+    res_x, res_y = 400, 300
     set_theme!(theme_latexfonts())
     l1 = 3
     ii, jj = 1:Omega.mx, Omega.my
@@ -17,7 +18,7 @@ function FastIsostasy.plot_transect(fip::FastIsoProblem, vars; analytic_cylinder
     z = similar(x)
     k = Int(length(x) ÷ 1.2)
 
-    fig = Figure()
+    fig = Figure(size = (res_x*length(vars), res_y))
     axs = [Axis(fig[1, j]) for j in eachindex(vars)]
     for j in eachindex(vars)
         axs[j].xlabel = L"$x \: (10^3 \: \mathrm{km})$"
