@@ -2,7 +2,7 @@ using FastIsostasy, TerminalLoggers
 
 W, n = 3f6, 8
 use_cuda = false
-Omega = RegionalComputationDomain(W, n, use_cuda = use_cuda)
+Omega = RegionalComputationDomain(W, n, correct_distortion = false)
 
 H_ice_0 = kernelnull(Omega)
 H_ice_1 = 1f3 .* (Omega.R .< 1f6)
@@ -24,10 +24,11 @@ sep = SolidEarthParameters(Omega, rho_litho = 0f0)
 sep.effective_viscosity .= 1f21
 nout = NativeOutput(vars = [:u, :ue, :dz_ss, :H_ice, :u_x, :u_y],
     t = [0, 100, 500, 1500, 5000, 10_000, 50_000f0])
-fip = FastIsoProblem(Omega, sem, sep; bcs = bcs, nout = nout)
+opts = SolverOptions(diffeq = DiffEqOptions(alg = BS3(), reltol = 1f-5))
+fip = FastIsoProblem(Omega, sem, sep; bcs = bcs, nout = nout, opts = opts)
 solve!(fip)
 println("Computation time: $(fip.nout.computation_time)")
 
-using CairoMakie
+using CairoMakie, LinearAlgebra
 
 fig = plot_transect(fip, [:u])
