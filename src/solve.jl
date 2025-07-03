@@ -3,7 +3,7 @@
 #########################################################
 @kwdef struct DiffEqOptions{S<:ODEsolvers}
     alg::S = BS3()
-    reltol::AbstractFloat = 1f-3
+    reltol::AbstractFloat = 1f-5
 end
 
 """

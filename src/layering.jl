@@ -164,7 +164,12 @@ end
 Compute the layer boundaries for a given [`AbstractLayering`](@ref).
 Output is typically passed to [`SolidEarthParameters`](@ref) to create a layered Earth model.
 """
-function get_layer_boundaries(n_x, n_y, litho_thickness, layering::UniformLayering)
+function get_layer_boundaries(Omega::RegionalComputationDomain, litho_thickness, layering)
+    T = eltype(Omega.R)
+    return get_layer_boundaries(Omega.nx, Omega.ny, litho_thickness, layering, T)
+end
+
+function get_layer_boundaries(n_x, n_y, litho_thickness, layering::UniformLayering, T)
 
     layer_boundaries = zeros(T, n_x, n_y, layering.n_layers)
     for l in 1:layering.n_layers
@@ -173,7 +178,7 @@ function get_layer_boundaries(n_x, n_y, litho_thickness, layering::UniformLayeri
     return layer_boundaries
 end
 
-function get_layer_boundaries(n_x, n_y, litho_thickness, layering::ParallelLayering)
+function get_layer_boundaries(n_x, n_y, litho_thickness, layering::ParallelLayering, T)
 
     layer_boundaries = zeros(T, n_x, n_y, layering.n_layers)
     view(layer_boundaries, :, :, 1) .= litho_thickness .+ layering.tol
@@ -183,7 +188,7 @@ function get_layer_boundaries(n_x, n_y, litho_thickness, layering::ParallelLayer
     return layer_boundaries
 end
 
-function get_layer_boundaries(n_x, n_y, litho_thickness, layering::EqualizedLayering)
+function get_layer_boundaries(n_x, n_y, litho_thickness, layering::EqualizedLayering, T)
 
     layer_boundaries = zeros(T, n_x, n_y, layering.n_layers)
     view(layer_boundaries, :, :, 1) .= litho_thickness .+ layering.tol
@@ -193,7 +198,7 @@ function get_layer_boundaries(n_x, n_y, litho_thickness, layering::EqualizedLaye
     return layer_boundaries
 end
 
-function get_layer_boundaries(n_x, n_y, litho_thickness, layering::FoldedLayering)
+function get_layer_boundaries(n_x, n_y, litho_thickness, layering::FoldedLayering, T)
 
     layer_boundaries = zeros(T, n_x, n_y, layering.n_layers)
     for I in CartesianIndices(litho_thickness)
