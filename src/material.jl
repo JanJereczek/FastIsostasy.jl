@@ -35,14 +35,14 @@ Compute equivalent viscosity for multilayer model by recursively applying
 the formula for a halfspace and a channel from Lingle and Clark (1975).
 """
 function get_effective_viscosity(
-    Omega::RegionalComputationDomain{T, M},
+    Omega::RegionalComputationDomain{T, L, M},
     layer_viscosities::Array{T, 3},
     layer_boundaries::Array{T, 3},
     mantle_poissonratio::T,
     characteristic_loadlength::T,
     reference_viscosity::T = 1e21;
     correct_shearmoduluschange::Bool = true,
-) where {T<:AbstractFloat, M<:KernelMatrix{T}}
+) where {T<:AbstractFloat, L, M}
 
     incompressible_poissonratio = T(0.5)
     compressibility_scaling = (1 + incompressible_poissonratio) / (1 + mantle_poissonratio)

@@ -40,21 +40,17 @@ end
 
 function SolidEarthParameters(
     Omega::RegionalComputationDomain{T, L, M};
-    layer_boundaries::A = T.([88e3, 400e3]),
-    layer_viscosities::B = T.([1e19, 1e21]),        # (Pa*s) (Bueler 2007, Ivins 2022, Fig 12 WAIS)
-    litho_youngmodulus::T = T(DEFAULT_LITHO_YOUNGMODULUS),              # (N/m^2)
-    litho_poissonratio::T = T(DEFAULT_LITHO_POISSONRATIO),
-    mantle_poissonratio::T = T(DEFAULT_MANTLE_POISSONRATIO),
-    tau::T = T(DEFAULT_MANTLE_TAU),
-    rho_uppermantle::T = T(DEFAULT_RHO_UPPERMANTLE),   # Mean density of topmost upper mantle (kg m^-3)
-    rho_litho::T = T(DEFAULT_RHO_LITHO),               # Mean density of lithosphere (kg m^-3)
-    characteristic_loadlength::T = mean([Omega.Wx, Omega.Wy]),
-    reference_viscosity::T = T(1e21),
-) where {
-    T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T},
-    A<:Union{Vector{T}, Array{T, 3}},
-    B<:Union{Vector{T}, Array{T, 3}},
-}
+    layer_boundaries = T.([88e3, 400e3]),
+    layer_viscosities = T.([1e19, 1e21]),        # (Pa*s) (Bueler 2007, Ivins 2022, Fig 12 WAIS)
+    litho_youngmodulus = T(DEFAULT_LITHO_YOUNGMODULUS),              # (N/m^2)
+    litho_poissonratio = T(DEFAULT_LITHO_POISSONRATIO),
+    mantle_poissonratio = T(DEFAULT_MANTLE_POISSONRATIO),
+    tau = T(DEFAULT_MANTLE_TAU),
+    rho_uppermantle = T(DEFAULT_RHO_UPPERMANTLE),   # Mean density of topmost upper mantle (kg m^-3)
+    rho_litho = T(DEFAULT_RHO_LITHO),               # Mean density of lithosphere (kg m^-3)
+    characteristic_loadlength = mean([Omega.Wx, Omega.Wy]),
+    reference_viscosity = T(1e21),
+) where {T<:AbstractFloat, L, M}
 
     if tau isa Real
         tau = fill(tau, Omega.nx, Omega.ny)

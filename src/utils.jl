@@ -291,12 +291,11 @@ end
 # Example utils
 #####################################################
 
-function mask_disc(X::KernelMatrix{T}, Y::KernelMatrix{T}, R::T;
-    center::Vector{<:Real}) where {T<:AbstractFloat}
+function mask_disc(X, Y, R; center = [0, 0])
     return mask_disc(sqrt.((X .- center[1]) .^ 2 + (Y .- center[2]) .^ 2), R)
 end
 
-function mask_disc(r::KernelMatrix{T}, R::T) where {T<:AbstractFloat}
+function mask_disc(r::KernelMatrix{T}, R) where {T<:AbstractFloat}
     return T.(r .< R)
 end
 
@@ -306,11 +305,7 @@ function uniform_ice_cylinder(Omega::RegionalComputationDomain, R::T, H::T;
     return T.(M .* H)
 end
 
-function stereo_ice_cylinder(
-    Omega::RegionalComputationDomain,
-    R::T,
-    H::T,
-) where {T<:AbstractFloat}
+function stereo_ice_cylinder(Omega::RegionalComputationDomain, R, H)
     M = mask_disc(Omega.R, R)
     return M .* H
 end
