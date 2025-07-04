@@ -1,13 +1,20 @@
 #########################################################
 # Options
 #########################################################
+"""
+$(TYPEDSIGNATURES)
+
+Contains:
+- `alg::ODEsolvers`: the algorithm to integrate the ODE forward in time.
+- `reltol`: the relative error tolerance of the integrator.
+"""
 @kwdef struct DiffEqOptions{S<:ODEsolvers}
     alg::S = BS3()
     reltol::AbstractFloat = 1f-5
 end
 
 """
-    Options
+$(TYPEDSIGNATURES)
 
 Return a struct containing the options relative to solving a [`FastIsoProblem`](@ref).
 """
@@ -22,6 +29,8 @@ end
 #########################################################
 
 """
+$(TYPEDSIGNATURES)
+
     FastIsoProblem(Omega, c, p, t_out)
     FastIsoProblem(Omega, c, p, t_out, Hice)
     FastIsoProblem(Omega, c, p, t_out, t_Hice, Hice)
@@ -183,7 +192,7 @@ end
 #####################################################
 
 """
-    solve!(fip)
+$(TYPEDSIGNATURES)
 
 Solve the isostatic adjustment problem defined in `fip::FastIsoProblem`.
 """
@@ -203,7 +212,10 @@ end
 
 
 """
-    init_integrator(fip)
+$(TYPEDSIGNATURES)
+
+Initialise the integrator of `fip::FastIsoProblem`, which can be subsequently
+integrated forward in time by using `step!`.
 """
 function init_integrator(fip::FastIsoProblem)
     init_problem!(fip)
