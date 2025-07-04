@@ -110,11 +110,19 @@ function calc_viscous_green(Omega, litho_rigidity, kei, L_w)
     return -L_w^2 ./ (2*pi*litho_rigidity) .* kei .* (Omega.dx*Omega.dy)
 end
 
-# Gives lb, ub = 524, 616 years for 1e21, which could be a caveat compared to Spada et al. (2011)
+"""
+$(TYPEDSIGNATURES)
+
+Convert the viscosity to relaxation times following Van Calcar et al. (in rev.).
+"""
 get_relaxation_time(eta, m, p) = 10^(log10(eta)*m - p)
-eta1 = 1e21
-τ1_low = get_relaxation_time(eta1, 0.35, 4.63)
-τ1_high = get_relaxation_time(eta1, 0.20, 1.41)
+get_relaxation_time_weaker(eta) = get_relaxation_time(eta, 0.35, 4.63)
+get_relaxation_time_stronger(eta) = get_relaxation_time(eta, 0.20, 1.41)
+
+# eta1 = 1e21
+# τ1_low = get_relaxation_time(eta1, 0.35, 4.63)
+# τ1_high = get_relaxation_time(eta1, 0.20, 1.41)
+# Gives lb, ub = 524, 616 years for 1e21, which could be a caveat compared to Spada et al. (2011)
 
 # E = 66.0
 # He_lith = 88.0

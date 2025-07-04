@@ -135,6 +135,7 @@ export thinplate_horizontal_displacement
 
 # elra.jl
 export get_flexural_lengthscale, get_kei, calc_kei_value, calc_viscous_green
+export get_relaxation_time, get_relaxation_time_weaker, get_relaxation_time_stronger
 
 # analytic solutions
 export analytic_solution
