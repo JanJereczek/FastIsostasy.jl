@@ -154,7 +154,7 @@ function samesize_conv!(output::M, input::M, p::ConvolutionPlan, Omega, bc,
     output .= view(p.output_cropped,
         Omega.i1+Omega.convo_offset:Omega.i2+Omega.convo_offset,
         Omega.j1-Omega.convo_offset:Omega.j2-Omega.convo_offset)
-    apply_bc!(p.output_cropped, bc)
+    apply_bc!(output, bc)
     return nothing
 end
 
