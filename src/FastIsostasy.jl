@@ -16,7 +16,7 @@ using ParallelStencil: ParallelStencil, @init_parallel_stencil, @parallel, @para
 using Statistics: mean, cov, std
 using SpecialFunctions: besselj0, besselj1
 
-# Init stencil on GPU. Will only be used if specified in RegionalComputationDomain.
+# Init stencil on GPU. Will only be used if specified in RegionalDomain.
 allowscalar(false)
 @init_parallel_stencil(CUDA, Float32, 3);
 
@@ -31,78 +31,75 @@ using Reexport: Reexport, @reexport
 
 include("convenience_types.jl")
 include("interpolations.jl")
-include("earth_models.jl")
+include("barystatic_sealevel.jl")
 include("domain.jl")
 include("boundary_conditions.jl")
 include("constants.jl")
 include("layering.jl")
+include("material.jl")
 include("convolutions.jl")
 include("tools.jl")
-include("barystatic_sealevel.jl")
 include("state.jl")
+include("models.jl")
 include("io.jl")
-include("solve.jl")
+include("simulation.jl")
+include("loads.jl")
+include("topography.jl")
 include("utils.jl")
 include("derivatives.jl")
 include("derivatives_parallel.jl")
 include("sealevel.jl")
-include("material.jl")
-include("mechanics.jl")
+include("deformation.jl")
 include("analytic_solutions.jl")
 include("dataloaders.jl")
-include("elra.jl")
 include("inversion.jl")
 include("coordinates.jl")
 
-# earth_models.jl
-export SolidEarthModel
-export AbstractLithosphere, AbstractMantle
-export RigidLithosphere, LaterallyConstantLithosphere, LaterallyVariableLithosphere
-export RigidMantle, RelaxedMantle, MaxwellMantle
+# interpolations.jl
+# export TimeInterpolation0D, TimeInterpolation2D, interpolate!
+
+# barystatic_sealevel.jl
+export AbstractUpdateBSL, InternalUpdateBSL, ExternalUpdateBSL, ReferenceBSL, AbstractBSL
+export ConstantBSL, ConstantOceanSurfaceBSL, PiecewiseConstantOceanSurfaceBSL
+export update_bsl!
 
 # domain.jl
-export RegionalComputationDomain, GlobalComputationDomain
+export RegionalDomain, GlobalDomain
 
 # boundary_conditions.jl
 export AbstractIceThickness, TimeInterpolatedIceThickness, ExternallyUpdatedIceThickness
-export AbstractOceanLoad, NoOceanLoad, InteractiveOceanLoad
-export AbstractSeaSurfaceElevation, LaterallyConstantSeaSurface
-export LaterallyVariableSeaSurface
 export RegularBCSpace, ExtendedBCSpace
-export CornerBC, BorderBC, DistanceWeightedBC, ProblemBCs
-export update_ice!, apply_bc!, precompute_bc
+export CornerBC, BorderBC, DistanceWeightedBC, BoundaryConditions
+# export update_ice!, apply_bc!, precompute_bc
+
+# models.jl
+export Model
+export AbstractLithosphere, AbstractMantle, AbstractOceanLoad, AbstractSeaSurfaceElevation
+export RigidLithosphere, LaterallyConstantLithosphere, LaterallyVariableLithosphere
+export RigidMantle, RelaxedMantle, MaxwellMantle
+export NoOceanLoad, InteractiveOceanLoad
+export LaterallyConstantSeaSurface, LaterallyVariableSeaSurface
 
 # constants.jl
-export PhysicalConstants, ReferenceSolidEarthModel
+export PhysicalConstants    #, ReferenceSolidEarthModel
 
 # layering.jl
-export AbstractLayering, SolidEarthParameters
+export AbstractLayering
 export UniformLayering, ParallelLayering, EqualizedLayering, FoldedLayering
 export get_layer_boundaries, interpolate2layers
 
 # convolutions.jl
-# export InplaceConvolution, convolution!, blur, samesize_conv, samesize_conv!
-export ConvolutionPlan, convo!, nextfastfft, _zeropad!, samesize_conv!
-
-# interpolations.jl
-export TimeInterpolation0D, TimeInterpolation2D, interpolate!
+# export ConvolutionPlan, convo!, nextfastfft, _zeropad!, samesize_conv!
 
 # tools.jl
-export FastIsoTools
-
-# barystatic_sealevel.jl
-export ReferenceBSL, AbstractBSL
-export ConstantBSL, ConstantOceanSurfaceBSL, PiecewiseConstantOceanSurfaceBSL
-export update_bsl!
+export GIATools
 
 # state.jl
 export CurrentState, ReferenceState
 
 # io.jl
 export NetcdfOutput, NativeOutput, write_nc!, write_out!
-
-# solve.jl
-export DiffEqOptions, SolverOptions, FastIsoProblem, solve!, init_integrator, step!
+export PaddedOutputCrop, AsymetricOutputCrop
 
 # utils.jl
 export years2seconds, seconds2years, m_per_sec2mm_per_yr
@@ -111,31 +108,32 @@ export reinit_structs_cpu, meshgrid, kernelcollect
 
 export get_quad_coeffs, get_r, gauss_distr, generate_gaussian_field
 export uniform_ice_cylinder, stereo_ice_cylinder, stereo_ice_cap
-export remake!, null, not, cudainfo, kernelpromote, kernelnull
+export null, not, cudainfo, kernelpromote, kernelnull
 
 # derivatives.jl
-export update_second_derivatives!, dxx!, dyy!, FiniteDiffParams
+# export update_second_derivatives!, dxx!, dyy!, FiniteDiffParams
+
+# loads.jl
+# no export here, as it is only used internally
+
+# topography.jl
+# export update_Haf!, update_bedrock!
+# export update_maskocean!, update_maskgrounded!
 
 # sealevel.jl
-export update_loadcolumns!, update_elasticresponse!, update_dz_ss!, get_dz_ss_green
-export columnanom_load!, columnanom_full!, columnanom_ice, columnanom_water
-export columnanom_litho!, columnanom_mantle!, update_z_ss!, total_volume
-export update_V_af!, update_V_den!, update_V_pov!, height_above_floatation
-export update_bedrock!, columnanom_load, update_elastic_response!, columnanom_litho
-export update_maskocean!, update_z_ss!, update_maskgrounded!, update_Haf!
-export update_sealevel!
+# export update_dz_ss!, get_dz_ss_green, update_z_ss!, update_sealevel!
+# export update_V_af!, update_V_den!, update_V_pov!, total_volume
 
 # material.jl
-export maxwelltime_scaling!, get_shearmodulus, get_rigidity, load_prem
+export SolidEarthParameters
+# export maxwelltime_scaling!, get_shearmodulus, get_rigidity, load_prem
+# export get_flexural_lengthscale, get_kei, calc_kei_value, calc_viscous_green
+# export get_relaxation_time, get_relaxation_time_weaker, get_relaxation_time_stronger
+# export build_greenintegrand, get_elastic_green
 
-# mechanics.jl
-export update_diagnostics!, update_dudt!
-export update_deformation_rhs!, build_greenintegrand, get_elastic_green
-export thinplate_horizontal_displacement
-
-# elra.jl
-export get_flexural_lengthscale, get_kei, calc_kei_value, calc_viscous_green
-export get_relaxation_time, get_relaxation_time_weaker, get_relaxation_time_stronger
+# deformation.jl
+export update_dudt!, update_deformation_rhs!, thinplate_horizontal_displacement
+export update_elasticresponse!
 
 # analytic solutions
 export analytic_solution
@@ -147,6 +145,10 @@ export load_lithothickness_pan2022, load_logvisc_pan2022
 export load_ice6gd
 export load_spada2011, spada_cases
 export load_latychev_test3, load_latychev2023_ICE6G
+
+# simulation.jl
+export DiffEqOptions, SolverOptions, Simulation, run!, init_integrator, step!
+export update_diagnostics!
 
 # FastIsostasyMakieExt
 function plot_transect end

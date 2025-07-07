@@ -22,15 +22,19 @@ Contains:
 - `H_vec`: a vector of ice thickness values corresponding to `t_vec`.
 - `H_itp`: a function that interpolates the ice thickness based on time.
 """
-struct TimeInterpolatedIceThickness{T<:AbstractFloat, M<:KernelMatrix{T},
-    I<:TimeInterpolation2D{T, M}} <: AbstractIceThickness
+struct TimeInterpolatedIceThickness{
+    T<:AbstractFloat,
+    M<:KernelMatrix{T},
+    I<:TimeInterpolation2D{T, M},
+} <: AbstractIceThickness
+
     t_vec::Vector{T}
     H_vec::Vector{M}
     H_itp::I
 end
 
-function TimeInterpolatedIceThickness(t_vec, H_vec, Omega::RegionalComputationDomain)
-    H_vec = kernelpromote(H_vec, Omega.arraykernel)
+function TimeInterpolatedIceThickness(t_vec, H_vec, domain::RegionalDomain)
+    H_vec = kernelpromote(H_vec, domain.arraykernel)
     itp = TimeInterpolation2D(t_vec, H_vec)
     return TimeInterpolatedIceThickness(t_vec, H_vec, itp)
 end
@@ -215,121 +219,87 @@ function norm!(W)
 end
 
 """
-    precompute_bc(bc::AbstractBC, sp::AbstractBCSpace, Omega::RegionalComputationDomain)
+    precompute_bc(bc::AbstractBC, sp::AbstractBCSpace, domain::RegionalDomain)
 
 Precompute the boundary condition for the given computation domain.
 """
-function precompute_bc(bc::CornerBC, sp::RegularBCSpace, Omega::RegionalComputationDomain)
-    T = eltype(Omega.R)
-    W = corner_ones(T, Omega.nx, Omega.ny)
+function precompute_bc(bc::CornerBC, sp::RegularBCSpace, domain::RegionalDomain)
+    T = eltype(domain.R)
+    W = corner_ones(T, domain.nx, domain.ny)
     norm!(W)
-    return OffsetBC(bc.space, bc.x_border, Omega.arraykernel(W), similar(W))
+    return OffsetBC(bc.space, bc.x_border, domain.arraykernel(W), similar(W))
 end
 
-function precompute_bc(bc::CornerBC, sp::ExtendedBCSpace, Omega::RegionalComputationDomain)
-    T = eltype(Omega.R)
-    W = corner_ones(T, 2*Omega.nx-1, 2*Omega.ny-1)
+function precompute_bc(bc::CornerBC, sp::ExtendedBCSpace, domain::RegionalDomain)
+    T = eltype(domain.R)
+    W = corner_ones(T, 2*domain.nx-1, 2*domain.ny-1)
     norm!(W)
-    return OffsetBC(bc.space, bc.x_border, Omega.arraykernel(W), similar(W))
+    return OffsetBC(bc.space, bc.x_border, domain.arraykernel(W), similar(W))
 end
 
-function precompute_bc(bc::BorderBC, sp::RegularBCSpace, Omega::RegionalComputationDomain)
-    T = eltype(Omega.R)
-    W = border_ones(T, Omega.nx, Omega.ny)
+function precompute_bc(bc::BorderBC, sp::RegularBCSpace, domain::RegionalDomain)
+    T = eltype(domain.R)
+    W = border_ones(T, domain.nx, domain.ny)
     norm!(W)
-    return OffsetBC(bc.space, bc.x_border, Omega.arraykernel(W), similar(W))
+    return OffsetBC(bc.space, bc.x_border, domain.arraykernel(W), similar(W))
 end
 
-function precompute_bc(bc::BorderBC, sp::ExtendedBCSpace, Omega::RegionalComputationDomain)
-    T = eltype(Omega.R)
-    W = border_ones(T, 2*Omega.nx-1, 2*Omega.ny-1)
+function precompute_bc(bc::BorderBC, sp::ExtendedBCSpace, domain::RegionalDomain)
+    T = eltype(domain.R)
+    W = border_ones(T, 2*domain.nx-1, 2*domain.ny-1)
     norm!(W)
-    return OffsetBC(bc.space, bc.x_border, Omega.arraykernel(W), similar(W))
+    return OffsetBC(bc.space, bc.x_border, domain.arraykernel(W), similar(W))
 end
 
-function precompute_bc(bc::DistanceWeightedBC, sp::RegularBCSpace, Omega::RegionalComputationDomain)
-    T = eltype(Omega.R)
-    W = border_ones(T, Omega.nx, Omega.ny)
-    W .= W .* Omega.R
+function precompute_bc(bc::DistanceWeightedBC, sp::RegularBCSpace, domain::RegionalDomain)
+    T = eltype(domain.R)
+    W = border_ones(T, domain.nx, domain.ny)
+    W .= W .* domain.R
     norm!(W)
-    return OffsetBC(bc.space, bc.x_border, Omega.arraykernel(W), similar(W))
+    return OffsetBC(bc.space, bc.x_border, domain.arraykernel(W), similar(W))
 end
 
-function precompute_bc(bc::DistanceWeightedBC, sp::ExtendedBCSpace, Omega::RegionalComputationDomain)
+function precompute_bc(bc::DistanceWeightedBC, sp::ExtendedBCSpace, domain::RegionalDomain)
     error("DistanceWeightedBC is not implemented for ExtendedBCSpace")
 end
 
-function precompute_bc(bc::MeanBC, sp::RegularBCSpace, Omega::RegionalComputationDomain)
-    T = eltype(Omega.R)
-    W = ones(T, Omega.nx, Omega.ny)
+function precompute_bc(bc::MeanBC, sp::RegularBCSpace, domain::RegionalDomain)
+    T = eltype(domain.R)
+    W = ones(T, domain.nx, domain.ny)
     norm!(W)
-    return OffsetBC(bc.space, bc.x_border, Omega.arraykernel(W), similar(W))
+    return OffsetBC(bc.space, bc.x_border, domain.arraykernel(W), similar(W))
 end
 
-function precompute_bc(bc::MeanBC, sp::ExtendedBCSpace, Omega::RegionalComputationDomain)
-    T = eltype(Omega.R)
-    W = ones(T, 2*Omega.nx-1, 2*Omega.ny-1)
+function precompute_bc(bc::MeanBC, sp::ExtendedBCSpace, domain::RegionalDomain)
+    T = eltype(domain.R)
+    W = ones(T, 2*domain.nx-1, 2*domain.ny-1)
     norm!(W)
-    return OffsetBC(bc.space, bc.x_border, Omega.arraykernel(W), similar(W))
+    return OffsetBC(bc.space, bc.x_border, domain.arraykernel(W), similar(W))
 end
-
-###############################################################################
-# Sea level
-###############################################################################
-
-"""
-"""
-abstract type AbstractSeaSurface end
-
-"""
-"""
-struct LaterallyConstantSeaSurface <: AbstractSeaSurface end
-"""
-"""
-struct LaterallyVariableSeaSurface <: AbstractSeaSurface end
-
-
-
-"""
-"""
-abstract type AbstractOceanLoad end
-
-"""
-"""
-struct NoOceanLoad <: AbstractOceanLoad end
-"""
-"""
-struct InteractiveOceanLoad <: AbstractOceanLoad end
 
 #########################################################################
-# FastIsoProblem level
+# Simulation level
 #########################################################################
 
 """
-    ProblemBCs(viscous_displacement, elastic_displacement, geoid_perturbation, Omega)
+    BoundaryConditions(viscous_displacement, elastic_displacement, geoid_perturbation, domain)
 
-Create a `ProblemBCs` struct containing the boundary conditions for the problem.
+Create a `BoundaryConditions` struct containing the boundary conditions for the problem.
 """
-struct ProblemBCs{
+struct BoundaryConditions{
     T,      # <:AbstractFloat,
     M,      # <:KernelMatrix{T},
     IT,     # <:AbstractIceThickness,
-    SS,    # <:AbstractSeaSurface
-    OL,     # <:AbstractOceanLoad
 }
     ice_thickness::IT
-    sea_surface::SS
-    ocean_load::OL
     viscous_displacement::OffsetBC{T, M}
     elastic_displacement::OffsetBC{T, M}
     sea_surface_perturbation::OffsetBC{T, M}
 end
 
-function ProblemBCs(
-    Omega::RegionalComputationDomain{T, L, M};
+function BoundaryConditions(
+    domain::RegionalDomain{T, L, M};
     ice_thickness = ExternallyUpdatedIceThickness(),
-    sea_surface = LaterallyConstantSeaSurface(),
-    ocean_load = NoOceanLoad(),
     viscous_displacement = CornerBC(RegularBCSpace(), T(0)),
     elastic_displacement = CornerBC(ExtendedBCSpace(), T(0)),
     sea_surface_perturbation = CornerBC(ExtendedBCSpace(), T(0))) where
@@ -338,10 +308,10 @@ function ProblemBCs(
     # viscous_displacement must be defined on a regular grid
     @assert isa(viscous_displacement.space, RegularBCSpace)
     
-    return ProblemBCs(
-        ice_thickness, sea_surface, ocean_load,
-        precompute_bc(viscous_displacement, viscous_displacement.space, Omega),
-        precompute_bc(elastic_displacement, elastic_displacement.space, Omega),
-        precompute_bc(sea_surface_perturbation, sea_surface_perturbation.space, Omega),
+    return BoundaryConditions(
+        ice_thickness,
+        precompute_bc(viscous_displacement, viscous_displacement.space, domain),
+        precompute_bc(elastic_displacement, elastic_displacement.space, domain),
+        precompute_bc(sea_surface_perturbation, sea_surface_perturbation.space, domain),
     )
 end

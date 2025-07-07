@@ -1,6 +1,18 @@
-#########################################################
-# Geostate
-#########################################################
+mutable struct ColumnAnomalies{T<:AbstractFloat, M<:KernelMatrix{T}}
+    ice::M
+    seawater::M
+    sediment::M
+    litho::M
+    mantle::M
+    load::M
+    full::M
+end
+
+function ColumnAnomalies(domain)
+    zero_columnanoms = [kernelnull(domain) for _ in eachindex(fieldnames(ColumnAnomalies))]
+    return ColumnAnomalies(zero_columnanoms...)
+end
+
 abstract type AbstractState end
 
 """
@@ -29,32 +41,16 @@ struct ReferenceState{
     maskactive::B
 end
 
-mutable struct ColumnAnomalies{T<:AbstractFloat, M<:KernelMatrix{T}}
-    ice::M
-    seawater::M
-    sediment::M
-    litho::M
-    mantle::M
-    load::M
-    full::M
-end
-
-function ColumnAnomalies(Omega)
-    zero_columnanoms = [kernelnull(Omega) for _ in eachindex(fieldnames(ColumnAnomalies))]
-    return ColumnAnomalies(zero_columnanoms...)
-end
-
 """
     CurrentState
 
 Return a mutable struct containing the geostate which will be updated over the simulation.
-The geostate contains all the states of the [`FastIsoProblem`] to be solved.
+The geostate contains all the states of the [`Simulation`] to be solved.
 """
 mutable struct CurrentState{
     T<:AbstractFloat,
     M<:KernelMatrix{T},
     B<:BoolMatrix,
-    OS<:AbstractBSL,
 } <: AbstractState
 
     u::M                        # viscous displacement
@@ -73,23 +69,36 @@ mutable struct CurrentState{
     V_af::T                     # V contribution from ice above floatation
     V_pov::T                    # V contribution from bedrock adjustment
     V_den::T                    # V contribution from diff between melt- and saltwater density
+    delta_V::T                  # change in volume
+    z_bsl::T                      # ocean surface change
     maskgrounded::B             # mask for grounded ice
     maskocean::B                # mask for ocean
-    bsl::OS                     # ocean surface change
     count_sparse_updates::Int   # count the updates that are sparser in time
-    k::Int                      # index of the t_out segment
 end
 
 # Initialise CurrentState from ReferenceState
-function CurrentState(Omega::RegionalComputationDomain, ref::ReferenceState, bsl)
+function CurrentState(domain::RegionalDomain, ref::ReferenceState, z_bsl)
     return CurrentState(
-        copy(ref.u), copy(ref.ue), kernelnull(Omega), kernelnull(Omega),
-        kernelnull(Omega), copy(ref.u),
-        copy(ref.H_ice), copy(ref.H_af), copy(ref.H_water),
-        ColumnAnomalies(Omega), copy(ref.z_b),
-        kernelnull(Omega), copy(ref.z_ss),
-        copy(ref.V_af), copy(ref.V_pov), copy(ref.V_den),
-        copy(ref.maskgrounded), copy(ref.maskocean),
-        bsl, 0, 1,
+        copy(ref.u),                # u
+        copy(ref.ue),               # ue
+        kernelnull(domain),         # u_x
+        kernelnull(domain),         # u_y
+        kernelnull(domain),         # dudt
+        copy(ref.u),                # u_eq
+        copy(ref.H_ice),            # H_ice
+        copy(ref.H_af),             # H_af
+        copy(ref.H_water),          # H_water
+        ColumnAnomalies(domain),    # columnanoms
+        copy(ref.z_b),              # z_b
+        kernelnull(domain),         # dz_ss   (can init to 0 because diagnostic variable)
+        copy(ref.z_ss),             # z_ss
+        copy(ref.V_af),             # V_af
+        copy(ref.V_pov),            # V_pov
+        copy(ref.V_den),            # V_den
+        eltype(domain.x)(0),        # delta_V
+        z_bsl,                      # z_bsl
+        copy(ref.maskgrounded),     # maskgrounded
+        copy(ref.maskocean),        # maskocean
+        0,                          # count_sparse_updates
     )
 end

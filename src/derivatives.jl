@@ -45,37 +45,37 @@ function FiniteDiffParams(; order = 5, T = Float32)
     )
 end
 
-function update_second_derivatives!(uxx, uyy, ux, uxy, u, Omega)
-    update_second_derivatives!(uxx, uyy, ux, uxy, u, u, u, Omega)
+function update_second_derivatives!(uxx, uyy, ux, uxy, u, domain)
+    update_second_derivatives!(uxx, uyy, ux, uxy, u, u, u, domain)
 end
 
 function update_second_derivatives!(uxx::M, uyy::M, ux::M, uxy::M, u1::M, u2::M, u3::M,
-    Omega::RegionalComputationDomain{T, L, M}) where {T<:AbstractFloat, L<:Matrix{T}, M<:Matrix{T}}
-    dxx!(uxx, u1, Omega)
-    dyy!(uyy, u2, Omega)
-    dxy!(ux, uxy, u3, Omega)
+    domain::RegionalDomain{T, L, M}) where {T<:AbstractFloat, L<:Matrix{T}, M<:Matrix{T}}
+    dxx!(uxx, u1, domain)
+    dyy!(uyy, u2, domain)
+    dxy!(ux, uxy, u3, domain)
 end
 
-function dxx(u::M, Omega::RegionalComputationDomain{T, L, M}) where
+function dxx(u::M, domain::RegionalDomain{T, L, M}) where
     {T<:AbstractFloat, L<:Matrix{T}, M<:Matrix{T}}
     du = Matrix{T}(undef, size(u)...)
-    dxx!(du, u, Omega)
+    dxx!(du, u, domain)
     return du
 end
 
-function dxx!(du::M, u::M, Omega::RegionalComputationDomain{T, L, M}) where
+function dxx!(du::M, u::M, domain::RegionalDomain{T, L, M}) where
     {T<:AbstractFloat, L<:Matrix{T}, M<:Matrix{T}}
     @inbounds for j in axes(du, 2)
-        for i in axes(du, 1)[2:Omega.nx-1]
-            du[i, j] = (u[i+1, j] - 2*u[i, j] + u[i-1, j]) / (Omega.Dx[i, j] ^ 2)
+        for i in axes(du, 1)[2:domain.nx-1]
+            du[i, j] = (u[i+1, j] - 2*u[i, j] + u[i-1, j]) / (domain.Dx[i, j] ^ 2)
         end
-        du[1, j] = (u[3, j] - 2*u[2, j] + u[1, j]) / (Omega.Dx[1, j] ^ 2)
-        du[Omega.nx, j] = (u[Omega.nx, j] - 2*u[Omega.nx-1, j] + u[Omega.nx-2, j]) /
-            (Omega.Dx[Omega.nx, j] ^ 2)
+        du[1, j] = (u[3, j] - 2*u[2, j] + u[1, j]) / (domain.Dx[1, j] ^ 2)
+        du[domain.nx, j] = (u[domain.nx, j] - 2*u[domain.nx-1, j] + u[domain.nx-2, j]) /
+            (domain.Dx[domain.nx, j] ^ 2)
     end
 end
 
-function dxx!(du::M, u::M, Omega::RegionalComputationDomain{T, L, M},
+function dxx!(du::M, u::M, domain::RegionalDomain{T, L, M},
     method::FiniteDiffParams{T}) where {T<:AbstractFloat, L<:Matrix{T}, M<:Matrix{T}}
     
     (; r, d2_central, d2_forward, d2_backward) = method
@@ -99,31 +99,31 @@ function dxx!(du::M, u::M, Omega::RegionalComputationDomain{T, L, M},
             end
         end
     end
-    du ./= (Omega.Dx .^ 2)
+    du ./= (domain.Dx .^ 2)
     return nothing
 end
 
 
-function dyy(u::M, Omega::RegionalComputationDomain{T, L, M}) where
+function dyy(u::M, domain::RegionalDomain{T, L, M}) where
     {T<:AbstractFloat, L<:Matrix{T}, M<:Matrix{T}}
     du = Matrix{T}(undef, size(u)...)
-    dyy!(du, u, Omega)
+    dyy!(du, u, domain)
     return du
 end
 
-function dyy!(du::M, u::M, Omega::RegionalComputationDomain{T, L, M}) where
+function dyy!(du::M, u::M, domain::RegionalDomain{T, L, M}) where
     {T<:AbstractFloat, L<:Matrix{T}, M<:Matrix{T}}
     @inbounds for i in axes(du, 1)
-        for j in axes(du, 2)[2:Omega.ny-1]
-            du[i, j] = (u[i, j+1] - 2*u[i, j] + u[i, j-1]) / (Omega.Dy[i, j] ^ 2)
+        for j in axes(du, 2)[2:domain.ny-1]
+            du[i, j] = (u[i, j+1] - 2*u[i, j] + u[i, j-1]) / (domain.Dy[i, j] ^ 2)
         end
-        du[i, 1] = (u[i, 3] - 2*u[i, 2] + u[i, 1]) / (Omega.Dy[i, 1] ^ 2)
-        du[i, Omega.ny] = (u[i, Omega.ny] - 2*u[i, Omega.ny-1] + u[i, Omega.ny-2]) /
-            (Omega.Dy[i, Omega.ny] ^ 2)
+        du[i, 1] = (u[i, 3] - 2*u[i, 2] + u[i, 1]) / (domain.Dy[i, 1] ^ 2)
+        du[i, domain.ny] = (u[i, domain.ny] - 2*u[i, domain.ny-1] + u[i, domain.ny-2]) /
+            (domain.Dy[i, domain.ny] ^ 2)
     end
 end
 
-function dyy!(du::M, u::M, Omega::RegionalComputationDomain{T, L, M},
+function dyy!(du::M, u::M, domain::RegionalDomain{T, L, M},
     method::FiniteDiffParams{T}) where {T<:AbstractFloat, L<:Matrix{T}, M<:Matrix{T}}
     
     (; r, d2_central, d2_forward, d2_backward) = method
@@ -150,43 +150,43 @@ function dyy!(du::M, u::M, Omega::RegionalComputationDomain{T, L, M},
         end
     end
 
-    du ./= (Omega.Dy .^ 2)
+    du ./= (domain.Dy .^ 2)
     return nothing
 end
 
-function dxy(u::M, Omega::RegionalComputationDomain{T, L, M}) where
+function dxy(u::M, domain::RegionalDomain{T, L, M}) where
     {T<:AbstractFloat, L<:Matrix{T}, M<:Matrix{T}}
     ux = Matrix{T}(undef, size(u)...)
     uxy = Matrix{T}(undef, size(u)...)
-    dx!(ux, u, Omega)
-    dy!(uxy, ux, Omega)
+    dx!(ux, u, domain)
+    dy!(uxy, ux, domain)
     return uxy
 end
 
-function dxy!(ux, uxy, u, Omega)
-    dx!(ux, u, Omega)
-    dy!(uxy, ux, Omega)
+function dxy!(ux, uxy, u, domain)
+    dx!(ux, u, domain)
+    dy!(uxy, ux, domain)
 end
 
-function dx!(du::M, u::M, Omega::RegionalComputationDomain{T, L, M}) where
+function dx!(du::M, u::M, domain::RegionalDomain{T, L, M}) where
     {T<:AbstractFloat, L<:Matrix{T}, M<:Matrix{T}}
     @inbounds for j in axes(du, 2)
-        for i in axes(du, 1)[2:Omega.nx-1]
-            du[i,j] = (u[i+1, j] - u[i-1, j]) / (2 * Omega.Dx[i, j])
+        for i in axes(du, 1)[2:domain.nx-1]
+            du[i,j] = (u[i+1, j] - u[i-1, j]) / (2 * domain.Dx[i, j])
         end
-        du[1, j] = (u[2, j] - u[1, j]) / Omega.Dx[1, j]
-        du[Omega.nx, j] = (u[Omega.nx, j] - u[Omega.nx-1, j]) / Omega.Dx[Omega.nx, j]
+        du[1, j] = (u[2, j] - u[1, j]) / domain.Dx[1, j]
+        du[domain.nx, j] = (u[domain.nx, j] - u[domain.nx-1, j]) / domain.Dx[domain.nx, j]
     end
 end
 
-function dy!(du::M, u::M, Omega::RegionalComputationDomain{T, L, M}) where
+function dy!(du::M, u::M, domain::RegionalDomain{T, L, M}) where
     {T<:AbstractFloat, L<:Matrix{T}, M<:Matrix{T}}
     @inbounds for i in axes(du, 1)
-        for j in axes(du, 2)[2:Omega.ny-1]
-            du[i, j] = (u[i,j+1] - u[i,j-1]) / (2 * Omega.Dy[i, j])
+        for j in axes(du, 2)[2:domain.ny-1]
+            du[i, j] = (u[i,j+1] - u[i,j-1]) / (2 * domain.Dy[i, j])
         end
-        du[i, 1] = (u[i, 2] - u[i, 1]) / Omega.Dy[i, 1]
-        du[i, Omega.ny] = (u[i, Omega.ny] - u[i, Omega.ny-1]) / Omega.Dy[i, Omega.ny]
+        du[i, 1] = (u[i, 2] - u[i, 1]) / domain.Dy[i, 1]
+        du[i, domain.ny] = (u[i, domain.ny] - u[i, domain.ny-1]) / domain.Dy[i, domain.ny]
     end
 end
 
@@ -198,8 +198,8 @@ end
 
 Compute the matrices representing the differential operators in the fourier space.
 """
-get_differential_fourier(Omega) = get_differential_fourier(Omega.Wx, Omega.Wy, Omega.nx,
-    Omega.ny)
+get_differential_fourier(domain) = get_differential_fourier(domain.Wx, domain.Wy, domain.nx,
+    domain.ny)
 
 function get_differential_fourier(Wx::T, Wy::T, nx::Int, ny::Int) where {T<:Real}
     mu_x = π / Wx

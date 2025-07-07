@@ -1,9 +1,9 @@
 # See derivatives.jl for multiple dispatch
 function update_second_derivatives!(uxx::M, uyy::M, ux::M, uxy::M, u1::M, u2::M, u3::M,
-    Omega::RegionalComputationDomain{T, L, M}) where {T<:AbstractFloat, L<:Matrix{T}, M<:CuMatrix{T}}
-    dxx!(uxx, u1, Omega.Dx, Omega.nx, Omega.ny)
-    dyy!(uyy, u2, Omega.Dy, Omega.nx, Omega.ny)
-    dxy!(ux, uxy, u3, Omega.Dx, Omega.Dy, Omega.nx, Omega.ny)
+    domain::RegionalDomain{T, L, M}) where {T<:AbstractFloat, L<:Matrix{T}, M<:CuMatrix{T}}
+    dxx!(uxx, u1, domain.Dx, domain.nx, domain.ny)
+    dyy!(uyy, u2, domain.Dy, domain.nx, domain.ny)
+    dxy!(ux, uxy, u3, domain.Dx, domain.Dy, domain.nx, domain.ny)
 end
 
 function dxx!(uxx::M, u::M, Dx::M, nx::Int, ny::Int) where {T<:AbstractFloat, M<:CuMatrix{T}}

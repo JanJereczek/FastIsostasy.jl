@@ -38,8 +38,8 @@ end
 #####################################################
 
 not(x::Bool) = !x
-Base.fill(x::Real, fip::FastIsoProblem) = fill(x, fip.Omega)
-Base.fill(x::Real, Omega::RegionalComputationDomain) = Omega.arraykernel(fill(x, Omega.nx, Omega.ny))
+Base.fill(x::Real, sim::Simulation) = fill(x, sim.domain)
+Base.fill(x::Real, domain::RegionalDomain) = domain.arraykernel(fill(x, domain.nx, domain.ny))
 
 approx_in(item, collection, tol) = any(abs.(collection .- item) .< tol)
 
@@ -91,19 +91,19 @@ function gauss_distr(X::M, Y::M, mu::Vector{T}, sigma::Matrix{T}) where
 end
 
 function generate_gaussian_field(
-    Omega::RegionalComputationDomain{T, M},
+    domain::RegionalDomain{T, M},
     z_background::T,
     xy_peak::Vector{T},
     z_peak::T,
     sigma::Matrix{T},
 ) where {T<:AbstractFloat, M<:Matrix{T}}
-    if Omega.nx == Omega.ny
-        N = Omega.nx
+    if domain.nx == domain.ny
+        N = domain.nx
     else
         error("Automated generation of Gaussian parameter fields only supported for" *
             "square domains.")
     end
-    G = gauss_distr( Omega.X, Omega.Y, xy_peak, sigma )
+    G = gauss_distr( domain.X, domain.Y, xy_peak, sigma )
     G = G ./ maximum(G) .* z_peak
     return fill(z_background, N, N) + G
 end
@@ -193,14 +193,14 @@ end
 # Kernel utils
 #####################################################
 
-function null(Omega::RegionalComputationDomain{T, L, M}) where {T, L, M}
-    return zeros(T, Omega.nx, Omega.ny)
+function null(domain::RegionalDomain{T, L, M}) where {T, L, M}
+    return zeros(T, domain.nx, domain.ny)
 end
 
-kernelnull(Omega) = Omega.arraykernel(null(Omega))
+kernelnull(domain) = domain.arraykernel(null(domain))
 
-function kernelcollect(X, Omega)
-    if not(Omega.use_cuda)
+function kernelcollect(X, domain)
+    if not(domain.use_cuda)
         return collect(X)
     else
         return X
@@ -222,15 +222,15 @@ end
 kernelpromote(X::Vector, arraykernel) = [arraykernel(x) for x in X]
 
 """
-    reinit_structs_cpu(Omega, p)
+    reinit_structs_cpu(domain, p)
 
-Reinitialize `Omega::RegionalComputationDomain` and `p::SolidEarthParameters` on the CPU, mostly
+Reinitialize `domain::RegionalDomain` and `p::SolidEarthParameters` on the CPU, mostly
 for post-processing purposes.
 """
-function reinit_structs_cpu(Omega::RegionalComputationDomain{T, L, M}, p::SolidEarthParameters{T, M}
+function reinit_structs_cpu(domain::RegionalDomain{T, L, M}, p::SolidEarthParameters{T, M}
     ) where {T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}}
 
-    Omega_cpu = RegionalComputationDomain(Omega.Wx, Omega.Wy, Omega.nx, Omega.ny, use_cuda = false)
+    Omega_cpu = RegionalDomain(domain.Wx, domain.Wy, domain.nx, domain.ny, use_cuda = false)
     p_cpu = SolidEarthParameters(
         Omega_cpu;
         layer_boundaries = Array(p.layer_boundaries),
@@ -239,10 +239,10 @@ function reinit_structs_cpu(Omega::RegionalComputationDomain{T, L, M}, p::SolidE
     return Omega_cpu, p_cpu
 end
 
-# function remake!(fip::FastIsoProblem)
+# function remake!(sim::Simulation)
 
 #     T = Float64
-#     (; Omega, ref, now) = fip
+#     (; domain, ref, now) = sim
 
 #     now.u .= ref.u
 #     now.dudt .= T.(0.0)
@@ -251,7 +251,7 @@ end
 #     now.ucorner = T(0.0)
 #     now.H_ice .= ref.H_ice
 #     now.H_water .= ref.H_water
-#     now.columnanoms = ColumnAnomalies(Omega)
+#     now.columnanoms = ColumnAnomalies(domain)
 #     now.z_b .= ref.z_b
 #     now.bsl = ref.bsl
 #     now.dz_ss .= T.(0.0)
@@ -269,25 +269,6 @@ end
 # end
 
 #####################################################
-# BC utils
-#####################################################
-
-function periodic_extension(M::Matrix{T}, nx::Int, ny::Int) where {T<:AbstractFloat}
-    M_periodic = zeropad_extension(M, nx, ny)
-    M_periodic[1, 2:end-1] .= M[end, :]
-    M_periodic[end, 2:end-1] .= M[1, :]
-    M_periodic[2:end-1, 1] .= M[:, end]
-    M_periodic[2:end-1, end] .= M[:, 1]
-    return M_periodic
-end
-
-function zeropad_extension(M::Matrix{T}, nx::Int, ny::Int) where {T<:AbstractFloat}
-    M_zeropadded = fill(T(0), nx+2, ny+2)
-    M_zeropadded[2:end-1, 2:end-1] .= M
-    return M_zeropadded
-end
-
-#####################################################
 # Example utils
 #####################################################
 
@@ -299,23 +280,23 @@ function mask_disc(r::KernelMatrix{T}, R) where {T<:AbstractFloat}
     return T.(r .< R)
 end
 
-function uniform_ice_cylinder(Omega::RegionalComputationDomain, R::T, H::T;
+function uniform_ice_cylinder(domain::RegionalDomain, R::T, H::T;
     center::Vector{T} = T.([0.0, 0.0])) where {T<:AbstractFloat}
-    M = mask_disc(Omega.X, Omega.Y, R, center = center)
+    M = mask_disc(domain.X, domain.Y, R, center = center)
     return T.(M .* H)
 end
 
-function stereo_ice_cylinder(Omega::RegionalComputationDomain, R, H)
-    M = mask_disc(Omega.R, R)
+function stereo_ice_cylinder(domain::RegionalDomain, R, H)
+    M = mask_disc(domain.R, R)
     return M .* H
 end
 
 function stereo_ice_cap(
-    Omega::RegionalComputationDomain,
+    domain::RegionalDomain,
     alpha_deg::T,
     H::T,
 ) where {T<:AbstractFloat}
     alpha = deg2rad(alpha_deg)
-    M = Omega.Theta .< alpha
-    return H .* sqrt.( M .* (cos.(Omega.Theta) .- cos(alpha)) ./ (1 - cos(alpha)) )
+    M = domain.Theta .< alpha
+    return H .* sqrt.( M .* (cos.(domain.Theta) .- cos(alpha)) ./ (1 - cos(alpha)) )
 end

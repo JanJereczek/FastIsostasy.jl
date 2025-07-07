@@ -43,7 +43,7 @@ function analytic_integrand(
     R0::T,
 ) where {T<:AbstractFloat}
 
-    # Here we assume that p-fields are constant over Omega
+    # Here we assume that p-fields are constant over domain
     beta = p.rho_uppermantle * c.g + mean(p.litho_rigidity) * kappa ^ 4
     j0 = besselj0(kappa * r)
     j1 = besselj1(kappa * R0)

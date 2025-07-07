@@ -17,13 +17,13 @@ end
 # Tools
 #########################################################
 """
-    FastIsoTools(Omega, c, p)
+    GIATools(domain, c, p)
 Return a `struct` containing pre-computed tools to perform forward-stepping of the model.
 This includes the Green's functions for the computation of the lithosphere and the SSH
 perturbation, plans for FFTs, interpolators of the load and the viscosity over time and
 preallocated arrays.
 """
-struct FastIsoTools{
+struct GIATools{
     I1<:ConvolutionPlan,
     I2<:ConvolutionPlan,
     I3<:ConvolutionPlan,
@@ -41,47 +41,47 @@ struct FastIsoTools{
     prealloc::PA
 end
 
-function FastIsoTools(Omega, c, p; quad_precision::Int = 4, smooth_radius = 20f3)
+function GIATools(domain, c, p; quad_precision::Int = 4, rhs_smooth_radius = nothing)
 
-    T = eltype(Omega.R)
+    T = eltype(domain.R)
 
     # Build in-place convolution for viscous response (only used in ELRA)
     L_w = get_flexural_lengthscale(mean(p.litho_rigidity), p.rho_uppermantle, c.g)
-    kei = get_kei(Omega, L_w)
-    viscous_green = calc_viscous_green(Omega, mean(p.litho_rigidity), kei, L_w)
+    kei = get_kei(domain, L_w)
+    viscous_green = calc_viscous_green(domain, mean(p.litho_rigidity), kei, L_w)
     viscous_convo = ConvolutionPlan(T.(viscous_green))
 
     # Build in-place convolution to compute elastic response
     distance, greenintegrand_coeffs = get_greenintegrand_coeffs(T)
     greenintegrand_function = build_greenintegrand(distance, greenintegrand_coeffs)
     quad_support, quad_coeffs = get_quad_coeffs(T, quad_precision)
-    elastic_green = get_elastic_green(Omega, greenintegrand_function, quad_support, quad_coeffs)
+    elastic_green = get_elastic_green(domain, greenintegrand_function, quad_support, quad_coeffs)
     elastic_convo = ConvolutionPlan(T.(elastic_green))
 
     # Build in-place convolution to compute dz_ss response
-    dz_ss_green = get_dz_ss_green(Omega, c)
+    dz_ss_green = get_dz_ss_green(domain, c)
     dz_ss_convo = ConvolutionPlan(T.(dz_ss_green))
 
     # Build in-place convolution for smoothing
-    if isnothing(smooth_radius)
+    if isnothing(rhs_smooth_radius)
         smooth_convo = EmptyConvolution()
     else
-        sigma = T.(diagm([(smooth_radius)^2, (smooth_radius)^2]))
-        smoothing_kernel = generate_gaussian_field(Omega, T(0.0), T.([0.0, 0.0]), T(1.0), sigma)
+        sigma = T.(diagm([(rhs_smooth_radius)^2, (rhs_smooth_radius)^2]))
+        smoothing_kernel = generate_gaussian_field(domain, T(0.0), T.([0.0, 0.0]), T(1.0), sigma)
         norm!(smoothing_kernel)
         smooth_convo = ConvolutionPlan(smoothing_kernel)
     end
 
     # FFT plans depening on CPU vs. GPU usage
-    pfft!, pifft! = choose_fft_plans(Omega.K, Omega.use_cuda)
+    pfft!, pifft! = choose_fft_plans(domain.K, domain.use_cuda)
 
     n_cplx_matrices = 1
-    realmatrices = [kernelnull(Omega) for _ in 
+    realmatrices = [kernelnull(domain) for _ in 
         eachindex(fieldnames(PreAllocated))[1:end-n_cplx_matrices]]
-    cplxmatrices = [complex.(kernelnull(Omega)) for _ in 1:n_cplx_matrices]
+    cplxmatrices = [complex.(kernelnull(domain)) for _ in 1:n_cplx_matrices]
     prealloc = PreAllocated(realmatrices..., cplxmatrices...)
     
-    return FastIsoTools(viscous_convo, elastic_convo, dz_ss_convo, smooth_convo,
+    return GIATools(viscous_convo, elastic_convo, dz_ss_convo, smooth_convo,
         pfft!, pifft!, prealloc)
 end
 

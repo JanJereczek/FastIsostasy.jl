@@ -120,40 +120,40 @@ end
 struct EmptyConvolution end
 
 """
-    samesize_conv!(output, input, convplan, Omega, bc, bcspace)
+    samesize_conv!(output, input, convplan, domain, bc, bcspace)
 """
-function samesize_conv!(output, input, p::EmptyConvolution, Omega)
+function samesize_conv!(output, input, p::EmptyConvolution, domain)
     return nothing
 end
 
-function samesize_conv!(output::M, input::M, p::ConvolutionPlan, Omega) where
+function samesize_conv!(output::M, input::M, p::ConvolutionPlan, domain) where
     {T<:AbstractFloat, M<:KernelMatrix{T}}
     
     conv!(input, p)
     output .= view(p.output_cropped,
-        Omega.i1+Omega.convo_offset:Omega.i2+Omega.convo_offset,
-        Omega.j1-Omega.convo_offset:Omega.j2-Omega.convo_offset)
+        domain.i1+domain.convo_offset:domain.i2+domain.convo_offset,
+        domain.j1-domain.convo_offset:domain.j2-domain.convo_offset)
     return nothing
 end
 
-function samesize_conv!(output::M, input::M, p::ConvolutionPlan, Omega, bc,
+function samesize_conv!(output::M, input::M, p::ConvolutionPlan, domain, bc,
     bc_space::ExtendedBCSpace) where {T<:AbstractFloat, M<:KernelMatrix{T}}
     
     conv!(input, p)
     apply_bc!(p.output_cropped, bc)
     output .= view(p.output_cropped,
-        Omega.i1+Omega.convo_offset:Omega.i2+Omega.convo_offset,
-        Omega.j1-Omega.convo_offset:Omega.j2-Omega.convo_offset)
+        domain.i1+domain.convo_offset:domain.i2+domain.convo_offset,
+        domain.j1-domain.convo_offset:domain.j2-domain.convo_offset)
     return nothing
 end
 
-function samesize_conv!(output::M, input::M, p::ConvolutionPlan, Omega, bc,
+function samesize_conv!(output::M, input::M, p::ConvolutionPlan, domain, bc,
     bc_space::RegularBCSpace) where {T<:AbstractFloat, M<:KernelMatrix{T}}
     
     conv!(input, p)
     output .= view(p.output_cropped,
-        Omega.i1+Omega.convo_offset:Omega.i2+Omega.convo_offset,
-        Omega.j1-Omega.convo_offset:Omega.j2-Omega.convo_offset)
+        domain.i1+domain.convo_offset:domain.i2+domain.convo_offset,
+        domain.j1-domain.convo_offset:domain.j2-domain.convo_offset)
     apply_bc!(output, bc)
     return nothing
 end
@@ -161,8 +161,8 @@ end
 # TODO get rid of this!
 # Just a helper for blur! Not performant but we only blur at preprocessing
 # so we do not care :)
-function samesize_conv(kernel, input, Omega::RegionalComputationDomain)
-    (; i1, i2, j1, j2, convo_offset) = Omega
+function samesize_conv(kernel, input, domain::RegionalDomain)
+    (; i1, i2, j1, j2, convo_offset) = domain
     p = convplan(kernel)
     return samesize_conv(input, p, i1, i2, j1, j2, convo_offset)
 end
@@ -171,15 +171,15 @@ function samesize_conv(input, p::ConvolutionPlan, i1, i2, j1, j2, convo_offset)
     return p.output_cropped[i1+convo_offset:i2+convo_offset, j1-convo_offset:j2-convo_offset]
 end
 
-function blur(input, Omega::RegionalComputationDomain, level)
+function blur(input, domain::RegionalDomain, level)
     if not(0 <= level <= 1)
         error("Blurring level must be a value between 0 and 1.")
     end
     T = eltype(input)
-    sigma = T.(diagm([(level * Omega.Wx)^2, (level * Omega.Wy)^2]))
-    kernel = generate_gaussian_field(Omega, T(0.0), T.([0.0, 0.0]), T(1.0), sigma)
+    sigma = T.(diagm([(level * domain.Wx)^2, (level * domain.Wy)^2]))
+    kernel = generate_gaussian_field(domain, T(0.0), T.([0.0, 0.0]), T(1.0), sigma)
     kernel ./= sum(kernel)
-    return samesize_conv(kernel, input, Omega)
+    return samesize_conv(kernel, input, domain)
 end
 
 

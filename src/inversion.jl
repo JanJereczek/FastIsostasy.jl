@@ -2,8 +2,8 @@
     ParameterReduction
 
 Abstract type for parameter reduction methods. Any subtype must implement the
-`reconstruct!(fip, theta)` method, which assigns the reconstructed parameter
-values to `fip::FastIsoProblem`.
+`reconstruct!(sim, theta)` method, which assigns the reconstructed parameter
+values to `sim::Simulation`.
 """
 abstract type ParameterReduction{T} end
 
@@ -77,7 +77,7 @@ using [`inversion_problem`](@ref). For now, the unscented Kalman inversion
 is the only method available.
 
 # Fields
-- `fip::FastIsoProblem`: FastIsoProblem object.
+- `sim::Simulation`: Simulation object.
 - `config::InversionConfig`: Configuration for the inversion.
 - `data::InversionData`: Data for the inversion.
 - `reduction::R`: Parameter reduction method.
@@ -89,7 +89,7 @@ is the only method available.
 """
 struct InversionProblem{T<:AbstractFloat, V<:Vector{T}, M<:Matrix{T},
     R<:ParameterReduction{T}, PD, EKP}
-    fip::FastIsoProblem{T, <:Any, M, <:Any, <:Any, <:Any, <:Any, <:Any}
+    sim::Simulation{T, <:Any, M, <:Any, <:Any, <:Any, <:Any, <:Any}
     config::InversionConfig# {T}
     data::InversionData{T, M}
     reduction::R
@@ -102,13 +102,13 @@ end
 
 
 """
-    inversion_problem(fip, config, data, reduction, priors; save_stride_iter::Int = 1)
+    inversion_problem(sim, config, data, reduction, priors; save_stride_iter::Int = 1)
 
-Generate an inversion problem for the given `fip::FastIsoProblem` object.
+Generate an inversion problem for the given `sim::Simulation` object.
 """
 function inversion_problem end
 
-function solve! end
+function run! end
 function forward_fastiso end
 
 """
@@ -126,18 +126,18 @@ Extract the inversion results to compare them with the ground truth.
 function extract_inversion end
 
 """
-    reconstruct!(fip, params, reduction)
+    reconstruct!(sim, params, reduction)
 
-Reconstruct the parameter values from `reduction` and update `fip` accordingly.
+Reconstruct the parameter values from `reduction` and update `sim` accordingly.
 """
 function reconstruct! end
 
 """
-    extract_output(fip, reduction, data)
+    extract_output(sim, reduction, data)
 
 Extract the output of the forward run for the inversion.
 """
 function extract_output end
 
-export inversion_problem, solve!, forward_fastiso,
+export inversion_problem, run!, forward_fastiso,
     print_inversion_evolution, extract_inversion, reconstruct!, extract_output

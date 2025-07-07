@@ -1,3 +1,27 @@
+abstract type AbstractOutputCrop end
+
+struct PaddedOutputCrop <: AbstractOutputCrop
+    pad::Int
+end
+
+crop(x::V, c::PaddedOutputCrop) where {V<:AbstractVector} = x[c.pad+1:end-c.pad]
+crop(X::M, c::PaddedOutputCrop) where {M<:AbstractMatrix}= X[c.pad+1:end-c.pad, c.pad+1:end-c.pad]
+
+struct AsymetricOutputCrop <: AbstractOutputCrop
+    pad_x1::Int
+    pad_x2::Int
+    pad_y1::Int
+    pad_y2::Int
+end
+
+function crop(x::V, c::AsymetricOutputCrop) where {V<:AbstractVector}
+    return x[c.pad_x1+1:end-c.pad_x2]
+end
+
+function crop(X::M, c::AsymetricOutputCrop) where {M<:AbstractMatrix}
+    return X[c.pad_x1+1:end-c.pad_x2, c.pad_y1+1:end-c.pad_y2]
+end
+
 ################################################################################
 # NetCDF output
 ################################################################################
@@ -69,25 +93,31 @@ io_dict[:u_y] = Dict(
     "units" => "m",
     "dims" => "x y t",
 )
-io_dict[:bsl] = Dict(
-    "shortname" => "bsl",
+io_dict[:z_bsl] = Dict(
+    "shortname" => "z_bsl",
     "longname" => "Barystatic sea level",
     "units" => "m",
     "dims" => "t",
 )
 
-mutable struct NetcdfOutput{T<:AbstractFloat}
+mutable struct NetcdfOutput{
+    T<:AbstractFloat,
+    OC,                 # <: AbstractOutputCrop
+}
     t::Vector{T}
     filename::String
     buffer::Matrix{T}
     vars3D::Vector{Symbol}
     vars1D::Vector{Symbol}
+    oc::OC
+    k::Int
 end
 
-function NetcdfOutput(Omega::RegionalComputationDomain{T, L, M}, t, filename;
+function NetcdfOutput(domain::RegionalDomain{T, L, M}, t, filename;
     vars3D = [:u, :ue, :b, :dz_ss],
-    vars1D = [:bsl],
+    vars1D = [:z_bsl],
     Tout = Float32,
+    output_crop = PaddedOutputCrop(0),
 ) where {T<:AbstractFloat, L, M}
 
     isfile(filename) && rm(filename)
@@ -96,8 +126,8 @@ function NetcdfOutput(Omega::RegionalComputationDomain{T, L, M}, t, filename;
     yatts = Dict("longname" => "y", "units" => "m")
     tatts = Dict("longname" => "time", "units" => "yr")
 
-    xdim = NcDim("x", Omega.x, xatts)
-    ydim = NcDim("y", Omega.y, yatts)
+    xdim = NcDim("x", crop(domain.x, output_crop), xatts)
+    ydim = NcDim("y", crop(domain.y, output_crop), yatts)
     tdim = NcDim("t", t, tatts)
 
     vars = NcVar[]
@@ -129,17 +159,15 @@ function NetcdfOutput(Omega::RegionalComputationDomain{T, L, M}, t, filename;
         @warn "NetCDF filename does not end with '.nc' and is therefore ignored."
     end
     
-    buffer = Matrix{Tout}(undef, Omega.nx, Omega.ny)
-    return NetcdfOutput(Tout.(t), filename, buffer, vars3D, vars1D)
+    buffer = crop(Matrix{Tout}(undef, domain.nx, domain.ny), output_crop)
+    return NetcdfOutput(Tout.(t), filename, buffer, vars3D, vars1D, output_crop, 1)
 end
 
-function select_preconfig(preconfig, intermediate, sparse)
-    if preconfig == :intermediate
-        return intermediate
-    elseif preconfig == :sparse
-        return sparse
+function crop_promote!(out, state, var, Tout, M, oc)
+    if M isa Matrix
+        out .= Tout.(crop(getfield(state, var), oc))
     else
-        error("Unknown preconfiguration")
+        out .= Tout.(crop(Array(getfield(state, var)), oc))
     end
 end
 
@@ -147,11 +175,12 @@ function write_nc!(ncout::NetcdfOutput{Tout}, state::CurrentState{T, M}, k::Int)
     T<:AbstractFloat, M<:KernelMatrix{T}, Tout<:AbstractFloat}
     for i in eachindex(ncout.vars3D)
         j = ncout.vars3D[i]
-        if M == Matrix{T}
-            ncout.buffer .= Tout.(getfield(state, ncout.vars3D[i]))
-        else
-            ncout.buffer .= Tout.(Array(getfield(state, ncout.vars3D[i])))
-        end
+        crop_promote!(ncout.buffer, state, ncout.vars3D[i], Tout, M, ncout.oc)
+        # if M == Matrix{T}
+        #     ncout.buffer .= Tout.(getfield(state, ncout.vars3D[i]))
+        # else
+        #     ncout.buffer .= Tout.(Array(getfield(state, ncout.vars3D[i])))
+        # end
         NetCDF.open(ncout.filename, mode = NC_WRITE) do nc
             NetCDF.putvar(nc, io_dict[j]["shortname"], ncout.buffer,
                 start = [1, 1, k], count = [-1, -1, 1])
@@ -187,11 +216,12 @@ mutable struct NativeOutput{T<:AbstractFloat}
     vars::Vector{Symbol}
     vals::Dict{Symbol, Vector{Matrix{T}}}
     computation_time::T
+    k::Int
 end
 
 function NativeOutput(; t = Float32[], vars = Symbol[], T = Float32)
     vals = Dict{Symbol, Vector{Matrix{T}}}(var => Matrix{T}[] for var in vars)
-    return NativeOutput(t, T[], vars, vals, T(0))
+    return NativeOutput(t, T[], vars, vals, T(0), 1)
 end
 
 function write_out!(nout::NativeOutput, now::CurrentState)

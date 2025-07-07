@@ -6,14 +6,14 @@ using DocStringExtensions
 """
 $(TYPEDSIGNATURES)
 """
-function FastIsostasy.plot_transect(fip::FastIsoProblem, vars; analytic_cylinder_solution = false)
-    Omega, c, p, t_out = fip.Omega, fip.c, fip.p, fip.nout.t[2:end]
+function FastIsostasy.plot_transect(sim::Simulation, vars; analytic_cylinder_solution = false)
+    domain, c, p, t_out = sim.domain, sim.c, sim.p, sim.nout.t
 
     res_x, res_y = 400, 300
     set_theme!(theme_latexfonts())
     l1 = 3
-    ii, jj = 1:Omega.mx, Omega.my
-    x, y = Omega.X[ii, jj], Omega.Y[ii, jj]
+    ii, jj = 1:domain.mx, domain.my
+    x, y = domain.X[ii, jj], domain.Y[ii, jj]
     cmap = cgrad(:jet, length(t_out), categorical = true)
     z = similar(x)
     k = Int(length(x) ÷ 1.2)
@@ -34,7 +34,7 @@ function FastIsostasy.plot_transect(fip::FastIsoProblem, vars; analytic_cylinder
                     linewidth = l1)
             end
 
-            z .= view(fip.nout.vals[vars[j]][i], ii, jj)
+            z .= view(sim.nout.vals[vars[j]][i], ii, jj)
             lines!(axs[j], x, z, color = cmap[i], linewidth = l1)
             text!(axs[j], x[k], z[k], text = L"$ %$t $ yr", color = cmap[i])
         end

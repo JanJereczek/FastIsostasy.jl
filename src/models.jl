@@ -82,10 +82,51 @@ Not implemented yet!
 struct BurgersMantle <: AbstractMantle end
 
 ##################################################################
-# SolidEarthModel
+# Sea level
 ################################################################
 
-@kwdef struct SolidEarthModel{L<:AbstractLithosphere, M<:AbstractMantle}
+"""
+"""
+abstract type AbstractSeaSurface end
+
+"""
+"""
+struct LaterallyConstantSeaSurface <: AbstractSeaSurface end
+"""
+"""
+struct LaterallyVariableSeaSurface <: AbstractSeaSurface end
+
+###############################################################################
+# Ocean load
+###############################################################################
+
+"""
+"""
+abstract type AbstractOceanLoad end
+
+"""
+"""
+struct NoOceanLoad <: AbstractOceanLoad end
+"""
+"""
+struct InteractiveOceanLoad <: AbstractOceanLoad end
+
+##################################################################
+# Model
+################################################################
+
+@kwdef struct Model{
+    L,          # <:AbstractLithosphere,
+    M,          # <:AbstractMantle,
+    SS,         # <:AbstractSeaSurface}
+    BSL,        # <:AbstractBSL,
+    UBSL,       # <:AbstractUpdateBSL,
+    OL,         # <:AbstractOceanLoad,
+}
     lithosphere::L = LaterallyVariableLithosphere()     # rigid, lc or lv
     mantle::M = MaxwellMantle()                         # rigid, relaxed or maxwell
+    sea_surface::SS = LaterallyConstantSeaSurface()     # lc or lv
+    bsl::BSL = ConstantBSL()                            # constant, imposed, pw constant or pw linear
+    update_bsl::UBSL = InternalUpdateBSL()              # internal or external
+    ocean_load::OL = NoOceanLoad()                      # no or interactive
 end

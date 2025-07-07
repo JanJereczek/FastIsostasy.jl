@@ -42,6 +42,10 @@ end
 
 Base.eltype(ref::ReferenceBSL{T}) where {T<:AbstractFloat} = T
 
+abstract type AbstractUpdateBSL end
+struct InternalUpdateBSL <: AbstractUpdateBSL end
+struct ExternalUpdateBSL <: AbstractUpdateBSL end
+
 """
     AbstractBSL
 
@@ -51,7 +55,7 @@ Available subtypes are:
 - [`ConstantOceanSurfaceBSL`](@ref)
 - [`PiecewiseConstantOceanSurfaceBSL`](@ref)
 - [`PiecewiseLinearOceanSurfaceBSL`](@ref)
-- [`ExternalBSL`](@ref)
+- [`ImposedBSL`](@ref)
 - [`CombinedBSL`](@ref)
 
 All subtypes implement the `update_bsl!` function:
@@ -73,7 +77,11 @@ A `mutable struct` containing:
 
 Assume that the BSL is constant in time.
 """
-mutable struct ConstantBSL{T, R<:ReferenceBSL{T}} <: AbstractBSL{T}
+mutable struct ConstantBSL{
+    T,                      # <: AbstractFloat
+    R,                      # <: ReferenceBSL
+} <: AbstractBSL{T}
+
     ref::R
     z::T
     A::T
@@ -90,7 +98,7 @@ A `mutable struct` containing:
 - `A`: the ocean surface area, considered constant in time.
 
 Assume that the ocean surface is constant in time and that the BSL evolves
-only according to the changes in ice volume covered by the `RegionalComputationDomain`.
+only according to the changes in ice volume covered by the `RegionalDomain`.
 """
 mutable struct ConstantOceanSurfaceBSL{T, R<:ReferenceBSL{T}} <: AbstractBSL{T}
     ref::R
@@ -109,7 +117,7 @@ A `mutable struct` containing:
 - `A`: the ocean surface at current time step.
 
 Assume that the ocean surface evolves in time according to a piecewise constant function
-of the BSL, which evolves in time according to the changes in ice volume covered by the `RegionalComputationDomain`.
+of the BSL, which evolves in time according to the changes in ice volume covered by the `RegionalDomain`.
 """
 mutable struct PiecewiseConstantOceanSurfaceBSL{T, R<:ReferenceBSL{T}} <: AbstractBSL{T}
     ref::R
@@ -121,7 +129,7 @@ PiecewiseConstantOceanSurfaceBSL(; ref = ReferenceBSL()) =
     PiecewiseConstantOceanSurfaceBSL(ref, ref.z, ref.A)
 
 """
-    ExternalBSL
+    ImposedBSL
 
 A `mutable struct` containing:
 - `ref`: an instance of [`ReferenceBSL`](@ref).
@@ -132,7 +140,7 @@ A `mutable struct` containing:
 
 Impose an externally computed BSL, which is internally computed via a time interpolation.
 """
-mutable struct ExternalBSL{T, R<:ReferenceBSL{T}} <: AbstractBSL{T}
+mutable struct ImposedBSL{T, R<:ReferenceBSL{T}} <: AbstractBSL{T}
     ref::R
     z::T
     t_vec::Vector{T}
@@ -144,14 +152,14 @@ end
     CombinedBSL
 
 A `mutable struct`containing:
-- `bsl1`: an [`ExternalBSL`](@ref).
+- `bsl1`: an [`ImposedBSL`](@ref).
 - `bsl2`: an [`AbstractBSL`](@ref).
 
 This imposes a mixture of BSL. For instance, if you simulate Antarctica over the LGM,
 you can impose an offline BSL contribution from the other ice sheets via `bsl1`. The
 contribution of Antarctica will be intercatively added to this via `bsl2`.
 """
-mutable struct CombinedBSL{T, B1<:ExternalBSL, B2<:AbstractBSL} <: AbstractBSL{T}
+mutable struct CombinedBSL{T, B1<:ImposedBSL, B2<:AbstractBSL} <: AbstractBSL{T}
     bsl1::B1
     bsl2::B2
 end
@@ -179,7 +187,7 @@ function update_bsl!(bsl::PiecewiseConstantOceanSurfaceBSL, delta_V, t)
     return nothing
 end
 
-function update_bsl!(bsl::ExternalBSL, delta_V, t)
+function update_bsl!(bsl::ImposedBSL, delta_V, t)
     bsl.z = bsl.z_itp(t)
     return nothing
 end
