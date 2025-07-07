@@ -17,6 +17,7 @@ The most important change from v1.0 to v2.0 is the API refactor. This allows the
 9. MakieExt
 10. LinearSolveExt
 11. NonlinearSolveExt
+12. Naming is now very close to that Oceananigans and SpeedyWeather
 
 ### Automatic Differentiation
 An other important change is the inclusion of AD capabilities!!!
