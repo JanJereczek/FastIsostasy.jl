@@ -57,12 +57,14 @@ function update_dudt!(dudt, u, sim, t, mantle::MaxwellMantle,
     P = tools.prealloc
     dt = sim.opts.diffeq.dt_min * sim.c.seconds_per_year
 
-    # helper variable
+    # helper variables
+    nabla = P.buffer_xx
+    @. nabla = 2 * sim.p.effective_viscosity * sim.domain.pseudodiff * sim.p.pseudodiff_scaling
+
     beta = P.buffer_x
     @. beta = sim.p.rho_uppermantle * sim.c.g + sim.p.litho_rigidity * sim.domain.pseudodiff ^ 4
 
     # fourier transform load
-    # P.fftF .= -sim.now.columnanoms.load .* sim.c.g
     @. P.fftF = - (sim.now.columnanoms.load +
         sim.now.columnanoms.litho) * sim.c.g * sim.domain.K ^ 2
     tools.pfft! * P.fftF
@@ -72,10 +74,7 @@ function update_dudt!(dudt, u, sim, t, mantle::MaxwellMantle,
     tools.pfft! * P.fftU
 
     # compute the right-hand side of the deformation equation
-    @. P.fftrhs =
-        ((2 * sim.p.effective_viscosity * sim.domain.pseudodiff - (dt/2)*beta) *
-            P.fftU + dt * P.fftF) /
-        (2 * sim.p.effective_viscosity * sim.domain.pseudodiff + (dt/2)*beta)
+    @. P.fftrhs = ((nabla - (dt/2)*beta) * P.fftU + dt * P.fftF) / (nabla + (dt/2)*beta)
     tools.pifft! * P.fftrhs
 
     P.rhs .= real.(P.fftrhs)
@@ -93,7 +92,7 @@ function update_dudt!(dudt, u, sim, t, mantle::MaxwellMantle,
     update_deformation_rhs!(sim, u)
     @. P.fftrhs = P.rhs * domain.K / (2 * sim.p.effective_viscosity)
     sim.tools.pfft! * P.fftrhs
-    @. P.fftrhs *= sim.p.pseudodiff_scaling
+    @. P.fftrhs *= sim.p.scaled_pseudodiff_inv
     sim.tools.pifft! * P.fftrhs
     dudt .= real.(P.fftrhs)
     dudt .*= sim.c.seconds_per_year

@@ -23,7 +23,7 @@ model = Model(
 params = SolidEarthParameters(
     domain,
     layer_boundaries = [88f3],       #[88f3, 88f3 + 75f3],
-    layer_viscosities = [1f21],      #[0.04 * 1f21, 1f21],
+    layer_viscosities = [1f21],      #[0.04f0 * 1f21, 1f21],
 )
 opts = SolverOptions(diffeq = DiffEqOptions(alg = Euler(), dt_min = 100f0))
 nout = NativeOutput(vars = [:u, :ue, :dz_ss, :H_ice, :u_x, :u_y], t = [1f2, 5f2, 15f2, 5f3, 1f4, 5f4])

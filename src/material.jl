@@ -108,7 +108,6 @@ function get_effective_viscosity_and_scaling(domain, layer_viscosities, layer_bo
                 layer_boundaries[:, :, end - l]
             viscosity_ratio .= layer_viscosities[:, :, end - l] ./ effective_viscosity
             R .*= channel_scaling_freqdomain_2D(domain, viscosity_ratio, channel_thickness, maskactive)
-            @show extrema(R)
         end
 
     end
@@ -249,6 +248,7 @@ mutable struct SolidEarthParameters{
 }
     effective_viscosity::M
     pseudodiff_scaling::M
+    scaled_pseudodiff_inv::M
     litho_thickness::M
     litho_rigidity::M
     maskactive::B
@@ -304,12 +304,12 @@ function SolidEarthParameters(
         kernelpromote( [litho_thickness, litho_rigidity, effective_viscosity,
         pseudodiff_scaling, maskactive], domain.arraykernel)
 
-    pseudodiff_scaling = 1 ./ (pseudodiff_scaling .* domain.pseudodiff)
+    scaled_pseudodiff_inv = 1 ./ (pseudodiff_scaling .* domain.pseudodiff)
 
     litho_shearmodulus = get_shearmodulus(litho_youngmodulus, litho_poissonratio)
 
     return SolidEarthParameters(
-        effective_viscosity, pseudodiff_scaling,
+        effective_viscosity, pseudodiff_scaling, scaled_pseudodiff_inv,
         litho_thickness, litho_rigidity, kernelcollect(maskactive, domain),
         litho_poissonratio, mantle_poissonratio, tau,
         litho_youngmodulus, litho_shearmodulus, rho_uppermantle, rho_litho,
