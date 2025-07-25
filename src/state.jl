@@ -38,7 +38,6 @@ struct ReferenceState{
     V_den::T                # ref potential ocean volume associated with V_den
     maskgrounded::B         # mask for grounded ice
     maskocean::B            # mask for ocean
-    maskactive::B
 end
 
 """
@@ -70,7 +69,7 @@ mutable struct CurrentState{
     V_pov::T                    # V contribution from bedrock adjustment
     V_den::T                    # V contribution from diff between melt- and saltwater density
     delta_V::T                  # change in volume
-    z_bsl::T                      # ocean surface change
+    z_bsl::T                    # ocean surface change
     maskgrounded::B             # mask for grounded ice
     maskocean::B                # mask for ocean
     count_sparse_updates::Int   # count the updates that are sparser in time
@@ -78,6 +77,7 @@ end
 
 # Initialise CurrentState from ReferenceState
 function CurrentState(domain::RegionalDomain, ref::ReferenceState, z_bsl)
+    T = eltype(domain.x)
     return CurrentState(
         copy(ref.u),                # u
         copy(ref.ue),               # ue
@@ -95,8 +95,8 @@ function CurrentState(domain::RegionalDomain, ref::ReferenceState, z_bsl)
         copy(ref.V_af),             # V_af
         copy(ref.V_pov),            # V_pov
         copy(ref.V_den),            # V_den
-        eltype(domain.x)(0),        # delta_V
-        z_bsl,                      # z_bsl
+        T(0),                       # delta_V
+        T(z_bsl),                   # z_bsl
         copy(ref.maskgrounded),     # maskgrounded
         copy(ref.maskocean),        # maskocean
         0,                          # count_sparse_updates
