@@ -36,7 +36,7 @@ function ReferenceBSL(; z = 0, T = Float32, flat_bc = false)
     z_vec, A_vec = load_oceansurface_data(T = T, verbose = false)
     A_unbiased = A_OCEAN_PD ./ A_vec[argmin(abs.(z_vec))] .* A_vec
     A_itp = TimeInterpolation0D(z_vec, T.(A_unbiased), flat_bc = flat_bc)
-    A = interpolate!(z, A_itp)
+    A = interpolate(z, A_itp)
     return ReferenceBSL(T(z), T(A), z_vec, A_vec, A_itp)
 end
 
@@ -53,15 +53,15 @@ Abstract type to compute the evolution of the barystatic sea level.
 Available subtypes are:
 - [`ConstantBSL`](@ref)
 - [`ConstantOceanSurfaceBSL`](@ref)
-- [`PiecewiseConstantOceanSurfaceBSL`](@ref)
-- [`PiecewiseLinearOceanSurfaceBSL`](@ref)
+- [`PiecewiseConstantBSL`](@ref)
+- [`PiecewiseLinearBSL`](@ref)
 - [`ImposedBSL`](@ref)
 - [`CombinedBSL`](@ref)
 
 All subtypes implement the `update_bsl!` function:
 ```julia
 T, delta_V, t = Float64, 1.0e9, 0.0             # Example values
-bsl = PiecewiseConstantOceanSurfaceBSL()        # or any other subtype!
+bsl = PiecewiseConstantBSL()        # or any other subtype!
 update_bsl!(bsl, delta_V, t)
 ```
 """
@@ -109,7 +109,7 @@ end
 ConstantOceanSurfaceBSL(; ref = ReferenceBSL()) = ConstantOceanSurfaceBSL(ref, ref.z, ref.A)
 
 """
-    PiecewiseConstantOceanSurfaceBSL{T}
+    PiecewiseConstantBSL{T}
 
 A `mutable struct` containing:
 - `ref`: an instance of [`ReferenceBSL`](@ref).
@@ -119,14 +119,14 @@ A `mutable struct` containing:
 Assume that the ocean surface evolves in time according to a piecewise constant function
 of the BSL, which evolves in time according to the changes in ice volume covered by the `RegionalDomain`.
 """
-mutable struct PiecewiseConstantOceanSurfaceBSL{T, R<:ReferenceBSL{T}} <: AbstractBSL{T}
+mutable struct PiecewiseConstantBSL{T, R<:ReferenceBSL{T}} <: AbstractBSL{T}
     ref::R
     z::T
     A::T
 end
 
-PiecewiseConstantOceanSurfaceBSL(; ref = ReferenceBSL()) = 
-    PiecewiseConstantOceanSurfaceBSL(ref, ref.z, ref.A)
+PiecewiseConstantBSL(; ref = ReferenceBSL()) = 
+    PiecewiseConstantBSL(ref, ref.z, ref.A)
 
 """
     ImposedBSL
@@ -181,13 +181,13 @@ function update_bsl!(bsl::ConstantOceanSurfaceBSL, delta_V, t)
     return nothing
 end
 
-function update_bsl!(bsl::PiecewiseConstantOceanSurfaceBSL, delta_V, t)
+function update_bsl!(bsl::PiecewiseConstantBSL, delta_V, t)
     bsl.z += delta_V / bsl.A
-    bsl.A = bsl.ref.A_itp(bsl.z)
+    bsl.A = interpolate(bsl.z, bsl.ref.A_itp)
     return nothing
 end
 
 function update_bsl!(bsl::ImposedBSL, delta_V, t)
-    bsl.z = bsl.z_itp(t)
+    bsl.z = interpolate(t, bsl.z_itp)
     return nothing
 end
