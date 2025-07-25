@@ -7,7 +7,8 @@ function update_dz_ss!(sim::Simulation, sl::LaterallyVariableSeaSurface)
 
     @. sim.tools.prealloc.buffer_x = mass_anom(sim.domain.A, sim.now.columnanoms.full)
     samesize_conv!(sim.now.dz_ss, sim.tools.prealloc.buffer_x,
-        sim.tools.dz_ss_convo, sim.domain, sim.bcs.sea_surface_perturbation,
+        sim.tools.dz_ss_convo, sim.tools.conv_helpers,
+        sim.domain, sim.bcs.sea_surface_perturbation,
         sim.bcs.sea_surface_perturbation.space)
     return nothing
 end
@@ -113,9 +114,10 @@ Note: we do not use eq. (8) as it is only a special case of eq. (14) that does n
 allow a correct representation of external sea-level forcings.
 """
 function update_V_pov!(sim::Simulation)
-    sim.tools.prealloc.buffer_x .= sim.now.z_b .- sim.now.z_ss
-    sim.tools.prealloc.buffer_x .= max.(sim.tools.prealloc.buffer_x, 0) .* sim.domain.A
-    sim.tools.prealloc.buffer_x .= sim.tools.prealloc.buffer_x .* (sim.now.z_b .< sim.now.z_ss)
-    sim.now.V_pov = sum( sim.tools.prealloc.buffer_x )
+    # sim.tools.prealloc.buffer_x .= sim.now.z_b .- sim.now.z_ss
+    # sim.tools.prealloc.buffer_x .= max.(sim.tools.prealloc.buffer_x, 0) .* sim.domain.A
+    # sim.tools.prealloc.buffer_x .= sim.tools.prealloc.buffer_x .* (sim.now.z_b .< sim.now.z_ss)
+    # sim.now.V_pov = sum( sim.tools.prealloc.buffer_x )
+    sim.now.V_pov = 0
     return nothing
 end
