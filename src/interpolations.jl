@@ -21,7 +21,7 @@ function TimeInterpolation2D(t, X; flat_bc = false)
 end
 
 
-function interpolate!(t_out, itp::TimeInterpolation0D)
+function interpolate(t_out, itp::TimeInterpolation0D)
     if t_out < minimum(itp.t)
         if itp.flat_bc
             return itp.y[1]
