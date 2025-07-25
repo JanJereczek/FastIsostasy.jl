@@ -1,8 +1,14 @@
+function inn(X)
+    nx, ny = size(X)
+    return view(X, 2:nx-1, 2:ny-1)
+end
+
 function derivative_stdsetup(use_cuda::Bool)
-    W, n = 3000e3, 7
+    W, n = 3f6, 7
     domain = RegionalDomain(W, n, correct_distortion = false, use_cuda = use_cuda)
-    c, p, t_out, _, _, t_Hice, Hice = benchmark1_constants(domain)
-    sim = Simulation(domain, c, p, t_out, t_Hice, Hice)
+    sep = SolidEarthParameters(domain)
+    model = Model()
+    sim = Simulation(domain, model, sep, (0f0, 50f3))
 
     u = domain.X .^ 2 .* domain.Y .^ 2
     uxx = 2 .* domain.Y .^ 2
