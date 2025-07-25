@@ -12,11 +12,11 @@ function FastIsostasy.plot_transect(sim::Simulation, vars; analytic_cylinder_sol
     res_x, res_y = 400, 300
     set_theme!(theme_latexfonts())
     l1 = 3
-    ii, jj = 1:domain.mx, domain.my
+    ii, jj = domain.mx:domain.nx, domain.my
     x, y = domain.X[ii, jj], domain.Y[ii, jj]
     cmap = cgrad(:jet, length(t_out), categorical = true)
     z = similar(x)
-    k = Int(length(x) ÷ 1.2)
+    k = 2 # Int(length(x) ÷ 1.2)
 
     fig = Figure(size = (res_x*length(vars), res_y))
     axs = [Axis(fig[1, j]) for j in eachindex(vars)]
@@ -35,9 +35,11 @@ function FastIsostasy.plot_transect(sim::Simulation, vars; analytic_cylinder_sol
             end
 
             z .= view(sim.nout.vals[vars[j]][i], ii, jj)
-            lines!(axs[j], x, z, color = cmap[i], linewidth = l1)
-            text!(axs[j], x[k], z[k], text = L"$ %$t $ yr", color = cmap[i])
+            lines!(axs[j], x, z, color = cmap[i], linewidth = l1, label = "$(t) yr")
+            # text!(axs[j], x[k], z[k], text = L"$ %$t $ yr", color = cmap[i])
         end
+        Legend(fig[1, length(vars)+1], axs[j])
+        # axislegend(axs[j], position = :rc)
     end
 
     
