@@ -212,7 +212,7 @@ end
 
 Promote X to the kernel (`Array` or `CuArray`) specified by `arraykernel`.
 """
-function kernelpromote(X::M, arraykernel) where {M<:AbstractArray{T}} where {T<:Real}
+function kernelpromote(X, arraykernel)
     if isa(X, arraykernel)
         return X
     else
