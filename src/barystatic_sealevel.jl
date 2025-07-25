@@ -33,7 +33,7 @@ struct ReferenceBSL{T<:AbstractFloat, I<:TimeInterpolation0D{T}}
 end
 
 function ReferenceBSL(; z = 0, T = Float32, flat_bc = false)
-    z_vec, A_vec = load_oceansurface_data(T = T, verbose = false)
+    z_vec, A_vec, _ = load_oceansurface_data(T = T, verbose = false)
     A_unbiased = A_OCEAN_PD ./ A_vec[argmin(abs.(z_vec))] .* A_vec
     A_itp = TimeInterpolation0D(z_vec, T.(A_unbiased), flat_bc = flat_bc)
     A = interpolate(z, A_itp)

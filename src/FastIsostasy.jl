@@ -112,7 +112,7 @@ export uniform_ice_cylinder, stereo_ice_cylinder, stereo_ice_cap
 export null, not, cudainfo, kernelpromote, kernelnull
 
 # derivatives.jl
-# export update_second_derivatives!, dxx!, dyy!, FiniteDiffParams
+export update_second_derivatives!   #, dxx!, dyy!, FiniteDiffParams
 
 # loads.jl
 # no export here, as it is only used internally

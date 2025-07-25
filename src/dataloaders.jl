@@ -74,7 +74,7 @@ function load_oceansurface_data(; T = Float64, verbose = true)
     tmp = download(link)
     data = readdlm(tmp)
     z, A = T.(data[:, 1]), T.(data[:, 2])
-    return z, A
+    return z, A, nothing
 end
 
 function load_bedmachine3(; var = "bed", T = Float64)
