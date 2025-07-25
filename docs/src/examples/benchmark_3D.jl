@@ -34,11 +34,11 @@ sep = SolidEarthParameters(
 nout = NativeOutput(vars = [:u, :ue, :dz_ss, :H_ice],
     t = vcat(0, 1f3:1f3:4f3, 5f3:5f3:50f3))
 tspan = (0f0, 50f3)
-fip = Simulation(domain, model, sep, tspan; bcs = bcs, nout = deepcopy(nout))
-run!(fip)
-println("Took $(fip.nout.computation_time) seconds!")
+sim = Simulation(domain, model, sep, tspan; bcs = bcs, nout = deepcopy(nout))
+run!(sim)
+println("Took $(sim.nout.computation_time) seconds!")
 
-fig = plot_transect(fip, [:u])
+fig = plot_transect(sim, [:u])
 
 
 #######
@@ -52,8 +52,8 @@ sep = SolidEarthParameters(
     layer_viscosities = reshape(10 .^ log10visc, domain.nx, domain.ny, 1),
 )
 
-fip = Simulation(domain, model, sep, tspan; bcs = bcs, nout = deepcopy(nout))
-run!(fip)
-println("Took $(fip.nout.computation_time) seconds!")
+sim = Simulation(domain, model, sep, tspan; bcs = bcs, nout = deepcopy(nout))
+run!(sim)
+println("Took $(sim.nout.computation_time) seconds!")
 
-fig = plot_transect(fip, [:u])
+fig = plot_transect(sim, [:u])

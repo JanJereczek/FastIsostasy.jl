@@ -50,7 +50,7 @@ The next section shows how to use the now obtained `p::SolidEarthParameters` for
 
 ## Simple load and geometry
 
-We now apply a constant load, here a cylinder of ice with radius $$R = 1000 \, \mathrm{km}$$ and thickness $$H = 1 \, \mathrm{km}$$, over `domain::RegionalDomain` introduced in [`SolidEarthParameters`](@ref). To formulate the problem conviniently, we use [`FastIsoProblem`](@ref), a struct containing the variables and options that are necessary to perform the integration over time. We can then simply apply `solve!(fip::FastIsoProblem)` to perform the integration of the ODE. Under the hood, the ODE is obtained from the PDE by applying a Fourier collocation scheme contained in [`lv_elva!`](@ref). The integration is performed according to `FastIsoProblem.diffeq::NamedTuple`, which contains the algorithm and optionally tolerances, maximum iteration number... etc.
+We now apply a constant load, here a cylinder of ice with radius $$R = 1000 \, \mathrm{km}$$ and thickness $$H = 1 \, \mathrm{km}$$, over `domain::RegionalDomain` introduced in [`SolidEarthParameters`](@ref). To formulate the problem conviniently, we use [`Simulation`](@ref), a struct containing the variables and options that are necessary to perform the integration over time. We can then simply apply `run!(sim::Simulation)` to perform the integration of the ODE. Under the hood, the ODE is obtained from the PDE by applying a Fourier collocation scheme contained in [`lv_elva!`](@ref). The integration is performed according to `Simulation.diffeq::NamedTuple`, which contains the algorithm and optionally tolerances, maximum iteration number... etc.
 =#
 
 t_out = [0.0, 2e2, 6e2, 2e3, 5e3, 1e4, 5e4]     # vector of output time steps (yr)
@@ -64,11 +64,11 @@ Hcylinder = uniform_ice_cylinder(domain, R, H)   # field representing ice disk
 t_Hice = [-εt, 0.0, t_out[end]]                 # ice history = Heaviside at t=0
 Hice = [zeros(domain.nx, domain.ny), Hcylinder, Hcylinder]
 
-fip = FastIsoProblem(domain, c, p, t_out, t_Hice, Hice, output = "sparse")
-solve!(fip)
+sim = Simulation(domain, c, p, t_out, t_Hice, Hice, output = "sparse")
+run!(sim)
 
-function plot3D(fip, k_idx)
-    X, Y, out = Array(fip.domain.X), Array(fip.domain.Y), fip.out
+function plot3D(sim, k_idx)
+    X, Y, out = Array(sim.domain.X), Array(sim.domain.Y), sim.out
     zl = extrema(out.ue[end] + out.u[end])
     fig = Figure(fontsize = 10)
     for j in eachindex(k_idx)
@@ -80,10 +80,10 @@ function plot3D(fip, k_idx)
     end
     return fig
 end
-fig = plot3D(fip, [lastindex(t_out) ÷ 2, lastindex(t_out)])
+fig = plot3D(sim, [lastindex(t_out) ÷ 2, lastindex(t_out)])
 
 #=
-The figure above shows the total displacement at $$t = 0.6 \, \mathrm{kyr}$$ and $$t = 50 \, \mathrm{kyr}$$. Since we defined `output = "sparse"`, we can now access the elastic and viscous displacement at time `t_out[k]` by calling `fip.out.ue[k]` and `fip.out.u[k]`. For the present case, the latter can be compared to an analytic solution that is known for this particular case. Let's look at the accuracy of our numerical scheme over time by running following plotting commands:
+The figure above shows the total displacement at $$t = 0.6 \, \mathrm{kyr}$$ and $$t = 50 \, \mathrm{kyr}$$. Since we defined `output = "sparse"`, we can now access the elastic and viscous displacement at time `t_out[k]` by calling `sim.out.ue[k]` and `sim.out.u[k]`. For the present case, the latter can be compared to an analytic solution that is known for this particular case. Let's look at the accuracy of our numerical scheme over time by running following plotting commands:
 =#
 
 fig = Figure()
@@ -97,7 +97,7 @@ for k in eachindex(t_out)[2:end]
     analytic_solution_r(r) = analytic_solution(r, years2seconds(t_out[k]),
         c, p, H, R)
     u_analytic = analytic_solution_r.(r)
-    u_numeric = fip.out.u[k][ii, jj]
+    u_numeric = sim.out.u[k][ii, jj]
     lines!(ax, x, u_analytic, color = cmap[k], linewidth = 5,
         label = L"$u_{ana}(t = %$(t_out[k]) \, \mathrm{yr})$")
     lines!(ax, x, u_numeric, color = cmap[k], linewidth = 5, linestyle = :dash,
@@ -115,7 +115,7 @@ For about $$n \geq 7$$, the present example can be computed even faster by using
 domain = RegionalDomain(W, n, use_cuda = true)
 ```
 
-We then pass `domain` to a `SolidEarthParameters` and a `FastIsoProblem`, which we solve as done above: that's it!
+We then pass `domain` to a `SolidEarthParameters` and a `Simulation`, which we solve as done above: that's it!
 
 !!! info "Only CUDA supported!"
     For now only Nvidia GPUs are supported and there is no plan of extending this compatibility at this point.
@@ -123,21 +123,21 @@ We then pass `domain` to a `SolidEarthParameters` and a `FastIsoProblem`, which 
 
 ## Make your own time loop
 
-As any high-level function, [`solve!`](@ref) has some limitations. An ice-sheet modeller typically wants to embed FastIsostasy within a time-stepping loop. This can be easily done by getting familiar with some intermediate-level functions like [`init`](@ref), [`step!`](@ref) and [`write_out!`](@ref):
+As any high-level function, [`run!`](@ref) has some limitations. An ice-sheet modeller typically wants to embed FastIsostasy within a time-stepping loop. This can be easily done by getting familiar with some intermediate-level functions like [`init`](@ref), [`step!`](@ref) and [`write_out!`](@ref):
 =#
 
 domain = RegionalDomain(3000e3, n)
 p = SolidEarthParameters(domain)
-fip = FastIsoProblem(domain, c, p, t_out, t_Hice, Hice, output = "sparse")
+sim = Simulation(domain, c, p, t_out, t_Hice, Hice, output = "sparse")
 
-update_diagnostics!(fip.now.dudt, fip.now.u, fip, 0.0)
-write_out!(fip.nout, fip.now)
-ode = init(fip)
-@inbounds for k in eachindex(fip.out.t)[2:end]
-    step!(fip, ode, (fip.out.t[k-1], fip.out.t[k]))
-    write_out!(fip.nout, fip.now)
+update_diagnostics!(sim.now.dudt, sim.now.u, sim, 0.0)
+write_out!(sim.nout, sim.now)
+ode = init(sim)
+@inbounds for k in eachindex(sim.out.t)[2:end]
+    step!(sim, ode, (sim.out.t[k-1], sim.out.t[k]))
+    write_out!(sim.nout, sim.now)
 end
-fig = plot3D(fip, [lastindex(t_out) ÷ 2, lastindex(t_out)])
+fig = plot3D(sim, [lastindex(t_out) ÷ 2, lastindex(t_out)])
 
 #=
 !!! warning "Limited GPU support"
@@ -151,9 +151,9 @@ ELRA is a GIA model that is commonly used in ice-sheet modelling. For the vast m
 
 p = SolidEarthParameters(domain, tau = 3e3)
 opts = SolverOptions(deformation_model = :elra)
-fip = FastIsoProblem(domain, c, p, t_out, t_Hice, Hice, opts = opts, output = "sparse")
-solve!(fip)
-fig = plot3D(fip, [lastindex(t_out) ÷ 2, lastindex(t_out)])
+sim = Simulation(domain, c, p, t_out, t_Hice, Hice, opts = opts, output = "sparse")
+run!(sim)
+fig = plot3D(sim, [lastindex(t_out) ÷ 2, lastindex(t_out)])
 
 #=
 

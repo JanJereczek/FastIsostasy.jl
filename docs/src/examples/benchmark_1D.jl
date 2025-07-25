@@ -9,7 +9,7 @@ H_ice_0 = kernelnull(domain)
 alpha = T(10)                       # max latitude (°) of ice cap
 Hmax = T(1500)
 H_ice_1 = stereo_ice_cap(domain, alpha, Hmax)
-t_ice = [0, 1, 100f3]
+t_ice = [-1f-3, 0, 100f3]
 H_ice = [H_ice_0, H_ice_1, H_ice_1]
 it = TimeInterpolatedIceThickness(t_ice, H_ice, domain)
 
@@ -21,7 +21,7 @@ bcs = BoundaryConditions(
     sea_surface_perturbation = BorderBC(ExtendedBCSpace(), 0f0),
 )
 model = Model(
-    lithosphere = LaterallyVariableLithosphere(),     # Maxwell + LVL: need to define constant time step
+    lithosphere = LaterallyVariableLithosphere(),     # actually set constant
     mantle = MaxwellMantle(),
     sea_surface = LaterallyVariableSeaSurface(),
 )
@@ -40,11 +40,13 @@ sep = SolidEarthParameters(
 
 nout = NativeOutput(vars = [:u, :ue, :dz_ss, :H_ice, :u_x, :u_y, :dudt],
     t = [0, 10, 1_000, 2_000, 5_000, 10_000, 100_000f0])
-tspan = (0f0, 100_000f0)
+tspan = (-1f-3, 100_000f0)
 sim = Simulation(domain, model, sep, tspan; bcs = bcs, nout = deepcopy(nout))
 run!(sim)
 println("Computation time: $(sim.nout.computation_time)")
 
 using CairoMakie, LinearAlgebra
 
-fig = plot_transect(sim, [:ue, :u, :dudt, :dz_ss])
+fig = plot_transect(sim, [:ue, :u, :dudt])
+
+fig = plot_transect(sim, [:dz_ss, :u_x, :u_y])
