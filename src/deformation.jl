@@ -35,7 +35,8 @@ function update_dudt!(dudt, u, sim, t, mantle::RelaxedMantle,
         sim.now.columnanoms.litho) * sim.c.g * sim.domain.K ^ 2
     
     samesize_conv!(sim.now.u_eq, sim.tools.prealloc.buffer_x,
-        sim.tools.viscous_convo, sim.domain, sim.bcs.viscous_displacement,
+        sim.tools.viscous_convo, sim.tools.conv_helpers,
+        sim.domain, sim.bcs.viscous_displacement,
         sim.bcs.viscous_displacement.space)
 
     @. dudt = 1 / sim.p.tau * (sim.now.u_eq - sim.now.u)
@@ -50,13 +51,40 @@ end
 
 function update_dudt!(dudt, u, sim, t, mantle::MaxwellMantle,
     litho::L) where {L<:AbstractLithosphere}
-    error("Viscous rheology is not implemented for laterally constant lithosphere.")
-    # fft(load, t + dt/2)
-    # U_now = fft(u_now)
-    # U_next = (2 * eta * mu * kappa - dt/2*beta) * U_now +
-    #     dt * load
-    # U_next ./= (2 * eta * mu * kappa + dt/2*beta)
-    # u_next = fftinv(U_next)
+    # error("Viscous rheology is not implemented for laterally constant lithosphere.")
+
+    tools = sim.tools
+    P = tools.prealloc
+    dt = sim.opts.diffeq.dt_min * sim.c.seconds_per_year
+
+    # helper variable
+    beta = P.buffer_x
+    @. beta = sim.p.rho_uppermantle * sim.c.g + sim.p.litho_rigidity * sim.domain.pseudodiff ^ 4
+
+    # fourier transform load
+    # P.fftF .= -sim.now.columnanoms.load .* sim.c.g
+    @. P.fftF = - (sim.now.columnanoms.load +
+        sim.now.columnanoms.litho) * sim.c.g * sim.domain.K ^ 2
+    tools.pfft! * P.fftF
+
+    # fourier transform u
+    P.fftU .= u
+    tools.pfft! * P.fftU
+
+    # compute the right-hand side of the deformation equation
+    @. P.fftrhs =
+        ((2 * sim.p.effective_viscosity * sim.domain.pseudodiff - (dt/2)*beta) *
+            P.fftU + dt * P.fftF) /
+        (2 * sim.p.effective_viscosity * sim.domain.pseudodiff + (dt/2)*beta)
+    tools.pifft! * P.fftrhs
+
+    P.rhs .= real.(P.fftrhs)
+    apply_bc!(P.rhs, sim.bcs.viscous_displacement)
+    u .= P.rhs
+    sim.now.u .= u
+
+    # dudt .= (P.rhs .- sim.now.u) ./ dt .* sim.c.seconds_per_year
+    return nothing
 end
 
 function update_dudt!(dudt, u, sim, t, mantle::MaxwellMantle,
@@ -65,22 +93,7 @@ function update_dudt!(dudt, u, sim, t, mantle::MaxwellMantle,
     update_deformation_rhs!(sim, u)
     @. P.fftrhs = P.rhs * domain.K / (2 * sim.p.effective_viscosity)
     sim.tools.pfft! * P.fftrhs
-    @. P.fftrhs *= domain.pseudodiff_inv
-    sim.tools.pifft! * P.fftrhs
-    dudt .= real.(P.fftrhs)
-    dudt .*= sim.c.seconds_per_year
-    apply_bc!(dudt, sim.bcs.viscous_displacement)
-    return nothing
-end
-
-
-function update_dudt!(dudt, u, sim, t, mantle::MaxwellMantle,
-    lithosphere::RigidLithosphere)
-    domain, P = sim.domain, sim.tools.prealloc
-    update_deformation_rhs!(sim, u)
-    @. P.fftrhs = P.rhs * domain.K / (2 * sim.p.effective_viscosity)
-    sim.tools.pfft! * P.fftrhs
-    @. P.fftrhs *= domain.pseudodiff_inv
+    @. P.fftrhs *= sim.p.pseudodiff_scaling
     sim.tools.pifft! * P.fftrhs
     dudt .= real.(P.fftrhs)
     dudt .*= sim.c.seconds_per_year
@@ -115,7 +128,8 @@ function update_deformation_rhs!(sim::Simulation, u)
     @. P.rhs += P.buffer_xx + muladd(2, P.buffer_xy, P.buffer_yy)
 
     P.buffer_x .= P.rhs
-    # samesize_conv!(P.rhs, P.buffer_x, sim.tools.smooth_convo, sim.domain)
+    samesize_conv!(P.rhs, P.buffer_x, sim.tools.smooth_convo,
+        sim.tools.conv_helpers, sim.domain)
     return nothing
 end
 
@@ -165,8 +179,8 @@ function update_elasticresponse!(sim::Simulation, lithosphere::L) where {L<:Abst
 
     @. sim.tools.prealloc.buffer_x = sim.now.columnanoms.load * sim.domain.K ^ 2
     samesize_conv!(sim.now.ue, sim.tools.prealloc.buffer_x,
-        sim.tools.elastic_convo, sim.domain, sim.bcs.elastic_displacement,
-        sim.bcs.elastic_displacement.space)
+        sim.tools.elastic_convo, sim.tools.conv_helpers, sim.domain,
+        sim.bcs.elastic_displacement, sim.bcs.elastic_displacement.space)
     # sim.now.ue .= samesize_conv(sim.now.columnanoms.load .* sim.domain.K .^ 2,
     #     sim.tools.elastic_convo, sim.domain)
     return nothing
