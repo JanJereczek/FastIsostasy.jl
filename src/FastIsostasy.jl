@@ -60,7 +60,7 @@ include("coordinates.jl")
 
 # barystatic_sealevel.jl
 export AbstractUpdateBSL, InternalUpdateBSL, ExternalUpdateBSL, ReferenceBSL, AbstractBSL
-export ConstantBSL, ConstantOceanSurfaceBSL, PiecewiseConstantOceanSurfaceBSL
+export ConstantBSL, ConstantOceanSurfaceBSL, PiecewiseConstantBSL
 export update_bsl!
 
 # domain.jl
@@ -90,6 +90,7 @@ export get_layer_boundaries, interpolate2layers
 
 # convolutions.jl
 # export ConvolutionPlan, convo!, nextfastfft, _zeropad!, samesize_conv!
+export gaussian_smooth, conv!, ConvolutionPlan, ConvolutionPlanHelpers
 
 # tools.jl
 export GIATools
@@ -115,21 +116,24 @@ export null, not, cudainfo, kernelpromote, kernelnull
 
 # loads.jl
 # no export here, as it is only used internally
+export height_above_floatation, watercolumn
 
 # topography.jl
 # export update_Haf!, update_bedrock!
 # export update_maskocean!, update_maskgrounded!
+export get_maskgrounded, get_maskocean
 
 # sealevel.jl
 # export update_dz_ss!, get_dz_ss_green, update_z_ss!, update_sealevel!
 # export update_V_af!, update_V_den!, update_V_pov!, total_volume
 
 # material.jl
+export AbstractCalibration, NoCalibration, SeakonCalibration
+export AbstractCompressibility, IncompressibleMantle, CompressibleMantle
+export AbstractViscosityLumping, TimeDomainViscosityLumping
+export FreqDomainViscosityLumping, MeanViscosityLumping, MeanLogViscosityLumping
 export SolidEarthParameters
-# export maxwelltime_scaling!, get_shearmodulus, get_rigidity, load_prem
-# export get_flexural_lengthscale, get_kei, calc_kei_value, calc_viscous_green
-# export get_relaxation_time, get_relaxation_time_weaker, get_relaxation_time_stronger
-# export build_greenintegrand, get_elastic_green
+export get_relaxation_time, get_relaxation_time_weaker, get_relaxation_time_stronger
 
 # deformation.jl
 export update_dudt!, update_deformation_rhs!, thinplate_horizontal_displacement
