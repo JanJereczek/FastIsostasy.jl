@@ -1,19 +1,23 @@
 # FastIsostasy.jl
 
-❄ *Fast and friendly glacial isostatic adjustment on CPU and GPU.*
+❄ *Fast and flexible glacial isostatic adjustment on CPU and GPU.*
+
+!!! warning "Upgrade to v2.0!"
+FastIsostasy.jl has been refactored to fix some performance issues, offer a more versatile API and propose new features. FastIsostasy v2.0 is currently being tested and will be out soon. If you are using v1.0, we strongly encourage you to uprade to v2.0 when it comes out!
 
 ![GlacialCycle](assets/isl-ice6g-N=350.gif)
 
-FastIsostasy is a friendly and flexible model that regionally computes the glacial isostatic adjustment (GIA) with laterally-variable mantle viscosity and lithospheric thickness. It is described in [swierczek2024fastisostasy](@citet) and is mainly adressed to ice-sheet modellers who seek for (1) a good representation of solid-Earth mechanics at virtually zero computational cost, (2) an approximation of the sea-level equation and (3) ready-to-use inversion tools to calibrate the model parameters to data. The simple interface of FastIsostasy allows to flexibly solve GIA problems within a few lines of code. The code is distributed under GNU general public license v3 and was succesfully benchmarked against analytical, 1D GIA and 3D GIA model solutions.
-
-Based on the work of [cathles-viscosity-1975](@citet) and [lingle-numerical-1985](@citet), an efficient way of solving for the vertical displacement was proposed by [bueler-fast-2007](@citet). FastIsostasy generalises this approach by relying on a hybrid Fourier/finite-difference collocation. Thanks to a simplification of the full problem from 3D to 2D space and the use of [optimized software packages](@ref Juliaecosystem), running kiloyears of regional GIA with $$\Delta x = \Delta y = 45 \, \mathrm{km}$$ is a matter of seconds on a single CPU. For high resolution runs, the user can switch to GPU usage with minimal syntax change and enjoy the advantage of parallelization without requiring an HPC cluster. For GIA "purists", this package is likely to miss interesting processes but we belive that its ridiculous run-time can help to fast-prototype a problem before transfering it to a more comprehensive model.
+FastIsostasy is a collection of models to compute the regional glacial isostatic adjustment (GIA) resulting from changes in the surface load (ice, liquid water and sediments). It is:
+- Accessible: you can set up complex simulations with only a few lines of code, as demonstrated for the case of the last glacial cycle.
+- Flexible: you can easily permute parameters and modelling choices to play Earth System Modelling like it's lego.
+- Performant: the results obtained only marginally differ from those obtained by 1D and 3D GIA models, while displaying a speed-up of 2 to 6 orders of magnitude.
 
 !!! tip "Star us on GitHub!"
     If you have found this library useful, please consider starring it on [GitHub](https://github.com/JanJereczek/FastIsostasy.jl). This gives us a lower bound of the satisfied user count.
 
 ## Getting started
 
-FastIsostasy.jl is a registered julia package. To install it, please run:
+FastIsostasy.jl is a registered julia package. To install it, simply run:
 
 ```julia
 using Pkg
@@ -36,8 +40,7 @@ FastIsostasy.jl was written thanks to the sheer amount of work that people inves
 - [ParallelStencil.jl](https://github.com/omlins/ParallelStencil.jl)
 - [Interpolations.jl](https://github.com/JuliaMath/Interpolations.jl)
 - [OrdinaryDiffEq.jl](https://github.com/SciML/OrdinaryDiffEq.jl)
-- [DynamicalSystemsBase.jl](https://github.com/JuliaDynamics/DynamicalSystemsBase.jl)
-- [KalmanEnsembleProcesses.jl](https://github.com/CliMA/EnsembleKalmanProcesses.jl)
 - [SpecialFunctions.jl](https://github.com/JuliaMath/SpecialFunctions.jl)
 - [FastGaussQuadrature.jl](https://github.com/JuliaApproximation/FastGaussQuadrature.jl)
-- And all the fantastic development tools that ease the every-day work so much: [Documenter.jl](https://github.com/JuliaDocs/Documenter.jl), [Literate.jl](https://github.com/fredrikekre/Literate.jl), [Test.jl](https://github.com/JuliaLang/julia/tree/master/usr/share/julia/stdlib/v1.9/Test) and [DocumenterCitations.jl](https://github.com/JuliaDocs/DocumenterCitations.jl). Despite being quite unrelated, [Oceananigans](https://github.com/CliMA/Oceananigans.jl) was a great template of how well geoscientific models can be documented.
+- [Proj.jl]()
+- And all the fantastic development tools that ease the every-day work so much: [Documenter.jl](https://github.com/JuliaDocs/Documenter.jl), [Literate.jl](https://github.com/fredrikekre/Literate.jl), [Test.jl](https://github.com/JuliaLang/julia/tree/master/usr/share/julia/stdlib/v1.9/Test) and [DocumenterCitations.jl](https://github.com/JuliaDocs/DocumenterCitations.jl). [Oceananigans](https://github.com/CliMA/Oceananigans.jl) and [SpeedyWeather]() provided fantastic templates in terms of API, code structure and documentation.
