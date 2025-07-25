@@ -16,13 +16,14 @@ function columnanom_litho!(sim::Simulation)
 end
 
 function columnanom_ice!(sim::Simulation)
-    anom!(sim.now.columnanoms.ice, sim.c.rho_ice, sim.now.H_ice, sim.ref.H_ice)
+    anom!(sim.now.columnanoms.ice, sim.c.rho_ice, sim.now.H_af, sim.ref.H_af)
     return nothing
 end
 
 function columnanom_water!(sim::Simulation, ol::InteractiveOceanLoad)
     watercolumn!(sim)
-    anom!(sim.now.columnanoms.seawater, sim.c.rho_seawater, sim.now.H_water, sim.ref.H_water)
+    anom!(sim.now.columnanoms.seawater, sim.c.rho_seawater, sim.now.z_ss, sim.ref.z_ss)
+    sim.now.columnanoms.seawater .*= sim.now.maskocean .* sim.p.maskactive
     return nothing
 end
 
@@ -61,13 +62,13 @@ end
 
 function columnanom_load!(sim::Simulation)
     canoms = sim.now.columnanoms
-    @. canoms.load .= sim.ref.maskactive * (canoms.ice + canoms.seawater + canoms.sediment)
+    @. canoms.load .= sim.p.maskactive * (canoms.ice + canoms.seawater + canoms.sediment)
     return nothing
 end
 
 function columnanom_full!(sim::Simulation)
     canoms = sim.now.columnanoms
-    @. canoms.full = canoms.load + canoms.litho + canoms.mantle
+    @. canoms.full = canoms.load + sim.p.maskactive * (canoms.litho + canoms.mantle)
     return nothing
 end
 
