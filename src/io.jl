@@ -26,78 +26,132 @@ end
 # NetCDF output
 ################################################################################
 
-io_dict = Dict{Symbol, Dict{String, String}}()
+io_dict = Dict{Symbol, Dict{String, Any}}()
 io_dict[:u] = Dict(
     "shortname" => "u",
     "longname" => "Viscous displacement",
     "units" => "m",
     "dims" => "x y t",
+    "map" => x -> x,
 )
 io_dict[:ue] = Dict(
     "shortname" => "ue",
     "longname" => "Elastic displacement",
     "units" => "m",
     "dims" => "x y t",
-)
-io_dict[:b] = Dict(
-    "shortname" => "b",
-    "longname" => "Bedrock elevation",
-    "units" => "m",
-    "dims" => "x y t",
-)
-io_dict[:z_ss] = Dict(
-    "shortname" => "z_ss",
-    "longname" => "Sea-surface height (SSH)",
-    "units" => "m",
-    "dims" => "x y t",
-)
-io_dict[:dudt] = Dict(
-    "shortname" => "dudt",
-    "longname" => "Viscous displacement rate",
-    "units" => "m/yr",
-    "dims" => "x y t",
-)
-io_dict[:dz_ss] = Dict(
-    "shortname" => "dz_ss",
-    "longname" => "SSH perturbation",
-    "units" => "m",
-    "dims" => "x y t",
-)
-io_dict[:maskgrounded] = Dict(
-    "shortname" => "maskgrounded",
-    "longname" => "Mask for grounded ice",
-    "units" => "1",
-    "dims" => "x y t",
-)
-io_dict[:H_ice] = Dict(
-    "shortname" => "Hice",
-    "longname" => "Ice thickness",
-    "units" => "m",
-    "dims" => "x y t",
-)
-io_dict[:H_water] = Dict(
-    "shortname" => "Hwater",
-    "longname" => "Water depth",
-    "units" => "m",
-    "dims" => "x y t",
+    "map" => x -> x,
 )
 io_dict[:u_x] = Dict(
     "shortname" => "u_x",
     "longname" => "Horizontal displacement in x",
     "units" => "m",
     "dims" => "x y t",
+    "map" => x -> x,
 )
 io_dict[:u_y] = Dict(
     "shortname" => "u_y",
     "longname" => "Horizontal displacement in y",
     "units" => "m",
     "dims" => "x y t",
+    "map" => x -> x,
+)
+io_dict[:dudt] = Dict(
+    "shortname" => "dudt",
+    "longname" => "Viscous displacement rate",
+    "units" => "mm/yr",
+    "dims" => "x y t",
+    "map" => x -> 1f3 .* x,     # Convert from m/yr to mm/yr
+)
+io_dict[:u_eq] = Dict(
+    "shortname" => "u_eq",
+    "longname" => "Equilibrium displacement",
+    "units" => "m",
+    "dims" => "x y t",
+    "map" => x -> x,
+)
+io_dict[:H_ice] = Dict(
+    "shortname" => "Hice",
+    "longname" => "Ice thickness",
+    "units" => "m",
+    "dims" => "x y t",
+    "map" => x -> x,
+)
+io_dict[:H_af] = Dict(
+    "shortname" => "Haf",
+    "longname" => "Ice thickness above floatation",
+    "units" => "m",
+    "dims" => "x y t",
+    "map" => x -> x,
+)
+io_dict[:H_water] = Dict(
+    "shortname" => "Hwater",
+    "longname" => "Water depth",
+    "units" => "m",
+    "dims" => "x y t",
+    "map" => x -> x,
+)
+io_dict[:z_b] = Dict(
+    "shortname" => "z_b",
+    "longname" => "Bedrock position",
+    "units" => "m",
+    "dims" => "x y t",
+    "map" => x -> x,
+)
+io_dict[:z_ss] = Dict(
+    "shortname" => "z_ss",
+    "longname" => "Sea-surface height (SSH)",
+    "units" => "m",
+    "dims" => "x y t",
+    "map" => x -> x,
+)
+io_dict[:dz_ss] = Dict(
+    "shortname" => "dz_ss",
+    "longname" => "SSH perturbation",
+    "units" => "m",
+    "dims" => "x y t",
+    "map" => x -> x,
+)
+io_dict[:maskgrounded] = Dict(
+    "shortname" => "maskgrounded",
+    "longname" => "Mask for grounded ice",
+    "units" => "1",
+    "dims" => "x y t",
+    "map" => x -> x,
+)
+io_dict[:maskocean] = Dict(
+    "shortname" => "maskocean",
+    "longname" => "Mask for ocean",
+    "units" => "1",
+    "dims" => "x y t",
+    "map" => x -> x,
 )
 io_dict[:z_bsl] = Dict(
     "shortname" => "z_bsl",
     "longname" => "Barystatic sea level",
     "units" => "m",
     "dims" => "t",
+    "map" => x -> x,
+)
+io_dict[:effective_viscosity] = Dict(
+    "shortname" => "effective_viscosity",
+    "longname" => "Effective viscosity",
+    "units" => "Pa s",
+    "dims" => "x y",
+    "map" => x -> log10(x),
+)
+io_dict[:tau] = Dict(
+    "shortname" => "tau",
+    "longname" => "Relaxation time",
+    "units" => "yr",
+    "dims" => "x y",
+    "map" => x -> x,
+)
+io_dict[:litho_thickness] = Dict(
+    "shortname" => "litho_thickness",
+    "longname" => "Lithosphere thickness",
+    "units" => "km",
+    "dims" => "x y",
+    "map" => x -> 1f-3 .* x,        # Convert from m to km
 )
 
 mutable struct NetcdfOutput{
@@ -109,15 +163,18 @@ mutable struct NetcdfOutput{
     buffer::Matrix{T}
     vars3D::Vector{Symbol}
     vars1D::Vector{Symbol}
+    params2D::Vector{Symbol}
     oc::OC
     k::Int
 end
 
 function NetcdfOutput(domain::RegionalDomain{T, L, M}, t, filename;
-    vars3D = [:u, :ue, :b, :dz_ss],
+    vars3D = [:u, :ue, :z_b, :dz_ss],
     vars1D = [:z_bsl],
+    params2D = [:effective_viscosity],
     Tout = Float32,
     output_crop = PaddedOutputCrop(0),
+    solid_earth_params = nothing,
 ) where {T<:AbstractFloat, L, M}
 
     isfile(filename) && rm(filename)
@@ -129,6 +186,7 @@ function NetcdfOutput(domain::RegionalDomain{T, L, M}, t, filename;
     xdim = NcDim("x", crop(domain.x, output_crop), xatts)
     ydim = NcDim("y", crop(domain.y, output_crop), yatts)
     tdim = NcDim("t", t, tatts)
+    buffer = crop(Matrix{Tout}(undef, domain.nx, domain.ny), output_crop)
 
     vars = NcVar[]
     for i in eachindex(vars3D)
@@ -148,19 +206,37 @@ function NetcdfOutput(domain::RegionalDomain{T, L, M}, t, filename;
         )
         push!(vars, NcVar(io_dict[j]["shortname"], [tdim]; atts = varatts, t = Tout))
     end
+    for i in eachindex(params2D)
+        j = params2D[i]
+        varatts = Dict(
+            "longname" => io_dict[j]["longname"],
+            "units" => io_dict[j]["units"],
+        )
+        push!(vars, NcVar(io_dict[j]["shortname"], [xdim, ydim]; atts = varatts, t = Tout))
+    end
 
     if occursin(".nc", filename)
         isfile(filename) && rm(filename)
         NetCDF.create(filename, vars) do nc
             nothing
         end
+
+        if solid_earth_params !== nothing
+            for i in eachindex(params2D)
+                j = params2D[i]
+                crop_promote!(buffer, solid_earth_params, j, Tout, M, output_crop)
+                NetCDF.open(filename, mode = NC_WRITE) do nc
+                    NetCDF.putvar(nc, io_dict[j]["shortname"], io_dict[j]["map"].(buffer))
+                end
+            end
+        end
+
         println("NetCDF file $filename was created correctly.")
     else
         @warn "NetCDF filename does not end with '.nc' and is therefore ignored."
     end
     
-    buffer = crop(Matrix{Tout}(undef, domain.nx, domain.ny), output_crop)
-    return NetcdfOutput(Tout.(t), filename, buffer, vars3D, vars1D, output_crop, 1)
+    return NetcdfOutput(Tout.(t), filename, buffer, vars3D, vars1D, params2D, output_crop, 1)
 end
 
 function crop_promote!(out, state, var, Tout, M, oc)
@@ -176,11 +252,6 @@ function write_nc!(ncout::NetcdfOutput{Tout}, state::CurrentState{T, M}, k::Int)
     for i in eachindex(ncout.vars3D)
         j = ncout.vars3D[i]
         crop_promote!(ncout.buffer, state, ncout.vars3D[i], Tout, M, ncout.oc)
-        # if M == Matrix{T}
-        #     ncout.buffer .= Tout.(getfield(state, ncout.vars3D[i]))
-        # else
-        #     ncout.buffer .= Tout.(Array(getfield(state, ncout.vars3D[i])))
-        # end
         NetCDF.open(ncout.filename, mode = NC_WRITE) do nc
             NetCDF.putvar(nc, io_dict[j]["shortname"], ncout.buffer,
                 start = [1, 1, k], count = [-1, -1, 1])
