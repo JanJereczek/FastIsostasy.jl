@@ -1,4 +1,217 @@
 ######################################################################################
+# Effect of mantle compressibility on effective viscosity
+######################################################################################
+
+abstract type AbstractCompressibility end
+
+struct CompressibleMantle end
+
+struct IncompressibleMantle end
+
+apply_compressibility!(eta, nu, compressibility::IncompressibleMantle) = eta
+
+function apply_compressibility!(eta, nu, compressibility::CompressibleMantle)
+    incompressible_poissonratio = 0.5f0
+    mantle_poissonratio = nu
+    compressibility_scaling = (1 + incompressible_poissonratio) / (1 + mantle_poissonratio)
+    eta .*= compressibility_scaling
+    return nothing
+end
+
+######################################################################################
+# Calibration to a specific 3D GIA model
+######################################################################################
+
+abstract type AbstractCalibration end
+
+struct NoCalibration end
+
+@kwdef struct SeakonCalibration{T}
+    ref_viscosity::T = 1f21
+end
+
+
+"""
+$(TYPEDSIGNATURES)
+
+Apply the `calibration` to the viscosity `eta`.
+"""
+apply_calibration!(eta, calibraton::NoCalibration) = eta
+
+function apply_calibration!(eta, calibration::SeakonCalibration)
+    eta .*= exp.(log10.(T(calibration.eta_ref) ./ eta))
+    return nothing
+end
+
+######################################################################################
+# Lumping of 3D viscosity into effective 2D viscosity
+######################################################################################
+
+abstract type AbstractViscosityLumping end
+@kwdef struct TimeDomainViscosityLumping
+    characteristic_loadlength::Float32 = 2f6
+end
+
+struct FreqDomainViscosityLumping end
+
+struct MeanViscosityLumping end
+
+struct MeanLogViscosityLumping end
+
+"""
+$(TYPEDSIGNATURES)
+
+Compute equivalent viscosity for multilayer model by recursively applying
+the formula for a halfspace and a channel from Lingle and Clark (1975).
+"""
+function get_effective_viscosity_and_scaling(domain, layer_viscosities, layer_boundaries,
+    maskactive, lumping::TimeDomainViscosityLumping)
+
+    characteristic_loadlength = lumping.characteristic_loadlength
+    T = eltype(domain.dx)
+
+    # Recursion has to start with half space = n-th layer:
+    effective_viscosity = layer_viscosities[:, :, end]
+    R = fill(T(1), domain.nx, domain.ny)
+
+    if size(layer_viscosities, 3) > 1
+        channel_viscosity = layer_viscosities[:, :, end - 1]
+        channel_thickness = layer_boundaries[:, :, end] - layer_boundaries[:, :, end - 1]
+        viscosity_ratio = channel_viscosity ./ effective_viscosity
+        
+        @inbounds for l in axes(layer_viscosities, 3)[1:end-1]
+            channel_viscosity .= layer_viscosities[:, :, end - l]
+            channel_thickness .= layer_boundaries[:, :, end - l + 1] -
+                layer_boundaries[:, :, end - l]
+            viscosity_ratio = channel_viscosity ./ effective_viscosity
+            effective_viscosity .*= channel_scaling_timedomain(domain, viscosity_ratio,
+                channel_thickness, characteristic_loadlength)
+        end
+    end
+    
+    return T.(effective_viscosity), T.(R)
+end
+
+function get_effective_viscosity_and_scaling(domain, layer_viscosities, layer_boundaries,
+    maskactive, lumping::FreqDomainViscosityLumping)
+
+    T = eltype(domain.dx)
+    R = fill(T(1), domain.nx, domain.ny)
+    effective_viscosity = layer_viscosities[:, :, end]
+
+    if size(layer_viscosities, 3) > 1
+        channel_thickness = similar(effective_viscosity)
+        viscosity_ratio = similar(effective_viscosity)
+        
+        @inbounds for l in axes(layer_viscosities, 3)[1:end-1]
+            channel_thickness .= layer_boundaries[:, :, end - l + 1] -
+                layer_boundaries[:, :, end - l]
+            viscosity_ratio .= layer_viscosities[:, :, end - l] ./ effective_viscosity
+            R .*= channel_scaling_freqdomain_2D(domain, viscosity_ratio, channel_thickness, maskactive)
+            @show extrema(R)
+        end
+
+    end
+
+    return T.(effective_viscosity), T.(R)
+end
+
+function get_effective_viscosity_and_scaling(domain, layer_viscosities, layer_boundaries,
+    maskactive, lumping::MeanViscosityLumping)
+    T = eltype(domain.dx)
+    R = fill(T(1), domain.nx, domain.ny)
+    T_lithosphere = layer_boundaries[:, :, 1]
+    T_uppermantle = layer_boundaries[:, :, end] .- T_lithosphere
+    effective_viscosity = mean_viscosity(T_lithosphere, T_uppermantle,
+        layer_viscosities, layer_boundaries)
+
+    return T.(effective_viscosity), T.(R)
+end
+
+function get_effective_viscosity_and_scaling(domain, layer_viscosities, layer_boundaries,
+    maskactive, lumping::MeanLogViscosityLumping)
+    T = eltype(domain.dx)
+    R = fill(T(1), domain.nx, domain.ny)
+    T_lithosphere = layer_boundaries[:, :, 1]
+    T_uppermantle = layer_boundaries[:, :, end] .- T_lithosphere
+    effective_viscosity = mean_viscosity(T_lithosphere, T_uppermantle,
+        log10.(layer_viscosities), layer_boundaries)
+    effective_viscosity = 10 .^ effective_viscosity
+    return T.(effective_viscosity), T.(R)
+end
+
+"""
+$(TYPEDSIGNATURES)
+
+"""
+function channel_scaling_timedomain(
+    domain::RegionalDomain{T, M},
+    visc_ratio::Matrix{T},
+    channel_thickness::Matrix{T},
+    characteristic_loadlength::T,
+) where {T<:AbstractFloat, M<:KernelMatrix{T}}
+
+    # kappa is the wavenumber of the harmonic load. (see Cathles 1975, p.43)
+    # for the default value, we assume this is related to the size of the domain!
+    kappa = T(π) / characteristic_loadlength
+    return channel_scaling(domain, kappa, channel_thickness, visc_ratio)
+end
+
+function channel_scaling_freqdomain_0D(
+    domain::RegionalDomain{T, M},
+    visc_ratio::T,
+    channel_thickness::T,
+) where {T<:AbstractFloat, M<:KernelMatrix{T}}
+
+    # kappa is here the pseudodiff operator in Fourier space (Bueler et al., 2007)
+    kappa = Array(domain.pseudodiff)
+    return channel_scaling(domain, kappa, channel_thickness, visc_ratio)
+end
+
+function channel_scaling(domain, kappa, channel_thickness, visc_ratio)
+    C = cosh.(channel_thickness .* kappa)
+    S = sinh.(channel_thickness .* kappa)
+    
+    num = null(domain)
+    denum = null(domain)
+
+    @. num += 2 * visc_ratio * C * S
+    @. num += (1 - visc_ratio ^ 2) * channel_thickness ^ 2 * kappa ^ 2
+    @. num += visc_ratio ^ 2 * S ^ 2 + C ^ 2
+
+    @. denum += (visc_ratio + 1 / visc_ratio) * C * S
+    @. denum += (visc_ratio - 1 / visc_ratio) * channel_thickness * kappa
+    @. denum += S ^ 2 + C ^ 2
+    
+    return num ./ denum
+end
+
+function channel_scaling_freqdomain_2D(
+    domain::RegionalDomain{T, M},
+    visc_ratio::Matrix{T},
+    channel_thickness::Matrix{T},
+    maskactive,
+) where {T<:AbstractFloat, M<:KernelMatrix{T}}
+
+    # actually only compute mean over maskactive
+    R = channel_scaling_freqdomain_0D(
+        domain,
+        mean(visc_ratio[maskactive]),
+        mean(channel_thickness),
+    )
+    return R
+end
+
+function mean_viscosity(T_lithosphere, T_uppermantle, eta, depth)
+    eta_mean = similar(T_lithosphere)
+    for I in CartesianIndices(eta_mean)
+        eta_mean[I] = mean(eta[I, T_uppermantle[I] + T_lithosphere[I] .>= depth[I, :] .>= T_lithosphere[I]])
+    end
+    return eta_mean
+end
+
+
+######################################################################################
 # General solid Earth properties
 ######################################################################################
 
@@ -29,10 +242,16 @@ at ``T_2``. This represents a homogenous case. For heterogeneous ones, simply ma
 `lb::Vector{Matrix}`, `lv::Vector{Matrix}` such that the vector elements represent the
 lateral variability of each layer on the grid of `domain::RegionalDomain`.
 """
-mutable struct SolidEarthParameters{T<:AbstractFloat, M<:KernelMatrix{T}}
+mutable struct SolidEarthParameters{
+    T,  # <:AbstractFloat,
+    M,  # <:KernelMatrix{T},
+    B,  # <:KernelMatrix{Bool},
+}
     effective_viscosity::M
+    pseudodiff_scaling::M
     litho_thickness::M
     litho_rigidity::M
+    maskactive::B
     litho_poissonratio::T
     mantle_poissonratio::T
     tau::M
@@ -44,6 +263,10 @@ end
 
 function SolidEarthParameters(
     domain::RegionalDomain{T, L, M};
+    lumping = FreqDomainViscosityLumping(),
+    compressibility = CompressibleMantle(),
+    calibration = NoCalibration(),
+    maskactive = domain.R .< Inf,
     layer_boundaries = T.([88e3, 400e3]),
     layer_viscosities = T.([1e19, 1e21]),        # (Pa*s) (Bueler 2007, Ivins 2022, Fig 12 WAIS)
     litho_youngmodulus = T(DEFAULT_LITHO_YOUNGMODULUS),              # (N/m^2)
@@ -52,8 +275,6 @@ function SolidEarthParameters(
     tau = T(DEFAULT_MANTLE_TAU),
     rho_uppermantle = T(DEFAULT_RHO_UPPERMANTLE),   # Mean density of topmost upper mantle (kg m^-3)
     rho_litho = T(DEFAULT_RHO_LITHO),               # Mean density of lithosphere (kg m^-3)
-    characteristic_loadlength = mean([domain.Wx, domain.Wy]),
-    reference_viscosity = T(1e21),
 ) where {T<:AbstractFloat, L, M}
 
     if tau isa Real
@@ -61,11 +282,11 @@ function SolidEarthParameters(
     end
     tau = kernelpromote(tau, domain.arraykernel)
 
-    if layer_boundaries isa Vector{<:Real}
+    if layer_boundaries isa Vector
         layer_boundaries = matrify(layer_boundaries, domain.nx, domain.ny)
     end
 
-    if layer_viscosities isa Vector{<:Real}
+    if layer_viscosities isa Vector
         layer_viscosities = matrify(layer_viscosities, domain.nx, domain.ny)
     end
 
@@ -73,33 +294,43 @@ function SolidEarthParameters(
     litho_thickness .= view(layer_boundaries, :, :, 1)
 
     litho_rigidity = get_rigidity.(litho_thickness, litho_youngmodulus, litho_poissonratio)
-    effective_viscosity = get_effective_viscosity(domain, layer_viscosities,
-        layer_boundaries, mantle_poissonratio, characteristic_loadlength,
-        reference_viscosity)
+    effective_viscosity, pseudodiff_scaling = get_effective_viscosity_and_scaling(
+        domain, layer_viscosities, layer_boundaries, maskactive, lumping)
 
-    litho_thickness, litho_rigidity, effective_viscosity = kernelpromote(
-        [litho_thickness, litho_rigidity, effective_viscosity], domain.arraykernel)
-    
-    litho_shearmodulus = litho_youngmodulus / (2 * (1 + litho_poissonratio))
+    apply_compressibility!(effective_viscosity, mantle_poissonratio, compressibility)
+    apply_calibration!(effective_viscosity, calibration)
+
+    litho_thickness, litho_rigidity, effective_viscosity, pseudodiff_scaling, maskactive =
+        kernelpromote( [litho_thickness, litho_rigidity, effective_viscosity,
+        pseudodiff_scaling, maskactive], domain.arraykernel)
+
+    pseudodiff_scaling = 1 ./ (pseudodiff_scaling .* domain.pseudodiff)
+
+    litho_shearmodulus = get_shearmodulus(litho_youngmodulus, litho_poissonratio)
 
     return SolidEarthParameters(
-        effective_viscosity,
-        litho_thickness, litho_rigidity, litho_poissonratio,
-        mantle_poissonratio, tau, litho_youngmodulus, litho_shearmodulus,
-        rho_uppermantle, rho_litho,
+        effective_viscosity, pseudodiff_scaling,
+        litho_thickness, litho_rigidity, kernelcollect(maskactive, domain),
+        litho_poissonratio, mantle_poissonratio, tau,
+        litho_youngmodulus, litho_shearmodulus, rho_uppermantle, rho_litho,
     )
 
 end
 
 """
-    get_rigidity(t::T, E::T, nu::T) where {T<:AbstractFloat}
+$(TYPEDSIGNATURES)
 
 Compute rigidity `D` based on thickness `t`, Young modulus `E` and Poisson ration `nu`.
 """
-function get_rigidity(t::T, E::T, nu::T) where {T<:AbstractFloat}
-    return (E * t^3) / (12 * (1 - nu^2))
-end
+get_rigidity(t, E, nu) = (E * t^3) / (12 * (1 - nu^2))
 
+"""
+$(TYPEDSIGNATURES)
+
+Compute shear modulus `G` based on Young modulus `E` and Poisson ratio `nu`, or based on
+seismic velocities.
+"""
+get_shearmodulus(youngmodulus, poissonratio) = youngmodulus / (2 * (1 + poissonratio))
 get_shearmodulus(m::ReferenceSolidEarthModel) = get_shearmodulus(m.density, m.Vsv, m.Vsh)
 get_shearmodulus(ρ, Vsv, Vsh) = ρ .* (Vsv + Vsh) ./ 2
 
@@ -182,120 +413,6 @@ function get_elastic_green(
         )
     end
     return elasticgreen
-end
-
-######################################################################################
-# ViscousMantle properties
-######################################################################################
-
-abstract type AbstractViscosityLumping end
-
-struct LocalViscosityLumping end
-# For now the only one implemented so we don't bother with using the struct.
-# In future, implement NeighborhoodViscosityLumping
-
-function maxwelltime_scaling(layer_viscosities, layer_shearmoduli)
-    return layer_shearmoduli[end] ./ layer_shearmoduli .* layer_viscosities
-end
-
-function maxwelltime_scaling!(layer_viscosities, layer_boundaries, m::ReferenceSolidEarthModel)
-    mu = get_shearmodulus(m)
-    layer_meandepths = (layer_boundaries[:, :, 1:end-1] + layer_boundaries[:, :, 2:end]) ./ 2
-    layer_meandepths = cat(layer_meandepths, layer_boundaries[:, :, end], dims = 3)
-    mu_itp = linear_interpolation(m.depth, mu)
-    layer_meanshearmoduli = layer_viscosities ./ 1e21 .* mu_itp.(layer_meandepths)
-    layer_viscosities .*= layer_meanshearmoduli[:, :, end] ./ layer_meanshearmoduli
-end
-
-"""
-    get_effective_viscosity(
-        layer_viscosities::Vector{KernelMatrix{T}},
-        layers_thickness::Vector{T},
-        domain::RegionalDomain{T, M},
-    ) where {T<:AbstractFloat}
-
-Compute equivalent viscosity for multilayer model by recursively applying
-the formula for a halfspace and a channel from Lingle and Clark (1975).
-"""
-function get_effective_viscosity(
-    domain::RegionalDomain{T, L, M},
-    layer_viscosities::Array{T, 3},
-    layer_boundaries::Array{T, 3},
-    mantle_poissonratio::T,
-    characteristic_loadlength::T,
-    reference_viscosity::T = 1e21;
-    correct_shearmoduluschange::Bool = true,
-) where {T<:AbstractFloat, L, M}
-
-    incompressible_poissonratio = T(0.5)
-    compressibility_scaling = (1 + incompressible_poissonratio) / (1 + mantle_poissonratio)
-
-    # Recursion has to start with half space = n-th layer:
-    effective_viscosity = layer_viscosities[:, :, end]
-
-    if size(layer_viscosities, 3) > 1
-        channel_viscosity = layer_viscosities[:, :, end - 1]
-        channel_thickness = layer_boundaries[:, :, end] - layer_boundaries[:, :, end - 1]
-        viscosity_ratio = channel_viscosity ./ effective_viscosity
-        
-        @inbounds for l in axes(layer_viscosities, 3)[1:end-1]
-            channel_viscosity .= layer_viscosities[:, :, end - l]
-            channel_thickness .= layer_boundaries[:, :, end - l + 1] -
-                layer_boundaries[:, :, end - l]
-            viscosity_ratio = channel_viscosity ./ effective_viscosity
-            effective_viscosity .*= three_layer_scaling(domain, viscosity_ratio,
-                channel_thickness, characteristic_loadlength)
-        end
-    end
-    effective_compressible_viscosity = effective_viscosity .* compressibility_scaling
-
-    if correct_shearmoduluschange
-        corrected_viscosity = seakon_calibration(effective_compressible_viscosity,
-            reference_viscosity)
-    else
-        corrected_viscosity = effective_compressible_viscosity
-    end
-    return corrected_viscosity
-end
-
-function seakon_calibration(eta::Matrix{T}, eta_ref) where {T<:AbstractFloat}
-    return exp.(log10.(T(eta_ref) ./ eta)) .* eta
-end
-
-"""
-    three_layer_scaling(domain::RegionalDomain, kappa::T, visc_ratio::T,
-        channel_thickness::T)
-
-Return the viscosity scaling for a three-layer model and based on a the wave
-number `kappa`, the `visc_ratio` and the `channel_thickness`.
-Reference: Bueler et al. 2007, below equation 15.
-"""
-function three_layer_scaling(
-    domain::RegionalDomain{T, M},
-    visc_ratio::Matrix{T},
-    channel_thickness::Matrix{T},
-    characteristic_loadlength::T,
-) where {T<:AbstractFloat, M<:KernelMatrix{T}}
-
-    # kappa is the wavenumber of the harmonic load. (see Cathles 1975, p.43)
-    # for the default value, we assume this is related to the size of the domain!
-    kappa = T(π) / characteristic_loadlength
-
-    C = cosh.(channel_thickness .* kappa)
-    S = sinh.(channel_thickness .* kappa)
-    
-    num = null(domain)
-    denum = null(domain)
-
-    @. num += 2 * visc_ratio * C * S
-    @. num += (1 - visc_ratio ^ 2) * channel_thickness ^ 2 * kappa ^ 2
-    @. num += visc_ratio ^ 2 * S ^ 2 + C ^ 2
-
-    @. denum += (visc_ratio + 1 / visc_ratio) * C * S
-    @. denum += (visc_ratio - 1 / visc_ratio) * channel_thickness * kappa
-    @. denum += S ^ 2 + C ^ 2
-    
-    return num ./ denum
 end
 
 ######################################################################################
@@ -428,7 +545,18 @@ get_relaxation_time_stronger(eta) = get_relaxation_time(eta, 0.20, 1.41)
 # τ1_high = get_relaxation_time(eta1, 0.20, 1.41)
 # Gives lb, ub = 524, 616 years for 1e21, which could be a caveat compared to Spada et al. (2011)
 
-# E = 66.0
-# He_lith = 88.0
-# nu = 0.28
-# D_lith = (E*1e9) * (He_lith*1e3)^3 / (12.0 * (1.0-nu^2))
+
+
+
+function maxwelltime_scaling(layer_viscosities, layer_shearmoduli)
+    return layer_shearmoduli[end] ./ layer_shearmoduli .* layer_viscosities
+end
+
+function maxwelltime_scaling!(layer_viscosities, layer_boundaries, m::ReferenceSolidEarthModel)
+    mu = get_shearmodulus(m)
+    layer_meandepths = (layer_boundaries[:, :, 1:end-1] + layer_boundaries[:, :, 2:end]) ./ 2
+    layer_meandepths = cat(layer_meandepths, layer_boundaries[:, :, end], dims = 3)
+    mu_itp = linear_interpolation(m.depth, mu)
+    layer_meanshearmoduli = layer_viscosities ./ 1e21 .* mu_itp.(layer_meandepths)
+    layer_viscosities .*= layer_meanshearmoduli[:, :, end] ./ layer_meanshearmoduli
+end

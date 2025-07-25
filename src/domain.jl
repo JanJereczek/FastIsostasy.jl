@@ -54,7 +54,6 @@ struct RegionalDomain{T<:AbstractFloat, L<:Matrix{T},
     correct_distortion::Bool
     null::M                     # a zero matrix of size nx x ny
     pseudodiff::M               # pseudodiff operator as matrix (Hadamard product)
-    pseudodiff_inv::M           # inverse of pseudodiff operator
     use_cuda::Bool
     arraykernel::Any            # Array or CuArray depending on chosen hardware
 end
@@ -156,5 +155,5 @@ function RegionalDomain(
     return RegionalDomain(Wx, Wy, nx, ny, mx, my, dx, dy, x, y, X, Y,
         i1, i2, j1, j2, convo_offset,
         R, Theta, Lat, Lon, K, K .* dx, K .* dy, (dx * dy) .* K .^ 2, correct_distortion,
-        null, pseudodiff, 1 ./ pseudodiff, use_cuda, arraykernel)
+        null, pseudodiff, use_cuda, arraykernel)
 end
