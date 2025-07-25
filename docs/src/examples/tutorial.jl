@@ -5,21 +5,21 @@ In this section, we will present some examples with idealised loads and solid-Ea
 
 ## 3D ➡ 2D Earth
 
-FastIsostasy relies on a (polar) stereographic projection. Let's first create `Omega::ComputationDomain` and visualise how this relates to a domain on a spherical Earth:
+FastIsostasy relies on a projection of the sperical Earth, which defaults to the polar stereographic one. Let's first create a `RegionalDomain` and visualise its grid:
 =#
 
 using CairoMakie, FastIsostasy
 
-W = 3000e3      # (m) half-width of the domain Wx = Wy
-n = 7           # implies an nx x ny grid with nx = ny = 2^n = 128.
-Omega = ComputationDomain(W, n)
+W = 3f6         # (m) half-width of the domain. For now assume Wx = Wy
+n = 7           # implies an nx x ny grid with nx = ny = 2^n.
+domain = RegionalDomain(W, n)
+
 fig = Figure(size = (1600, 800), fontsize = 24)
 ax1 = Axis3(fig[1, 1], title = "Original grid")
 ax2 = Axis3(fig[1, 2], title = "Projected grid")
-wireframe!(ax1, Omega.X .* Omega.K, Omega.Y .* Omega.K,
-    Omega.R .* cos.(deg2rad.(Omega.Lat)), color = :gray10, linewidth = 0.1)
-wireframe!(ax2, Omega.X .* Omega.K, Omega.Y .* Omega.K,
-    Omega.null, color = :gray10, linewidth = 0.1)
+wireframe!(ax1, domain.X, domain.Y, domain.R .* cos.(deg2rad.(domain.Lat)),
+    color = :gray10, linewidth = 0.1)
+wireframe!(ax2, domain.X, domain.Y, domain.null, color = :gray10, linewidth = 0.1)
 for ax in [ax1, ax2]
     zlims!(ax, (0, 5e6))
     hidedecorations!(ax)
@@ -28,23 +28,19 @@ end
 fig
 
 #=
-!!! note "Using other projections"
-    For now, FastIsostasy only supports the polar stereographic projection. Future releases will allow the user to define their own projection.
-
 The projection allows to treat the radially-layered, onion-like structure of the solid Earth as a superposition of horizontal layers. Furthermore, FastIsostasy reduces this 3D problem into a 2D problem by collapsing the depth dimension, mainly through the computation of an effective viscosity field that accounts for the superposition of layers with different viscosities. The user is required to provide the 3D information, which will then be used under the hood to compute the effective viscosity. This tutorial shows such an example.
 
 We want to render a situation similar to the one depicted below:
 
 ![Schematic representation of the three-layer set-up.](../assets/sketch_nlayer_model.png)
 
-Initializing a [`SolidEarthParameters`](@ref) with parameters corresponding to this situation automatically computes the conversion from a 3D to a 2D problem. Since we will compare our solution to an analytical one of a flat Earth, we exceptionally switch off the distortion correction, which accounts for the distortion factor `Omega.K` in the computation. This can be simply executed by running:
+Initializing a [`SolidEarthParameters`](@ref) with parameters corresponding to this situation automatically computes the conversion from a 3D to a 2D problem. Since we will compare our solution to an analytical one of a flat Earth, we exceptionally switch off the distortion correction, which accounts for the distortion factor `domain.K` in the computation. This can be simply executed by running:
 =#
 
-Omega = ComputationDomain(W, n, correct_distortion = false)
-c = PhysicalConstants()
+domain = RegionalDomain(W, n)
 lv = [1e19, 1e21]       # viscosity layers (Pa s)
 lb = [88e3, 400e3]      # depth of layer boundaries (m)
-p = SolidEarthParameters(Omega, layer_viscosities = lv, layer_boundaries = lb, rho_litho = 0.0)
+sep = SolidEarthParameters(domain, layer_viscosities = lv, layer_boundaries = lb, rho_litho = 0.0)
 extrema(p.effective_viscosity)
 
 #=
@@ -54,7 +50,7 @@ The next section shows how to use the now obtained `p::SolidEarthParameters` for
 
 ## Simple load and geometry
 
-We now apply a constant load, here a cylinder of ice with radius $$R = 1000 \, \mathrm{km}$$ and thickness $$H = 1 \, \mathrm{km}$$, over `Omega::ComputationDomain` introduced in [`SolidEarthParameters`](@ref). To formulate the problem conviniently, we use [`FastIsoProblem`](@ref), a struct containing the variables and options that are necessary to perform the integration over time. We can then simply apply `solve!(fip::FastIsoProblem)` to perform the integration of the ODE. Under the hood, the ODE is obtained from the PDE by applying a Fourier collocation scheme contained in [`lv_elva!`](@ref). The integration is performed according to `FastIsoProblem.diffeq::NamedTuple`, which contains the algorithm and optionally tolerances, maximum iteration number... etc.
+We now apply a constant load, here a cylinder of ice with radius $$R = 1000 \, \mathrm{km}$$ and thickness $$H = 1 \, \mathrm{km}$$, over `domain::RegionalDomain` introduced in [`SolidEarthParameters`](@ref). To formulate the problem conviniently, we use [`FastIsoProblem`](@ref), a struct containing the variables and options that are necessary to perform the integration over time. We can then simply apply `solve!(fip::FastIsoProblem)` to perform the integration of the ODE. Under the hood, the ODE is obtained from the PDE by applying a Fourier collocation scheme contained in [`lv_elva!`](@ref). The integration is performed according to `FastIsoProblem.diffeq::NamedTuple`, which contains the algorithm and optionally tolerances, maximum iteration number... etc.
 =#
 
 t_out = [0.0, 2e2, 6e2, 2e3, 5e3, 1e4, 5e4]     # vector of output time steps (yr)
@@ -63,16 +59,16 @@ pushfirst!(t_out, -εt)                          # append step to have Heaviside
 
 R = 1000e3                                      # ice disc radius (m)
 H = 1e3                                         # ice disc thickness (m)
-Hcylinder = uniform_ice_cylinder(Omega, R, H)   # field representing ice disk
+Hcylinder = uniform_ice_cylinder(domain, R, H)   # field representing ice disk
 
 t_Hice = [-εt, 0.0, t_out[end]]                 # ice history = Heaviside at t=0
-Hice = [zeros(Omega.nx, Omega.ny), Hcylinder, Hcylinder]
+Hice = [zeros(domain.nx, domain.ny), Hcylinder, Hcylinder]
 
-fip = FastIsoProblem(Omega, c, p, t_out, t_Hice, Hice, output = "sparse")
+fip = FastIsoProblem(domain, c, p, t_out, t_Hice, Hice, output = "sparse")
 solve!(fip)
 
 function plot3D(fip, k_idx)
-    X, Y, out = Array(fip.Omega.X), Array(fip.Omega.Y), fip.out
+    X, Y, out = Array(fip.domain.X), Array(fip.domain.Y), fip.out
     zl = extrema(out.ue[end] + out.u[end])
     fig = Figure(fontsize = 10)
     for j in eachindex(k_idx)
@@ -93,9 +89,9 @@ The figure above shows the total displacement at $$t = 0.6 \, \mathrm{kyr}$$ and
 fig = Figure()
 ax = Axis(fig[1, 1])
 cmap = cgrad(:jet, length(t_out), categorical = true)
-ii, jj = Omega.mx:Omega.nx, Omega.my
-x = Omega.X[ii, jj]
-r = Omega.R[ii, jj]
+ii, jj = domain.mx:domain.nx, domain.my
+x = domain.X[ii, jj]
+r = domain.R[ii, jj]
 
 for k in eachindex(t_out)[2:end]
     analytic_solution_r(r) = analytic_solution(r, years2seconds(t_out[k]),
@@ -113,13 +109,13 @@ fig
 #=
 ## GPU support
 
-For about $$n \geq 7$$, the present example can be computed even faster by using GPU parallelism. It could not represent less work from the user's perspective, as it boils down to calling [`ComputationDomain`](@ref) with an extra keyword argument:
+For about $$n \geq 7$$, the present example can be computed even faster by using GPU parallelism. It could not represent less work from the user's perspective, as it boils down to calling [`RegionalDomain`](@ref) with an extra keyword argument:
 
 ```julia
-Omega = ComputationDomain(W, n, use_cuda = true)
+domain = RegionalDomain(W, n, use_cuda = true)
 ```
 
-We then pass `Omega` to a `SolidEarthParameters` and a `FastIsoProblem`, which we solve as done above: that's it!
+We then pass `domain` to a `SolidEarthParameters` and a `FastIsoProblem`, which we solve as done above: that's it!
 
 !!! info "Only CUDA supported!"
     For now only Nvidia GPUs are supported and there is no plan of extending this compatibility at this point.
@@ -130,9 +126,9 @@ We then pass `Omega` to a `SolidEarthParameters` and a `FastIsoProblem`, which w
 As any high-level function, [`solve!`](@ref) has some limitations. An ice-sheet modeller typically wants to embed FastIsostasy within a time-stepping loop. This can be easily done by getting familiar with some intermediate-level functions like [`init`](@ref), [`step!`](@ref) and [`write_out!`](@ref):
 =#
 
-Omega = ComputationDomain(3000e3, n)
-p = SolidEarthParameters(Omega)
-fip = FastIsoProblem(Omega, c, p, t_out, t_Hice, Hice, output = "sparse")
+domain = RegionalDomain(3000e3, n)
+p = SolidEarthParameters(domain)
+fip = FastIsoProblem(domain, c, p, t_out, t_Hice, Hice, output = "sparse")
 
 update_diagnostics!(fip.now.dudt, fip.now.u, fip, 0.0)
 write_out!(fip.nout, fip.now)
@@ -153,9 +149,9 @@ fig = plot3D(fip, [lastindex(t_out) ÷ 2, lastindex(t_out)])
 ELRA is a GIA model that is commonly used in ice-sheet modelling. For the vast majority of applications, it is less accurate than LV-ELVA without providing any significant speed up [swierczek2024fastisostasy](@cite). However, it can be used by specifying adequate options:
 =#
 
-p = SolidEarthParameters(Omega, tau = 3e3)
+p = SolidEarthParameters(domain, tau = 3e3)
 opts = SolverOptions(deformation_model = :elra)
-fip = FastIsoProblem(Omega, c, p, t_out, t_Hice, Hice, opts = opts, output = "sparse")
+fip = FastIsoProblem(domain, c, p, t_out, t_Hice, Hice, opts = opts, output = "sparse")
 solve!(fip)
 fig = plot3D(fip, [lastindex(t_out) ÷ 2, lastindex(t_out)])
 

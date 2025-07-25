@@ -24,7 +24,7 @@ function main(N, isl; use_cuda = false, mask_bsl = true)
     mask_eais = mask_itp.(Omega.X .* 1e-3, Omega.Y .* 1e-3) .== 5
     sharp_tau = fill(tau_wais, Omega.nx, Omega.ny)
     sharp_tau[mask_eais] .= tau_eais
-    tau = blur(sharp_tau, Omega, 0.2)
+    tau = gaussian_smooth(sharp_tau, Omega, 0.2)
     tau[tau .< 2.0] .= tau_wais
     tau = years2seconds.(5.0 * 10 .^ (tau))
     p = LayeredEarth(Omega, tau = tau, layer_boundaries = lb)
@@ -35,7 +35,7 @@ function main(N, isl; use_cuda = false, mask_bsl = true)
     if isl
         k_lgm = argmax([mean(Hice_vec[k]) for k in eachindex(Hice_vec)])
         sharp_lgm_mask = Float64.(Hice_vec[k_lgm] .> 1e-3)
-        blurred_lgm = blur(sharp_lgm_mask, Omega, 0.05)
+        blurred_lgm = gaussian_smooth(sharp_lgm_mask, Omega, 0.05)
         blurred_lgm_mask = blurred_lgm .> 0.5 * maximum(blurred_lgm)
     else
         blurred_lgm_mask = Omega.X .< Inf
@@ -80,5 +80,5 @@ main(256, true, use_cuda = true)
 # mask_eais = mask_itp.(Omega.X .* 1e-3, Omega.Y .* 1e-3) .== 5
 # sharp_tau = fill(1e2, Omega.nx, Omega.ny)
 # sharp_tau[mask_eais] .= 3e3
-# tau = blur(sharp_tau, Omega, 0.1)
+# tau = gaussian_smooth(sharp_tau, Omega, 0.1)
 # heatmap(tau)
