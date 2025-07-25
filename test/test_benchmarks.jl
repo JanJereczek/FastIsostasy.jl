@@ -1,124 +1,85 @@
-function benchmark1_compare(Omega::ComputationDomain, fip, H, R)
+function benchmark1_compare(domain::RegionalDomain, sim, H, R)
     # Comparing to analytical results
-    ii, jj = slice_along_x(Omega)
+    ii, jj = slice_along_x(domain)
     fig, axs = comparison_figure(1)
-    x, y = Omega.X[ii, jj], Omega.Y[ii, jj]
-    cmap = cgrad(:jet, length(fip.out.t), categorical = true)
+    x, y = domain.X[ii, jj], domain.Y[ii, jj]
+    cmap = cgrad(:jet, length(sim.out.t), categorical = true)
     
-    for k in eachindex(fip.out.t)[2:end]
-        t = years2seconds(fip.out.t[k])
-        analytic_solution_r(r) = analytic_solution(r, t, fip.c, fip.p, H, R)
+    for k in eachindex(sim.out.t)[2:end]
+        t = years2seconds(sim.out.t[k])
+        analytic_solution_r(r) = analytic_solution(r, t, sim.c, sim.p, H, R)
         u_analytic = analytic_solution_r.( get_r.(x, y) )
 
-        mean_error = mean(abs.(fip.out.u[k][ii, jj] .- u_analytic))
-        max_error = maximum(abs.(fip.out.u[k][ii, jj] .- u_analytic))
+        mean_error = mean(abs.(sim.out.u[k][ii, jj] .- u_analytic))
+        max_error = maximum(abs.(sim.out.u[k][ii, jj] .- u_analytic))
 
         # @show mean_error, max_error
         @test mean_error < 6
         @test max_error < 7
 
-        update_compfig!(axs, [fip.out.u[k][ii, jj]], [u_analytic], cmap[k])
+        update_compfig!(axs, [sim.out.u[k][ii, jj]], [u_analytic], cmap[k])
     end
     return fig
 end
 
 function benchmark1()
     # Generating numerical results
-    Omega = ComputationDomain(3000e3, 7, correct_distortion = false)
-    c, p, t_out, R, H, t_Hice, Hice = benchmark1_constants(Omega)
-    fip = FastIsoProblem(Omega, c, p, t_out, t_Hice, Hice, output = "sparse")
-    # @btime update_diagnostics!($fip.now.dudt, $fip.now.u, $fip, $200.0)
-    # 640.930 μs (0 allocations: 0 bytes)
-    solve!(fip)
-    
-    println("Computation took $(fip.ncout.computation_time) s")
-    fig = benchmark1_compare(Omega, fip, H, R)
-    if SAVE_PLOTS
-        isdir("plots/benchmark1") || mkdir("plots/benchmark1")
-        save("plots/benchmark1/plot.png", fig)
-    end
+    T = Float64
+    use_cuda = false
+    sim = benchmark1_sim(T, use_cuda)
+    run!(sim)
+    println("Computation took $(sim.nout.computation_time) s")
 end
 
 function benchmark1_float32()
     T = Float32
-    Omega = ComputationDomain(3000f3, 7, correct_distortion = false)
-    c = PhysicalConstants{T}()
-    p = LayeredEarth(Omega, rho_litho = 0f0)
-    t_out = T.([0.0, 100.0, 500.0, 1500.0, 5000.0, 10_000.0, 50_000.0])
-    
-    εt = 1f-8
-    pushfirst!(t_out, -εt)
-    t_Hice = [-εt, 0f0, t_out[end]]
-
-    R, H = 1000f3, 1f3
-    Hcylinder = uniform_ice_cylinder(Omega, R, H)
-    Hice = [zeros(T, Omega.nx, Omega.ny), Hcylinder, Hcylinder]
-    fip = FastIsoProblem(Omega, c, p, t_out, t_Hice, Hice, output = "sparse")
-    solve!(fip)
-    println("Computation took $(fip.ncout.computation_time) s")
-
-    fig = benchmark1_compare(Omega, fip, H, R)
-    if SAVE_PLOTS
-        isdir("plots/benchmark1") || mkdir("plots/benchmark1")
-        save("plots/benchmark1/plot_float32.png", fig)
-    end
+    use_cuda = false
+    sim = benchmark1_sim(T, use_cuda)
+    run!(sim)
+    println("Computation took $(sim.nout.computation_time) s")
     return nothing
 end
 
 
 function benchmark1_external_loadupdate()
-    # Generating numerical results
-    Omega = ComputationDomain(3000e3, 7, correct_distortion = false)
-    c, p, t_out, R, H, t_Hice, Hice = benchmark1_constants(Omega)
-    fip = FastIsoProblem(Omega, c, p, t_out, t_Hice, Hice, output = "sparse")
-    integrator = init_integrator(fip)
+    T = Float32
+    use_cuda = false
+    sim = benchmark1_sim(T, use_cuda)
+    integrator = init_integrator(sim)
 
-    for k in eachindex(fip.out.t)[2:end]
-        step!(integrator, fip.out.t[k] - fip.out.t[k-1], true)
-    end
-    # println("Computation took $(fip.out.computation_time) s")
-
-    fig = benchmark1_compare(Omega, integrator.p, H, R)
-    if SAVE_PLOTS
-        isdir("plots/benchmark1") || mkdir("plots/benchmark1")
-        save("plots/benchmark1/plot_external_loadupdate.png", fig)
+    for k in eachindex(sim.nout.t)[2:end]
+        step!(integrator, sim.nout.t[k] - sim.nout.t[k-1], true)
     end
 end
 
 function benchmark1_gpu()
-    # Generating numerical results
-    Omega = ComputationDomain(3000e3, 7, use_cuda = true, correct_distortion = false)
-    c, p, t_out, R, H, t_Hice, Hice = benchmark1_constants(Omega)
-    fip = FastIsoProblem(Omega, c, p, t_out, t_Hice, Hice, output = "sparse")
-    solve!(fip)
-    # println("Computation took $(fip.ncout.computation_time) s")
-    Omega_cpu = ComputationDomain(Omega.Wx, Omega.Wy, Omega.nx, Omega.ny, use_cuda = false)
-
-    fig = benchmark1_compare(Omega_cpu, fip, H, R)
-    if SAVE_PLOTS
-        save("plots/benchmark1/plot_gpu.png", fig)
-    end
+    T = Float32
+    use_cuda = true
+    sim = benchmark1_sim(T, use_cuda)
+    run!(sim)
+    println("Computation took $(sim.nout.computation_time) s")
 end
 
 function benchmark2()
-    Omega = ComputationDomain(3000e3, 6, correct_distortion = false)
-    c = PhysicalConstants(rho_ice = 0.931e3)
+    T = Float32
+    domain = RegionalDomain(3000f3, 7, correct_distortion = false)
+    c = PhysicalConstants(rho_ice = T(0.931f3))
 
-    G, nu = 0.50605e11, 0.28        # shear modulus (Pa) and Poisson ratio of lithsphere
+    G, nu = 0.50605f11, 0.28f0
     E = G * 2 * (1 + nu)
-    lb = c.r_equator .- [6301e3, 5951e3, 5701e3]
-    p = LayeredEarth( Omega, layer_boundaries = lb,
-        layer_viscosities = [1e21, 1e21, 2e21], litho_youngmodulus = E,
-        litho_poissonratio = nu, rho_litho = 2.8e3)
+    lb = c.r_equator .- [6301f3, 5951f3, 5701f3]
+    p = SolidEarthParameters(domain, layer_boundaries = lb,
+        layer_viscosities = [1f21, 1f21, 2f21], litho_youngmodulus = E,
+        litho_poissonratio = nu, rho_litho = 2.8f3)
 
-    εt = 1e-8
+    εt = 1f-8
     t_out = [-εt, 0.0, 1.0, 1e3, 2e3, 5e3, 1e4, 1e5]
     t_Hice = [-εt, 0.0, t_out[end]]
-    b = fill(1e6, Omega.nx, Omega.ny)
-    ii, jj = slice_along_x(Omega)
-    theta = rad2deg.(Omega.Theta[ii, jj])
+    b = fill(1e6, domain.nx, domain.ny)
+    ii, jj = slice_along_x(domain)
+    theta = rad2deg.(domain.Theta[ii, jj])
     ii = ii[theta .< 20]
-    theta = rad2deg.(Omega.Theta[ii, jj])
+    theta = rad2deg.(domain.Theta[ii, jj])
     (_, _), X, Xitp = load_spada2011()
     opts = SolverOptions(interactive_sealevel = true, verbose = true,
         diffeq = DiffEqOptions(reltol = 1e-4))
@@ -129,22 +90,22 @@ function benchmark2()
             alpha = 10.0                        # max latitude (°) of uniform ice disc
             Hmax = 1000.0                       # uniform ice thickness (m)
             R = deg2rad(alpha) * c.r_equator    # disc radius (m), (Earth radius as in Spada)
-            H_ice = stereo_ice_cylinder(Omega, R, Hmax)
+            H_ice = stereo_ice_cylinder(domain, R, Hmax)
         elseif occursin("cap", case)
             alpha = 10.0                        # max latitude (°) of ice cap
             Hmax = 1500.0
-            H_ice = stereo_ice_cap(Omega, alpha, Hmax)
+            H_ice = stereo_ice_cap(domain, alpha, Hmax)
         end
-        Hice = [zeros(Omega.nx, Omega.ny), H_ice, H_ice]
+        Hice = [zeros(domain.nx, domain.ny), H_ice, H_ice]
         mask = collect(H_ice .> 1e-8)
-        fip = FastIsoProblem(Omega, c, p, t_out, t_Hice, Hice, opts = opts, b_0 = b,
+        sim = Simulation(domain, c, p, t_out, t_Hice, Hice, opts = opts, b_0 = b,
             maskactive = mask, output = "intermediate")
-        solve!(fip)
+        run!(sim)
         
         # Compare to 1D GIA models benchmark
         fig, axs = comparison_figure(3)
         u_0 = Xitp["u_$case"].(theta, 0)
-        cmap = cgrad(:jet, length(fip.out.t), categorical = true)
+        cmap = cgrad(:jet, length(sim.out.t), categorical = true)
 
         for k in eachindex(t_out)[3:end]
             tt = t_out[k]
@@ -152,9 +113,9 @@ function benchmark2()
             dudt_bm = Xitp["dudt_$case"].(theta, tt)
             n_bm = Xitp["n_$case"].(theta, tt)
 
-            u_fi = fip.out.u[k][ii, jj]
-            dudt_fi = fip.out.dudt[k][ii, jj] .* 1e3    # convert m/yr to mm/yr
-            dz_ss_fi = fip.out.dz_ss[k][ii, jj]
+            u_fi = sim.out.u[k][ii, jj]
+            dudt_fi = sim.out.dudt[k][ii, jj] .* 1e3    # convert m/yr to mm/yr
+            dz_ss_fi = sim.out.dz_ss[k][ii, jj]
 
             update_compfig!(axs, [u_fi, dudt_fi, dz_ss_fi], [u_bm, dudt_bm, n_bm], cmap[k])
 
@@ -174,21 +135,21 @@ function benchmark2()
 end
 
 function benchmark3()
-    Omega = ComputationDomain(3000e3, 6)
+    domain = RegionalDomain(3000e3, 6)
     c = PhysicalConstants()
 
     R = 1000e3                  # ice disc radius (m)
     H = 1e3                     # ice disc thickness (m)
-    Hcylinder = uniform_ice_cylinder(Omega, R, H)
-    Hice = [zeros(Omega.nx, Omega.ny), Hcylinder, Hcylinder]
+    Hcylinder = uniform_ice_cylinder(domain, R, H)
+    Hice = [zeros(domain.nx, domain.ny), Hcylinder, Hcylinder]
 
     t_out = [0.0, 100.0, 500.0, 1500.0, 5000.0, 10_000.0, 50_000.0]
     εt = 1e-8
     pushfirst!(t_out, -εt)
     t_Hice = [-εt, 0.0, t_out[end]]
 
-    ii, jj = slice_along_x(Omega)
-    x = Omega.X[ii, jj]
+    ii, jj = slice_along_x(domain)
+    x = domain.X[ii, jj]
     cmap = cgrad(:jet, length(t_out), categorical = true)
 
     cases = ["gaussian_lo_D", "gaussian_hi_D", "gaussian_lo_η", "gaussian_hi_η",
@@ -202,17 +163,17 @@ function benchmark3()
         case = cases[m]
         file = seakon_files[m]
         _, _, usk_itp = load_latychev_test3(case = file)
-        p, _, _ = choose_case(case, Omega)
+        p, _, _ = choose_case(case, domain)
         opts = SolverOptions(diffeq = DiffEqOptions(reltol = 1e-5), verbose = true)
 
-        fip = FastIsoProblem(Omega, c, p, t_out, t_Hice, Hice, opts = opts, output = "sparse")
-        solve!(fip)
+        sim = Simulation(domain, c, p, t_out, t_Hice, Hice, opts = opts, output = "sparse")
+        run!(sim)
 
         println("---------------")
         println("Case: $case")
         for k in eachindex(t_out)[2:end]
             u_bm = usk_itp.(x ./ 1e3, t_out[k])
-            u_fi = fip.out.u[k][ii, jj] + fip.out.ue[k][ii, jj]
+            u_fi = sim.out.u[k][ii, jj] + sim.out.ue[k][ii, jj]
             update_compfig!(axs, [u_fi], [u_bm], cmap[k])
             emean = mean(abs.(u_fi .- u_bm))
             emax = maximum(abs.(u_fi .- u_bm))

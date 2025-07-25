@@ -1,5 +1,5 @@
 @testset "ocean surface" begin
-    osc = OceanSurfaceChange()
+    osc = PiecewiseConstantBSL()
     z = -150:0.1:70
     srf = osc.A_itp.(z)
 
@@ -8,7 +8,7 @@
     dV = Vice / nV
     Vvec = -dV:-dV:-Vice
     zvec = zeros(nV)
-    osc = OceanSurfaceChange()
+    osc = PiecewiseConstantBSL()
     for i in 1:nV
         osc(-dV)
         zvec[i] = osc.z_k

@@ -35,7 +35,7 @@ function string2latexstring(x::String)
 end
 
 function plot_response(
-    Omega::ComputationDomain,
+    domain::ComputationDomain,
     sigma::Matrix{T},
     u_plot::Vector{Matrix{T}},
     panels::Vector{Tuple{Int, Int}},
@@ -45,7 +45,7 @@ function plot_response(
 
     fig = Figure(resolution=(1600, 900))
     ax1 = Axis(fig[1, 1][1, :], aspect=DataAspect())
-    hm = heatmap!(ax1, Omega.X, Omega.Y, sigma)
+    hm = heatmap!(ax1, domain.X, domain.Y, sigma)
     Colorbar(
         fig[1, 1][2, :],
         hm,
@@ -59,16 +59,16 @@ function plot_response(
         ax3D = Axis3(fig[i, j][1, :])
         sf = surface!(
             ax3D,
-            Omega.X,
-            Omega.Y,
+            domain.X,
+            domain.Y,
             u_plot[k],
             # colorrange = (-300, 50),
             colormap = :jet,
         )
         wireframe!(
             ax3D,
-            Omega.X,
-            Omega.Y,
+            domain.X,
+            domain.Y,
             u_plot[k],
             linewidth = 0.01,
             color = :black,
@@ -81,14 +81,14 @@ function plot_response(
             width = Relative(0.8),
         )
     end
-    plotname = "plots/test1/2D/$(case)_Nx$(Omega.nx)_ny$(Omega.ny)"
+    plotname = "plots/test1/2D/$(case)_Nx$(domain.nx)_ny$(domain.ny)"
     save("$plotname.png", fig)
     save("$plotname.pdf", fig)
     return fig
 end
 
 function slice_test3(
-    Omega::ComputationDomain,
+    domain::ComputationDomain,
     c::PhysicalConstants,
     t_vec::AbstractVector{T},
     t_plot::AbstractVector{T},
@@ -120,7 +120,7 @@ function slice_test3(
         U = Uvec[i]
         n1, n2, nt = size(U)
         slicex, slicey = n1÷2:n1, n2÷2
-        theta = rad2deg.( Omega.X[slicex, slicey] ./ c.r_equator)
+        theta = rad2deg.( domain.X[slicex, slicey] ./ c.r_equator)
 
         for l in eachindex(t_plot)
             t = t_plot[l]

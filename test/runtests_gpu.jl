@@ -12,8 +12,8 @@ init()
 const SAVE_PLOTS = true
 
 @testset "gpu derivatives" begin
-    Omega, P, u, uxx, uyy, uxy = derivative_stdsetup(true)
-    test_derivatives(P, u, Omega, uxx, uyy, uxy)
+    domain, P, u, uxx, uyy, uxy = derivative_stdsetup(true)
+    test_derivatives(P, u, domain, uxx, uyy, uxy)
 end
 
 @testset "FastIsostasy.jl" begin

@@ -1,24 +1,24 @@
 
 function benchmark5()
-    Omega = ComputationDomain(3000e3, 5)
+    domain = RegionalDomain(3000e3, 5)
     c = PhysicalConstants()
     lb = [88e3, 100e3, 200e3, 300e3]
     dims, logeta, logeta_itp = load_wiens2022(extrapolation_bc = Flat())
-    lv = 10 .^ cat([logeta_itp.(Omega.X, Omega.Y, z) for z in lb]..., dims=3)
-    p = LayeredEarth(Omega, layer_boundaries = lb, layer_viscosities = lv)
+    lv = 10 .^ cat([logeta_itp.(domain.X, domain.Y, z) for z in lb]..., dims=3)
+    p = SolidEarthParameters(domain, layer_boundaries = lb, layer_viscosities = lv)
     R, H = 1000e3, 1e3
-    Hcylinder = uniform_ice_cylinder(Omega, R, H, center = [-1000e3, -1000e3])
+    Hcylinder = uniform_ice_cylinder(domain, R, H, center = [-1000e3, -1000e3])
     t_Hice = [0.0, 1e-8, t_out[end]]
-    Hice = [zeros(Omega.nx, Omega.ny), Hcylinder, Hcylinder]
+    Hice = [zeros(domain.nx, domain.ny), Hcylinder, Hcylinder]
     t_out = collect(1e3:1e3:2e3)
-    fip = FastIsoProblem(Omega, c, p, t_out, t_Hice, Hice, output = "sparse")
-    solve!(fip)
+    sim = Simulation(domain, c, p, t_out, t_Hice, Hice, output = "sparse")
+    solve!(sim)
     ground_truth = copy(p.effective_viscosity)
 
     config = InversionConfig(N_iter = 15)
-    data = InversionData(copy(fip.out.t[2:end]), copy(fip.out.u[2:end]), copy([Hice, Hice]),
+    data = InversionData(copy(sim.out.t[2:end]), copy(sim.out.u[2:end]), copy([Hice, Hice]),
         config)
-    paraminv = InversionProblem(deepcopy(fip), config, data)
+    paraminv = InversionProblem(deepcopy(sim), config, data)
     solve!(paraminv)
     logeta, Gx, abserror = extract_inversion(paraminv)
 
