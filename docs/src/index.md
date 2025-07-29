@@ -3,7 +3,7 @@
 ❄ *Fast and flexible glacial isostatic adjustment on CPU and GPU.*
 
 !!! warning "Upgrade to v2.0!"
-FastIsostasy.jl has been refactored to fix some performance issues, offer a more versatile API and propose new features. FastIsostasy v2.0 is currently being tested and will be out soon. If you are using v1.0, we strongly encourage you to uprade to v2.0 when it comes out!
+    FastIsostasy.jl has been refactored to fix some performance issues, offer a more versatile API and propose new features. FastIsostasy v2.0 is currently being tested and will be out soon. If you are using v1.0, we strongly encourage you to uprade to v2.0 when it comes out!
 
 ![GlacialCycle](assets/isl-ice6g-N=350.gif)
 

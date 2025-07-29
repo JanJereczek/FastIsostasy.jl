@@ -7,7 +7,7 @@ cudainfo() = CUDA.versioninfo()
 global SECONDS_PER_YEAR = 60^2 * 24 * 365.25
 
 """
-    years2seconds(t::Real)
+$(TYPEDSIGNATURES)
 
 Convert input time `t` from years to seconds.
 """
@@ -16,7 +16,7 @@ function years2seconds(t::T) where {T<:AbstractFloat}
 end
 
 """
-    seconds2years(t::Real)
+$(TYPEDSIGNATURES)
 
 Convert input time `t` from seconds to years.
 """
@@ -25,7 +25,7 @@ function seconds2years(t::T) where {T<:AbstractFloat}
 end
 
 """
-    m_per_sec2mm_per_yr(dudt::Real)
+$(TYPEDSIGNATURES)
 
 Convert displacement rate `dudt` from ``m \\, s^{-1} ``to ``mm \\, \\mathrm{yr}^{-1} ``.
 """
@@ -38,8 +38,11 @@ end
 #####################################################
 
 not(x::Bool) = !x
+
+Base.zeros(domain::RegionalDomain) = zeros(eltype(domain.x), domain.nx, domain.ny)
+
 Base.fill(x::Real, sim::Simulation) = fill(x, sim.domain)
-Base.fill(x::Real, domain::RegionalDomain) = domain.arraykernel(fill(x, domain.nx, domain.ny))
+Base.fill(x, domain::RegionalDomain) = fill(eltype(domain.x)(x), domain.nx, domain.ny)
 
 approx_in(item, collection, tol) = any(abs.(collection .- item) .< tol)
 
@@ -50,7 +53,7 @@ function corner_matrix(T, nx, ny)
 end
 
 """
-    matrify(x, nx, ny)
+$(TYPEDSIGNATURES)
 
 Generate a vector of constant matrices from a vector of constants.
 """
@@ -71,8 +74,7 @@ end
 #####################################################
 
 """
-    gauss_distr(X::KernelMatrix{T}, Y::KernelMatrix{T},
-        mu::Vector{<:Real}, sigma::Matrix{<:Real})
+$(TYPEDSIGNATURES)
 
 Compute `Z = f(X,Y)` with `f` a Gaussian function parametrized by mean
 `mu` and covariance `sigma`.
@@ -113,7 +115,7 @@ end
 #####################################################
 
 """
-    get_quad_coeffs(T, n)
+$(TYPEDSIGNATURES)
 
 Return support points and associated coefficients with specified Type
 for Gauss-Legendre quadrature.
@@ -124,7 +126,7 @@ function get_quad_coeffs(T::Type, n::Int)
 end
 
 """
-    quadrature1D(f, n, x1, x2)
+$(TYPEDSIGNATURES)
 
 Compute 1D Gauss-Legendre quadrature of `f` between `x1` and `x2`
 based on `n` support points.
@@ -141,7 +143,7 @@ function quadrature1D(f::Union{Function, Interpolations.Extrapolation},
 end
 
 """
-    quadrature2D(f, x, w, x1, x2, y1, y2)
+$(TYPEDSIGNATURES)
 
 Return the integration of `f` over [`x1, x2`] x [`y1, y2`] with `x, w` some pre-computed
 support points and coefficients of the Gauss-Legendre quadrature.
@@ -168,7 +170,7 @@ function quadrature2D(
 end
 
 """
-    get_normalized_lin_transform(x1, x2)
+$(TYPEDSIGNATURES)
 
 Return parameters of linear function mapping `x1, x2` onto `-1, 1`.
 """
@@ -180,7 +182,7 @@ function get_normalized_lin_transform(x1::T, x2::T) where {T<:AbstractFloat}
 end
 
 """
-    normalized_lin_transform(y, m, p)
+$(TYPEDSIGNATURES)
 
 Apply normalized linear transformation with slope `m` and bias `p` on `y`.
 """
@@ -192,11 +194,7 @@ end
 # Kernel utils
 #####################################################
 
-function null(domain::RegionalDomain{T, L, M}) where {T, L, M}
-    return zeros(T, domain.nx, domain.ny)
-end
-
-kernelnull(domain) = domain.arraykernel(null(domain))
+kernelzeros(domain) = domain.arraykernel(zeros(domain))
 
 function kernelcollect(X, domain)
     if not(domain.use_cuda)
@@ -207,7 +205,7 @@ function kernelcollect(X, domain)
 end
 
 """
-    kernelpromote(X, arraykernel)
+$(TYPEDSIGNATURES)
 
 Promote X to the kernel (`Array` or `CuArray`) specified by `arraykernel`.
 """

@@ -61,7 +61,7 @@ struct RegionalDomain{T<:AbstractFloat, L<:Matrix{T},
     Dy::M                       # dy matrix accounting for distortion.  TODO: macro
     A::M                        # area (accounting for distortion).     TODO: macro
     correct_distortion::Bool
-    null::M                     # a zero matrix of size nx x ny
+    zeros::M                     # a zero matrix of size nx x ny
     pseudodiff::M               # pseudodiff operator as matrix (Hadamard product)
     use_cuda::Bool
     arraykernel::Any            # Array or CuArray depending on chosen hardware
@@ -126,7 +126,7 @@ function RegionalDomain(
 ) where {T<:AbstractFloat}
 
     X, Y = meshgrid(x, y)
-    null = fill(T(0), nx, ny)
+    zeros = fill(T(0), nx, ny)
     R = get_r.(X, Y)
 
     lonlat2target = Proj.Transformation(proj_lonlat,
@@ -155,7 +155,7 @@ function RegionalDomain(
     pseudodiff[1, 1] = 1e-3 * mean([pseudodiff[1,2], pseudodiff[2,1]])
     
     arraykernel = use_cuda ? CuArray : Array
-    null, K, pseudodiff = kernelpromote([null, K, pseudodiff], arraykernel)
+    zeros, K, pseudodiff = kernelpromote([zeros, K, pseudodiff], arraykernel)
 
     i1, i2 = samesize_conv_indices(nx, mx)
     j1, j2 = samesize_conv_indices(ny, my)
@@ -164,5 +164,5 @@ function RegionalDomain(
     return RegionalDomain(Wx, Wy, nx, ny, mx, my, dx, dy, x, y, X, Y,
         i1, i2, j1, j2, convo_offset,
         R, Theta, Lat, Lon, K, K .* dx, K .* dy, (dx * dy) .* K .^ 2, correct_distortion,
-        null, pseudodiff, use_cuda, arraykernel)
+        zeros, pseudodiff, use_cuda, arraykernel)
 end

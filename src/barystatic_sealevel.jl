@@ -47,7 +47,7 @@ struct InternalUpdateBSL <: AbstractUpdateBSL end
 struct ExternalUpdateBSL <: AbstractUpdateBSL end
 
 """
-    AbstractBSL
+$(TYPEDSIGNATURES)
 
 Abstract type to compute the evolution of the barystatic sea level.
 Available subtypes are:
@@ -68,7 +68,7 @@ update_bsl!(bsl, delta_V, t)
 abstract type AbstractBSL{T<:AbstractFloat} end
 
 """
-    ConstantBSL
+$(TYPEDSIGNATURES)
 
 A `mutable struct` containing:
 - `ref`: an instance of [`ReferenceBSL`](@ref).
@@ -90,7 +90,7 @@ end
 ConstantBSL(; ref = ReferenceBSL()) = ConstantBSL(ref, ref.z, ref.A)
 
 """
-    ConstantOceanSurfaceBSL{T}
+$(TYPEDSIGNATURES)
 
 A `mutable struct` containing:
 - `ref`: an instance of [`ReferenceBSL`](@ref).
@@ -109,7 +109,7 @@ end
 ConstantOceanSurfaceBSL(; ref = ReferenceBSL()) = ConstantOceanSurfaceBSL(ref, ref.z, ref.A)
 
 """
-    PiecewiseConstantBSL{T}
+$(TYPEDSIGNATURES)
 
 A `mutable struct` containing:
 - `ref`: an instance of [`ReferenceBSL`](@ref).
@@ -129,7 +129,7 @@ PiecewiseConstantBSL(; ref = ReferenceBSL()) =
     PiecewiseConstantBSL(ref, ref.z, ref.A)
 
 """
-    ImposedBSL
+$(TYPEDSIGNATURES)
 
 A `mutable struct` containing:
 - `ref`: an instance of [`ReferenceBSL`](@ref).
@@ -149,7 +149,7 @@ mutable struct ImposedBSL{T, R<:ReferenceBSL{T}} <: AbstractBSL{T}
 end
 
 """
-    CombinedBSL
+$(TYPEDSIGNATURES)
 
 A `mutable struct`containing:
 - `bsl1`: an [`ImposedBSL`](@ref).
@@ -165,7 +165,7 @@ mutable struct CombinedBSL{T, B1<:ImposedBSL, B2<:AbstractBSL} <: AbstractBSL{T}
 end
 
 """
-    update_bsl!(bsl::AbstractBSL, delta_V, t)
+$(TYPEDSIGNATURES)
 
 Update the BSL and ocean surface based on the input `delta_V` (in m^3) and
 on a subtype of [`AbstractBSL`](@ref).

@@ -1,4 +1,6 @@
 #=
+# 3D GIA benchmark
+
 After comparing our results against analytical and 1D numerical solution, the obvious next step is to compare our results against a 3D numerical solution. To this end, we reproduce Test 3 from Swierczek-Jereczek et al. (2024), where a 1D Earth structure is perturbed by a Gaussian field in 4 different ways:
 1. A reduction of the lithospheric thickness from 150 km (at margin of the domain) to 50 km (at the center of the domain).
 2. An increase of the lithospheric thickness from 150 km (at margin of the domain) to 250 km (at the center of the domain).
@@ -13,7 +15,7 @@ using FastIsostasy, CairoMakie, LinearAlgebra
 W, n = 3f6, 7
 domain = RegionalDomain(W, n)
 
-H_ice_0 = null(domain)
+H_ice_0 = zeros(domain)
 H_ice_1 = 1f3 .* (domain.R .< 1f6)
 t_ice = [0, 1f-8, 50f3]
 H_ice = [H_ice_0, H_ice_1, H_ice_1]

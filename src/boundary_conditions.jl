@@ -3,7 +3,7 @@
 ###############################################################################
 
 """
-    AbstractIceThickness
+$(TYPEDSIGNATURES)
 
 An abstract type that determines how the ice thickness is updated in the model.
 This is done by implementing the `update_ice!` function for different subtypes.
@@ -14,7 +14,7 @@ Available subtypes are:
 abstract type AbstractIceThickness end
 
 """
-    TimeInterpolatedIceThickness
+$(TYPEDSIGNATURES)
 
 A struct to update the ice thickness based on time interpolation.
 Contains:
@@ -48,7 +48,7 @@ without any internal update.
 struct ExternallyUpdatedIceThickness <: AbstractIceThickness end
 
 """
-    update_ice!(H, t, it::AbstractIceThickness)
+$(TYPEDSIGNATURES)
 
 Update the ice thickness `H` at time `t` using the method defined in `it`.
 """
@@ -75,7 +75,7 @@ struct TimeInterpolatedSedimentThickness <: AbstractSedimentThickness end
 ###############################################################################
 
 """
-    AbstractBCSpace
+$(TYPEDSIGNATURES)
 
 An abstract type representing the space in which boundary conditions are defined.
 This typically needs to be defined when initializing an [`AbstractBCSpace`](@ref).
@@ -86,14 +86,14 @@ Available subtypes are:
 abstract type AbstractBCSpace end
 
 """
-    RegularBCSpace <: AbstractBCSpace
+$(TYPEDSIGNATURES)
 
 Singleton struct to impose boundary conditions at the edges of the computation domain.
 """
 struct RegularBCSpace <: AbstractBCSpace end
 
 """
-    ExtendedBCSpace <: AbstractBCSpace
+$(TYPEDSIGNATURES)
 
 Singleton struct to impose boundary conditions at the edges of the extended
 computation domain, which naturally arises from convolutions.
@@ -105,7 +105,7 @@ struct ExtendedBCSpace <: AbstractBCSpace end
 #########################################################################
 
 """
-    AbstractBC
+$(TYPEDSIGNATURES)
 
 An abstract type representing a boundary condition in the context of a computational domain.
 Available subtypes are:
@@ -114,7 +114,7 @@ Available subtypes are:
 abstract type AbstractBC end
 
 """
-    OffsetBC{T} <: AbstractBC
+$(TYPEDSIGNATURES)
 
 A boundary condition that applies an offset to the values at the boundaries of a
 computational domain. Contains:
@@ -130,11 +130,11 @@ struct OffsetBC{T, M<:KernelMatrix{T}} <: AbstractBC
 end
 
 """
-    NoBC <: AbstractBC
+$(TYPEDSIGNATURES)
 
 A singleton struct representing the absence of a boundary condition.
 """
-struct NoBC end
+struct NoBC <: AbstractBC end
 
 """
     apply_bc!(X, bc::OffsetBC)
@@ -156,7 +156,7 @@ end
 #########################################################################
 
 """
-    CornerBC
+$(TYPEDSIGNATURES)
 
 Impose a Dirichlet-like boundary condition at the corners of the computational domain.
 """
@@ -166,7 +166,7 @@ struct CornerBC
 end
 
 """
-    BorderBC
+$(TYPEDSIGNATURES)
 
 Impose a Dirichlet-like boundary condition at the borders of the computational domain.
 """
@@ -176,7 +176,7 @@ struct BorderBC
 end
 
 """
-    DistanceWeightedBC
+$(TYPEDSIGNATURES)
 
 Impose a Dirichlet-like boundary condition at the borders of the computational domain,
 weighted by the distance from the center of the domain.
@@ -187,7 +187,7 @@ struct DistanceWeightedBC
 end
 
 """
-    MeanBC
+$(TYPEDSIGNATURES)
 
 Impose a mean value for the field.
 """
@@ -224,7 +224,7 @@ function norm!(W)
 end
 
 """
-    precompute_bc(bc::AbstractBC, sp::AbstractBCSpace, domain::RegionalDomain)
+$(TYPEDSIGNATURES)
 
 Precompute the boundary condition for the given computation domain.
 """

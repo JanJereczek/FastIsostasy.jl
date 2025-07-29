@@ -2,7 +2,7 @@
 # Physical constants
 #########################################################
 """
-    PhysicalConstants
+$(TYPEDSIGNATURES)
 
 Return a struct containing important physical constants.
 Comes with default values that can however be changed by the user, for instance by running:
@@ -31,7 +31,8 @@ end
 # Earth model
 #########################################################
 """
-    ReferenceSolidEarthModel
+$(TYPEDSIGNATURES)
+
 Return a struct with vectors containing the:
  - radius (distance from Earth center),
  - depth (distance from Earth surface),

@@ -19,7 +19,8 @@ end
 # Tools
 #########################################################
 """
-    GIATools(domain, c, solidearth)
+$(TYPEDSIGNATURES)
+
 Return a `struct` containing pre-computed tools to perform forward-stepping of the model.
 This includes the Green's functions for the computation of the lithosphere and the SSH
 perturbation, plans for FFTs, interpolators of the load and the viscosity over time and
@@ -89,9 +90,9 @@ function GIATools(domain, c, solidearth;
     pfft!, pifft! = choose_fft_plans(domain.K, domain.use_cuda)
 
     n_cplx_matrices = 3
-    realmatrices = [kernelnull(domain) for _ in 
+    realmatrices = [kernelzeros(domain) for _ in 
         eachindex(fieldnames(PreAllocated))[1:end-n_cplx_matrices]]
-    cplxmatrices = [complex.(kernelnull(domain)) for _ in 1:n_cplx_matrices]
+    cplxmatrices = [complex.(kernelzeros(domain)) for _ in 1:n_cplx_matrices]
     prealloc = PreAllocated(realmatrices..., cplxmatrices...)
     return GIATools(conv_helpers, viscous_convo, elastic_convo, dz_ss_convo,
         smooth_convo, pfft!, pifft!, prealloc)

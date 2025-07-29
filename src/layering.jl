@@ -1,5 +1,5 @@
 """
-    AbstractLayering{T<:AbstractFloat}
+$(TYPEDSIGNATURES)
 
 Abstract type for layering models. Subtypes should implement the `layer_boundaries` function.
 Available subtypes are:
@@ -11,7 +11,7 @@ Available subtypes are:
 abstract type AbstractLayering{T<:AbstractFloat} end
 
 """
-    UniformLayering{T} <: AbstractLayering{T}
+$(TYPEDSIGNATURES)
 
 Struct to enforce uniform layering when passed to [`get_layer_boundaries`](@ref).
 Contains:
@@ -24,7 +24,7 @@ Contains:
 end
 
 """
-    ParallelLayering{T} <: AbstractLayering{T}
+$(TYPEDSIGNATURES)
 
 Struct to enforce parallel layering when passed to [`get_layer_boundaries`](@ref).
 Contains:
@@ -40,7 +40,7 @@ end
 
 
 """
-    EqualizedLayering{T} <: AbstractLayering{T}
+$(TYPEDSIGNATURES)
 
 Struct to enforce equalized layering when passed to [`get_layer_boundaries`](@ref).
 Contains:
@@ -55,7 +55,7 @@ Contains:
 end
 
 """
-    FoldedLayering{T} <: AbstractLayering{T}
+$(TYPEDSIGNATURES)
 
 Struct to enforce folded layering when passed to [`get_layer_boundaries`](@ref).
 Contains:
@@ -70,7 +70,7 @@ Contains:
 end
 
 """
-    get_layer_boundaries(n_x, n_y, litho_thickness::Matrix{T}, layering::AbstractLayering{T})
+$(TYPEDSIGNATURES)
 
 Compute the layer boundaries for a given [`AbstractLayering`](@ref).
 Output is typically passed to [`SolidEarth`](@ref) to create a layered Earth model.
@@ -120,7 +120,7 @@ function get_layer_boundaries(n_x, n_y, litho_thickness, layering::FoldedLayerin
 end
 
 """
-    interpolate2layers(z, X, lb)
+$(TYPEDSIGNATURES)
 
 Interpolate the values of `X` at the layer boundaries `lb` using linear interpolation.
 This is typically used to interpolate the viscosity values at the layer boundaries, which

@@ -9,14 +9,14 @@ mutable struct ColumnAnomalies{T<:AbstractFloat, M<:KernelMatrix{T}}
 end
 
 function ColumnAnomalies(domain)
-    zero_columnanoms = [kernelnull(domain) for _ in eachindex(fieldnames(ColumnAnomalies))]
+    zero_columnanoms = [kernelzeros(domain) for _ in eachindex(fieldnames(ColumnAnomalies))]
     return ColumnAnomalies(zero_columnanoms...)
 end
 
 abstract type AbstractState end
 
 """
-    ReferenceState
+$(TYPEDSIGNATURES)
 
 Return a struct containing the reference state.
 """
@@ -41,7 +41,7 @@ struct ReferenceState{
 end
 
 """
-    CurrentState
+$(TYPEDSIGNATURES)
 
 Return a mutable struct containing the geostate which will be updated over the simulation.
 The geostate contains all the states of the [`Simulation`] to be solved.
@@ -81,16 +81,16 @@ function CurrentState(domain::RegionalDomain, ref::ReferenceState, z_bsl)
     return CurrentState(
         copy(ref.u),                # u
         copy(ref.ue),               # ue
-        kernelnull(domain),         # u_x
-        kernelnull(domain),         # u_y
-        kernelnull(domain),         # dudt
+        kernelzeros(domain),         # u_x
+        kernelzeros(domain),         # u_y
+        kernelzeros(domain),         # dudt
         copy(ref.u),                # u_eq
         copy(ref.H_ice),            # H_ice
         copy(ref.H_af),             # H_af
         copy(ref.H_water),          # H_water
         ColumnAnomalies(domain),    # columnanoms
         copy(ref.z_b),              # z_b
-        kernelnull(domain),         # dz_ss   (can init to 0 because diagnostic variable)
+        kernelzeros(domain),         # dz_ss   (can init to 0 because diagnostic variable)
         copy(ref.z_ss),             # z_ss
         copy(ref.V_af),             # V_af
         copy(ref.V_pov),            # V_pov

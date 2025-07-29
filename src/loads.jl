@@ -48,6 +48,11 @@ function columnanom_ice!(sim::Simulation)
     return nothing
 end
 
+"""
+$(TYPEDSIGNATURES)
+
+Update the water column based on the instance of `AbstractSealevelLoad`.
+"""
 function columnanom_water!(sim::Simulation, ol::InteractiveSealevelLoad)
     watercolumn!(sim)
     anom!(sim.now.columnanoms.seawater, sim.c.rho_seawater, sim.now.z_ss, sim.ref.z_ss)

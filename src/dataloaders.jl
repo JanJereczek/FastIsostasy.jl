@@ -1,7 +1,7 @@
 const isos_data = "https://github.com/JanJereczek/isostasy_data"
 
 """
-    load_dataset(name) → (dims), field, interpolator
+$(TYPEDSIGNATURES)
 
 Return the `dims::Tuple{Vararg{Vector}}`, the `field<:Array` and the `interpolator`
 corresponding to a data set defined by a unique `name::String`. For instance:

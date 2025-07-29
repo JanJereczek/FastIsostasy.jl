@@ -101,7 +101,7 @@ function update_dudt!(dudt, u, sim, t, mantle::MaxwellMantle,
 end
 
 """
-    update_deformation_rhs!(sim)
+$(TYPEDSIGNATURES)
 
 Update the right-hand side of the deformation equation.
 """
@@ -128,7 +128,7 @@ function update_deformation_rhs!(sim::Simulation, u)
 end
 
 """
-    horizontal_displacement(u, litho_thickness, domain)
+$(TYPEDSIGNATURES)
 
 Compute the horizontal displacement field from the vertical displacement field `u`.
 Equation used for this can be found at [https://en.wikipedia.org/wiki/Plate_theory].
@@ -136,8 +136,8 @@ Since we assume an isotropic material under pure bending, the in-plane displacem
 The mid-surface of the thin plate is assumed to be at `litho_thickness / 2`.
 """
 function thinplate_horizontal_displacement(u, litho_thickness, domain)
-    u_x = null(domain)
-    u_y = null(domain)
+    u_x = zeros(domain)
+    u_y = zeros(domain)
     thinplate_horizontal_displacement!(u_x, u_y, u, litho_thickness, domain)
     return u_x, u_y
 end
@@ -164,7 +164,7 @@ end
 # Lithosphere response
 #####################################################
 """
-    update_elasticresponse!(sim::Simulation)
+$(TYPEDSIGNATURES)
 
 Update the elastic response by convoluting the Green's function with the load anom.
 To use coefficients differing from [^Farrell1972], see [GIATools](@ref).

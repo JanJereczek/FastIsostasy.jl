@@ -23,12 +23,24 @@ get_shearmodulus(ρ, Vsv, Vsh) = ρ .* (Vsv + Vsh) ./ 2
 # Effect of mantle compressibility on effective viscosity
 ######################################################################################
 
+"""
+$(TYPEDSIGNATURES)
+"""
 abstract type AbstractCompressibility end
 
+"""
+$(TYPEDSIGNATURES)
+"""
 struct CompressibleMantle end
 
+"""
+$(TYPEDSIGNATURES)
+"""
 struct IncompressibleMantle end
 
+"""
+$(TYPEDSIGNATURES)
+"""
 apply_compressibility!(eta, nu, compressibility::IncompressibleMantle) = eta
 
 function apply_compressibility!(eta, nu, compressibility::CompressibleMantle)
@@ -43,10 +55,19 @@ end
 # Calibration to a specific 3D GIA model
 ######################################################################################
 
+"""
+$(TYPEDSIGNATURES)
+"""
 abstract type AbstractCalibration end
 
+"""
+$(TYPEDSIGNATURES)
+"""
 struct NoCalibration end
 
+"""
+$(TYPEDSIGNATURES)
+"""
 @kwdef struct SeakonCalibration{T}
     ref_viscosity::T = 1f21
 end
@@ -69,15 +90,31 @@ end
 # Lumping of 3D viscosity into effective 2D viscosity
 ######################################################################################
 
+"""
+$(TYPEDSIGNATURES)
+"""
 abstract type AbstractViscosityLumping end
+
+"""
+$(TYPEDSIGNATURES)
+"""
 @kwdef struct TimeDomainViscosityLumping
     characteristic_loadlength::Float32 = 2f6
 end
 
+"""
+$(TYPEDSIGNATURES)
+"""
 struct FreqDomainViscosityLumping end
 
+"""
+$(TYPEDSIGNATURES)
+"""
 struct MeanViscosityLumping end
 
+"""
+$(TYPEDSIGNATURES)
+"""
 struct MeanLogViscosityLumping end
 
 """
@@ -94,7 +131,7 @@ function get_effective_viscosity_and_scaling(domain, layer_viscosities, layer_bo
 
     # Recursion has to start with half space = n-th layer:
     effective_viscosity = layer_viscosities[:, :, end]
-    R = fill(T(1), domain.nx, domain.ny)
+    R = fill(1, domain)
 
     if size(layer_viscosities, 3) > 1
         channel_viscosity = layer_viscosities[:, :, end - 1]
@@ -118,7 +155,7 @@ function get_effective_viscosity_and_scaling(domain, layer_viscosities, layer_bo
     maskactive, lumping::FreqDomainViscosityLumping)
 
     T = eltype(domain.dx)
-    R = fill(T(1), domain.nx, domain.ny)
+    R = fill(1, domain)
     effective_viscosity = layer_viscosities[:, :, end]
 
     if size(layer_viscosities, 3) > 1
@@ -143,7 +180,7 @@ end
 function get_effective_viscosity_and_scaling(domain, layer_viscosities, layer_boundaries,
     maskactive, lumping::MeanViscosityLumping)
     T = eltype(domain.dx)
-    R = fill(T(1), domain.nx, domain.ny)
+    R = fill(1, domain)
     T_lithosphere = layer_boundaries[:, :, 1]
     T_uppermantle = layer_boundaries[:, :, end] .- T_lithosphere
     effective_viscosity = mean_viscosity(T_lithosphere, T_uppermantle,
@@ -155,7 +192,7 @@ end
 function get_effective_viscosity_and_scaling(domain, layer_viscosities, layer_boundaries,
     maskactive, lumping::MeanLogViscosityLumping)
     T = eltype(domain.dx)
-    R = fill(T(1), domain.nx, domain.ny)
+    R = fill(1, domain)
     T_lithosphere = layer_boundaries[:, :, 1]
     T_uppermantle = layer_boundaries[:, :, end] .- T_lithosphere
     effective_viscosity = mean_viscosity(T_lithosphere, T_uppermantle,
@@ -166,7 +203,6 @@ end
 
 """
 $(TYPEDSIGNATURES)
-
 """
 function channel_scaling_timedomain(
     domain::RegionalDomain{T, M},
@@ -196,8 +232,8 @@ function channel_scaling(domain, kappa, channel_thickness, visc_ratio)
     C = cosh.(channel_thickness .* kappa)
     S = sinh.(channel_thickness .* kappa)
     
-    num = null(domain)
-    denum = null(domain)
+    num = zeros(domain)
+    denum = zeros(domain)
 
     @. num += 2 * visc_ratio * C * S
     @. num += (1 - visc_ratio ^ 2) * channel_thickness ^ 2 * kappa ^ 2
@@ -239,8 +275,7 @@ end
 ######################################################################################
 
 """
-    build_greenintegrand(distance::Vector{T}, 
-        greenintegrand_coeffs::Vector{T}) where {T<:AbstractFloat}
+$(TYPEDSIGNATURES)
 
 Compute the integrands of the Green's function resulting from a load at a given
 `distance` and based on provided `greenintegrand_coeffs`.
@@ -259,8 +294,7 @@ function build_greenintegrand(
 end
 
 """
-    get_loadgreen(r::T, rm::Vector{T}, greenintegrand_coeffs::Vector{T},     
-        interp_greenintegrand_::Interpolations.Extrapolation) where {T<:AbstractFloat}
+$(TYPEDSIGNATURES)
 
 Compute the integrands of the Green's function resulting from a load at a given
 `distance` and based on provided `greenintegrand_coeffs`.
@@ -283,20 +317,20 @@ function get_loadgreen(
 end
 
 """
-    get_elastic_green(domain, quad_support, quad_coeffs)
+$(TYPEDSIGNATURES)
 
 Integrate load response over field by using 2D quadrature with specified
 support points and associated coefficients.
 """
 function get_elastic_green(
-    domain::RegionalDomain{T, M},
-    greenintegrand_function::Function,
-    quad_support::Vector{T},
-    quad_coeffs::Vector{T},
-) where {T<:AbstractFloat, M<:KernelMatrix{T}}
+    domain::RegionalDomain,
+    greenintegrand_function,
+    quad_support,
+    quad_coeffs,
+)
 
     dx, dy = domain.dx, domain.dy
-    elasticgreen = fill(T(0), domain.nx, domain.ny)
+    elasticgreen = zeros(domain)
 
     @inbounds for i = 1:domain.nx, j = 1:domain.ny
         p = i - domain.mx - 1
@@ -319,7 +353,7 @@ end
 ######################################################################################
 
 """
-    get_kei(filt, L_w, dx, dy; T = Float64)
+$(TYPEDSIGNATURES)
 
 Calculate the Kelvin filter in 2D.
 
@@ -343,7 +377,7 @@ function get_kei(domain::RegionalDomain{T, <:Any, <:Any}, L_w) where
 
     # Load tabulated values and init filt before filling with loop
     rn_vals, kei_vals = load_viscous_kelvin_function(T)
-    filt = null(domain)
+    filt = zeros(domain)
     for j = -n2:n2
         for i = -n2:n2
             x = i*dx
@@ -363,7 +397,7 @@ function get_kei(domain::RegionalDomain{T, <:Any, <:Any}, L_w) where
 end
 
 """
-    get_kei_value(r, L_w, rn_vals, kei_vals)
+$(TYPEDSIGNATURES)
 
 Calculate the Kelvin function (kei) value based on the radius from the point load `r`,
 the flexural length scale `L_w`, and the arrays of normalized radii `rn_vals` and
@@ -401,7 +435,7 @@ function get_kei_value(r, L_w, rn_vals, kei_vals)
 end
 
 """
-    get_flexural_lengthscale(litho_rigidity, rho_uppermantle, g)
+$(TYPEDSIGNATURES)
 
 Compute the flexural length scale, based on Coulon et al. (2021), Eq. in text after Eq. 3.
 The flexural length scale will be on the order of 100km.
@@ -420,7 +454,7 @@ function get_flexural_lengthscale(litho_rigidity, rho_uppermantle, g)
 end
 
 """
-    calc_viscous_green(GV, kei2D, L_w, D_lith, dx, dy)
+$(TYPEDSIGNATURES)
 
 Calculate the viscous Green's function. Note that L_w contains information about
 the density of the upper mantle.

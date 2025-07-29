@@ -15,9 +15,9 @@ bib = CitationBibliography(
 )
 
 Literate.markdown("src/examples/benchmark_analytic.jl", "src/examples"; credit = false)
-Literate.markdown("src/examples/alernative_models.jl", "src/examples"; credit = false)
 Literate.markdown("src/examples/benchmark_1D.jl", "src/examples"; credit = false)
 Literate.markdown("src/examples/benchmark_3D.jl", "src/examples"; credit = false)
+Literate.markdown("src/examples/alternative_models.jl", "src/examples"; credit = false)
 Literate.markdown("src/examples/glacialcycle.jl", "src/examples"; credit = false)
 
 example_pages = [
@@ -52,7 +52,7 @@ makedocs(
     authors = "Jan Swierczek-Jereczek",
     pages = PAGES,
     doctest = CI,
-    draft = true,
+    draft = false,
     plugins = [bib],
     checkdocs = :none,
     warnonly = true,

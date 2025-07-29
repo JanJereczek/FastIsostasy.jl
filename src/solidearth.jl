@@ -3,7 +3,7 @@
 ##############################################################
 
 """
-    AbstractLithosphere
+$(TYPEDSIGNATURES)
 
 Available subtypes are:
 - [`RigidLithosphere`](@ref)
@@ -13,14 +13,14 @@ Available subtypes are:
 abstract type AbstractLithosphere end
 
 """
-    RigidLithosphere
+$(TYPEDSIGNATURES)
 
 Assume a rigid lithosphere, i.e. the elastic deformation is neglected.
 """
 struct RigidLithosphere <: AbstractLithosphere end
 
 """
-    LaterallyConstantLithosphere
+$(TYPEDSIGNATURES)
 
 Assume a laterally constant lithospheric thickness (and rigidity) across the domain.
 This generally improves the performance of the solver, but is less realistic.
@@ -28,7 +28,7 @@ This generally improves the performance of the solver, but is less realistic.
 struct LaterallyConstantLithosphere <: AbstractLithosphere end
 
 """
-    LaterallyVariableLithosphere
+$(TYPEDSIGNATURES)
 
 Assume a laterally variable lithospheric thickness (and rigidity) across the domain.
 This generally improves the realism of the model, but is more computationally expensive.
@@ -40,7 +40,7 @@ struct LaterallyVariableLithosphere <: AbstractLithosphere end
 ##############################################################
 
 """
-    AbstractMantle
+$(TYPEDSIGNATURES)
 
 Available subtypes are:
 - [`RigidMantle`](@ref)
@@ -50,14 +50,14 @@ Available subtypes are:
 abstract type AbstractMantle end
 
 """
-    RigidMantle
+$(TYPEDSIGNATURES)
 
 Assume a rigid mantle that does not deform.
 """
 struct RigidMantle <: AbstractMantle end
 
 """
-    RelaxedMantle
+$(TYPEDSIGNATURES)
 
 Assume a relaxed mantle that deforms according to a relaxation time.
 This is generally less realistic and offers worse performance than a viscous mantle.
@@ -66,7 +66,7 @@ It is only included for legacy purpose (e.g. comparison among solvers).
 struct RelaxedMantle <: AbstractMantle end
 
 """
-    MaxwellMantle
+$(TYPEDSIGNATURES)
 
 Assume a viscous mantle that deforms according to a viscosity.
 This is the most realistic mantle model and generally offers the best performance.
@@ -75,7 +75,7 @@ It is the default mantle model used in the solver.
 struct MaxwellMantle <: AbstractMantle end
 
 """
-    BurgersMantle
+$(TYPEDSIGNATURES)
 
 Not implemented yet!
 """
@@ -94,7 +94,7 @@ const DEFAULT_MANTLE_POISSONRATIO = 0.28
 const DEFAULT_MANTLE_TAU = 855.0
 
 """
-    SolidEarth(domain; layer_boundaries, layer_viscosities)
+$(TYPEDSIGNATURES)
 
 Return a struct containing all information related to the lateral variability of
 solid-Earth parameters. To initialize with values other than default, run:
@@ -161,7 +161,7 @@ function SolidEarth(
 ) where {T<:AbstractFloat, L, M}
 
     if tau isa Real
-        tau = fill(tau, domain.nx, domain.ny)
+        tau = fill(tau, domain)
     end
     tau = kernelpromote(tau, domain.arraykernel)
 

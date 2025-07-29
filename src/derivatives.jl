@@ -194,7 +194,7 @@ end
 
 # Fourier
 """
-    get_differential_fourier(W, N2)
+$(TYPEDSIGNATURES)
 
 Compute the matrices representing the differential operators in the fourier space.
 """

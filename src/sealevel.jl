@@ -54,7 +54,7 @@ It contains:
 end
 
 """
-    update_dz_ss!(sim::Simulation)
+$(TYPEDSIGNATURES)
 
 Update the SSH perturbation `dz_ss` by convoluting the Green's function with the load anom.
 """
@@ -73,7 +73,7 @@ function update_dz_ss!(sim::Simulation, sl::LaterallyConstantSeaSurface)
 end
 
 """
-    get_dz_ss_green(sim::Simulation)
+$(TYPEDSIGNATURES)
 
 Return the Green's function used to compute the SSH perturbation `dz_ss` as in [^Coulon2021].
 """
@@ -89,7 +89,7 @@ function unbounded_dz_ssgreen(R, c::PhysicalConstants)
 end
 
 """
-    update_z_ss!(sim::Simulation)
+$(TYPEDSIGNATURES)
 
 Update the sea-level by adding the various contributions as in [coulon-contrasting-2021](@cite).
 Here, the constant term is used to impose a zero dz_ss perturbation in the far field rather
@@ -135,7 +135,7 @@ total_volume(sim::Simulation) = sim.now.V_af * sim.c.rho_ice / sim.c.rho_seawate
     sim.now.V_den # + sim.now.V_pov
 
 """
-    update_V_af!(sim::Simulation)
+$(TYPEDSIGNATURES)
 
 Update the volume contribution from ice above floatation as in [goelzer-brief-2020](@cite) (eq. 13).
 Note: we do not use (eq. 1) as it is only a special case of (eq. 13) that does not
@@ -148,7 +148,7 @@ function update_V_af!(sim::Simulation)
 end
 
 """
-    update_V_den!(sim::Simulation)
+$(TYPEDSIGNATURES)
 
 Update the volume contribution associated with the density difference between meltwater and
 sea water, as in [goelzer-brief-2020](@cite) (eq. 10).
@@ -161,7 +161,7 @@ function update_V_den!(sim::Simulation)
 end
 
 """
-    update_V_pov!(sim::Simulation)
+$(TYPEDSIGNATURES)
 
 Update the volume contribution to the ocean (from isostatic adjustement in ocean regions),
 which corresponds to the "potential ocean volume" in [goelzer-brief-2020](@cite) (eq. 14).

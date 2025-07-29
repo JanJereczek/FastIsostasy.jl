@@ -1,18 +1,34 @@
+"""
+$(TYPEDSIGNATURES)
+
+"""
 abstract type AbstractOutputCrop end
 
+"""
+$(TYPEDSIGNATURES)
+
+"""
 struct PaddedOutputCrop <: AbstractOutputCrop
     pad::Int
 end
 
-crop(x::V, c::PaddedOutputCrop) where {V<:AbstractVector} = x[c.pad+1:end-c.pad]
-crop(X::M, c::PaddedOutputCrop) where {M<:AbstractMatrix}= X[c.pad+1:end-c.pad, c.pad+1:end-c.pad]
+"""
+$(TYPEDSIGNATURES)
 
+"""
 struct AsymetricOutputCrop <: AbstractOutputCrop
     pad_x1::Int
     pad_x2::Int
     pad_y1::Int
     pad_y2::Int
 end
+
+"""
+$(TYPEDSIGNATURES)
+
+"""
+crop(x::V, c::PaddedOutputCrop) where {V<:AbstractVector} = x[c.pad+1:end-c.pad]
+crop(X::M, c::PaddedOutputCrop) where {M<:AbstractMatrix}= X[c.pad+1:end-c.pad, c.pad+1:end-c.pad]
 
 function crop(x::V, c::AsymetricOutputCrop) where {V<:AbstractVector}
     return x[c.pad_x1+1:end-c.pad_x2]
@@ -279,8 +295,7 @@ end
 ################################################################################
 
 """
-
-    NativeOutput{T<:AbstractFloat}
+$(TYPEDSIGNATURES)
 
 Return a mutable struct containing the native output which will be updated over the simulation.
 

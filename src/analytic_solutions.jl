@@ -1,5 +1,5 @@
 """
-    analytic_solution(r, t, c, solidearth, H0, R0, domains; n_quad_support)
+$(TYPEDSIGNATURES)
 
 Return the analytic solution of the bedrock displacement resulting from a
 cylindrical ice load with radius `R0` and height `H0` on a flat Earth represented

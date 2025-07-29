@@ -59,26 +59,21 @@ include("coordinates.jl")
 # export TimeInterpolation0D, TimeInterpolation2D, interpolate!
 
 # barystatic_sealevel.jl
-export AbstractUpdateBSL, InternalUpdateBSL, ExternalUpdateBSL, ReferenceBSL, AbstractBSL
-export ConstantBSL, ConstantOceanSurfaceBSL, PiecewiseConstantBSL
+export AbstractUpdateBSL, InternalUpdateBSL, ExternalUpdateBSL, ReferenceBSL
+export AbstractBSL, ConstantBSL, ConstantOceanSurfaceBSL, PiecewiseConstantBSL
+export PiecewiseLinearBSL, ImposedBSL, CombinedBSL
 export update_bsl!
 
 # domain.jl
-export RegionalDomain, GlobalDomain
+export AbstractDomain, RegionalDomain, GlobalDomain
 
 # boundary_conditions.jl
+export BoundaryConditions
 export AbstractIceThickness, TimeInterpolatedIceThickness, ExternallyUpdatedIceThickness
-export RegularBCSpace, ExtendedBCSpace
-export CornerBC, BorderBC, DistanceWeightedBC, BoundaryConditions
-# export update_ice!, apply_bc!, precompute_bc
-
-# models.jl
-export Model
-export AbstractLithosphere, AbstractMantle, AbstractSealevelLoad, AbstractSeaSurfaceElevation
-export RigidLithosphere, LaterallyConstantLithosphere, LaterallyVariableLithosphere
-export RigidMantle, RelaxedMantle, MaxwellMantle
-export NoSealevelLoad, InteractiveSealevelLoad
-export LaterallyConstantSeaSurface, LaterallyVariableSeaSurface
+export AbstractBCSpace, RegularBCSpace, ExtendedBCSpace
+export AbstractBC, OffsetBC, NoBC
+export CornerBC, BorderBC, DistanceWeightedBC, MeanBC
+export apply_bc!
 
 # constants.jl
 export PhysicalConstants    #, ReferenceSolidEarthModel
@@ -109,14 +104,13 @@ export reinit_structs_cpu, meshgrid, kernelcollect
 
 export get_quad_coeffs, get_r, gauss_distr, generate_gaussian_field
 export uniform_ice_cylinder, stereo_ice_cylinder, stereo_ice_cap
-export null, not, cudainfo, kernelpromote, kernelnull
+export zeros, not, cudainfo, kernelpromote, kernelzeros
 
 # derivatives.jl
 export update_second_derivatives!   #, dxx!, dyy!, FiniteDiffParams
 
 # loads.jl
-# no export here, as it is only used internally
-export height_above_floatation, watercolumn
+export height_above_floatation, watercolumn, columnanom_water!
 
 # topography.jl
 # export update_Haf!, update_bedrock!
@@ -125,16 +119,29 @@ export get_maskgrounded, get_maskocean
 
 # sealevel.jl
 export SeaLevel
-# export update_dz_ss!, get_dz_ss_green, update_z_ss!, update_sealevel!
-# export update_V_af!, update_V_den!, update_V_pov!, total_volume
+export AbstractSeaSurface, AbstractSealevelLoad
+export NoSealevelLoad, InteractiveSealevelLoad
+export LaterallyConstantSeaSurface, LaterallyVariableSeaSurface
+export update_dz_ss!
 
 # material.jl
-export AbstractCalibration, NoCalibration, SeakonCalibration
-export AbstractCompressibility, IncompressibleMantle, CompressibleMantle
+export AbstractCalibration, NoCalibration, SeakonCalibration, apply_calibration!
+
+export AbstractCompressibility, IncompressibleMantle, CompressibleMantle, apply_compressibility!
+
 export AbstractViscosityLumping, TimeDomainViscosityLumping
 export FreqDomainViscosityLumping, MeanViscosityLumping, MeanLogViscosityLumping
-export SolidEarth
+export get_effective_viscosity_and_scaling
+
 export get_relaxation_time, get_relaxation_time_weaker, get_relaxation_time_stronger
+export get_rigidity, get_shearmodulus, get_elastic_green, get_flexural_lengthscale
+export calc_viscous_green
+
+# solidearth.jl
+export SolidEarth
+export AbstractLithosphere, AbstractMantle
+export RigidLithosphere, LaterallyConstantLithosphere, LaterallyVariableLithosphere
+export RigidMantle, RelaxedMantle, MaxwellMantle
 
 # deformation.jl
 export update_dudt!, update_deformation_rhs!, thinplate_horizontal_displacement
@@ -155,21 +162,7 @@ export load_latychev_test3, load_latychev2023_ICE6G
 export DiffEqOptions, SolverOptions, Simulation, run!, init_integrator, step!
 export update_diagnostics!
 
-# FastIsostasyMakieExt
-function plot_transect end
-export plot_transect
-
-function plot_load end
-export plot_load
-
-function plot_earth end
-export plot_earth
-
-function plot_out_at_time end
-export plot_out_at_time
-
-function plot_out_over_time end
-export plot_out_over_time
+include("plots.jl")
 
 # inversion.jl
 export InversionConfig, InversionData, InversionProblem, ParameterReduction

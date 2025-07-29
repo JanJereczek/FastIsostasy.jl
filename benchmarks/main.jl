@@ -4,7 +4,7 @@ W, n = 3f6, 6
 use_cuda = false
 Omega = RegionalComputationDomain(W, n, use_cuda = use_cuda)
 
-H_ice_0 = kernelnull(Omega)
+H_ice_0 = kernelzeros(Omega)
 H_ice_1 = 1f3 .* (Omega.R .< 1f6)
 t_ice = [0, 1, 50f3]
 H_ice = [H_ice_0, H_ice_1, H_ice_1]

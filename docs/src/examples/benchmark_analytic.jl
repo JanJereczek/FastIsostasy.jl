@@ -1,4 +1,8 @@
 #=
+# Analytical benchmark
+
+## Explicit time stepping (recommended)
+
 In this example, we want to compute the viscous displacement of the upper mantle resulting from a cylindrical ice load with a radius of 1000 km and a thickness of 1 km. To do so, we first generate the computation domain and the load:
 =#
 
@@ -9,7 +13,7 @@ W, n = 3f6, 7
 domain = RegionalDomain(W, n)
 
 # Load: 0 at the beginning; cylinder of radius 1000 km and thickness 1 km afterwards
-H_ice_0 = null(domain)
+H_ice_0 = zeros(domain)
 H_ice_1 = 1f3 .* (domain.R .< 1f6)
 fig = plot_load(domain, H_ice_1)
 
@@ -56,6 +60,8 @@ println("Computation time using explicit time stepping: $(sim.nout.computation_t
 #=
 This is the (compilation + computation) time that was required to approximate the viscous displacement field over 50 kyr for a domain of 128x128 points!
 
+## Implicit time stepping
+
 If the Earth structure is laterally constant (i.e. the lithospheric thickness and the mantle viscosity do not vary in x and y), the performance can be improved by using an implicit time stepping, as derived by Bueler et al. (2007). This can be achieved by specifying the lithosphere as `RigidLithosphere()` or as `LaterallyConstantLithosphere()` and requires to set a fixed time step via the `DiffEqOptions` in the `SolverOptions`:
 =#
 
@@ -77,8 +83,8 @@ The results appear to be comprable with the previously obtained ones! However, t
 println("Computation time using implicit time stepping: $(sim_implicit.nout.computation_time)")
 
 #=
-!!! warning
-If you are not sure whether your Earth structure is laterally constant, you should not use the implicit time stepping. The results will be wrong if the lithosphere thickness or the mantle viscosity vary in x and y.
+!!! warning "Implicit time stepping is very specific"
+    If you are not sure whether your Earth structure is laterally constant, you should not use the implicit time stepping. The results will be wrong if the lithosphere thickness or the mantle viscosity vary in x and y.
 
 All of the computations shown above are performed with `Float32` as floating point precision. It is easy to switch to `Float64`, by passing arguments as such (e.g. `W = 3e6`). This will increase the accuracy of the results, but also the computation time. The default is `Float32`, which is sufficient for most applications.
 

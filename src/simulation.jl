@@ -76,10 +76,10 @@ function Simulation(
     T = eltype(domain.R),
     tspan = extrema(bcs.ice_thickness.t_vec),
     opts = SolverOptions(),
-    u_ref = null(domain),
-    ue_ref = null(domain),
-    dz_ss_ref = null(domain),
-    z_b_ref = fill(1f6, domain.nx, domain.ny),
+    u_ref = zeros(domain),
+    ue_ref = zeros(domain),
+    dz_ss_ref = zeros(domain),
+    z_b_ref = fill(1f6, domain),
     ncout = NetcdfOutput(domain, T[], ""),
     nout = NativeOutput(t = T[]),
     c = PhysicalConstants{T}(),
@@ -95,7 +95,7 @@ function Simulation(
     tools = GIATools(domain, c, solidearth)
 
     # Initialise the reference state
-    H_ice_ref = kernelnull(domain)
+    H_ice_ref = kernelzeros(domain)
     apply_bc!(H_ice_ref, tspan[1], bcs.ice_thickness)
 
     u_ref, ue_ref, dz_ss_ref, z_b_ref, H_ice_ref = kernelpromote([u_ref, ue_ref,
@@ -275,7 +275,7 @@ function write_nc!(sim::Simulation)
 end
 
 """
-    update_diagnostics!(dudt, u, sim, t)
+$(TYPEDSIGNATURES)
 
 Update all the diagnostics variables, i.e. all fields of `sim.now` apart
 from the displacement, which requires an integrator.

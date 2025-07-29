@@ -1,12 +1,12 @@
 """
-    get_r(x::T, y::T) where {T<:Real}
+$(TYPEDSIGNATURES)
 
 Get euclidean distance of point (x, y) to origin.
 """
 get_r(x::T, y::T) where {T<:Real} = sqrt(x^2 + y^2)
 
 """
-    meshgrid(x, y)
+$(TYPEDSIGNATURES)
 
 Return a 2D meshgrid spanned by `x, y`.
 """
@@ -16,7 +16,7 @@ function meshgrid(x::V, y::V) where {T<:AbstractFloat, V<:AbstractVector{T}}
 end
 
 """
-    dist2angulardist(r::Real)
+$(TYPEDSIGNATURES)
 
 Convert Euclidean to angular distance along great circle.
 """
@@ -26,7 +26,7 @@ function dist2angulardist(r::T) where {T<:AbstractFloat}
 end
 
 """
-    lon360tolon180(lon, X)
+$(TYPEDSIGNATURES)
 
 Convert longitude and field from `lon=0:360` to `lon=-180:180`.
 """
@@ -38,7 +38,7 @@ function lon360tolon180(lon, X)
 end
 
 """
-    XY2LonLat(X, Y, proj)
+$(TYPEDSIGNATURES)
 
 Convert Cartesian coordinates `(X, Y)` to longitude-latitude `(Lon, Lat)`
 using the projection `proj`.
@@ -51,7 +51,7 @@ function XY2LonLat(X, Y, proj)
 end
 
 """
-    scalefactor(Lat, lat_s; kwargs...)
+$(TYPEDSIGNATURES)
 
 Compute scaling factor of Lambert conformal conic projection for a given `Lat::AbstractMatrix`.
 This follows the example *Polar aspect with know scale factor*, beginning on page 314 of
@@ -76,7 +76,7 @@ function scalefactor(
 end
 
 """
-    lambert_t(phi; e = 0.0819919)
+$(TYPEDSIGNATURES)
 
 Compute `t` following (Eq. 15-9) of [snyder-projections-1987](@citet) for a given latitude
 `phi` and eccentricity `e`.
@@ -84,7 +84,7 @@ Compute `t` following (Eq. 15-9) of [snyder-projections-1987](@citet) for a give
 lambert_t(phi; e = 0.0819919) = tan(π/4+phi/2) / ((1+e*sin(phi))/(1 - e * sin(phi)))^(e/2)
 
 """
-    lambert_m(phi; e = 0.0819919)
+$(TYPEDSIGNATURES)
 
 Compute `m` following (Eq. 14-15) of [snyder-projections-1987](@citet) for a given latitude
 `phi` and eccentricity `e`.
@@ -92,7 +92,7 @@ Compute `m` following (Eq. 14-15) of [snyder-projections-1987](@citet) for a giv
 lambert_m(phi; e = 0.0819919) = cos(phi) / sqrt(1 - e^2 * sin(phi)^2)
 
 """
-    lambert_rho(r, mc, t, tc)
+$(TYPEDSIGNATURES)
 
 Compute `rho` following (Eq. 21-34) of [snyder-projections-1987](@citet) for given
 `r`, `mc`, and `t` and `tc`.
@@ -100,7 +100,7 @@ Compute `rho` following (Eq. 21-34) of [snyder-projections-1987](@citet) for giv
 lambert_rho(r, mc, t, tc) = r .* mc .* t ./ tc
 
 """
-    lambert_k(rho, r, m)
+$(TYPEDSIGNATURES)
 
 Compute `k` following (Eq. 21-32) of [snyder-projections-1987](@citet) for given
 `rho`, `r`, and `m`.
@@ -109,8 +109,7 @@ lambert_k(rho, r, m) = rho ./ r ./ m
 
 
 """
-    scalefactor(lat::T, lon::T, lat_0::T, lon_0::T) where {T<:Real}
-    scalefactor(lat::M, lon::M, lat_0::T, lon_0::T) where {T<:Real, M<:KernelMatrix{T}}
+$(TYPEDSIGNATURES)
 
 Compute scaling factor of stereographic projection for a given `(lat, lon)` and origin
 `(lat_0, lon_0)`. Angles must be provided in radians. Reference:

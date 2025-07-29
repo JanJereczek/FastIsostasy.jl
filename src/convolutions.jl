@@ -56,7 +56,7 @@ function ConvolutionPlanHelpers(kernel::KernelMatrix{T}; pad_val = 0) where T
 end
 
 """
-    ConvolutionPlan
+$(TYPEDSIGNATURES)
 
 A struct that contains:
  - p_rfft: the real-valued FFT plan
@@ -111,7 +111,7 @@ end
 struct EmptyConvolution end
 
 """
-    samesize_conv!(output, input, convplan, domain, bc, bcspace)
+$(TYPEDSIGNATURES)
 """
 function samesize_conv!(output, input, p::EmptyConvolution, h, domain)
     return nothing
@@ -177,7 +177,7 @@ end
 
 
 """
-    samesize_conv_indices(N, M)
+$(TYPEDSIGNATURES)
 
 Get the start and end indices required for a [`samesize_conv`](@ref)
 """

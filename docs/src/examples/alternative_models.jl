@@ -1,7 +1,7 @@
 #=
-## Alternative models
+# Alternative models
 
-### ELRA
+## ELRA
 
 Sometimes people might want to use ELRA (LeMeur & Huybrechts, 1996):
 =#
@@ -11,7 +11,7 @@ using FastIsostasy, CairoMakie
 T, W, n = Float32, 3f6, 7
 domain = RegionalDomain(W, n, correct_distortion = false)
 
-H_ice_0 = null(domain)
+H_ice_0 = zeros(domain)
 H_ice_1 = 1f3 .* (domain.R .< 1f6)
 t_ice = [0, 1, 5f4]
 H_ice = [H_ice_0, H_ice_1, H_ice_1]
@@ -35,9 +35,8 @@ println("Took $(sim.nout.computation_time) seconds!")
 fig = plot_transect(sim, [:u])
 
 #=
-## Alternative models
 
-### ELRA with 2D relaxation time
+## ELRA with 2D relaxation time
 
 Sometimes people might want to use ELRA with 2D maps of the relaxation time (Van Calcar et al., 2025)
 =#

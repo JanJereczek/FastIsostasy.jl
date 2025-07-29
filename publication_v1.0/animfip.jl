@@ -39,7 +39,7 @@ function anim(path::String, target::String)
     # grmask = [Union{Float64, missing}.(mask) for mask in fip.out.maskgrounded]
     # flmask = [Float64.(mask) for mask in fip.out.maskgrounded]
     Omega = fip.Omega
-    null = zeros(Omega.nx, Omega.ny)
+    zeros = zeros(Omega.nx, Omega.ny)
     grmask = [zeros(Union{Float64, Missing}, Omega.nx, Omega.ny) for _ in fip.out.t]
     flmask = [zeros(Union{Float64, Missing}, Omega.nx, Omega.ny) for _ in fip.out.t]
 
