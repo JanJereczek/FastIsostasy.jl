@@ -1,5 +1,3 @@
-using CairoMakie
-using DelimitedFiles
 using DSP
 using FastIsostasy
 using Interpolations
