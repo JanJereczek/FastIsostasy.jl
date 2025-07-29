@@ -123,7 +123,6 @@ function get_quad_coeffs(T::Type, n::Int)
     return T.(x), T.(w)
 end
 
-
 """
     quadrature1D(f, n, x1, x2)
 
@@ -221,23 +220,6 @@ function kernelpromote(X, arraykernel)
 end
 kernelpromote(X::Vector, arraykernel) = [arraykernel(x) for x in X]
 
-"""
-    reinit_structs_cpu(domain, p)
-
-Reinitialize `domain::RegionalDomain` and `p::SolidEarthParameters` on the CPU, mostly
-for post-processing purposes.
-"""
-function reinit_structs_cpu(domain::RegionalDomain{T, L, M}, p::SolidEarthParameters{T, M}
-    ) where {T<:AbstractFloat, L<:Matrix{T}, M<:KernelMatrix{T}}
-
-    Omega_cpu = RegionalDomain(domain.Wx, domain.Wy, domain.nx, domain.ny, use_cuda = false)
-    p_cpu = SolidEarthParameters(
-        Omega_cpu;
-        layer_boundaries = Array(p.layer_boundaries),
-        layer_viscosities = Array(p.layer_viscosities),
-    )
-    return Omega_cpu, p_cpu
-end
 
 # function remake!(sim::Simulation)
 

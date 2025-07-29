@@ -37,10 +37,10 @@ include("boundary_conditions.jl")
 include("constants.jl")
 include("layering.jl")
 include("material.jl")
+include("solidearth.jl")
 include("convolutions.jl")
 include("tools.jl")
 include("state.jl")
-include("models.jl")
 include("io.jl")
 include("simulation.jl")
 include("loads.jl")
@@ -74,10 +74,10 @@ export CornerBC, BorderBC, DistanceWeightedBC, BoundaryConditions
 
 # models.jl
 export Model
-export AbstractLithosphere, AbstractMantle, AbstractOceanLoad, AbstractSeaSurfaceElevation
+export AbstractLithosphere, AbstractMantle, AbstractSealevelLoad, AbstractSeaSurfaceElevation
 export RigidLithosphere, LaterallyConstantLithosphere, LaterallyVariableLithosphere
 export RigidMantle, RelaxedMantle, MaxwellMantle
-export NoOceanLoad, InteractiveOceanLoad
+export NoSealevelLoad, InteractiveSealevelLoad
 export LaterallyConstantSeaSurface, LaterallyVariableSeaSurface
 
 # constants.jl
@@ -124,6 +124,7 @@ export height_above_floatation, watercolumn
 export get_maskgrounded, get_maskocean
 
 # sealevel.jl
+export SeaLevel
 # export update_dz_ss!, get_dz_ss_green, update_z_ss!, update_sealevel!
 # export update_V_af!, update_V_den!, update_V_pov!, total_volume
 
@@ -132,7 +133,7 @@ export AbstractCalibration, NoCalibration, SeakonCalibration
 export AbstractCompressibility, IncompressibleMantle, CompressibleMantle
 export AbstractViscosityLumping, TimeDomainViscosityLumping
 export FreqDomainViscosityLumping, MeanViscosityLumping, MeanLogViscosityLumping
-export SolidEarthParameters
+export SolidEarth
 export get_relaxation_time, get_relaxation_time_weaker, get_relaxation_time_stronger
 
 # deformation.jl
@@ -157,6 +158,18 @@ export update_diagnostics!
 # FastIsostasyMakieExt
 function plot_transect end
 export plot_transect
+
+function plot_load end
+export plot_load
+
+function plot_earth end
+export plot_earth
+
+function plot_out_at_time end
+export plot_out_at_time
+
+function plot_out_over_time end
+export plot_out_over_time
 
 # inversion.jl
 export InversionConfig, InversionData, InversionProblem, ParameterReduction

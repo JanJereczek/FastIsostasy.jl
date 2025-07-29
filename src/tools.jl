@@ -19,7 +19,7 @@ end
 # Tools
 #########################################################
 """
-    GIATools(domain, c, p)
+    GIATools(domain, c, solidearth)
 Return a `struct` containing pre-computed tools to perform forward-stepping of the model.
 This includes the Green's functions for the computation of the lithosphere and the SSH
 perturbation, plans for FFTs, interpolators of the load and the viscosity over time and
@@ -45,15 +45,20 @@ struct GIATools{
     prealloc::PA
 end
 
-function GIATools(domain, c, p; quad_precision::Int = 4, rhs_smooth_radius = nothing)
+function GIATools(domain, c, solidearth;
+    quad_precision::Int = 4, rhs_smooth_radius = nothing)
 
     T = eltype(domain.R)
 
     # Build in-place convolution for viscous response (only used in ELRA)
-    L_w = get_flexural_lengthscale(mean(p.litho_rigidity), p.rho_uppermantle, c.g)
+    L_w = get_flexural_lengthscale(
+        mean(solidearth.litho_rigidity),
+        solidearth.rho_uppermantle,
+        c.g,
+    )
     kei = get_kei(domain, L_w)
     viscous_green = domain.arraykernel(T.(
-        calc_viscous_green(domain, mean(p.litho_rigidity), kei, L_w)))
+        calc_viscous_green(domain, mean(solidearth.litho_rigidity), kei, L_w)))
     conv_helpers = ConvolutionPlanHelpers(viscous_green)
     viscous_convo = ConvolutionPlan(viscous_green, conv_helpers)
 

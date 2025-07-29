@@ -129,6 +129,11 @@ struct OffsetBC{T, M<:KernelMatrix{T}} <: AbstractBC
     buffer::M
 end
 
+"""
+    NoBC <: AbstractBC
+
+A singleton struct representing the absence of a boundary condition.
+"""
 struct NoBC end
 
 """
@@ -281,9 +286,13 @@ end
 #########################################################################
 
 """
-    BoundaryConditions(viscous_displacement, elastic_displacement, geoid_perturbation, domain)
+$(TYPEDSIGNATURES)
 
-Create a `BoundaryConditions` struct containing the boundary conditions for the problem.
+A struct containing the boundary conditions of the problem:
+- `ice_thickness`: an instance of [`AbstractIceThickness`](@ref) that defines how the ice thickness is updated.
+- `viscous_displacement`: a boundary condition for the viscous displacement, defined as an [`OffsetBC`](@ref).
+- `elastic_displacement`: a boundary condition for the elastic displacement, defined as an [`OffsetBC`](@ref).
+- `sea_surface_perturbation`: a boundary condition for the sea surface perturbation, defined as an [`OffsetBC`](@ref).
 """
 struct BoundaryConditions{
     T,      # <:AbstractFloat,

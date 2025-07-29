@@ -1,3 +1,31 @@
+
+###############################################################################
+# Ocean load
+###############################################################################
+
+"""
+$(TYPEDSIGNATURES)
+
+Abstract type for sea-level load representation. Available subtypes are:
+ - [`NoSealevelLoad`](@ref)
+ - [`InteractiveSealevelLoad`](@ref)
+"""
+abstract type AbstractSealevelLoad end
+
+"""
+$(TYPEDSIGNATURES)
+
+Assume no sea-level load, i.e. the bedrock deformation is not influenced by the sea-level.
+"""
+struct NoSealevelLoad <: AbstractSealevelLoad end
+
+"""
+$(TYPEDSIGNATURES)
+
+Assume an interactive sea-level load, i.e. the bedrock deformation is influenced by the sea-level.
+"""
+struct InteractiveSealevelLoad <: AbstractSealevelLoad end
+
 # Functions to compute/update density-scaled column anomalies
 # Correction of surface distortion not needed here since rho * A * z / A = rho * z.
 function anom!(x, scale, now, ref)
@@ -6,12 +34,12 @@ function anom!(x, scale, now, ref)
 end
 
 function columnanom_mantle!(sim::Simulation)
-    anom!(sim.now.columnanoms.mantle, sim.p.rho_uppermantle, sim.now.u, sim.ref.u)
+    anom!(sim.now.columnanoms.mantle, sim.solidearth.rho_uppermantle, sim.now.u, sim.ref.u)
     return nothing
 end
 
 function columnanom_litho!(sim::Simulation)
-    anom!(sim.now.columnanoms.litho, sim.p.rho_litho, sim.now.ue, sim.ref.ue)
+    anom!(sim.now.columnanoms.litho, sim.solidearth.rho_litho, sim.now.ue, sim.ref.ue)
     return nothing
 end
 
@@ -20,14 +48,14 @@ function columnanom_ice!(sim::Simulation)
     return nothing
 end
 
-function columnanom_water!(sim::Simulation, ol::InteractiveOceanLoad)
+function columnanom_water!(sim::Simulation, ol::InteractiveSealevelLoad)
     watercolumn!(sim)
     anom!(sim.now.columnanoms.seawater, sim.c.rho_seawater, sim.now.z_ss, sim.ref.z_ss)
-    sim.now.columnanoms.seawater .*= sim.now.maskocean .* sim.p.maskactive
+    sim.now.columnanoms.seawater .*= sim.now.maskocean .* sim.solidearth.maskactive
     return nothing
 end
 
-function columnanom_water!(sim::Simulation, ol::NoOceanLoad)
+function columnanom_water!(sim::Simulation, ol::NoSealevelLoad)
     watercolumn!(sim)
     sim.now.columnanoms.seawater .= 0
     return nothing
@@ -62,13 +90,13 @@ end
 
 function columnanom_load!(sim::Simulation)
     canoms = sim.now.columnanoms
-    @. canoms.load .= sim.p.maskactive * (canoms.ice + canoms.seawater + canoms.sediment)
+    @. canoms.load .= sim.solidearth.maskactive * (canoms.ice + canoms.seawater + canoms.sediment)
     return nothing
 end
 
 function columnanom_full!(sim::Simulation)
     canoms = sim.now.columnanoms
-    @. canoms.full = canoms.load + sim.p.maskactive * (canoms.litho + canoms.mantle)
+    @. canoms.full = canoms.load + sim.solidearth.maskactive * (canoms.litho + canoms.mantle)
     return nothing
 end
 

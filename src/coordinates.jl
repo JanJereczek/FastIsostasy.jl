@@ -114,7 +114,7 @@ lambert_k(rho, r, m) = rho ./ r ./ m
 
 Compute scaling factor of stereographic projection for a given `(lat, lon)` and origin
 `(lat_0, lon_0)`. Angles must be provided in radians. Reference:
-[snyder-projections-1987](@citet), p. 157, eq. (21-4).
+[snyder-projections-1987](@citet), solidearth. 157, eq. (21-4).
 
 Note: this version of the function does not support a standard parallel different from
 the pole.

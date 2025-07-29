@@ -18,8 +18,8 @@ function height_above_floatation(state::AbstractState, c::PhysicalConstants)
         state.z_ss, c)
 end
 
-function height_above_floatation(H_ice, b, z_ss, c)
-    return max.(H_ice .+ min.(b .- z_ss, 0), 0) .* (c.rho_seawater / c.rho_ice)
+function height_above_floatation(H_ice, z_b, z_ss, c)
+    return max.(H_ice .+ min.(z_b .- z_ss, 0) .* (c.rho_seawater / c.rho_ice), 0)
 end
 
 function update_maskocean!(sim)
@@ -34,7 +34,6 @@ function update_bedrock!(sim::Simulation, u)
 end
 
 function update_Haf!(sim::Simulation)
-    @. sim.now.H_af = max(sim.now.H_ice + min(sim.now.z_b - sim.now.z_ss, 0), 0) 
-    sim.now.H_af .*= sim.c.rho_sw_ice
+    @. sim.now.H_af = max(sim.now.H_ice + min(sim.now.z_b - sim.now.z_ss, 0) .* sim.c.rho_sw_ice, 0) 
     return nothing
 end

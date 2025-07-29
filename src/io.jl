@@ -154,6 +154,14 @@ io_dict[:litho_thickness] = Dict(
     "map" => x -> 1f-3 .* x,        # Convert from m to km
 )
 
+"""
+$(TYPEDSIGNATURES)
+
+A struct that contains all the necessary information to store the output
+in a NetCDF file.
+
+Can be initilized as:
+"""
 mutable struct NetcdfOutput{
     T<:AbstractFloat,
     OC,                 # <: AbstractOutputCrop
@@ -278,7 +286,8 @@ Return a mutable struct containing the native output which will be updated over 
 
 Initialization example:
 ```julia
-nout = NativeOutput(vars = [:u, :ue, :b, :dz_ss, :H_ice, :H_water, :u_x, :u_y])
+nout = NativeOutput(vars = [:u, :ue, :b, :dz_ss, :H_ice, :H_water, :u_x, :u_y],
+    t = collect(0:1f3:10f3))
 ```
 """
 mutable struct NativeOutput{T<:AbstractFloat}

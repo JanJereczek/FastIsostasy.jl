@@ -1,3 +1,58 @@
+##################################################################
+# Sea level
+################################################################
+
+"""
+$(TYPEDSIGNATURES)
+
+Abstract type for sea surface representation. Available subtypes are:
+ - [`LaterallyConstantSeaSurface`](@ref)
+ - [`LaterallyVariableSeaSurface`](@ref)
+"""
+abstract type AbstractSeaSurface end
+
+"""
+$(TYPEDSIGNATURES)
+
+Assume a laterally constant sea surface across the domain. This means that
+the gravitatiional response is ignored.
+"""
+struct LaterallyConstantSeaSurface <: AbstractSeaSurface end
+
+"""
+$(TYPEDSIGNATURES)
+
+Assume a laterally variable sea surface across the domain. This means that
+the gravitational response is included in the sea surface perturbation.
+"""
+struct LaterallyVariableSeaSurface <: AbstractSeaSurface end
+
+##################################################################
+# SeaLevel
+################################################################
+
+"""
+$(TYPEDSIGNATURES)
+
+A struct that gathers the modelling choices for the sea-level component of the simulation.
+It contains:
+ - `surface`: an instance of [`AbstractSeaSurface`](@ref) to represent the sea surface.
+ - `load`: an instance of [`AbstractSealevelLoad`](@ref) to represent the sea-level load.
+ - `bsl`: an instance of [`AbstractBSL`](@ref) to represent the barystatic sea level.
+ - `update_bsl`: an instance of [`AbstractUpdateBSL`](@ref) to represent the update mechanism for the barystatic sea level.
+"""
+@kwdef struct SeaLevel{
+    S,          # <:AbstractSeaSurface,
+    L,          # <:AbstractSealevelLoad,
+    BSL,        # <:AbstractBSL,
+    UBSL,       # <:AbstractUpdateBSL,
+}
+    surface::S = LaterallyConstantSeaSurface()         # lc or lv
+    load::L = NoSealevelLoad()                         # no or interactive
+    bsl::BSL = ConstantBSL()                            # constant, imposed, pw constant or pw linear
+    update_bsl::UBSL = InternalUpdateBSL()              # internal or external
+end
+
 """
     update_dz_ss!(sim::Simulation)
 
@@ -56,8 +111,8 @@ is arguably blanaced by the depression of the peripherial forebulge.
 """
 function internal_update_bsl!(sim::Simulation, up::InternalUpdateBSL)
     update_delta_V!(sim)
-    update_bsl!(sim.model.bsl, -sim.now.delta_V, sim.nout.t_steps_ode[end])
-    sim.now.z_bsl = sim.model.bsl.z
+    update_bsl!(sim.sealevel.bsl, -sim.now.delta_V, sim.nout.t_steps_ode[end])
+    sim.now.z_bsl = sim.sealevel.bsl.z
     return nothing
 end
 

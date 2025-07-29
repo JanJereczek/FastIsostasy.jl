@@ -6,9 +6,9 @@ end
 function derivative_stdsetup(use_cuda::Bool)
     W, n = 3f6, 7
     domain = RegionalDomain(W, n, correct_distortion = false, use_cuda = use_cuda)
-    sep = SolidEarthParameters(domain)
+    earth = SolidEarth(domain)
     model = Model()
-    sim = Simulation(domain, model, sep, (0f0, 50f3))
+    sim = Simulation(domain, model, earth, (0f0, 50f3))
 
     u = domain.X .^ 2 .* domain.Y .^ 2
     uxx = 2 .* domain.Y .^ 2

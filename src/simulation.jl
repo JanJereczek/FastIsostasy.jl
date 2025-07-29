@@ -32,22 +32,22 @@ end
 """
 $(TYPEDSIGNATURES)
 
-    Simulation(domain, c, p, t_out)
-    Simulation(domain, c, p, t_out, Hice)
-    Simulation(domain, c, p, t_out, t_Hice, Hice)
+    Simulation(domain, c, solidearth, t_out)
+    Simulation(domain, c, solidearth, t_out, Hice)
+    Simulation(domain, c, solidearth, t_out, t_Hice, Hice)
 
 Return a struct containing all the other structs needed for the forward integration of the
 model over `domain::RegionalDomain` with parameters `c::PhysicalConstants` and
-`p::SolidEarthParameters`. The outputs are stored at `t_out::Vector{<:AbstractFloat}`.
+`solidearth::SolidEarth`. The outputs are stored at `t_out::Vector{<:AbstractFloat}`.
 """
 struct Simulation{
     CD,     # <:AbstractDomain
     PC,     # <:PhysicalConstants
     BCS,    # <:BoundaryConditions
-    GM,     # <:Model
-    SEP,    # <:SolidEarthParameters
+    SL,     # <:SeaLevel
+    SE,     # <:SolidEarth
     SO,     # <:SolverOptions
-    FIT,    # <:GIATools
+    TL,    # <:GIATools
     RS,     # <:ReferenceState
     CS,     # <:CurrentState
     NCO,    # <:NetcdfOutput
@@ -57,10 +57,10 @@ struct Simulation{
     domain::CD
     c::PC
     bcs::BCS
-    model::GM
-    p::SEP
+    sealevel::SL
+    solidearth::SE
     opts::SO
-    tools::FIT
+    tools::TL
     ref::RS
     now::CS
     ncout::NCO
@@ -69,30 +69,30 @@ struct Simulation{
 end
 
 function Simulation(
-    domain,     # RegionalDomain
-    model,      # Model
-    p,          # SolidEarthParameters
-    tspan;      # Time span
+    domain,         # RegionalDomain
+    bcs,            # BoundaryConditions
+    sealevel,       # SeaLevel
+    solidearth;     # SolidEarth
     T = eltype(domain.R),
-    bcs = BoundaryConditions(domain),
+    tspan = extrema(bcs.ice_thickness.t_vec),
     opts = SolverOptions(),
     u_ref = null(domain),
     ue_ref = null(domain),
     dz_ss_ref = null(domain),
-    z_b_ref = null(domain),
+    z_b_ref = fill(1f6, domain.nx, domain.ny),
     ncout = NetcdfOutput(domain, T[], ""),
     nout = NativeOutput(t = T[]),
     c = PhysicalConstants{T}(),
 )
 
-    if (model.ocean_load isa NoOceanLoad)
+    if (sealevel.load isa NoSealevelLoad)
         nothing
-    elseif (sum(p.maskactive) > 0.6 * domain.nx * domain.ny)
+    elseif (sum(solidearth.maskactive) > 0.6 * domain.nx * domain.ny)
         error("Mask defining regions of active load must not cover more than 60%"*
             " of the cells when using an interactive sea level.")
     end
 
-    tools = GIATools(domain, c, p)
+    tools = GIATools(domain, c, solidearth)
 
     # Initialise the reference state
     H_ice_ref = kernelnull(domain)
@@ -100,7 +100,7 @@ function Simulation(
 
     u_ref, ue_ref, dz_ss_ref, z_b_ref, H_ice_ref = kernelpromote([u_ref, ue_ref,
         dz_ss_ref, z_b_ref, H_ice_ref], domain.arraykernel)
-    z_ss_ref = model.bsl.ref.z .+ dz_ss_ref
+    z_ss_ref = sealevel.bsl.ref.z .+ dz_ss_ref
 
     if domain.use_cuda
         maskgrounded = get_maskgrounded(H_ice_ref, z_b_ref, z_ss_ref, c)
@@ -114,19 +114,20 @@ function Simulation(
     H_water_ref = watercolumn(H_ice_ref, maskgrounded, z_b_ref, z_ss_ref, c)
     ref = ReferenceState(u_ref, ue_ref, H_ice_ref, H_af_ref, H_water_ref, z_b_ref, z_ss_ref,
         T(0), T(0), T(0), maskgrounded, maskocean)
-    now = CurrentState(domain, ref, model.bsl.z)
+    now = CurrentState(domain, ref, sealevel.bsl.z)
 
-    return Simulation(domain, c, bcs, model, p, opts, tools, ref, now, ncout, nout, tspan)
+    return Simulation(domain, c, bcs, sealevel, solidearth, opts, tools, ref, now,
+        ncout, deepcopy(nout), tspan)
 end
 
 function Base.show(io::IO, ::MIME"text/plain", sim::Simulation)
-    domain, p = sim.domain, sim.p
+    domain, solidearth = sim.domain, sim.solidearth
     descriptors = [
         "Computation domain" => typeof(domain),
         "Physical constants" => typeof(sim.c),
         "Problem BCs" => typeof(sim.bcs),
-        "Earth model" => typeof(sim.model),
-        "Layered Earth" => typeof(p),
+        "Sea level" => typeof(sim.sealevel),
+        "Solid Earth" => typeof(solidearth),
         "Solver options" => typeof(sim.opts),
         "GIATools" => typeof(sim.tools),
         "Reference state" => typeof(sim.ref),
@@ -137,8 +138,8 @@ function Base.show(io::IO, ::MIME"text/plain", sim::Simulation)
         "nx, ny" => [domain.nx, domain.ny],
         "dx, dy" => [domain.dx, domain.dy],
         "Wx, Wy" => [domain.Wx, domain.Wy],
-        "extrema(effective viscosity)" => extrema(p.effective_viscosity),
-        "extrema(lithospheric thickness)" => extrema(p.litho_thickness),
+        "extrema(effective viscosity)" => extrema(solidearth.effective_viscosity),
+        "extrema(lithospheric thickness)" => extrema(solidearth.litho_thickness),
     ]
     padlen = maximum(length(d[1]) for d in descriptors) + 2
     for (desc, val) in descriptors
@@ -165,7 +166,7 @@ function nc_affect!(integrator)
 
         if (:u_x in sim.ncout.vars3D) || (:u_y in sim.ncout.vars3D)
             thinplate_horizontal_displacement!(sim.now.u_x, sim.now.u_y,
-                sim.now.u + sim.now.ue, sim.p.litho_thickness, sim.domain)
+                sim.now.u + sim.now.ue, sim.solidearth.litho_thickness, sim.domain)
         end
 
         write_nc!(sim)
@@ -179,7 +180,7 @@ function nout_affect!(integrator)
 
     if (:u_x in sim.nout.vars) || (:u_y in sim.nout.vars)
         thinplate_horizontal_displacement!(sim.now.u_x, sim.now.u_y,
-            sim.now.u + sim.now.ue, sim.p.litho_thickness, sim.domain)
+            sim.now.u + sim.now.ue, sim.solidearth.litho_thickness, sim.domain)
     end
 
     write_out!(sim.nout, sim.now)
@@ -290,6 +291,7 @@ function update_diagnostics!(dudt, u, sim::Simulation, t)
     columnanom_mantle!(sim)
 
     apply_bc!(sim.now.H_ice, t, sim.bcs.ice_thickness)      # Apply ice thickness BC
+    update_Haf!(sim)
     columnanom_ice!(sim)                        # Compute associated column anomaly
 
     # apply_bc!(sim.now.H_sed, t, sim.bcs.)
@@ -305,18 +307,12 @@ function update_diagnostics!(dudt, u, sim::Simulation, t)
     if update_diagnostics
 
         # Update the elastic response and the resulting anomaly in lithospheric column
-        update_elasticresponse!(sim, sim.model.lithosphere)
+        update_elasticresponse!(sim, sim.solidearth.lithosphere)
         columnanom_litho!(sim)
 
         # Update barystatic sea level
-        internal_update_bsl!(sim, sim.model.update_bsl)
-
-        # Update perturbation of sea surface elevation according to new anomalies
-        columnanom_load!(sim)
-        columnanom_full!(sim)
-        update_dz_ss!(sim, sim.model.sea_surface)
-
-        # Update sea surface based on perturbation and BSL
+        internal_update_bsl!(sim, sim.sealevel.update_bsl)
+        update_dz_ss!(sim, sim.sealevel.surface)
         update_z_ss!(sim)
 
         # Update hieght above floatation and the resulting masks
@@ -325,8 +321,9 @@ function update_diagnostics!(dudt, u, sim::Simulation, t)
         update_maskocean!(sim)
 
         # Update the anomaly of seawater column
-        columnanom_water!(sim, sim.model.ocean_load)
-        
+        columnanom_water!(sim, sim.sealevel.load)
+        columnanom_ice!(sim)
+
         # Count the sparse update
         sim.now.count_sparse_updates += 1
     end
@@ -336,7 +333,7 @@ function update_diagnostics!(dudt, u, sim::Simulation, t)
     columnanom_full!(sim)
 
     # Update the derivative of the viscous displacement based on the new load
-    update_dudt!(dudt, u, sim, t, sim.model)
+    update_dudt!(dudt, u, sim, t, sim.solidearth)
     sim.now.dudt .= dudt
     return nothing
 end

@@ -20,9 +20,9 @@ sem = SolidEarthModel(
     LaterallyVariableLithosphere(),
     MaxwellMantle(),
 )
-sep = SolidEarthParameters(Omega, rho_litho = 0f0)
+earth = SolidEarth(Omega, rho_litho = 0f0)
 nout = NativeOutput(vars = [:u, :ue, :dz_ss, :H_ice, :u_x, :u_y], t = t_ice)
-fip = FastIsoProblem(Omega, sem, sep; bcs = bcs, nout = nout)
+fip = FastIsoProblem(Omega, sem, earth; bcs = bcs, nout = nout)
 @time solve!(fip)
 println("Computation time: ", fip.nout.computation_time)
 # Computation time: 62.86226 ==> pretty bad compared to publication. Due to type specification issues?

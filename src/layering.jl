@@ -73,7 +73,7 @@ end
     get_layer_boundaries(n_x, n_y, litho_thickness::Matrix{T}, layering::AbstractLayering{T})
 
 Compute the layer boundaries for a given [`AbstractLayering`](@ref).
-Output is typically passed to [`SolidEarthParameters`](@ref) to create a layered Earth model.
+Output is typically passed to [`SolidEarth`](@ref) to create a layered Earth model.
 """
 function get_layer_boundaries(domain::RegionalDomain, litho_thickness, layering)
     T = eltype(domain.R)

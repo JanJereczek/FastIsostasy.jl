@@ -1,4 +1,25 @@
 ######################################################################################
+# General material properties
+######################################################################################
+
+"""
+$(TYPEDSIGNATURES)
+
+Compute rigidity `D` based on thickness `t`, Young modulus `E` and Poisson ration `nu`.
+"""
+get_rigidity(t, E, nu) = (E * t^3) / (12 * (1 - nu^2))
+
+"""
+$(TYPEDSIGNATURES)
+
+Compute shear modulus `G` based on Young modulus `E` and Poisson ratio `nu`, or based on
+seismic velocities.
+"""
+get_shearmodulus(youngmodulus, poissonratio) = youngmodulus / (2 * (1 + poissonratio))
+get_shearmodulus(ρ, Vsv, Vsh) = ρ .* (Vsv + Vsh) ./ 2
+# get_shearmodulus(m::ReferenceSolidEarthModel) = get_shearmodulus(m.density, m.Vsv, m.Vsh)
+
+######################################################################################
 # Effect of mantle compressibility on effective viscosity
 ######################################################################################
 
@@ -39,7 +60,8 @@ Apply the `calibration` to the viscosity `eta`.
 apply_calibration!(eta, calibraton::NoCalibration) = eta
 
 function apply_calibration!(eta, calibration::SeakonCalibration)
-    eta .*= exp.(log10.(T(calibration.eta_ref) ./ eta))
+    T = eltype(eta)
+    eta .*= exp.(log10.(T(calibration.ref_viscosity) ./ eta))
     return nothing
 end
 
@@ -108,6 +130,9 @@ function get_effective_viscosity_and_scaling(domain, layer_viscosities, layer_bo
                 layer_boundaries[:, :, end - l]
             viscosity_ratio .= layer_viscosities[:, :, end - l] ./ effective_viscosity
             R .*= channel_scaling_freqdomain_2D(domain, viscosity_ratio, channel_thickness, maskactive)
+            if maximum(R) == typemax(eltype(R))
+                error("The scaling factor R is too large. Try to introduce intermediate layers if you do not want to change the floating point precision.")
+            end
         end
 
     end
@@ -150,7 +175,7 @@ function channel_scaling_timedomain(
     characteristic_loadlength::T,
 ) where {T<:AbstractFloat, M<:KernelMatrix{T}}
 
-    # kappa is the wavenumber of the harmonic load. (see Cathles 1975, p.43)
+    # kappa is the wavenumber of the harmonic load. (see Cathles 1975, solidearth.43)
     # for the default value, we assume this is related to the size of the domain!
     kappa = T(π) / characteristic_loadlength
     return channel_scaling(domain, kappa, channel_thickness, visc_ratio)
@@ -209,135 +234,9 @@ function mean_viscosity(T_lithosphere, T_uppermantle, eta, depth)
     return eta_mean
 end
 
-
-######################################################################################
-# General solid Earth properties
-######################################################################################
-
-const DEFAULT_RHO_LITHO = 3.2e3
-const DEFAULT_LITHO_YOUNGMODULUS = 6.6e10
-const DEFAULT_LITHO_POISSONRATIO = 0.28
-const DEFAULT_LITHO_THICKNESS = 88e3
-const DEFAULT_RHO_UPPERMANTLE = 3.4e3
-const DEFAULT_MANTLE_POISSONRATIO = 0.28
-const DEFAULT_MANTLE_TAU = 855.0
-
-"""
-    SolidEarthParameters(domain; layer_boundaries, layer_viscosities)
-
-Return a struct containing all information related to the lateral variability of
-solid-Earth parameters. To initialize with values other than default, run:
-
-```julia
-domain = RegionalDomain(3000e3, 7)
-lb = [100e3, 300e3]
-lv = [1e19, 1e21]
-p = SolidEarthParameters(domain, layer_boundaries = lb, layer_viscosities = lv)
-```
-
-which initializes a lithosphere of thickness ``T_1 = 100 \\mathrm{km}``, a viscous
-channel between ``T_1``and ``T_2 = 300 \\mathrm{km}``and a viscous halfspace starting
-at ``T_2``. This represents a homogenous case. For heterogeneous ones, simply make
-`lb::Vector{Matrix}`, `lv::Vector{Matrix}` such that the vector elements represent the
-lateral variability of each layer on the grid of `domain::RegionalDomain`.
-"""
-mutable struct SolidEarthParameters{
-    T,  # <:AbstractFloat,
-    M,  # <:KernelMatrix{T},
-    B,  # <:KernelMatrix{Bool},
-}
-    effective_viscosity::M
-    pseudodiff_scaling::M
-    scaled_pseudodiff_inv::M
-    litho_thickness::M
-    litho_rigidity::M
-    maskactive::B
-    litho_poissonratio::T
-    mantle_poissonratio::T
-    tau::M
-    litho_youngmodulus::T
-    litho_shearmodulus::T
-    rho_uppermantle::T
-    rho_litho::T
-end
-
-function SolidEarthParameters(
-    domain::RegionalDomain{T, L, M};
-    lumping = FreqDomainViscosityLumping(),
-    compressibility = CompressibleMantle(),
-    calibration = NoCalibration(),
-    maskactive = domain.R .< Inf,
-    layer_boundaries = T.([88e3, 400e3]),
-    layer_viscosities = T.([1e19, 1e21]),        # (Pa*s) (Bueler 2007, Ivins 2022, Fig 12 WAIS)
-    litho_youngmodulus = T(DEFAULT_LITHO_YOUNGMODULUS),              # (N/m^2)
-    litho_poissonratio = T(DEFAULT_LITHO_POISSONRATIO),
-    mantle_poissonratio = T(DEFAULT_MANTLE_POISSONRATIO),
-    tau = T(DEFAULT_MANTLE_TAU),
-    rho_uppermantle = T(DEFAULT_RHO_UPPERMANTLE),   # Mean density of topmost upper mantle (kg m^-3)
-    rho_litho = T(DEFAULT_RHO_LITHO),               # Mean density of lithosphere (kg m^-3)
-) where {T<:AbstractFloat, L, M}
-
-    if tau isa Real
-        tau = fill(tau, domain.nx, domain.ny)
-    end
-    tau = kernelpromote(tau, domain.arraykernel)
-
-    if layer_boundaries isa Vector
-        layer_boundaries = matrify(layer_boundaries, domain.nx, domain.ny)
-    end
-
-    if layer_viscosities isa Vector
-        layer_viscosities = matrify(layer_viscosities, domain.nx, domain.ny)
-    end
-
-    litho_thickness = zeros(T, domain.nx, domain.ny)
-    litho_thickness .= view(layer_boundaries, :, :, 1)
-
-    litho_rigidity = get_rigidity.(litho_thickness, litho_youngmodulus, litho_poissonratio)
-    effective_viscosity, pseudodiff_scaling = get_effective_viscosity_and_scaling(
-        domain, layer_viscosities, layer_boundaries, maskactive, lumping)
-
-    apply_compressibility!(effective_viscosity, mantle_poissonratio, compressibility)
-    apply_calibration!(effective_viscosity, calibration)
-
-    litho_thickness, litho_rigidity, effective_viscosity, pseudodiff_scaling, maskactive =
-        kernelpromote( [litho_thickness, litho_rigidity, effective_viscosity,
-        pseudodiff_scaling, maskactive], domain.arraykernel)
-
-    scaled_pseudodiff_inv = 1 ./ (pseudodiff_scaling .* domain.pseudodiff)
-
-    litho_shearmodulus = get_shearmodulus(litho_youngmodulus, litho_poissonratio)
-
-    return SolidEarthParameters(
-        effective_viscosity, pseudodiff_scaling, scaled_pseudodiff_inv,
-        litho_thickness, litho_rigidity, kernelcollect(maskactive, domain),
-        litho_poissonratio, mantle_poissonratio, tau,
-        litho_youngmodulus, litho_shearmodulus, rho_uppermantle, rho_litho,
-    )
-
-end
-
-"""
-$(TYPEDSIGNATURES)
-
-Compute rigidity `D` based on thickness `t`, Young modulus `E` and Poisson ration `nu`.
-"""
-get_rigidity(t, E, nu) = (E * t^3) / (12 * (1 - nu^2))
-
-"""
-$(TYPEDSIGNATURES)
-
-Compute shear modulus `G` based on Young modulus `E` and Poisson ratio `nu`, or based on
-seismic velocities.
-"""
-get_shearmodulus(youngmodulus, poissonratio) = youngmodulus / (2 * (1 + poissonratio))
-get_shearmodulus(m::ReferenceSolidEarthModel) = get_shearmodulus(m.density, m.Vsv, m.Vsh)
-get_shearmodulus(ρ, Vsv, Vsh) = ρ .* (Vsv + Vsh) ./ 2
-
 ######################################################################################
 # Elastic properties
 ######################################################################################
-
 
 """
     build_greenintegrand(distance::Vector{T}, 
@@ -537,16 +436,25 @@ $(TYPEDSIGNATURES)
 Convert the viscosity to relaxation times following Van Calcar et al. (in rev.).
 """
 get_relaxation_time(eta, m, p) = 10^(log10(eta)*m - p)
+
+"""
+$(TYPEDSIGNATURES)
+
+Compute the relaxation time for a weaker mantle, following Van Calcar et al. (in rev.).
+"""
 get_relaxation_time_weaker(eta) = get_relaxation_time(eta, 0.35, 4.63)
+
+"""
+$(TYPEDSIGNATURES)
+
+Compute the relaxation time for a stronger mantle, following Van Calcar et al. (in rev.).
+"""
 get_relaxation_time_stronger(eta) = get_relaxation_time(eta, 0.20, 1.41)
 
 # eta1 = 1e21
 # τ1_low = get_relaxation_time(eta1, 0.35, 4.63)
 # τ1_high = get_relaxation_time(eta1, 0.20, 1.41)
 # Gives lb, ub = 524, 616 years for 1e21, which could be a caveat compared to Spada et al. (2011)
-
-
-
 
 function maxwelltime_scaling(layer_viscosities, layer_shearmoduli)
     return layer_shearmoduli[end] ./ layer_shearmoduli .* layer_viscosities

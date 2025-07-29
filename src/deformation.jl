@@ -3,7 +3,7 @@
 #####################################################
 
 """
-    update_dudt!(dudt, u, sim, t, model::Model)
+$(TYPEDSIGNATURES)
 
 Update the time derivative of the viscous displacement `dudt` based on an [`Model`](@ref):
 - `RigidMantle`: no deformation, `dudt` is zero.
@@ -17,8 +17,8 @@ Update the time derivative of the viscous displacement `dudt` based on an [`Mode
 - `MaxwellMantle` with `LaterallyVariableLithosphere`: This corresponds to the approach
   of Swierczek-Jereczek et al. (2024).
 """
-function update_dudt!(dudt, u, sim, t, model::Model)
-    update_dudt!(dudt, u, sim, t, model.mantle, model.lithosphere)
+function update_dudt!(dudt, u, sim, t, earth::SolidEarth)
+    update_dudt!(dudt, u, sim, t, earth.mantle, earth.lithosphere)
 end
 
 function update_dudt!(dudt, u, sim, t, mantle::RigidMantle, litho)
@@ -39,7 +39,7 @@ function update_dudt!(dudt, u, sim, t, mantle::RelaxedMantle,
         sim.domain, sim.bcs.viscous_displacement,
         sim.bcs.viscous_displacement.space)
 
-    @. dudt = 1 / sim.p.tau * (sim.now.u_eq - sim.now.u)
+    @. dudt = 1 / sim.solidearth.tau * (sim.now.u_eq - sim.now.u)
     return nothing
     
 end
@@ -59,10 +59,10 @@ function update_dudt!(dudt, u, sim, t, mantle::MaxwellMantle,
 
     # helper variables
     nabla = P.buffer_xx
-    @. nabla = 2 * sim.p.effective_viscosity * sim.domain.pseudodiff * sim.p.pseudodiff_scaling
+    @. nabla = 2 * sim.solidearth.effective_viscosity * sim.domain.pseudodiff * sim.solidearth.pseudodiff_scaling
 
     beta = P.buffer_x
-    @. beta = sim.p.rho_uppermantle * sim.c.g + sim.p.litho_rigidity * sim.domain.pseudodiff ^ 4
+    @. beta = sim.solidearth.rho_uppermantle * sim.c.g + sim.solidearth.litho_rigidity * sim.domain.pseudodiff ^ 4
 
     # fourier transform load
     @. P.fftF = - (sim.now.columnanoms.load +
@@ -90,9 +90,9 @@ function update_dudt!(dudt, u, sim, t, mantle::MaxwellMantle,
     lithosphere::LaterallyVariableLithosphere)
     domain, P = sim.domain, sim.tools.prealloc
     update_deformation_rhs!(sim, u)
-    @. P.fftrhs = P.rhs * domain.K / (2 * sim.p.effective_viscosity)
+    @. P.fftrhs = P.rhs * domain.K / (2 * sim.solidearth.effective_viscosity)
     sim.tools.pfft! * P.fftrhs
-    @. P.fftrhs *= sim.p.scaled_pseudodiff_inv
+    @. P.fftrhs *= sim.solidearth.scaled_pseudodiff_inv
     sim.tools.pifft! * P.fftrhs
     dudt .= real.(P.fftrhs)
     dudt .*= sim.c.seconds_per_year
@@ -111,17 +111,12 @@ function update_deformation_rhs!(sim::Simulation, u)
     @. P.rhs = -sim.c.g * sim.now.columnanoms.full
     update_second_derivatives!(P.buffer_xx, P.buffer_yy, P.buffer_x,
         P.buffer_xy, u, domain)
-    # @. P.Mxx = -sim.p.litho_rigidity * (P.buffer_xx +
-    #     sim.p.litho_poissonratio * P.buffer_yy)
-    # @. P.Myy = -sim.p.litho_rigidity * (P.buffer_yy +
-    #     sim.p.litho_poissonratio * P.buffer_xx)
-    # @. P.Mxy = -sim.p.litho_rigidity * (1 - sim.p.litho_poissonratio) * P.buffer_xy
 
-    @. P.Mxx = -sim.p.litho_rigidity *
-        muladd(sim.p.litho_poissonratio, P.buffer_yy, P.buffer_xx)
-    @. P.Myy = -sim.p.litho_rigidity *
-        muladd(sim.p.litho_poissonratio, P.buffer_xx, P.buffer_yy)
-    @. P.Mxy = -sim.p.litho_rigidity * (1 - sim.p.litho_poissonratio) * P.buffer_xy
+    @. P.Mxx = -sim.solidearth.litho_rigidity *
+        muladd(sim.solidearth.litho_poissonratio, P.buffer_yy, P.buffer_xx)
+    @. P.Myy = -sim.solidearth.litho_rigidity *
+        muladd(sim.solidearth.litho_poissonratio, P.buffer_xx, P.buffer_yy)
+    @. P.Mxy = -sim.solidearth.litho_rigidity * (1 - sim.solidearth.litho_poissonratio) * P.buffer_xy
     update_second_derivatives!(P.buffer_xx, P.buffer_yy, P.buffer_x, P.buffer_xy,
         P.Mxx, P.Myy, P.Mxy, domain)
     @. P.rhs += P.buffer_xx + muladd(2, P.buffer_xy, P.buffer_yy)

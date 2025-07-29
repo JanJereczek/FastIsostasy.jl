@@ -1,10 +1,19 @@
+"""
+$(TYPEDSIGNATURES)
+
+Abstract type for domain representation in the model.
+"""
 abstract type AbstractDomain end
 
+"""
+$(TYPEDSIGNATURES)
+
+Not implemented yet!
+
+Version 3.0 will allow for global domains.
+"""
 struct GlobalDomain <: AbstractDomain end
 
-#########################################################
-# Computation domain
-#########################################################
 """
     RegionalDomain
     RegionalDomain(W, n)
@@ -113,7 +122,7 @@ function RegionalDomain(
     lon_0::T = T(0.0),          # Longitude of center point (allows oblique proj)
     proj_lonlat = "EPSG:4326",
     proj_target = "+proj=stere +datum=WGS84",
-    correct_distortion::Bool = true,
+    correct_distortion::Bool = false,
 ) where {T<:AbstractFloat}
 
     X, Y = meshgrid(x, y)
