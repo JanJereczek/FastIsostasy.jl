@@ -5,10 +5,12 @@ end
 
 function derivative_stdsetup(use_cuda::Bool)
     W, n = 3f6, 7
-    domain = RegionalDomain(W, n, correct_distortion = false, use_cuda = use_cuda)
-    earth = SolidEarth(domain)
-    model = Model()
-    sim = Simulation(domain, model, earth, (0f0, 50f3))
+    domain = RegionalDomain(W, n, use_cuda = use_cuda)
+    it = ExternallyUpdatedIceThickness()
+    bcs = BoundaryConditions(domain, ice_thickness = it)
+    solidearth = SolidEarth(domain)
+    sealevel = SeaLevel()
+    sim = Simulation(domain, bcs, sealevel, solidearth, tspan = (0f0, 50f3))
 
     u = domain.X .^ 2 .* domain.Y .^ 2
     uxx = 2 .* domain.Y .^ 2
