@@ -79,7 +79,9 @@ Return the Green's function used to compute the SSH perturbation `dz_ss` as in [
 """
 function get_dz_ss_green(domain::RegionalDomain, c::PhysicalConstants)
     dz_ssgreen = unbounded_dz_ssgreen(domain.R, c)
-    max_dz_ssgreen = unbounded_dz_ssgreen(norm([100e3, 100e3]), c)  # tolerance = resolution on 100km
+    # max_dz_ssgreen = unbounded_dz_ssgreen(norm([100e3, 100e3]), c)
+        # tolerance = resolution on 100km
+    max_dz_ssgreen = unbounded_dz_ssgreen(domain.dx/2, c)
     return min.(dz_ssgreen, max_dz_ssgreen)
     # equivalent to: dz_ssgreen[dz_ssgreen .> max_dz_ssgreen] .= max_dz_ssgreen
 end
