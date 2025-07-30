@@ -21,7 +21,7 @@ Return a struct containing the options relative to solving a [`Simulation`](@ref
 """
 @kwdef struct SolverOptions
     diffeq::DiffEqOptions = DiffEqOptions()
-    dt_diagnostics::Float64 = 10.0
+    dt_sparse_diagnostics::Float64 = 10.0
     verbose::Bool = true
 end
 
@@ -299,8 +299,8 @@ function update_diagnostics!(dudt, u, sim::Simulation, t)
     
     # As integration requires smaller time steps than what we typically want
     # for the elastic displacement and the sea-surface elevation,
-    # we only update them every sim.opts.dt_diagnostics
-    update_diagnostics = ((t / sim.opts.dt_diagnostics) >=
+    # we only update them every sim.opts.dt_sparse_diagnostics
+    update_diagnostics = ((t / sim.opts.dt_sparse_diagnostics) >=
         sim.now.count_sparse_updates)   # +1
 
     # if elastic update placed after dz_ss, worse match with (Spada et al. 2011)
