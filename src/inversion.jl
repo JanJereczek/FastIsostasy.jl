@@ -2,32 +2,10 @@
     ParameterReduction
 
 Abstract type for parameter reduction methods. Any subtype must implement the
-`reconstruct!(fip, theta)` method, which assigns the reconstructed parameter
-values to `fip::FastIsoProblem`.
+`reconstruct!(sim, theta)` method, which assigns the reconstructed parameter
+values to `sim::Simulation`.
 """
 abstract type ParameterReduction{T} end
-
-
-"""
-    extract_viscous_displacement(fip::FastIsoProblem{T, L, M})
-
-Extract the viscous displacement field from the `fip::FastIsoProblem` object.
-"""
-extract_viscous_displacement(fip) = fip.out.u
-
-"""
-    extract_elastic_displacement(fip::FastIsoProblem{T, L, M})
-
-Extract the elastic displacement field from the `fip::FastIsoProblem` object.
-"""
-extract_elastic_displacement(fip) = fip.out.ue
-
-"""
-    extract_total_displacement(fip::FastIsoProblem{T, L, M})
-
-Extract the total displacement field from the `fip::FastIsoProblem` object.
-"""
-extract_total_displacement(fip) = fip.out.u .+ fip.out.ue
 
 """
     InversionConfig
@@ -43,27 +21,24 @@ Struct containing configuration parameters for a [`InversionProblem`].
 - `update_freq::Int`: Update frequency for the inversion.
 1 : approximate posterior cov matrix with an uninformative prior.
 0 : weighted average between posterior cov matrix with an uninformative prior and prior.
-- `n_samples::Int`: Number of samples for the inversion.
 - `scale_obscov::Real`: Scaling factor for the observational covariance matrix.
 """
 struct InversionConfig{T<:AbstractFloat}
     method::Any
+    N_ens::Int
     N_iter::Int
+    n_samples::Int
     α_reg::T
     update_freq::Int
-    n_samples::Int
     scale_obscov::T
 end
 
 function InversionConfig(
-    method;
-    N_iter = 5,
-    α_reg = 1.0,
-    update_freq = 1,
-    n_samples = 100,
-    scale_obscov = 1_000.0,
+    method, N_ens, N_iter, n_samples;
+    α_reg = 1.0, update_freq = 1, scale_obscov = 1_000.0,
 )
-    return InversionConfig(method, N_iter, α_reg, update_freq, n_samples, scale_obscov)
+    return InversionConfig(method, N_ens, N_iter, n_samples,
+        α_reg, update_freq, scale_obscov)
 end
 
 """
@@ -74,19 +49,23 @@ Struct containing the inversion data.
 # Fields
 
 - `t::Vector{T}`: Time vector.
-- `nt::Int`: Number of time steps.
-- `X::Vector{M}`: Ground truth input (forcing).
 - `Y::Vector{M}`: Ground truth response.
+- `nY::Int`: Number of output time steps used for inversion.
 - `mask::BitMatrix`: Region of interest.
 - `countmask::Int`: count(mask) = number of cells used for inversion.
 """
 struct InversionData{T<:AbstractFloat, M<:Matrix{T}}
     t::Vector{T}        # Time vector
-    nt::Int             # number of time steps
-    X::Vector{M}        # Ground truth input (forcing)
     Y::Vector{M}        # Ground truth response
+    nY::Int             # number of time steps
     mask::BitMatrix     # Region of interest
     countmask::Int      # count(mask) = number of cells used for inversion
+end
+
+function InversionData(t, Y, mask)
+    nY = length(Y)
+    countmask = count(mask)
+    return InversionData(t, Y, nY, mask, countmask)
 end
 
 """
@@ -98,7 +77,7 @@ using [`inversion_problem`](@ref). For now, the unscented Kalman inversion
 is the only method available.
 
 # Fields
-- `fip::FastIsoProblem`: FastIsoProblem object.
+- `sim::Simulation`: Simulation object.
 - `config::InversionConfig`: Configuration for the inversion.
 - `data::InversionData`: Data for the inversion.
 - `reduction::R`: Parameter reduction method.
@@ -110,7 +89,7 @@ is the only method available.
 """
 struct InversionProblem{T<:AbstractFloat, V<:Vector{T}, M<:Matrix{T},
     R<:ParameterReduction{T}, PD, EKP}
-    fip::FastIsoProblem{T, <:Any, M, <:Any, <:Any, <:Any, <:Any}
+    sim::Simulation{T, <:Any, M, <:Any, <:Any, <:Any, <:Any, <:Any}
     config::InversionConfig# {T}
     data::InversionData{T, M}
     reduction::R
@@ -121,14 +100,15 @@ struct InversionProblem{T<:AbstractFloat, V<:Vector{T}, M<:Matrix{T},
     G_ens::M
 end
 
-"""
-    inversion_problem(fip, config, data, reduction, priors; save_stride_iter::Int = 1)
 
-Generate an inversion problem for the given `fip::FastIsoProblem` object.
+"""
+    inversion_problem(sim, config, data, reduction, priors; save_stride_iter::Int = 1)
+
+Generate an inversion problem for the given `sim::Simulation` object.
 """
 function inversion_problem end
 
-function solve! end
+function run! end
 function forward_fastiso end
 
 """
@@ -146,18 +126,18 @@ Extract the inversion results to compare them with the ground truth.
 function extract_inversion end
 
 """
-    reconstruct!(fip, params, reduction)
+    reconstruct!(sim, params, reduction)
 
-Reconstruct the parameter values from `reduction` and update `fip` accordingly.
+Reconstruct the parameter values from `reduction` and update `sim` accordingly.
 """
 function reconstruct! end
 
 """
-    extract_output(fip, reduction, data)
+    extract_output(sim, reduction, data)
 
 Extract the output of the forward run for the inversion.
 """
 function extract_output end
 
-export inversion_problem, solve!, forward_fastiso,
+export inversion_problem, run!, forward_fastiso,
     print_inversion_evolution, extract_inversion, reconstruct!, extract_output

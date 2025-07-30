@@ -1,3 +1,5 @@
+cudainfo() = CUDA.versioninfo()
+
 #####################################################
 # Unit conversion utils
 #####################################################
@@ -5,7 +7,7 @@
 global SECONDS_PER_YEAR = 60^2 * 24 * 365.25
 
 """
-    years2seconds(t::Real)
+$(TYPEDSIGNATURES)
 
 Convert input time `t` from years to seconds.
 """
@@ -14,7 +16,7 @@ function years2seconds(t::T) where {T<:AbstractFloat}
 end
 
 """
-    seconds2years(t::Real)
+$(TYPEDSIGNATURES)
 
 Convert input time `t` from seconds to years.
 """
@@ -23,7 +25,7 @@ function seconds2years(t::T) where {T<:AbstractFloat}
 end
 
 """
-    m_per_sec2mm_per_yr(dudt::Real)
+$(TYPEDSIGNATURES)
 
 Convert displacement rate `dudt` from ``m \\, s^{-1} ``to ``mm \\, \\mathrm{yr}^{-1} ``.
 """
@@ -36,32 +38,22 @@ end
 #####################################################
 
 not(x::Bool) = !x
-Base.fill(x::Real, fip::FastIsoProblem) = fill(x, fip.Omega)
-Base.fill(x::Real, Omega::ComputationDomain) = Omega.arraykernel(fill(x, Omega.Nx, Omega.Ny))
 
-function corner_matrix(T, Nx, Ny)
-    M = zeros(T, Nx, Ny)
-    M[1, 1], M[Nx, 1], M[1, Ny], M[Nx, Ny] = T.([1, 1, 1, 1])
+Base.zeros(domain::RegionalDomain) = zeros(eltype(domain.x), domain.nx, domain.ny)
+
+Base.fill(x::Real, sim::Simulation) = fill(x, sim.domain)
+Base.fill(x, domain::RegionalDomain) = fill(eltype(domain.x)(x), domain.nx, domain.ny)
+
+approx_in(item, collection, tol) = any(abs.(collection .- item) .< tol)
+
+function corner_matrix(T, nx, ny)
+    M = zeros(T, nx, ny)
+    M[1, 1], M[nx, 1], M[1, ny], M[nx, ny] = T.([1, 1, 1, 1])
     return M
 end
 
 """
-    samesize_conv_indices(N, M)
-
-Get the start and end indices required for a [`samesize_conv`](@ref)
-"""
-function samesize_conv_indices(N, M)
-    if iseven(N)
-        j1 = M
-    else
-        j1 = M+1
-    end
-    j2 = 2*N-1-M
-    return j1, j2
-end
-
-"""
-    matrify(x, Nx, Ny)
+$(TYPEDSIGNATURES)
 
 Generate a vector of constant matrices from a vector of constants.
 """
@@ -69,217 +61,20 @@ function matrify(x::Vector{<:Real}, N::Int)
     return matrify(x, N, N)
 end
 
-function matrify(x::Vector{T}, Nx::Int, Ny::Int) where {T<:Real}
-    # X = Array{T, 3}(undef, Nx, Ny, length(x))
-    X = zeros(T, Nx, Ny, length(x))
+function matrify(x::Vector{T}, nx::Int, ny::Int) where {T<:Real}
+    X = zeros(T, nx, ny, length(x))
     @inbounds for i in eachindex(x)
-        X[:, :, i] = fill(x[i], Nx, Ny)
+        X[:, :, i] = fill(x[i], nx, ny)
     end
     return X
 end
-
-"""
-    samesize_conv(X, ipc, Omega)
-
-Perform convolution of `X` with `ipc` and crop the result to the same size as `X`.
-"""
-function samesize_conv(X::M, ipc::InplaceConvolution{T, M, C, FP, IP},
-    Omega::ComputationDomain{T, L, M}) where {T<:AbstractFloat, L<:Matrix{T},
-    M<:KernelMatrix{T}, C<:ComplexMatrix{T}, FP<:ForwardPlan{T}, IP<:InversePlan{T}}
-    ipc(X)
-    apply_bc!(ipc.out, Omega.extended_bc_matrix, Omega.extended_nbc)
-    return view(ipc.out,
-        Omega.i1+Omega.convo_offset:Omega.i2+Omega.convo_offset,
-        Omega.j1-Omega.convo_offset:Omega.j2-Omega.convo_offset)
-end
-
-# Just a helper for blur! Not performant but we only blur at preprocessing
-# so we do not care :)
-function samesize_conv(X::M, Y::M, Omega::ComputationDomain) where
-    {T<:AbstractFloat, M<:KernelMatrix{T}}
-    (; i1, i2, j1, j2, convo_offset) = Omega
-    ipc = InplaceConvolution(X, false)
-    return samesize_conv(Y, ipc, i1, i2, j1, j2, convo_offset)
-end
-function samesize_conv(Y, ipc, i1, i2, j1, j2, convo_offset)
-    ipc(Y)
-    return view(ipc.out, i1+convo_offset:i2+convo_offset,
-        j1-convo_offset:j2-convo_offset)
-end
-
-function write_step!(ncout::NetcdfOutput{Tout}, state::CurrentState{T, M}, k::Int) where {
-    T<:AbstractFloat, M<:KernelMatrix{T}, Tout<:AbstractFloat}
-    for i in eachindex(ncout.varnames3D)
-        if M == Matrix{T}
-            ncout.buffer .= Tout.(getfield(state, ncout.varsfi3D[i]))
-        else
-            ncout.buffer .= Tout.(Array(getfield(state, ncout.varsfi3D[i])))
-        end
-        NetCDF.open(ncout.filename, mode = NC_WRITE) do nc
-            NetCDF.putvar(nc, ncout.varnames3D[i], ncout.buffer,
-                start = [1, 1, k], count = [-1, -1, 1])
-        end
-    end
-    for i in eachindex(ncout.varnames1D)
-        val = Tout(getfield(state, ncout.varsfi1D[i]))
-        NetCDF.open(ncout.filename, mode = NC_WRITE) do nc
-            NetCDF.putvar(nc, ncout.varnames1D[i], [val], start = [k], count = [1])
-        end
-    end
-end
-
-"""
-    write_out!(now, out, k)
-
-Write results in output vectors.
-"""
-function write_out!(out::SparseOutput{T}, now::CurrentState{T, M}, k::Int) where
-    {T<:AbstractFloat, M<:KernelMatrix{T}}
-    out.u[k] .= copy(Array(now.u))
-    out.ue[k] .= copy(Array(now.ue))
-    return nothing
-end
-
-function write_out!(out::IntermediateOutput{T}, now::CurrentState{T, M}, k::Int) where
-    {T<:AbstractFloat, M<:KernelMatrix{T}}
-    out.bsl[k] = now.bsl
-    out.u[k] .= copy(Array(now.u))
-    out.ue[k] .= copy(Array(now.ue))
-    out.dudt[k] .= copy(Array(now.dudt))
-    out.dz_ss[k] .= copy(Array(now.dz_ss))
-    return nothing
-end
-
-#####################################################
-# Domain and projection utils
-#####################################################
-"""
-    get_r(x::T, y::T) where {T<:Real}
-
-Get euclidean distance of point (x, y) to origin.
-"""
-get_r(x::T, y::T) where {T<:Real} = sqrt(x^2 + y^2)
-
-"""
-    meshgrid(x, y)
-
-Return a 2D meshgrid spanned by `x, y`.
-"""
-function meshgrid(x::V, y::V) where {T<:AbstractFloat, V<:AbstractVector{T}}
-    one_x, one_y = ones(T, length(x)), ones(T, length(y))
-    return x * one_y', one_x * y'
-end
-
-"""
-    dist2angulardist(r::Real)
-
-Convert Euclidean to angular distance along great circle.
-"""
-function dist2angulardist(r::T) where {T<:AbstractFloat}
-    R = T(6371e3)       # radius at equator
-    return 2 * atan( r / (2 * R) )
-end
-
-"""
-    lon360tolon180(lon, X)
-
-Convert longitude and field from `lon=0:360` to `lon=-180:180`.
-"""
-function lon360tolon180(lon, X)
-    permidx = lon .> 180
-    lon180 = vcat(lon[permidx] .- 360, lon[not.(permidx)])
-    X180 = cat(X[permidx, :, :], X[not.(permidx), :, :], dims=1)
-    return lon180, X180
-end
-
-"""
-    scalefactor(lat::T, lon::T, lat0::T, lon0::T) where {T<:Real}
-    scalefactor(lat::M, lon::M, lat0::T, lon0::T) where {T<:Real, M<:KernelMatrix{T}}
-
-Compute scaling factor of stereographic projection for a given `(lat, lon)` and reference
-`(lat0, lon0)`. Angles must be provided in radians.
-Reference: [^Snyder1987], p. 157, eq. (21-4).
-"""
-function scalefactor(lat::T, lon::T, lat0::T, lon0::T; k0::T = T(1)) where {T<:Real}
-    return 2*k0 / (1 + sin(lat0)*sin(lat) + cos(lat0)*cos(lat)*cos(lon-lon0))
-end
-
-function scalefactor(lat::M, lon::M, lat0::T, lon0::T; kwargs...,
-    ) where {T<:Real, M<:KernelMatrix{T}}
-    K = similar(lat)
-    @inbounds for idx in CartesianIndices(lat)
-        K[idx] = scalefactor(lat[idx], lon[idx], lat0, lon0; kwargs...)
-    end
-    return K
-end
-
-"""
-    latlon2stereo(lat, lon, lat0, lon0)
-
-Compute stereographic projection (x,y) for a given latitude `lat`
-longitude `lon`, reference latitude `lat0` and reference longitude `lon0`.
-Optionally one can provide `lat::KernelMatrix` and `lon::KernelMatrix`
-if the projection is to be computed for the whole domain.
-Note: angles must be provided in degrees!
-Reference: John P. Snyder (1987), p. 157, eq. (21-2), (21-3), (21-4).
-"""
-function latlon2stereo(lat::T, lon::T, lat0::T, lon0::T;
-    R::T = T(6371e3), kwargs...) where {T<:Real}
-    lat, lon, lat0, lon0 = deg2rad.([lat, lon, lat0, lon0])
-    k = scalefactor(lat, lon, lat0, lon0; kwargs...)
-    x = R * k * cos(lat) * sin(lon - lon0)
-    y = R * k * (cos(lat0) * sin(lat) - sin(lat0) * cos(lat) * cos(lon-lon0))
-    return k, x, y
-end
-
-function latlon2stereo(lat::M, lon::M, lat0::T, lon0::T; kwargs...,
-    ) where {T<:Real, M<:KernelMatrix{T}}
-    K, X, Y = similar(lat), similar(lat), similar(lat)
-    @inbounds for idx in CartesianIndices(lat)
-        K[idx], X[idx], Y[idx] = latlon2stereo(lat[idx], lon[idx], lat0, lon0; kwargs...)
-    end
-    return K, X, Y
-end
-
-"""
-    stereo2latlon(x, y, lat0, lon0)
-
-Compute the inverse stereographic projection `(lat, lon)` based on Cartesian coordinates
-`(x,y)` and for a given reference latitude `lat0` and reference longitude `lon0`.
-Optionally one can provide `x::KernelMatrix` and `y::KernelMatrix`
-if the projection is to be computed for the whole domain.
-Note: angles must be  para elloprovided in degrees!
-
-Convert stereographic (x,y)-coordinates to latitude-longitude.
-Reference: John P. Snyder (1987), p. 159, eq. (20-14), (20-15), (20-18), (21-15).
-"""
-function stereo2latlon(x::T, y::T, lat0::T, lon0::T;
-    R::T = T(6371e3), k0::T = T(1)) where {T<:Real}
-    lat0, lon0 = deg2rad.([lat0, lon0])
-    r = get_r(x, y) + 1e-8      # add small tolerance to avoid division by zero
-    c = 2 * atan(r, 2*R*k0)
-    lat = asin( cos(c) * sin(lat0) + y/r * sin(c) * cos(lat0) )
-    lon = lon0 + atan( x*sin(c), ( - y * sin(lat0) * sin(c)) ) #(r * cos(lat0) * cos(c) - y * sin(lat0) * sin(c)) 
-    return rad2deg(lat), rad2deg(lon)
-end
-
-function stereo2latlon(X::Matrix{T}, Y::Matrix{T}, lat0::T, lon0::T;
-    kwargs...) where {T<:Real}
-    Lat, Lon = copy(X), copy(X)
-    @inbounds for idx in CartesianIndices(X)
-        Lat[idx], Lon[idx] = stereo2latlon(X[idx], Y[idx], lat0, lon0; kwargs...)
-    end
-    return Lat, Lon
-end
-
 
 #####################################################
 # Math utils
 #####################################################
 
 """
-    gauss_distr(X::KernelMatrix{T}, Y::KernelMatrix{T},
-        mu::Vector{<:Real}, sigma::Matrix{<:Real})
+$(TYPEDSIGNATURES)
 
 Compute `Z = f(X,Y)` with `f` a Gaussian function parametrized by mean
 `mu` and covariance `sigma`.
@@ -298,42 +93,29 @@ function gauss_distr(X::M, Y::M, mu::Vector{T}, sigma::Matrix{T}) where
 end
 
 function generate_gaussian_field(
-    Omega::ComputationDomain{T, M},
+    domain::RegionalDomain{T, M},
     z_background::T,
     xy_peak::Vector{T},
     z_peak::T,
     sigma::Matrix{T},
 ) where {T<:AbstractFloat, M<:Matrix{T}}
-    if Omega.Nx == Omega.Ny
-        N = Omega.Nx
+    if domain.nx == domain.ny
+        N = domain.nx
     else
         error("Automated generation of Gaussian parameter fields only supported for" *
             "square domains.")
     end
-    G = gauss_distr( Omega.X, Omega.Y, xy_peak, sigma )
+    G = gauss_distr( domain.X, domain.Y, xy_peak, sigma )
     G = G ./ maximum(G) .* z_peak
     return fill(z_background, N, N) + G
 end
-
-function blur(X::AbstractMatrix, Omega::ComputationDomain, level::Real)
-    if not(0 <= level <= 1)
-        error("Blurring level must be a value between 0 and 1.")
-    end
-    T = eltype(X)
-    sigma = diagm([(level * Omega.Wx)^2, (level * Omega.Wy)^2])
-    kernel = T.(generate_gaussian_field(Omega, 0.0, [0.0, 0.0], 1.0, sigma))
-    kernel ./= sum(kernel)
-    # return copy(samesize_conv(Omega.arraykernel(kernel), Omega.arraykernel(X), Omega))
-    return samesize_conv(kernel, X, Omega)
-end
-
 
 #####################################################
 # Quadrature utils
 #####################################################
 
 """
-    get_quad_coeffs(T, n)
+$(TYPEDSIGNATURES)
 
 Return support points and associated coefficients with specified Type
 for Gauss-Legendre quadrature.
@@ -343,9 +125,8 @@ function get_quad_coeffs(T::Type, n::Int)
     return T.(x), T.(w)
 end
 
-
 """
-    quadrature1D(f, n, x1, x2)
+$(TYPEDSIGNATURES)
 
 Compute 1D Gauss-Legendre quadrature of `f` between `x1` and `x2`
 based on `n` support points.
@@ -362,7 +143,7 @@ function quadrature1D(f::Union{Function, Interpolations.Extrapolation},
 end
 
 """
-    quadrature2D(f, x, w, x1, x2, y1, y2)
+$(TYPEDSIGNATURES)
 
 Return the integration of `f` over [`x1, x2`] x [`y1, y2`] with `x, w` some pre-computed
 support points and coefficients of the Gauss-Legendre quadrature.
@@ -389,7 +170,7 @@ function quadrature2D(
 end
 
 """
-    get_normalized_lin_transform(x1, x2)
+$(TYPEDSIGNATURES)
 
 Return parameters of linear function mapping `x1, x2` onto `-1, 1`.
 """
@@ -401,7 +182,7 @@ function get_normalized_lin_transform(x1::T, x2::T) where {T<:AbstractFloat}
 end
 
 """
-    normalized_lin_transform(y, m, p)
+$(TYPEDSIGNATURES)
 
 Apply normalized linear transformation with slope `m` and bias `p` on `y`.
 """
@@ -413,26 +194,10 @@ end
 # Kernel utils
 #####################################################
 
-function null(Omega::ComputationDomain{T, L, M}) where {T, L, M}
-    return zeros(T, Omega.Nx, Omega.Ny)
-end
+kernelzeros(domain) = domain.arraykernel(zeros(domain))
 
-function kernelnull(Omega::ComputationDomain{T, L, M}) where {T, L, M}
-    return Omega.arraykernel(zeros(T, Omega.Nx, Omega.Ny))
-end
-
-# function null(Omega::ComputationDomain{T, L, M}) where {T, L, M}
-#     return L(undef, Omega.Nx, Omega.Ny)
-# end
-
-# function kernelnull(Omega::ComputationDomain{T, L, M}) where {T, L, M}
-#     return M(undef, Omega.Nx, Omega.Ny)
-# end
-
-# null(Omega::ComputationDomain) = copy(Omega.null)
-
-function kernelcollect(X, Omega)
-    if not(Omega.use_cuda)
+function kernelcollect(X, domain)
+    if not(domain.use_cuda)
         return collect(X)
     else
         return X
@@ -440,126 +205,78 @@ function kernelcollect(X, Omega)
 end
 
 """
-    kernelpromote(X, arraykernel)
+$(TYPEDSIGNATURES)
 
 Promote X to the kernel (`Array` or `CuArray`) specified by `arraykernel`.
 """
-function kernelpromote(X::M, arraykernel) where {M<:AbstractArray{T}} where {T<:Real}
+function kernelpromote(X, arraykernel)
     if isa(X, arraykernel)
         return X
     else
         return arraykernel(X)
     end
 end
-
 kernelpromote(X::Vector, arraykernel) = [arraykernel(x) for x in X]
 
 
-"""
-    reinit_structs_cpu(Omega, p)
+# function remake!(sim::Simulation)
 
-Reinitialize `Omega::ComputationDomain` and `p::LayeredEarth` on the CPU, mostly
-for post-processing purposes.
-"""
-function reinit_structs_cpu(Omega::ComputationDomain{T, M}, p::LayeredEarth{T, M}
-    ) where {T<:AbstractFloat, M<:KernelMatrix{T}}
+#     T = Float64
+#     (; domain, ref, now) = sim
 
-    Omega_cpu = ComputationDomain(Omega.Wx, Omega.Wy, Omega.Nx, Omega.Ny, use_cuda = false)
-    p_cpu = LayeredEarth(
-        Omega_cpu;
-        layer_boundaries = Array(p.layer_boundaries),
-        layer_viscosities = Array(p.layer_viscosities),
-    )
-    return Omega_cpu, p_cpu
-end
+#     now.u .= ref.u
+#     now.dudt .= T.(0.0)
+#     now.ue .= ref.ue
+#     now.u_eq .= ref.u
+#     now.ucorner = T(0.0)
+#     now.H_ice .= ref.H_ice
+#     now.H_water .= ref.H_water
+#     now.columnanoms = ColumnAnomalies(domain)
+#     now.z_b .= ref.z_b
+#     now.bsl = ref.bsl
+#     now.dz_ss .= T.(0.0)
+#     now.z_ss .= ref.z_ss
+#     now.V_af = ref.V_af
+#     now.V_pov = ref.V_pov
+#     now.V_den = ref.V_den
+#     now.maskgrounded .= ref.maskgrounded
+#     now.maskocean .= ref.maskocean
+#     now.osc = OceanSurfaceChange(T = T, z0 = ref.bsl)
+#     now.count_sparse_updates = 0
+#     now.k = 1
 
-function choose_fft_plans(X, use_cuda)
-    if use_cuda
-        pfft! = CUFFT.plan_fft!(complex.(X))
-        pifft! = CUFFT.plan_ifft!(complex.(X))
-    else
-        pfft! = plan_fft!(complex.(X))
-        pifft! = plan_ifft!(complex.(X))
-    end
-    return pfft!, pifft!
-end
-
-function remake!(fip::FastIsoProblem)
-    # Get values from ReferenceState
-    fip.now.u .= copy(fip.ref.u)
-    fip.now.ue .= copy(fip.ref.ue)
-    fip.now.z_ss .= copy(fip.ref.z_ss)
-    fip.now.H_water .= copy(fip.ref.H_water)
-    fip.now.H_ice .= fip.tools.Hice(fip.ncout.t[1])
-    fip.now.b .= copy(fip.ref.b)
-
-    # Some values are not included in ReferenceState and need to be init with 0.
-    fip.now.dudt .= kernelnull(fip.Omega)
-    fip.now.dz_ss .= kernelnull(fip.Omega)
-    fip.now.countupdates = 0
-    fip.now.columnanoms = ColumnAnomalies(fip.Omega)
-    return nothing
-end
-
-#####################################################
-# BC utils
-#####################################################
-
-function periodic_extension(M::Matrix{T}, Nx::Int, Ny::Int) where {T<:AbstractFloat}
-    M_periodic = zeropad_extension(M, Nx, Ny)
-    M_periodic[1, 2:end-1] .= M[end, :]
-    M_periodic[end, 2:end-1] .= M[1, :]
-    M_periodic[2:end-1, 1] .= M[:, end]
-    M_periodic[2:end-1, end] .= M[:, 1]
-    return M_periodic
-end
-
-function zeropad_extension(M::Matrix{T}, Nx::Int, Ny::Int) where {T<:AbstractFloat}
-    M_zeropadded = fill(T(0), Nx+2, Ny+2)
-    M_zeropadded[2:end-1, 2:end-1] .= M
-    return M_zeropadded
-end
-
-# function init()
-#     println("Initializing CUDA Stencil")
-#     @init_parallel_stencil(CUDA, Float64, 2)
-#     CUDA.allowscalar(false)
+#     return nothing
 # end
 
 #####################################################
 # Example utils
 #####################################################
 
-function mask_disc(X::KernelMatrix{T}, Y::KernelMatrix{T}, R::T;
-    center::Vector{<:Real}) where {T<:AbstractFloat}
+function mask_disc(X, Y, R; center = [0, 0])
     return mask_disc(sqrt.((X .- center[1]) .^ 2 + (Y .- center[2]) .^ 2), R)
 end
 
-function mask_disc(r::KernelMatrix{T}, R::T) where {T<:AbstractFloat}
+function mask_disc(r::KernelMatrix{T}, R) where {T<:AbstractFloat}
     return T.(r .< R)
 end
 
-function uniform_ice_cylinder(Omega::ComputationDomain, R::T, H::T;
+function uniform_ice_cylinder(domain::RegionalDomain, R::T, H::T;
     center::Vector{T} = T.([0.0, 0.0])) where {T<:AbstractFloat}
-    M = mask_disc(Omega.X, Omega.Y, R, center = center)
+    M = mask_disc(domain.X, domain.Y, R, center = center)
     return T.(M .* H)
 end
 
-function stereo_ice_cylinder(
-    Omega::ComputationDomain,
-    R::T,
-    H::T,
-) where {T<:AbstractFloat}
-    M = mask_disc(Omega.R, R)
+function stereo_ice_cylinder(domain::RegionalDomain, R, H)
+    M = mask_disc(domain.R, R)
     return M .* H
 end
 
 function stereo_ice_cap(
-    Omega::ComputationDomain,
+    domain::RegionalDomain,
     alpha_deg::T,
     H::T,
 ) where {T<:AbstractFloat}
     alpha = deg2rad(alpha_deg)
-    M = Omega.Theta .< alpha
-    return H .* sqrt.( M .* (cos.(Omega.Theta) .- cos(alpha)) ./ (1 - cos(alpha)) )
+    M = domain.Theta .< alpha
+    return H .* sqrt.( M .* (cos.(domain.Theta) .- cos(alpha)) ./ (1 - cos(alpha)) )
 end

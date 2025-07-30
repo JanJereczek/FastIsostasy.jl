@@ -1,48 +1,171 @@
 # API reference
 
-## Basic structs
+## Simulation
 
 ```@docs
-ComputationDomain
-PhysicalConstants
-LayeredEarth
-ReferenceState
-CurrentState
-FastIsoTools
+Simulation
 SolverOptions
-OceanSurfaceChange
-FastIsoProblem
+DiffEqOptions
+run!
+init_integrator
+OrdinaryDiffEqTsit5.step!
 ```
 
-## Mechanics
+## Computation domains
 
 ```@docs
-solve!(::FastIsoProblem)
-init
-step!
-update_diagnostics!
-lv_elva!
+AbstractDomain
+RegionalDomain
+GlobalDomain
+```
+
+## Boundary conditions
+
+```@docs
+BoundaryConditions
+apply_bc!
+```
+
+### Ice thickness
+```@docs
+AbstractIceThickness
+TimeInterpolatedIceThickness
+ExternallyUpdatedIceThickness
+```
+
+### Boundary condition spaces
+```@docs
+AbstractBCSpace
+RegularBCSpace
+ExtendedBCSpace
+```
+
+### Boundary condition rules
+```@docs
+AbstractBC
+OffsetBC
+NoBC
+CornerBC
+BorderBC
+DistanceWeightedBC
+MeanBC
+```
+
+## Sea level
+
+```@docs
+SeaLevel
+```
+
+### Barystatic sea level (BSL)
+
+```@docs
+AbstractBSL
+ConstantBSL
+ConstantOceanSurfaceBSL
+PiecewiseConstantBSL
+ImposedBSL
+CombinedBSL
+update_bsl!
+```
+
+### Sea surface (gravitional response)
+
+```@docs
+AbstractSeaSurface
+LaterallyConstantSeaSurface
+LaterallyVariableSeaSurface
+update_dz_ss!
+```
+
+### Sea level load
+
+```@docs
+AbstractSealevelLoad
+NoSealevelLoad
+InteractiveSealevelLoad
+columnanom_water!
+```
+
+## Solid Earth
+
+```@docs
+SolidEarth
+```
+
+### Lithosphere
+
+```@docs
+AbstractLithosphere
+RigidLithosphere
+LaterallyConstantLithosphere
+LaterallyVariableLithosphere
 update_elasticresponse!
 ```
 
-## Parameter inversion
+### Mantle
 
 ```@docs
-InversionConfig
-InversionData
-InversionProblem
-inversion_problem
-ParameterReduction
-print_inversion_evolution
-extract_inversion
-reconstruct!
-extract_output
+AbstractMantle
+RigidMantle
+RelaxedMantle
+MaxwellMantle
+update_dudt!
 ```
 
-## Convenience
+### Layering
+```@docs
+AbstractLayering
+UniformLayering
+ParallelLayering
+EqualizedLayering
+FoldedLayering
+get_layer_boundaries
+```
+
+### Calibration
+```@docs
+AbstractCalibration
+NoCalibration
+SeakonCalibration
+apply_calibration!
+```
+
+### Viscosity lumping
+```@docs
+AbstractViscosityLumping
+TimeDomainViscosityLumping
+FreqDomainViscosityLumping
+MeanViscosityLumping
+MeanLogViscosityLumping
+get_effective_viscosity_and_scaling
+```
+
+### Material utilities
 
 ```@docs
+get_rigidity
+get_shearmodulus
+get_elastic_green
+get_flexural_lengthscale
+calc_viscous_green
+get_relaxation_time
+get_relaxation_time_weaker
+get_relaxation_time_stronger
+```
+
+## Input/Output (I/O)
+```@docs
 load_dataset
-reinit_structs_cpu
-write_out!
+NetcdfOutput
+NativeOutput
+```
+
+## Makie utilities
+```@docs
+plot_transect
+plot_load
+plot_earth
+plot_out_at_time
+plot_out_over_time
 ```

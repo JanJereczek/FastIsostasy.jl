@@ -21,7 +21,7 @@ function main(N, isl; use_cuda = false, mask_bsl = true)
     if isl
         k_lgm = argmax([mean(Hice_vec[k]) for k in eachindex(Hice_vec)])
         sharp_lgm_mask = Float64.(Hice_vec[k_lgm] .> 1e-3)
-        blurred_lgm = blur(sharp_lgm_mask, Omega, 0.05)
+        blurred_lgm = gaussian_smooth(sharp_lgm_mask, Omega, 0.05)
         blurred_lgm_mask = blurred_lgm .> 0.1 * maximum(blurred_lgm)
     else
         blurred_lgm_mask = Omega.X .< Inf
@@ -51,7 +51,7 @@ function main(N, isl; use_cuda = false, mask_bsl = true)
     println("Computation took $(fip.out.computation_time) s")
 
     dir = @__DIR__
-    path = "$dir/../../data/test4/ICE6G/elra-interactivesl=$isl-maskbsl=$mask_bsl-N=$(Omega.Nx)"
+    path = "$dir/../../data/test4/ICE6G/elra-interactivesl=$isl-maskbsl=$mask_bsl-N=$(Omega.nx)"
     savefip("$path.nc", fip)
 end
 

@@ -58,7 +58,7 @@ function main(N)
     println("Computation took $(fip.out.computation_time) s")
 
     @save "../data/test4/ICE6G/1D-N="*
-        "$(Omega.Nx)-premparams.jld2" t fip Hitp Hice_vec deltaH
+        "$(Omega.nx)-premparams.jld2" t fip Hitp Hice_vec deltaH
 end
 
 main(350)

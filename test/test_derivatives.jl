@@ -1,61 +1,69 @@
-function derivative_stdsetup(use_cuda::Bool)
-    W, n = 3000e3, 7
-    Omega = ComputationDomain(W, n, correct_distortion = false, use_cuda = use_cuda)
-    c, p, t_out, _, _, t_Hice, Hice = benchmark1_constants(Omega)
-    fip = FastIsoProblem(Omega, c, p, t_out, t_Hice, Hice)
-
-    u = Omega.X .^ 2 .* Omega.Y .^ 2
-    uxx = 2 .* Omega.Y .^ 2
-    uyy = 2 .* Omega.X .^ 2
-    uxy = 4 .* Omega.X .* Omega.Y
-    return Omega, fip.tools.prealloc, Omega.arraykernel(u), uxx, uyy, uxy
+function inn(X)
+    nx, ny = size(X)
+    return view(X, 2:nx-1, 2:ny-1)
 end
 
-function test_derivatives(P, u, Omega, uxx, uyy, uxy)
-    update_second_derivatives!(P.buffer_xx, P.buffer_yy, P.buffer_x, P.buffer_xy, u, Omega)
+function derivative_stdsetup(use_cuda::Bool)
+    W, n = 3f6, 7
+    domain = RegionalDomain(W, n, use_cuda = use_cuda)
+    it = ExternallyUpdatedIceThickness()
+    bcs = BoundaryConditions(domain, ice_thickness = it)
+    solidearth = SolidEarth(domain)
+    sealevel = SeaLevel()
+    sim = Simulation(domain, bcs, sealevel, solidearth, tspan = (0f0, 50f3))
+
+    u = domain.X .^ 2 .* domain.Y .^ 2
+    uxx = 2 .* domain.Y .^ 2
+    uyy = 2 .* domain.X .^ 2
+    uxy = 4 .* domain.X .* domain.Y
+    return domain, sim.tools.prealloc, domain.arraykernel(u), uxx, uyy, uxy
+end
+
+function test_derivatives(P, u, domain, uxx, uyy, uxy)
+    update_second_derivatives!(P.buffer_xx, P.buffer_yy, P.buffer_x, P.buffer_xy, u, domain)
     @test inn(Array(P.buffer_xx)) ≈ inn(uxx)
     @test inn(Array(P.buffer_yy)) ≈ inn(uyy)
     @test inn(Array(P.buffer_xy)) ≈ inn(uxy)
 end
 
 @testset "derivatives" begin
-    Omega, P, u, uxx, uyy, uxy = derivative_stdsetup(false)
-    test_derivatives(P, u, Omega, uxx, uyy, uxy)
+    domain, P, u, uxx, uyy, uxy = derivative_stdsetup(false)
+    test_derivatives(P, u, domain, uxx, uyy, uxy)
 end
 
 
 #=
 # function check_uneven_pseudodiff()
-Omega = ComputationDomain(3000e3, 7, correct_distortion = false)
-X, Y, K = Omega.X, Omega.Y, Omega.K
+domain = RegionalDomain(3000e3, 7, correct_distortion = false)
+X, Y, K = domain.X, domain.Y, domain.K
 # F = sin.(X) + 4 .* cos.(Y) + (X .* Y) .^ 2
 F = 2 .* X .+ 4 .* Y
-dF = real.(ifft(Omega.pseudodiff .* fft(F)))
-# x = Omega.X[:, Omega.My]
+dF = real.(ifft(domain.pseudodiff .* fft(F)))
+# x = domain.X[:, domain.my]
 
-OmegaK = ComputationDomain(3000e3, 7, correct_distortion = true)
-X, Y, K = OmegaK.X, OmegaK.Y, OmegaK.K
+domainK = RegionalDomain(3000e3, 7, correct_distortion = true)
+X, Y, K = domainK.X, domainK.Y, domainK.K
 # G = sin.(X .* K) + 4 .* cos.(Y .* K) + (X .* K .* Y .* K) .^ 2
 G = 2 .* (X .* K) .+ 4 .* (Y .* K)
-dG = real.(ifft(OmegaK.pseudodiff .* fft(G)))
+dG = real.(ifft(domainK.pseudodiff .* fft(G)))
 
-dX = real.(ifft(Omega.pseudodiff .* fft(X)))
-dXk = real.(ifft(OmegaK.pseudodiff .* fft(X .* K)))
+dX = real.(ifft(domain.pseudodiff .* fft(X)))
+dXk = real.(ifft(domainK.pseudodiff .* fft(X .* K)))
 ______________________________________________________________
 
-pd = real.(fft( ifft(Omega.pseudodiff) ./ Omega.K ))
-dXK = real.(ifft(pd .* fft(OmegaK.X .* OmegaK.K)))
+pd = real.(fft( ifft(domain.pseudodiff) ./ domain.K ))
+dXK = real.(ifft(pd .* fft(domainK.X .* domainK.K)))
 
-dX = real.(ifft(Omega.pseudodiff .* fft(Omega.X)))
+dX = real.(ifft(domain.pseudodiff .* fft(domain.X)))
 
-Xk = OmegaK.K .* OmegaK.X
-Yk = OmegaK.K .* OmegaK.Y
+Xk = domainK.K .* domainK.X
+Yk = domainK.K .* domainK.Y
 xk = vec(Xk)
 yk = vec(Yk)
 k = vcat(xk', yk') ./ 1e7
-ipd = vec(real.(ifft(Omega.pseudodiff)))
+ipd = vec(real.(ifft(domain.pseudodiff)))
 nfft(k, ipd)
-# dXKK = real.(ifft(Omega.pseudodiff .* fft(Omega.X)))
+# dXKK = real.(ifft(domain.pseudodiff .* fft(domain.X)))
 
-scaling = fft(OmegaK.X .* OmegaK.K) ./ (fft(Omega.X) .+ 1e3)
+scaling = fft(domainK.X .* domainK.K) ./ (fft(domain.X) .+ 1e3)
 =#

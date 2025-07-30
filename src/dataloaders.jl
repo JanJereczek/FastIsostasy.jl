@@ -1,7 +1,7 @@
 const isos_data = "https://github.com/JanJereczek/isostasy_data"
 
 """
-    load_dataset(name) → (dims), field, interpolator
+$(TYPEDSIGNATURES)
 
 Return the `dims::Tuple{Vararg{Vector}}`, the `field<:Array` and the `interpolator`
 corresponding to a data set defined by a unique `name::String`. For instance:
@@ -27,7 +27,7 @@ function load_dataset(name::String; kwargs...)
         return load_antarctic_3regionmask()
     ########################## Param and forcing fields #######################
     elseif name == "OceanSurfaceFunctionETOPO2022"
-        return load_oceansurfacefunction(; kwargs...)
+        return load_oceansurface_data(; kwargs...)
     elseif name == "BedMachine3"
         return load_bedmachine3(; kwargs...)
     elseif name == "ICE6G_D"
@@ -69,16 +69,12 @@ end
 #############################################################
 # Parameter fields
 #############################################################
-function load_oceansurfacefunction(; T = Float64, verbose = true)
+function load_oceansurface_data(; T = Float64, verbose = true)
     link = "$isos_data/raw/main/tools/ocean_surface/dz=0.1m.txt"
     tmp = download(link)
     data = readdlm(tmp)
     z, A = T.(data[:, 1]), T.(data[:, 2])
-    itp = linear_interpolation(z, A, extrapolation_bc = Flat())
-    if verbose
-        println("returning: z, A, interpolator")
-    end
-    return z, A, itp
+    return z, A, nothing
 end
 
 function load_bedmachine3(; var = "bed", T = Float64)
@@ -154,7 +150,7 @@ function load_prem()
     # radius, depth, density, Vpv, Vph, Vsv, Vsh, eta, Q-mu, Q-kappa
     M = readdlm(joinpath(@__DIR__, "input/PREM_1s.csv"), ',')[:, 1:7]
     M .*= 1e3
-    return ReferenceEarthModel([M[:, j] for j in axes(M, 2)]...)
+    return ReferenceSolidEarthModel([M[:, j] for j in axes(M, 2)]...)
 end
 
 

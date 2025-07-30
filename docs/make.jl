@@ -14,17 +14,25 @@ bib = CitationBibliography(
     style=:authoryear
 )
 
-Literate.markdown("src/examples/tutorial.jl", "src/examples"; credit = false)
+Literate.markdown("src/examples/benchmark_analytic.jl", "src/examples"; credit = false)
+Literate.markdown("src/examples/benchmark_1D.jl", "src/examples"; credit = false)
+Literate.markdown("src/examples/benchmark_3D.jl", "src/examples"; credit = false)
+Literate.markdown("src/examples/alternative_models.jl", "src/examples"; credit = false)
 Literate.markdown("src/examples/glacialcycle.jl", "src/examples"; credit = false)
-Literate.markdown("src/examples/inversion.jl", "src/examples"; credit = false)
 
-example_pages = ["examples/glacialcycle.md", "examples/inversion.md"]
+example_pages = [
+    "examples/benchmark_analytic.md",
+    "examples/benchmark_1D.md",
+    "examples/benchmark_3D.md",
+    "examples/alternative_models.md",
+    "examples/glacialcycle.md",
+]
+
 ref_pages = ["APIref.md", "fortran.md", "references.md"]
 # %% Build docs
 PAGES = [
     "index.md",
     "introGIA.md",
-    "examples/tutorial.md",
     "Examples" => example_pages,
     "References" => ref_pages,
 ]

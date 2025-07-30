@@ -10,8 +10,8 @@ function main(n::Int; use_cuda::Bool = false, dense::Bool = false)
     p = LayeredEarth(Omega, layer_viscosities = [1e21], layer_boundaries = [88e3])
 
     kernel = use_cuda ? "gpu" : "cpu"
-    println("Computing on $kernel and $(Omega.Ny) x $(Omega.Nx) grid...")
-    filename = "Nx=$(Omega.Nx)_Ny=$(Omega.Ny)_$(kernel)"
+    println("Computing on $kernel and $(Omega.ny) x $(Omega.nx) grid...")
+    filename = "nx=$(Omega.nx)_ny=$(Omega.ny)_$(kernel)"
     if dense
         filename *= "-dense"
         t_out = years2seconds.(0.0:100:50_000)
@@ -22,7 +22,7 @@ function main(n::Int; use_cuda::Bool = false, dense::Bool = false)
     R = T(1000e3)               # ice disc radius (m)
     H = T(1000)                 # ice disc thickness (m)
     Hcylinder = uniform_ice_cylinder(Omega, R, H)
-    Hice = [zeros(Omega.Nx, Omega.Ny), Hcylinder, Hcylinder]
+    Hice = [zeros(Omega.nx, Omega.ny), Hcylinder, Hcylinder]
     
     εt = 1e-8
     pushfirst!(t_out, -εt)
@@ -47,7 +47,7 @@ end
 Slight speed up if using powers of 2:
 
 This file:
-main(n, use_cuda = false, solver = BS3(), active_gs = false)
+main(n, use_cuda = false, solver = Tsit5(), active_gs = false)
 Took 0.6100420951843262 seconds!
 
 main(n, use_cuda = false, solver = "SimpleEuler", active_gs = false)
@@ -56,7 +56,7 @@ Took 14.107969999313354 seconds!
 ------------------------------------
 
 test1_rectangle.jl:
-main(63, 64, use_cuda = false, solver = BS3(), active_gs = false)
+main(63, 64, use_cuda = false, solver = Tsit5(), active_gs = false)
 Took 0.6303250789642334 seconds!
 
 main(63, 64, use_cuda = false, solver = "SimpleEuler", active_gs = false)

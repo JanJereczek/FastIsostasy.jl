@@ -19,7 +19,7 @@ function main()
 
     H, R = 1e3, 1000e3
     N = 256
-    filename = "Nx=$(N)_Ny=$(N)_cpu"
+    filename = "nx=$(N)_ny=$(N)_cpu"
     dir = "$(@__DIR__)/../../data/test1"
     @load "$dir/$filename.jld2" fip
     Omega, c, p, t_out = fip.Omega, fip.c, fip.p, fip.out.t
@@ -117,7 +117,7 @@ function main()
     t_end = years2seconds(t_plot[end])
     for n in eachindex(Nvec)
         Ni = Nvec[n]
-        fname = "Nx=$(Ni)_Ny=$(Ni)_cpu"
+        fname = "nx=$(Ni)_ny=$(Ni)_cpu"
         @load "$dir/$fname.jld2" fip
         Omega, c, p, t_out = fip.Omega, fip.c, fip.p, fip.out.t
 
@@ -178,7 +178,7 @@ function main()
         kernel = kernels[k]
         for j in eachindex(Nvec)
             N = Nvec[j]
-            fname = "Nx=$(N)_Ny=$(N)_$(kernel)"
+            fname = "nx=$(N)_ny=$(N)_$(kernel)"
             runtime[k][j] = get_runtime("../data/test1/$fname.jld2")
             delta_x[k][j] = NaN
         end

@@ -37,14 +37,14 @@ end
 function mainplot(n)
     N = 2^n
     kernel = "cpu"
-    suffix = "Nx$(N)_Ny$(N)_dense_premparams" # $(kernel)_
+    suffix = "nx$(N)_ny$(N)_dense_premparams" # $(kernel)_
 
     seakon_files = ["E0L4V4", "E0L0V1"]
     fastiso_files = ["ref_$suffix.jld2", "no_litho_$suffix.jld2"]
     elims = (-20, 45)
 
     u_fastiso, Omega = get_denseoutput_fastiso(fastiso_files)
-    t_elra, u_elra = get_ncdisplacement("elra_Nx$(N)_Ny$(N)")
+    t_elra, u_elra = get_ncdisplacement("elra_Nx$(N)_ny$(N)")
 
     idx, r = indices_latychev2023_indices("../data/Latychev/$(seakon_files[1])", -1, 3e6)
     r .*= 1e3

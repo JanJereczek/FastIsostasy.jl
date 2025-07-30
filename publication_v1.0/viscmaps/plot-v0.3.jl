@@ -17,7 +17,7 @@ n = 8
 kernel = "cpu"
 Omega = ComputationDomain(3000e3, n)
 c = PhysicalConstants()
-N = Omega.Nx
+N = Omega.nx
 suffix = "viscmap_N$N"
 lb = collect(100e3:100e3:300e3)
 

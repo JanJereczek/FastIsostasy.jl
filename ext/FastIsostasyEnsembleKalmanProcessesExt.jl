@@ -1,4 +1,4 @@
-module FastIsoInversion
+module FastIsostasyEnsembleKalmanProcessesExt
 
 using FastIsostasy
 using Distributions

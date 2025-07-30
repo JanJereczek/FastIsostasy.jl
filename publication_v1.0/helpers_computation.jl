@@ -4,7 +4,7 @@ function unpack(results::FastIsoProblem)
 end
 
 function vec_dHice(Omega, Lon, Lat, t, Hitp)
-    Hice_vec = [copy(Array(Omega.null)) for _ in t]
+    Hice_vec = [copy(Array(Omega.zeros)) for _ in t]
     for k in eachindex(t)
         for IJ in CartesianIndices(Lat)
             i, j = Tuple(IJ)

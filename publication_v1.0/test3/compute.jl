@@ -23,7 +23,7 @@ function main(n::Int, case::String; dense_out = false::Bool)
     R = T(1000e3)               # ice disc radius (m)
     H = T(1000)                 # ice disc thickness (m)
     Hcylinder = uniform_ice_cylinder(Omega, R, H)
-    Hice = [zeros(Omega.Nx, Omega.Ny), Hcylinder, Hcylinder]
+    Hice = [zeros(Omega.nx, Omega.ny), Hcylinder, Hcylinder]
 
     εt = 1e-8
     pushfirst!(t_out, -εt)
@@ -35,7 +35,7 @@ function main(n::Int, case::String; dense_out = false::Bool)
     println("Took $(fip.out.computation_time) seconds!")
     println("-------------------------------------")
 
-    filename = "$(case)_Nx$(Omega.Nx)_Ny$(Omega.Ny)_$(densekey)"
+    filename = "$(case)_Nx$(Omega.nx)_ny$(Omega.ny)_$(densekey)"
     path = "../data/test3/$filename"
     @save "$path.jld2" fip
     savefip("$path.nc", fip)

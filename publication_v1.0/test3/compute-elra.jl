@@ -17,7 +17,7 @@ function main(n::Int)
     R = T(1000e3)               # ice disc radius (m)
     H = T(1000)                 # ice disc thickness (m)
     Hcylinder = uniform_ice_cylinder(Omega, R, H)
-    Hice = [zeros(Omega.Nx, Omega.Ny), Hcylinder, Hcylinder]
+    Hice = [zeros(Omega.nx, Omega.ny), Hcylinder, Hcylinder]
 
     εt = 1e-8
     pushfirst!(t_out, -εt)
@@ -29,7 +29,7 @@ function main(n::Int)
     println("Took $(fip.out.computation_time) seconds!")
     println("-------------------------------------")
 
-    filename = "elra_Nx$(Omega.Nx)_Ny$(Omega.Ny)"
+    filename = "elra_Nx$(Omega.nx)_ny$(Omega.ny)"
     path = "$dir/../../data/test3/$filename"
     @save "$path.jld2" fip
     savefip("$path.nc", fip)

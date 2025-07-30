@@ -25,7 +25,7 @@ end
 
 function mainplot(n)
     N = 2^n
-    suffix = "Nx$(N)_Ny$(N)_dense"
+    suffix = "nx$(N)_ny$(N)_dense"
 
     seakon_files = ["E0L1V1", "E0L2V1", "E0L3V2", "E0L3V3"]
     fastiso_files = ["gaussian_lo_D_$suffix.jld2", "gaussian_hi_D_$suffix.jld2",
@@ -33,7 +33,7 @@ function mainplot(n)
     elims = (-30, 30)
 
     u_fastiso, Omega = get_denseoutput_fastiso(fastiso_files)
-    u_elva = get_denseoutput_fastiso("homogeneous_Nx$(N)_Ny$(N)_dense.jld2",)
+    u_elva = get_denseoutput_fastiso("homogeneous_Nx$(N)_ny$(N)_dense.jld2",)
     idx, r = indices_latychev2023_indices("../data/Latychev/$(seakon_files[1])", -1, 3e6)
     r .*= 1e3
     u_3DGIA = [load_latychev_gaussian("../data/Latychev/$file", idx) for file in seakon_files]
