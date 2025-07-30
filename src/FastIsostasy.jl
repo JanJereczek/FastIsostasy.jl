@@ -110,7 +110,7 @@ export zeros, not, cudainfo, kernelpromote, kernelzeros
 export update_second_derivatives!   #, dxx!, dyy!, FiniteDiffParams
 
 # loads.jl
-export height_above_floatation, watercolumn, columnanom_water!
+export height_above_floatation, columnanom_water!
 
 # topography.jl
 # export update_Haf!, update_bedrock!

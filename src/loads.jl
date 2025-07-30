@@ -54,14 +54,14 @@ $(TYPEDSIGNATURES)
 Update the water column based on the instance of `AbstractSealevelLoad`.
 """
 function columnanom_water!(sim::Simulation, ol::InteractiveSealevelLoad)
-    watercolumn!(sim)
+    watercolumn!(sim)   # This is needed for the BSL contribution!
     anom!(sim.now.columnanoms.seawater, sim.c.rho_seawater, sim.now.z_ss, sim.ref.z_ss)
     sim.now.columnanoms.seawater .*= sim.now.maskocean .* sim.solidearth.maskactive
     return nothing
 end
 
 function columnanom_water!(sim::Simulation, ol::NoSealevelLoad)
-    watercolumn!(sim)
+    watercolumn!(sim)   # This is needed for the BSL contribution!
     sim.now.columnanoms.seawater .= 0
     return nothing
 end
