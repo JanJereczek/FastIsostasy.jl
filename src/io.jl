@@ -169,7 +169,13 @@ io_dict[:litho_thickness] = Dict(
     "dims" => "x y",
     "map" => x -> 1f-3 .* x,        # Convert from m to km
 )
-
+io_dict[:pseudodiff_scaling] = Dict(
+    "shortname" => "R",
+    "longname" => "Pseudo-differential scaling",
+    "units" => "1",
+    "dims" => "x y",
+    "map" => x -> x,
+)
 """
 $(TYPEDSIGNATURES)
 
@@ -198,7 +204,7 @@ function NetcdfOutput(domain::RegionalDomain{T, L, M}, t, filename;
     params2D = [:effective_viscosity],
     Tout = Float32,
     output_crop = PaddedOutputCrop(0),
-    solid_earth_params = nothing,
+    solidearth = nothing,
 ) where {T<:AbstractFloat, L, M}
 
     isfile(filename) && rm(filename)
@@ -245,10 +251,10 @@ function NetcdfOutput(domain::RegionalDomain{T, L, M}, t, filename;
             nothing
         end
 
-        if solid_earth_params !== nothing
+        if solidearth !== nothing
             for i in eachindex(params2D)
                 j = params2D[i]
-                crop_promote!(buffer, solid_earth_params, j, Tout, M, output_crop)
+                crop_promote!(buffer, solidearth, j, Tout, M, output_crop)
                 NetCDF.open(filename, mode = NC_WRITE) do nc
                     NetCDF.putvar(nc, io_dict[j]["shortname"], io_dict[j]["map"].(buffer))
                 end
