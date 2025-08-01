@@ -93,7 +93,7 @@ function GIATools(domain, c, solidearth;
     cplxmatrices = [complex.(kernelzeros(domain)) for _ in 1:n_cplx_matrices]
     prealloc = PreAllocated(realmatrices..., cplxmatrices...)
     return GIATools(conv_helpers, viscous_convo, elastic_convo, dz_ss_convo,
-        smooth_convo, pfft!, pifft!, prealloc), viscous_green
+        smooth_convo, pfft!, pifft!, prealloc)
 end
 
 
