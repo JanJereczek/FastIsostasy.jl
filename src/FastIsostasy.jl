@@ -14,7 +14,7 @@ using OrdinaryDiffEqTsit5: init, ODEProblem, solve, DiscreteCallback, CallbackSe
 
 using ParallelStencil: ParallelStencil, @init_parallel_stencil, @parallel, @parallel_indices
 using Statistics: mean, cov, std
-using SpecialFunctions: besselj0, besselj1
+using SpecialFunctions: besselj0, besselj1, besselk
 
 # Init stencil on GPU. Will only be used if specified in RegionalDomain.
 allowscalar(false)
@@ -131,7 +131,7 @@ export AbstractCompressibility, IncompressibleMantle, CompressibleMantle, apply_
 
 export AbstractViscosityLumping, TimeDomainViscosityLumping
 export FreqDomainViscosityLumping, MeanViscosityLumping, MeanLogViscosityLumping
-export get_effective_viscosity_and_scaling
+export get_effective_viscosity_and_scaling, green_viscous
 
 export get_relaxation_time, get_relaxation_time_weaker, get_relaxation_time_stronger
 export get_rigidity, get_shearmodulus, get_elastic_green, get_flexural_lengthscale

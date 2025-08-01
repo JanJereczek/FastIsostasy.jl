@@ -176,6 +176,13 @@ io_dict[:pseudodiff_scaling] = Dict(
     "dims" => "x y",
     "map" => x -> x,
 )
+io_dict[:maskactive] = Dict(
+    "shortname" => "active_mask",
+    "longname" => "Mask where load is active",
+    "units" => "1",
+    "dims" => "x y",
+    "map" => x -> x,
+)
 """
 $(TYPEDSIGNATURES)
 

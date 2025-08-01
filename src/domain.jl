@@ -166,3 +166,5 @@ function RegionalDomain(
         R, Theta, Lat, Lon, K, K .* dx, K .* dy, (dx * dy) .* K .^ 2, correct_distortion,
         zeros, pseudodiff, use_cuda, arraykernel)
 end
+
+Base.eltype(domain::RegionalDomain) = eltype(domain.x)
