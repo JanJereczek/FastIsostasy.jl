@@ -116,7 +116,8 @@ function update_deformation_rhs!(sim::Simulation, u)
         muladd(sim.solidearth.litho_poissonratio, P.buffer_yy, P.buffer_xx)
     @. P.Myy = -sim.solidearth.litho_rigidity *
         muladd(sim.solidearth.litho_poissonratio, P.buffer_xx, P.buffer_yy)
-    @. P.Mxy = -sim.solidearth.litho_rigidity * (1 - sim.solidearth.litho_poissonratio) * P.buffer_xy
+    @. P.Mxy = -sim.solidearth.litho_rigidity *
+        (1 - sim.solidearth.litho_poissonratio) * P.buffer_xy
     update_second_derivatives!(P.buffer_xx, P.buffer_yy, P.buffer_x, P.buffer_xy,
         P.Mxx, P.Myy, P.Mxy, domain)
     @. P.rhs += P.buffer_xx + muladd(2, P.buffer_xy, P.buffer_yy)

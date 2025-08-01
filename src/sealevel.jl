@@ -134,7 +134,11 @@ function update_delta_V!(sim::Simulation)
 end
 
 total_volume(sim::Simulation) = sim.now.V_af * sim.c.rho_ice / sim.c.rho_seawater +
-    sim.now.V_den # + sim.now.V_pov
+    sim.now.V_den + sim.now.V_pov
+
+abstract type AbstractVolumeContribution end
+struct NoVolumeContribution end
+struct GoelzerVolumeContribution end
 
 """
 $(TYPEDSIGNATURES)
@@ -144,23 +148,14 @@ Note: we do not use (eq. 1) as it is only a special case of (eq. 13) that does n
 allow a correct representation of external sea-level forcings.
 """
 function update_V_af!(sim::Simulation)
-    sim.tools.prealloc.buffer_x .= (sim.now.H_af .- sim.ref.H_af) .* sim.domain.A 
+    sim.tools.prealloc.buffer_x .= sim.now.H_af .* sim.domain.A 
     sim.now.V_af = sum(sim.tools.prealloc.buffer_x)
     return nothing
 end
 
-"""
-$(TYPEDSIGNATURES)
-
-Update the volume contribution associated with the density difference between meltwater and
-sea water, as in [goelzer-brief-2020](@cite) (eq. 10).
-"""
-function update_V_den!(sim::Simulation)
-    density_factor = sim.c.rho_ice / sim.c.rho_water - sim.c.rho_ice / sim.c.rho_seawater
-    sim.tools.prealloc.buffer_x .= (sim.now.H_water .- sim.ref.H_water) .* sim.domain.A
-    sim.now.V_den = sum( sim.tools.prealloc.buffer_x ) * density_factor
-    return nothing
-end
+abstract type AbstractAdjustmentContribution end
+struct NoAdjustmentContribution end
+struct GoelzerAdjustmentContribution end
 
 """
 $(TYPEDSIGNATURES)
@@ -171,10 +166,27 @@ Note: we do not use eq. (8) as it is only a special case of eq. (14) that does n
 allow a correct representation of external sea-level forcings.
 """
 function update_V_pov!(sim::Simulation)
-    # sim.tools.prealloc.buffer_x .= sim.now.z_b .- sim.now.z_ss
-    # sim.tools.prealloc.buffer_x .= max.(sim.tools.prealloc.buffer_x, 0) .* sim.domain.A
-    # sim.tools.prealloc.buffer_x .= sim.tools.prealloc.buffer_x .* (sim.now.z_b .< sim.now.z_ss)
-    # sim.now.V_pov = sum( sim.tools.prealloc.buffer_x )
-    sim.now.V_pov = 0
+    # essentially watercolumn * surface
+    sim.tools.prealloc.buffer_x .= sim.now.z_ss .- sim.now.z_b
+    sim.tools.prealloc.buffer_x .= max.(sim.tools.prealloc.buffer_x, 0) .* sim.domain.A
+
+    sim.now.V_pov = sum( sim.tools.prealloc.buffer_x )
+    return nothing
+end
+
+abstract type AbstractDensityContribution end
+struct NoDensityContribution end
+struct GoelzerDensityContribution end
+
+"""
+$(TYPEDSIGNATURES)
+
+Update the volume contribution associated with the density difference between meltwater and
+sea water, as in [goelzer-brief-2020](@cite) (eq. 10).
+"""
+function update_V_den!(sim::Simulation)
+    density_factor = sim.c.rho_ice / sim.c.rho_water - sim.c.rho_ice / sim.c.rho_seawater
+    sim.tools.prealloc.buffer_x .= sim.now.H_ice .* sim.domain.A
+    sim.now.V_den = sum( sim.tools.prealloc.buffer_x ) * density_factor
     return nothing
 end

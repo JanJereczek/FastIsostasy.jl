@@ -136,6 +136,7 @@ mutable struct SolidEarth{
     litho_poissonratio::T
     mantle_poissonratio::T
     tau::M
+    scale_elralength::T
     litho_youngmodulus::T
     litho_shearmodulus::T
     rho_uppermantle::T
@@ -156,6 +157,7 @@ function SolidEarth(
     litho_poissonratio = T(DEFAULT_LITHO_POISSONRATIO),
     mantle_poissonratio = T(DEFAULT_MANTLE_POISSONRATIO),
     tau = T(DEFAULT_MANTLE_TAU),
+    scale_elralength = T(1),                        # Following LeMeur (1996, text below Eq. 3)
     rho_uppermantle = T(DEFAULT_RHO_UPPERMANTLE),   # Mean density of topmost upper mantle (kg m^-3)
     rho_litho = T(DEFAULT_RHO_LITHO),               # Mean density of lithosphere (kg m^-3)
 ) where {T<:AbstractFloat, L, M}
@@ -195,7 +197,7 @@ function SolidEarth(
         lithosphere, mantle, calibration, compressibility, lumping,
         effective_viscosity, pseudodiff_scaling, scaled_pseudodiff_inv,
         litho_thickness, litho_rigidity, kernelcollect(maskactive, domain),
-        litho_poissonratio, mantle_poissonratio, tau,
+        litho_poissonratio, mantle_poissonratio, tau, scale_elralength,
         litho_youngmodulus, litho_shearmodulus, rho_uppermantle, rho_litho,
     )
 

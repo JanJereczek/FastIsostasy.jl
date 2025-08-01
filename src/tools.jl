@@ -47,19 +47,17 @@ struct GIATools{
 end
 
 function GIATools(domain, c, solidearth;
-    quad_precision::Int = 4, rhs_smooth_radius = nothing)
+    quad_precision::Int = 4,
+    rhs_smooth_radius = nothing)
 
     T = eltype(domain.R)
 
-    # Build in-place convolution for viscous response (only used in ELRA)
-    L_w = get_flexural_lengthscale(
-        mean(solidearth.litho_rigidity),
-        solidearth.rho_uppermantle,
-        c.g,
-    )
-    kei = get_kei(domain, L_w)
     viscous_green = domain.arraykernel(T.(
-        calc_viscous_green(domain, mean(solidearth.litho_rigidity), kei, L_w)))
+        green_viscous(
+            domain,
+            solidearth.rho_uppermantle,
+            mean(solidearth.litho_rigidity),
+        )))
     conv_helpers = ConvolutionPlanHelpers(viscous_green)
     viscous_convo = ConvolutionPlan(viscous_green, conv_helpers)
 
