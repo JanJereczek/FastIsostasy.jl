@@ -264,6 +264,10 @@ function init_integrator(sim::Simulation)
 end
 
 function init_problem!(sim::Simulation)
+    update_V_af!(sim)
+    update_V_den!(sim)
+    update_V_pov!(sim)
+    total_volume(sim)
     update_diagnostics!(sim.now.dudt, sim.now.u, sim, sim.tspan[1])
     return nothing
 end
