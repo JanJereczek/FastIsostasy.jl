@@ -17,7 +17,7 @@ t_ice = [0, 1, 5f4]
 H_ice = [H_ice_0, H_ice_1, H_ice_1]
 it = TimeInterpolatedIceThickness(t_ice, H_ice, domain)
 bcs = BoundaryConditions(domain, ice_thickness = it)
-sealevel = SeaLevel()
+sealevel = RegionalSeaLevel()
 
 solidearth = SolidEarth(
     domain,

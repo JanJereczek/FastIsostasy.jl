@@ -34,7 +34,7 @@ solidearth = SolidEarth(    # Use the same geometry as in Bueler et al. (2007).
     rho_litho = 0f0,
 )
 
-sealevel = SeaLevel()               # Will be inactive if not specified.
+sealevel = RegionalSeaLevel()               # Will be inactive if not specified.
 
 nout = NativeOutput(vars = [:u],    # only store viscous displacement.
     t = [100, 500, 1500, 5000, 10_000, 50_000f0])

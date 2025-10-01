@@ -44,7 +44,7 @@ struct Simulation{
     CD,     # <:AbstractDomain
     PC,     # <:PhysicalConstants
     BCS,    # <:BoundaryConditions
-    SL,     # <:SeaLevel
+    SL,     # <:RegionalSeaLevel
     SE,     # <:SolidEarth
     SO,     # <:SolverOptions
     TL,    # <:GIATools
@@ -71,7 +71,7 @@ end
 function Simulation(
     domain,         # RegionalDomain
     bcs,            # BoundaryConditions
-    sealevel,       # SeaLevel
+    sealevel,       # RegionalSeaLevel
     solidearth;     # SolidEarth
     T = eltype(domain.R),
     tspan = extrema(bcs.ice_thickness.t_vec),

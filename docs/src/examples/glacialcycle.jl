@@ -22,12 +22,12 @@ k_lgm = argmax([mean(Hice_vec[k]) for k in eachindex(Hice_vec)])
 plot_load(domain, Hice_vec[k_lgm])
 
 #=
-This already looks like a much more exciting ice thickness field! Here again, the ice history is wrapped into an interpolator, which is passed to an instance of `BoundaryConditions`. We define the `SeaLevel` to include the gravitational response by making the surface a `LaterallyVariableSeaSurface`. Furthermore, we allow the changes in sea level to affect the deformational response of the solid Earth by setting `InteractiveSealevelLoad`. Finally, we compute the evolution of the barystatic sea level (BSL) according to a piece-wise constant approximation of the ocean surface as a function of the BSL:
+This already looks like a much more exciting ice thickness field! Here again, the ice history is wrapped into an interpolator, which is passed to an instance of `BoundaryConditions`. We define the `RegionalSeaLevel` to include the gravitational response by making the surface a `LaterallyVariableSeaSurface`. Furthermore, we allow the changes in sea level to affect the deformational response of the solid Earth by setting `InteractiveSealevelLoad`. Finally, we compute the evolution of the barystatic sea level (BSL) according to a piece-wise constant approximation of the ocean surface as a function of the BSL:
 =#
 
 it = TimeInterpolatedIceThickness(t .* 1e3, Hice_vec, domain)
 bcs = BoundaryConditions(domain, ice_thickness = it)
-sealevel = SeaLevel(
+sealevel = RegionalSeaLevel(
     surface = LaterallyVariableSeaSurface(),
     load = InteractiveSealevelLoad(),
     bsl = PiecewiseConstantBSL(),

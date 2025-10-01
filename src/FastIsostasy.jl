@@ -118,10 +118,13 @@ export height_above_floatation, columnanom_water!
 export get_maskgrounded, get_maskocean
 
 # sealevel.jl
-export SeaLevel
+export RegionalSeaLevel
 export AbstractSeaSurface, AbstractSealevelLoad
 export NoSealevelLoad, InteractiveSealevelLoad
 export LaterallyConstantSeaSurface, LaterallyVariableSeaSurface
+export AbstractVolumeContribution, GoelzerVolumeContribution, NoVolumeContribution
+export AbstractAdjustmentContribution, GoelzerAdjustmentContribution, NoAdjustmentContribution
+export AbstractDensityContribution, GoelzerDensityContribution, NoDensityContribution
 export update_dz_ss!
 
 # material.jl

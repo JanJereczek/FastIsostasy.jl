@@ -54,7 +54,7 @@ MeanBC
 ## Sea level
 
 ```@docs
-SeaLevel
+RegionalSeaLevel
 ```
 
 ### Barystatic sea level (BSL)

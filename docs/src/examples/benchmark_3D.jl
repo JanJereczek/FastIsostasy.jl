@@ -22,7 +22,7 @@ t_ice = [0, 1f-8, 50f3]
 H_ice = [H_ice_0, H_ice_1, H_ice_1]
 it = TimeInterpolatedIceThickness(t_ice, H_ice, domain)
 bcs = BoundaryConditions(domain, ice_thickness = it)
-sealevel = SeaLevel()
+sealevel = RegionalSeaLevel()
 
 sigma = diagm([(W/4)^2, (W/4)^2])
 thinning_lithosphere = generate_gaussian_field(domain, 150f3, [0f0, 0], -100f3, sigma)

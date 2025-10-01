@@ -19,7 +19,7 @@ H_ice_1 = stereo_ice_cap(domain, alpha, Hmax)
 fig = plot_load(domain, H_ice_1)
 
 #=
-This already looks a bit more like a real ice sheet! Again, let's wrap this into an interpolator passed to a `BoundaryConditions` instance. The current example is of interest because 1D GIA models include the elastic and the gravitational response to changes in the surface load. The former is included by default in `SolidEarth` (unless specified, as done in the previous example) and the latter can be specified in the `SeaLevel` instance:
+This already looks a bit more like a real ice sheet! Again, let's wrap this into an interpolator passed to a `BoundaryConditions` instance. The current example is of interest because 1D GIA models include the elastic and the gravitational response to changes in the surface load. The former is included by default in `SolidEarth` (unless specified, as done in the previous example) and the latter can be specified in the `RegionalSeaLevel` instance:
 =#
 
 t_ice = [-1f-3, 0, 100f3]
@@ -27,7 +27,7 @@ H_ice = [H_ice_0, H_ice_1, H_ice_1]
 it = TimeInterpolatedIceThickness(t_ice, H_ice, domain)     # Wrap in time interpolator
 bcs = BoundaryConditions(domain, ice_thickness = it)        # Pass to boundary conditions
 
-sealevel = SeaLevel(surface = LaterallyVariableSeaSurface())    # gravitational response: on
+sealevel = RegionalSeaLevel(surface = LaterallyVariableSeaSurface())    # gravitational response: on
 
 G = 0.50605f11              # Shear modulus (Pa)
 nu = 0.28f0                 # Poisson ratio
