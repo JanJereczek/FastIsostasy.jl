@@ -1,14 +1,104 @@
+# AbstractBSLcontributions
+"""
+$(TYPEDSIGNATURES)
+
+An abstract type for barystatic sea level contributions. Subtypes are:
+ - [`AbstractVolumeContribution`](@ref)
+ - [`AbstractDensityContribution`](@ref)
+ - [`AbstractAdjustmentContribution`](@ref)
+
+This is typically used during the initialisation of a [`RegionalSeaLevel`](@ref) struct. For instance, if we want to compute the volume and density contributions following [goelzer-brief-2020](@citet) and ignore the adjustment contribution, we would write:
+
+```julia
+sealevel = RegionalSeaLevel(
+    volume_contribution = GoelzerVolumeContribution(),
+    density_contribution = GoelzerDensityContribution(),
+    adjustment_contribution = NoAdjustmentContribution()
+)
+```
+
+"""
+abstract type AbstractBarystaticContribution end
+
+# AbstractVolumeContribution
+"""
+$(TYPEDSIGNATURES)
+
+An abstract subtype of [`AbstractBarystaticContribution`] that accounts for the volume contribution. Subtypes are:
+ - [`NoVolumeContribution`](@ref)
+ - [`GoelzerVolumeContribution`](@ref)
+"""
 abstract type AbstractVolumeContribution end
+
+"""
+$(TYPEDSIGNATURES)
+
+A struct to ignore volume contribution to barystatic sea level.
+"""
 struct NoVolumeContribution end
+
+"""
+$(TYPEDSIGNATURES)
+
+A struct to compute the volume contribtion to barystatic sea level following [goelzer-brief-2020](@citet).
+"""
 struct GoelzerVolumeContribution end
 
-abstract type AbstractAdjustmentContribution end
-struct NoAdjustmentContribution end
-struct GoelzerAdjustmentContribution end
+"""
+$(TYPEDSIGNATURES)
 
+A struct to compute the volume contribtion to barystatic sea level following [adhikari-kinematic-2020](@citet).
+"""
+struct AdhikariVolumeContribution end
+
+
+# AbstractDensityContribution
+"""
+$(TYPEDSIGNATURES)
+
+An abstract subtype of [`AbstractBarystaticContribution`] that accounts for the density contribution. Subtypes are:
+ - [`NoDensityContribution`](@ref)
+ - [`GoelzerDensityContribution`](@ref)
+"""
 abstract type AbstractDensityContribution end
+
+"""
+$(TYPEDSIGNATURES)
+
+A struct to ignore density contribution to barystatic sea level.
+"""
 struct NoDensityContribution end
+
+"""
+$(TYPEDSIGNATURES)
+
+A struct to compute the density contribtion to barystatic sea level following [goelzer-brief-2020](@citet).
+"""
 struct GoelzerDensityContribution end
+
+# AbstractAdjustmentContribution
+"""
+$(TYPEDSIGNATURES)
+
+An abstract subtype of [`AbstractBarystaticContribution`] that accounts for the adjustment contribution. Subtypes are:
+ - [`NoAdjustmentContribution`](@ref)
+ - [`GoelzerAdjustmentContribution`](@ref)
+"""
+abstract type AbstractAdjustmentContribution end
+
+"""
+$(TYPEDSIGNATURES)
+
+An empty struct indicating that there is no adjustment contribution to barystatic sea level.
+"""
+struct NoAdjustmentContribution end
+
+"""
+$(TYPEDSIGNATURES)
+
+A struct to compute the adjustment contribtion to barystatic sea level following [goelzer-brief-2020](@citet).
+"""
+struct GoelzerAdjustmentContribution end
 
 ##################################################################
 # Sea level
@@ -78,7 +168,10 @@ Update the SSH perturbation `dz_ss` by convoluting the Green's function with the
 """
 function update_dz_ss!(sim::Simulation, sl::LaterallyVariableSeaSurface)
 
-    @. sim.tools.prealloc.buffer_x = mass_anom(sim.domain.A, sim.now.columnanoms.full)
+    # Assume that lithosphere carries without gravity anomaly (due to compression)
+    @. sim.tools.prealloc.buffer_x = sim.now.columnanoms.load +
+        sim.solidearth.maskactive * sim.now.columnanoms.mantle
+    @. sim.tools.prealloc.buffer_x = mass_anom(sim.domain.A, sim.tools.prealloc.buffer_x)
     samesize_conv!(sim.now.dz_ss, sim.tools.prealloc.buffer_x,
         sim.tools.dz_ss_convo, sim.tools.conv_helpers,
         sim.domain, sim.bcs.sea_surface_perturbation,
@@ -144,8 +237,8 @@ end
 function update_delta_V!(sim::Simulation)
     Vold = total_volume(sim)
     update_V_af!(sim, sim.sealevel.volume_contribution)
-    update_V_pov!(sim, sim.sealevel.adjustment_contribution)
     update_V_den!(sim, sim.sealevel.density_contribution)
+    update_V_pov!(sim, sim.sealevel.adjustment_contribution)
     Vnew = total_volume(sim)
     sim.now.delta_V = Vnew - Vold
     return nothing
@@ -171,6 +264,34 @@ function update_V_af!(sim::Simulation, vc::GoelzerVolumeContribution)
     return nothing
 end
 
+function update_V_af!(sim::Simulation, vc::AdhikariVolumeContribution)
+    L = 1 - mask_ocean
+    Lp1 = 1 - mask_ocean_p1
+    delta_H_m = delta_H * L * Lp1 + delta_H_f * (1 - L * Lp1)
+    delta_H_v = (1 - rho_water / rho_seawater) * (delta_H - delta_H_f) * (1 - L * Lp1)
+    sim.tools.prealloc.buffer_x .= (delta_H_m + delta_H_v) .* sim.domain.A
+    sim.now.V_af = sum(sim.tools.prealloc.buffer_x)
+end
+
+"""
+$(TYPEDSIGNATURES)
+
+Update the volume contribution associated with the density difference between meltwater and
+sea water, as in [goelzer-brief-2020](@cite) (eq. 10).
+"""
+function update_V_den!(sim::Simulation, dc::NoDensityContribution)
+    sim.now.V_den = 0.0
+    return nothing
+end
+
+function update_V_den!(sim::Simulation, dc::GoelzerDensityContribution)
+    density_factor = sim.c.rho_ice / sim.c.rho_water - sim.c.rho_ice / sim.c.rho_seawater
+    sim.tools.prealloc.buffer_x .= sim.now.H_ice .* sim.domain.A
+    sim.now.V_den = sum( sim.tools.prealloc.buffer_x ) * density_factor
+    return nothing
+end
+
+
 """
 $(TYPEDSIGNATURES)
 
@@ -190,23 +311,5 @@ function update_V_pov!(sim::Simulation, ac::GoelzerAdjustmentContribution)
     sim.tools.prealloc.buffer_x .= max.(sim.tools.prealloc.buffer_x, 0) .* sim.domain.A
 
     sim.now.V_pov = sum( sim.tools.prealloc.buffer_x )
-    return nothing
-end
-
-"""
-$(TYPEDSIGNATURES)
-
-Update the volume contribution associated with the density difference between meltwater and
-sea water, as in [goelzer-brief-2020](@cite) (eq. 10).
-"""
-function update_V_den!(sim::Simulation, dc::NoDensityContribution)
-    sim.now.V_den = 0.0
-    return nothing
-end
-
-function update_V_den!(sim::Simulation, dc::GoelzerDensityContribution)
-    density_factor = sim.c.rho_ice / sim.c.rho_water - sim.c.rho_ice / sim.c.rho_seawater
-    sim.tools.prealloc.buffer_x .= sim.now.H_ice .* sim.domain.A
-    sim.now.V_den = sum( sim.tools.prealloc.buffer_x ) * density_factor
     return nothing
 end
