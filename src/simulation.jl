@@ -264,9 +264,9 @@ function init_integrator(sim::Simulation)
 end
 
 function init_problem!(sim::Simulation)
-    update_V_af!(sim)
-    update_V_den!(sim)
-    update_V_pov!(sim)
+    update_V_af!(sim, sim.sealevel.volume_contribution)
+    update_V_den!(sim, sim.sealevel.density_contribution)
+    update_V_pov!(sim, sim.sealevel.adjustment_contribution)
     total_volume(sim)
     update_diagnostics!(sim.now.dudt, sim.now.u, sim, sim.tspan[1])
     return nothing
