@@ -73,4 +73,5 @@ solidearth_strong = SolidEarth(
 )
 sim_strong = Simulation(domain, bcs, sealevel, solidearth_strong; nout = nout)
 run!(sim_strong)
+println("Computation time (s): $(sim.nout.computation_time)")
 fig = plot_transect(sim_strong, [:u])
