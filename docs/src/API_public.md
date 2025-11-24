@@ -1,4 +1,4 @@
-# API reference
+# Public API
 
 ## Simulation
 
@@ -67,6 +67,9 @@ ConstantOceanSurfaceBSL
 PiecewiseConstantBSL
 ImposedBSL
 CombinedBSL
+AbstractBSLUpdate
+InternalBSLUpdate
+ExternalBSLUpdate
 update_bsl!
 ```
 
@@ -92,7 +95,6 @@ columnanom_water!
 
 ```@docs
 SolidEarth
-RefereneceSolidEarth
 ```
 
 ### Lithosphere
