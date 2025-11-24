@@ -152,10 +152,11 @@ end
 #####################################################
 
 nc_condition(_, t, integrator) = (length(integrator.p.ncout.t) >= 1) &&
-    (t >= integrator.p.ncout.t[integrator.p.ncout.k]) &&
-    (integrator.p.ncout.k <= length(integrator.p.ncout.t))
+    (integrator.p.ncout.k <= length(integrator.p.ncout.t)) &&
+    (t >= integrator.p.ncout.t[integrator.p.ncout.k])
 
 nout_condition(_, t, integrator) = (length(integrator.p.nout.t) >= 1) &&
+    (integrator.p.nout.k <= length(integrator.p.nout.t)) &&
     (t >= integrator.p.nout.t[integrator.p.nout.k])
 
 function nc_affect!(integrator)
