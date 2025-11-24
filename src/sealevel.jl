@@ -141,13 +141,13 @@ It contains:
  - `surface`: an instance of [`AbstractSeaSurface`](@ref) to represent the sea surface.
  - `load`: an instance of [`AbstractSealevelLoad`](@ref) to represent the sea-level load.
  - `bsl`: an instance of [`AbstractBSL`](@ref) to represent the barystatic sea level.
- - `update_bsl`: an instance of [`AbstractUpdateBSL`](@ref) to represent the update mechanism for the barystatic sea level.
+ - `update_bsl`: an instance of [`AbstractBSLUpdate`](@ref) to represent the update mechanism for the barystatic sea level.
 """
 @kwdef struct RegionalSeaLevel{
     S,          # <:AbstractSeaSurface,
     L,          # <:AbstractSealevelLoad,
     BSL,        # <:AbstractBSL,
-    UBSL,       # <:AbstractUpdateBSL,
+    UBSL,       # <:AbstractBSLUpdate,
     VC,         # <:AbstractVolumeContribution,
     AC,         # <:AbstractAdjustmentContribution,
     DC          # <:AbstractDensityContribution
@@ -155,7 +155,7 @@ It contains:
     surface::S = LaterallyConstantSeaSurface()  # lc or lv
     load::L = NoSealevelLoad()                  # no or interactive
     bsl::BSL = ConstantBSL()                    # constant, imposed, pw-constant or -linear
-    update_bsl::UBSL = InternalUpdateBSL()      # internal or external
+    update_bsl::UBSL = InternalBSLUpdate()      # internal or external
     volume_contribution::VC = GoelzerVolumeContribution()
     density_contribution::DC = GoelzerDensityContribution()
     adjustment_contribution::AC = NoAdjustmentContribution()
@@ -229,14 +229,14 @@ surface is not assumed to be constant. Furthermore, the contribution to ocean vo
 from the bedrock uplift is not included here since the volume displaced on site
 is arguably blanaced by the depression of the peripherial forebulge.
 """
-function internal_update_bsl!(sim::Simulation, up::InternalUpdateBSL)
+function internal_update_bsl!(sim::Simulation, up::InternalBSLUpdate)
     update_delta_V!(sim)
     update_bsl!(sim.sealevel.bsl, -sim.now.delta_V, sim.nout.t_steps_ode[end])
     sim.now.z_bsl = sim.sealevel.bsl.z
     return nothing
 end
 
-function internal_update_bsl!(sim::Simulation, up::ExternalUpdateBSL)
+function internal_update_bsl!(sim::Simulation, up::ExternalBSLUpdate)
     update_delta_V!(sim)
     return nothing
 end

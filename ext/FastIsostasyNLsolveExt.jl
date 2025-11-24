@@ -4,26 +4,6 @@ using NLsolve: mcpsolve
 # PiecewiseLinearOceanSurfaceBSL
 ###########################################################################################
 
-"""
-    PiecewiseLinearOceanSurfaceBSL{T}
-    PiecewiseLinearOceanSurfaceBSL(; ref, mcp_opts)
-
-A `mutable struct` that is only available if `using NLsolve` and contains:
-- `ref`: a [`ReferenceBSL`](@ref).
-- `z`: the current BSL.
-- `A`: the current ocean surface.
-- `residual`: residual of the nonlinear equation solved numerically.
-- `mcp_opts`: options for the MCP solver, such as `reformulation`, `autodiff`, `iterations`, `ftol`, and `xtol`.
-
-Note that, unlike [`ConstantOceanSurface`](@ref) and [`PiecewiseConstantOceanSurface`](@ref), this will only work if `using NLsolve`.
-"""
-mutable struct PiecewiseLinearOceanSurfaceBSL{T, R<:ReferenceBSL{T}} <: AbstractBSL{T}
-    ref::R
-    z::T
-    A::T
-    residual::T
-    mcp_opts::NamedTuple
-end
 
 function PiecewiseLinearOceanSurfaceBSL(; ref = ReferenceBSL(),
     mcp_opts = (reformulation = :smooth, autodiff = :forward,

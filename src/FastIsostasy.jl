@@ -59,7 +59,7 @@ include("coordinates.jl")
 # export TimeInterpolation0D, TimeInterpolation2D, interpolate!
 
 # barystatic_sealevel.jl
-export AbstractUpdateBSL, InternalUpdateBSL, ExternalUpdateBSL, ReferenceBSL
+export AbstractBSLUpdate, InternalBSLUpdate, ExternalBSLUpdate, ReferenceBSL
 export AbstractBSL, ConstantBSL, ConstantOceanSurfaceBSL, PiecewiseConstantBSL
 export PiecewiseLinearBSL, ImposedBSL, CombinedBSL
 export update_bsl!
@@ -138,7 +138,6 @@ export get_effective_viscosity_and_scaling, green_viscous
 
 export get_relaxation_time, get_relaxation_time_weaker, get_relaxation_time_stronger
 export get_rigidity, get_shearmodulus, get_elastic_green, get_flexural_lengthscale
-export calc_viscous_green
 
 # solidearth.jl
 export SolidEarth
