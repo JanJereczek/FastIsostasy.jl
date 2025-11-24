@@ -1,7 +1,7 @@
 #=
 # 3D GIA benchmark
 
-After comparing our results against analytical and 1D numerical solution, the obvious next step is to compare our results against 3D numerical solutions, where the lithospheric thickness and the mantle viscosity vary in x and y. We reproduce Test 3 from Swierczek-Jereczek et al. (2024), where a 1D Earth structure is perturbed by a Gaussian field in 4 different ways:
+After comparing our results against analytical and 1D numerical solution, the obvious next step is to compare our results against 3D numerical solutions, where the lithospheric thickness and the mantle viscosity vary in x and y. We reproduce Test 3 from [swierczek2024fastisostasy](@citet), where a 1D Earth structure is perturbed by a Gaussian field in 4 different ways:
 1. A reduction of the lithospheric thickness from 150 km (at margin of the domain) to 50 km (at the center of the domain).
 2. An increase of the lithospheric thickness from 150 km (at margin of the domain) to 250 km (at the center of the domain).
 3. A reduction of the mantle viscosity from 10^21 Pa s (at margin of the domain) to 10^20 Pa s (at the center of the domain).
@@ -86,7 +86,7 @@ solidearth = SolidEarth(
 fig = plot_earth(domain, solidearth)
 
 #=
-Here we used `SeakonCalibration` as calibration passed to `SolidEarth`. As described in Appendix C of Swierczek-Jereczek et al. (2024), this allows to include the effect of a laterally varying shear modulus on the effective viscosity, which yields about 1f20.5 instead of the expected 1f20.
+Here we used `SeakonCalibration` as calibration passed to `SolidEarth`. As described in Appendix C of [swierczek2024fastisostasy](@citet), this allows to include the effect of a laterally varying shear modulus on the effective viscosity, which yields about 1f20.5 instead of the expected 1f20.
 =#
 
 sim3 = Simulation(domain, bcs, sealevel, solidearth; nout = nout)

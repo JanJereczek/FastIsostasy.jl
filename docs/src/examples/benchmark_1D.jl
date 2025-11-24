@@ -61,7 +61,7 @@ This is at least 2 orders of magnitude faster than typical 1D GIA models, withou
 
 ## Bonus
 
-[swierczek-jereczek_fastisostasy_2024](@citet) provides a comparison between FastIsostasy and a 3D GIA model, while assuming a 1D Earth structure. The first case assumes a layered Earth corresponding to the preliminary reference Earth model (PREM, [dziewonski-preliminary-1981](@citet)) and can be reproduced as follows:
+[swierczek2024fastisostasy](@citet) provides a comparison between FastIsostasy and a 3D GIA model, while assuming a 1D Earth structure. The first case assumes a layered Earth corresponding to the preliminary reference Earth model (PREM, [dziewonski-preliminary-1981](@citet)) and can be reproduced as follows:
 =#
 
 H_ice_0 = zeros(domain)             # Load: 0 at the beginning...

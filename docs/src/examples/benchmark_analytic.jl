@@ -41,7 +41,7 @@ nout = NativeOutput(vars = [:u],    # only store viscous displacement.
 
 sim = Simulation(domain, bcs, sealevel, solidearth; nout = nout)
 run!(sim)
-fig = plot_()
+fig = plot_transect(sim, [:u])
 
 #=
 The viscous displacement field that we obtained is quite intuitive: its shape is largely determined by the forcing and its maximal amplitude is a fraction of the ice thickness is about \dfrac{ \rho_\mathrm{ice} }{ \rho_\mathrm{mantle} }. This simple example presents the advantage to have an analytical solution, which can be plotted along our solution:
