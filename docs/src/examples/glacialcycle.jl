@@ -38,7 +38,7 @@ Finally, we load the interpolators of earth structure thanks to the convenience 
 =#
 
 (_, _), Tpan, Titp = load_dataset("Lithothickness_Pan2022")
-Tlitho = Titp.(Lon, Lat) .* 1e3                     # convert from m to km
+Tlitho = Titp.(Lon, Lat) .* 1e3                     # convert from km to m
 (_, _, _), _, logeta_itp = load_dataset("Viscosity_Pan2022");
 
 #=
