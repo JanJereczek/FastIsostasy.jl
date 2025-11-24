@@ -152,7 +152,7 @@ function get_effective_viscosity_and_scaling(domain, layer_viscosities, layer_bo
 end
 
 function get_effective_viscosity_and_scaling(domain, layer_viscosities, layer_boundaries,
-    maskactive, lumping::FreqDomainViscosityLumping)
+    maskactive, lumping::FreqDomainViscosityLumping; show_steps = false)
 
     T = eltype(domain.dx)
     R = fill(1, domain)
@@ -167,7 +167,7 @@ function get_effective_viscosity_and_scaling(domain, layer_viscosities, layer_bo
                 layer_boundaries[:, :, end - l]
             viscosity_ratio .= layer_viscosities[:, :, end - l] ./ effective_viscosity
             R .*= channel_scaling_freqdomain_2D(domain, viscosity_ratio, channel_thickness, maskactive)
-            @show extrema(R)
+            show_steps && @show extrema(R)
             if maximum(R) == typemax(eltype(R))
                 error("The scaling factor R is too large. Try to introduce intermediate layers if you do not want to change the floating point precision.")
             end
@@ -229,34 +229,34 @@ function channel_scaling_freqdomain_0D(
     return channel_scaling(domain, kappa, channel_thickness, visc_ratio)
 end
 
-function channel_scaling(domain, kappa, channel_thickness, visc_ratio)
+function channel_scaling(domain, kappa, channel_thickness, visc_ratio; show_steps = false)
     Text = eltype(domain)
     Tint = Float64
 
-    @show extrema(visc_ratio)
-    @show extrema(channel_thickness)
+    show_steps && @show extrema(visc_ratio)
+    show_steps && @show extrema(channel_thickness)
 
     C = Tint.(cosh.(channel_thickness .* kappa))
-    @show extrema(C)
+    show_steps && @show extrema(C)
     S = Tint.(sinh.(channel_thickness .* kappa))
-    @show extrema(S)
+    show_steps && @show extrema(S)
 
     num = zeros(Tint, domain.nx, domain.ny)
     denum = copy(num)
 
     @. num += 2 * visc_ratio * C * S
-    @show extrema(num)
+    show_steps && @show extrema(num)
     @. num += (1 - visc_ratio ^ 2) * channel_thickness ^ 2 * kappa ^ 2
-    @show extrema(num)
+    show_steps && @show extrema(num)
     @. num += visc_ratio ^ 2 * S ^ 2 + C ^ 2
-    @show extrema(num)
+    show_steps && @show extrema(num)
 
     @. denum += (visc_ratio + 1 / visc_ratio) * C * S
-    @show extrema(denum)
+    show_steps && @show extrema(denum)
     @. denum += (visc_ratio - 1 / visc_ratio) * channel_thickness * kappa
-    @show extrema(denum)
+    show_steps && @show extrema(denum)
     @. denum += S ^ 2 + C ^ 2
-    @show extrema(denum)
+    show_steps && @show extrema(denum)
     
     return Text.(num ./ denum)
 end
