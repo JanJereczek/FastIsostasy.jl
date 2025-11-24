@@ -100,7 +100,7 @@ A struct to compute the adjustment contribtion to barystatic sea level following
 """
 struct GoelzerAdjustmentContribution end
 
-##################################################################
+################################################################
 # Sea level
 ################################################################
 
@@ -168,10 +168,7 @@ Update the SSH perturbation `dz_ss` by convoluting the Green's function with the
 """
 function update_dz_ss!(sim::Simulation, sl::LaterallyVariableSeaSurface)
 
-    # Assume that lithosphere carries without gravity anomaly (due to compression)
-    @. sim.tools.prealloc.buffer_x = sim.now.columnanoms.load +
-        sim.solidearth.maskactive * sim.now.columnanoms.mantle
-    @. sim.tools.prealloc.buffer_x = mass_anom(sim.domain.A, sim.tools.prealloc.buffer_x)
+    update_mass_anom!(sim, sim.solidearth.lithosphere_column)
     samesize_conv!(sim.now.dz_ss, sim.tools.prealloc.buffer_x,
         sim.tools.dz_ss_convo, sim.tools.conv_helpers,
         sim.domain, sim.bcs.sea_surface_perturbation,
@@ -181,6 +178,16 @@ end
 
 function update_dz_ss!(sim::Simulation, sl::LaterallyConstantSeaSurface)
     return nothing
+end
+
+function update_mass_anom!(sim, lc::CompressibleLithosphereColumn)
+    @. sim.tools.prealloc.buffer_x = sim.now.columnanoms.load +
+        sim.solidearth.maskactive * sim.now.columnanoms.mantle
+    @. sim.tools.prealloc.buffer_x = mass_anom(sim.domain.A, sim.tools.prealloc.buffer_x)
+end
+
+function update_mass_anom!(sim, lc::IncompressibleLithosphereColumn)
+    @. sim.tools.prealloc.buffer_x = mass_anom(sim.domain.A, sim.now.columnanoms.full)
 end
 
 """

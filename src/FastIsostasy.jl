@@ -145,6 +145,7 @@ export SolidEarth
 export AbstractLithosphere, AbstractMantle
 export RigidLithosphere, LaterallyConstantLithosphere, LaterallyVariableLithosphere
 export RigidMantle, RelaxedMantle, MaxwellMantle
+export AbstractLithosphereColumn, IncompressibleLithosphereColumn, CompressibleLithosphereColumn
 
 # deformation.jl
 export update_dudt!, update_deformation_rhs!, thinplate_horizontal_displacement
