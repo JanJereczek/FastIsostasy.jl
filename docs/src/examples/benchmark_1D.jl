@@ -58,4 +58,52 @@ println("Computation time (s): $(sim.nout.computation_time)")
 
 #=
 This is at least 2 orders of magnitude faster than typical 1D GIA models, without any major loss in accuracy!
+
+## Bonus
+
+[swierczek-jereczek_fastisostasy_2024](@citet) provides a comparison between FastIsostasy and a 3D GIA model, while assuming a 1D Earth structure. The first case assumes a layered Earth corresponding to the preliminary reference Earth model (PREM, [dziewonski-preliminary-1981](@citet)) and can be reproduced as follows:
 =#
+
+H_ice_0 = zeros(domain)             # Load: 0 at the beginning...
+H_ice_1 = 1f3 .* (domain.R .< 1f6)  # cylinder afterwards
+t_ice = [0, 1, 50f3]
+H_ice = [H_ice_0, H_ice_1, H_ice_1]
+it = TimeInterpolatedIceThickness(t_ice, H_ice, domain)
+bcs = BoundaryConditions(domain, ice_thickness = it)
+
+solidearth = SolidEarth(
+    domain,
+    layer_boundaries = [100f3, 670f3],
+    layer_viscosities = [0.5f21, 5f21],
+    rho_uppermantle = 3.6f3,
+    lumping = FreqDomainViscosityLumping(),
+)
+
+nout = NativeOutput(vars = [:u, :ue],                               # Define the fields to be saved...
+    t = [0, 1f3, 2f3, 3f3, 4f3, 5f3, 10f3, 20f3, 30f3, 40f3, 50f3]) # And the time steps!
+sim1 = Simulation(domain, bcs, sealevel, solidearth; nout = nout)
+run!(sim1)
+fig = plot_transect(sim1, [:ue, :u])
+
+#=
+The second case assumes the absence of lithosphere and a homogeneous mantle with a viscosity of 1e21 Pa s:
+=#
+
+solidearth = SolidEarth(
+    domain,
+    layer_boundaries = [1f0, 150f3],
+    layer_viscosities = [1f21, 1f21],
+    rho_uppermantle = 3.6f3,
+)
+nout = NativeOutput(vars = [:u, :ue],                               # Define the fields to be saved...
+    t = [0, 1f3, 2f3, 3f3, 4f3, 5f3, 10f3, 20f3, 30f3, 40f3, 50f3]) # And the time steps!
+sim2 = Simulation(domain, bcs, sealevel, solidearth; nout = nout)
+run!(sim2)
+fig = plot_transect(sim2, [:ue, :u])
+
+#=
+Finally, we can check the computation times:
+=#
+
+println("Computation time (s): $(sim1.nout.computation_time)")
+println("Computation time (s): $(sim2.nout.computation_time)")
