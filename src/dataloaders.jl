@@ -122,8 +122,10 @@ function load_lithothickness_pan2022()
     reverse!(Tlitho, dims=2)
     reverse!(lat)
     lon180, Tlitho180 = lon360tolon180(lon, Tlitho)
+    
+    Interpolations.deduplicate_knots!(lon180)
+    Interpolations.deduplicate_knots!(lat)
     itp = linear_interpolation((lon180, lat), Tlitho180[:, :, 1], extrapolation_bc = Flat())
-
     println("returning: (lon180, lat), Tlitho, interpolator")
     return (lon180, lat), Tlitho, itp
 end
@@ -135,6 +137,9 @@ function load_logvisc_pan2022()
     lat = ncread(tmp, "lat")
     r = ncread(tmp, "r")
     logvisc = ncread(tmp, "eta")
+    
+    Interpolations.deduplicate_knots!(lon)
+    Interpolations.deduplicate_knots!(lat)
     logvisc_itp = linear_interpolation((lon, lat, r), logvisc, extrapolation_bc = Flat())
     println("returning: (lon180, lat, r), eta (in log10 space), interpolator")
     return (lon, lat, r), logvisc, logvisc_itp
