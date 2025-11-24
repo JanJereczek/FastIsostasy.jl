@@ -5,7 +5,7 @@
 """
 $(TYPEDSIGNATURES)
 
-Update the time derivative of the viscous displacement `dudt` based on an [`Model`](@ref):
+Update the time derivative of the viscous displacement `dudt` based on an [`AbstractMantle`](@ref):
 - `RigidMantle`: no deformation, `dudt` is zero.
 - `RelaxedMantle` with `LaterallyConstantLithosphere`: uses ELRA (LeMeur & Huybrechts 1996)
   to compute the viscous response. This also works with laterally-variable relaxation time,
@@ -15,7 +15,7 @@ Update the time derivative of the viscous displacement `dudt` based on an [`Mode
 - `MaxwellMantle` with `LaterallyConstantLithosphere` or `RigidLithosphere`: not implemented.
   This corresponds to what is described in Bueler et al. (2007) but is not yet implemented.
 - `MaxwellMantle` with `LaterallyVariableLithosphere`: This corresponds to the approach
-  of Swierczek-Jereczek et al. (2024).
+  of [swierczek2024fastisostasy](@citet).
 """
 function update_dudt!(dudt, u, sim, t, earth::SolidEarth)
     update_dudt!(dudt, u, sim, t, earth.mantle, earth.lithosphere)

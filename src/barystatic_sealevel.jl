@@ -42,9 +42,29 @@ end
 
 Base.eltype(ref::ReferenceBSL{T}) where {T<:AbstractFloat} = T
 
-abstract type AbstractUpdateBSL end
-struct InternalUpdateBSL <: AbstractUpdateBSL end
-struct ExternalUpdateBSL <: AbstractUpdateBSL end
+"""
+$(TYPEDSIGNATURES)
+
+An abstract type to determine how the barystatic sea level (BSL) is updated
+over time. Available subtypes are:
+- [`InternalBSLUpdate`](@ref)
+- [`ExternalBSLUpdate`](@ref)
+"""
+abstract type AbstractBSLUpdate end
+
+"""
+$(TYPEDSIGNATURES)
+
+A struct to indicate that the BSL is updated internally by the model based on the change in ice volume.
+"""
+struct InternalBSLUpdate <: AbstractBSLUpdate end
+
+"""
+$(TYPEDSIGNATURES)
+
+A struct to indicate that the BSL is updated externally, without any internal update.
+"""
+struct ExternalBSLUpdate <: AbstractBSLUpdate end
 
 """
 $(TYPEDSIGNATURES)
@@ -54,7 +74,7 @@ Available subtypes are:
 - [`ConstantBSL`](@ref)
 - [`ConstantOceanSurfaceBSL`](@ref)
 - [`PiecewiseConstantBSL`](@ref)
-- [`PiecewiseLinearBSL`](@ref)
+- [`PiecewiseLinearOceanSurfaceBSL`](@ref) (requires `using NLsolve`)
 - [`ImposedBSL`](@ref)
 - [`CombinedBSL`](@ref)
 
@@ -127,6 +147,28 @@ end
 
 PiecewiseConstantBSL(; ref = ReferenceBSL()) = 
     PiecewiseConstantBSL(ref, ref.z, ref.A)
+
+
+"""
+    PiecewiseLinearOceanSurfaceBSL{T}
+    PiecewiseLinearOceanSurfaceBSL(; ref, mcp_opts)
+
+A `mutable struct` that is only available if `using NLsolve` and contains:
+- `ref`: a [`ReferenceBSL`](@ref).
+- `z`: the current BSL.
+- `A`: the current ocean surface.
+- `residual`: residual of the nonlinear equation solved numerically.
+- `mcp_opts`: options for the MCP solver, such as `reformulation`, `autodiff`, `iterations`, `ftol`, and `xtol`.
+
+Note that, unlike [`ConstantOceanSurface`](@ref) and [`PiecewiseConstantOceanSurface`](@ref), this will only work if `using NLsolve`.
+"""
+mutable struct PiecewiseLinearOceanSurfaceBSL{T, R<:ReferenceBSL{T}} <: AbstractBSL{T}
+    ref::R
+    z::T
+    A::T
+    residual::T
+    mcp_opts::NamedTuple
+end
 
 """
 $(TYPEDSIGNATURES)

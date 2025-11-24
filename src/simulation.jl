@@ -39,6 +39,13 @@ $(TYPEDSIGNATURES)
 Return a struct containing all the other structs needed for the forward integration of the
 model over `domain::RegionalDomain` with parameters `c::PhysicalConstants` and
 `solidearth::SolidEarth`. The outputs are stored at `t_out::Vector{<:AbstractFloat}`.
+To perform the whole simulation, `run!(sim::Simulation)` and to perform a single step:
+
+```julia
+tspan = (t_start, t_end)
+integrator = init_integrator(sim)
+step!(integrator, tspan)
+```
 """
 struct Simulation{
     CD,     # <:AbstractDomain
