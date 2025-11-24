@@ -59,10 +59,12 @@ function update_dudt!(dudt, u, sim, t, mantle::MaxwellMantle,
 
     # helper variables
     nabla = P.buffer_xx
-    @. nabla = 2 * sim.solidearth.effective_viscosity * sim.domain.pseudodiff * sim.solidearth.pseudodiff_scaling
+    @. nabla = 2 * sim.solidearth.effective_viscosity * sim.domain.pseudodiff *
+        sim.solidearth.pseudodiff_scaling
 
     beta = P.buffer_x
-    @. beta = sim.solidearth.rho_uppermantle * sim.c.g + sim.solidearth.litho_rigidity * sim.domain.pseudodiff ^ 4
+    @. beta = sim.solidearth.rho_uppermantle * sim.c.g + sim.solidearth.litho_rigidity *
+        sim.domain.pseudodiff ^ 4
 
     # fourier transform load
     @. P.fftF = - (sim.now.columnanoms.load +
