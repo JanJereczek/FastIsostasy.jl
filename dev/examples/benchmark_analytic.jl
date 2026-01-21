@@ -34,14 +34,14 @@ solidearth = SolidEarth(    # Use the same geometry as in Bueler et al. (2007).
     rho_litho = 0f0,
 )
 
-sealevel = SeaLevel()               # Will be inactive if not specified.
+sealevel = RegionalSeaLevel()               # Will be inactive if not specified.
 
 nout = NativeOutput(vars = [:u],    # only store viscous displacement.
     t = [100, 500, 1500, 5000, 10_000, 50_000f0])
 
 sim = Simulation(domain, bcs, sealevel, solidearth; nout = nout)
 run!(sim)
-fig = plot_()
+fig = plot_transect(sim, [:u])
 
 #=
 The viscous displacement field that we obtained is quite intuitive: its shape is largely determined by the forcing and its maximal amplitude is a fraction of the ice thickness is about \dfrac{ \rho_\mathrm{ice} }{ \rho_\mathrm{mantle} }. This simple example presents the advantage to have an analytical solution, which can be plotted along our solution:
