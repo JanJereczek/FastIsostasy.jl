@@ -28,7 +28,7 @@ example_pages = [
     "examples/glacialcycle.md",
 ]
 
-ref_pages = ["APIref.md", "fortran.md", "references.md"]
+ref_pages = ["API_public.md", "API_private.md", "fortran.md", "references.md"]
 # %% Build docs
 PAGES = [
     "index.md",

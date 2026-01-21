@@ -39,12 +39,19 @@ $(TYPEDSIGNATURES)
 Return a struct containing all the other structs needed for the forward integration of the
 model over `domain::RegionalDomain` with parameters `c::PhysicalConstants` and
 `solidearth::SolidEarth`. The outputs are stored at `t_out::Vector{<:AbstractFloat}`.
+To perform the whole simulation, `run!(sim::Simulation)` and to perform a single step:
+
+```julia
+tspan = (t_start, t_end)
+integrator = init_integrator(sim)
+step!(integrator, tspan)
+```
 """
 struct Simulation{
     CD,     # <:AbstractDomain
     PC,     # <:PhysicalConstants
     BCS,    # <:BoundaryConditions
-    SL,     # <:SeaLevel
+    SL,     # <:RegionalSeaLevel
     SE,     # <:SolidEarth
     SO,     # <:SolverOptions
     TL,    # <:GIATools
@@ -71,7 +78,7 @@ end
 function Simulation(
     domain,         # RegionalDomain
     bcs,            # BoundaryConditions
-    sealevel,       # SeaLevel
+    sealevel,       # RegionalSeaLevel
     solidearth;     # SolidEarth
     T = eltype(domain.R),
     tspan = extrema(bcs.ice_thickness.t_vec),
@@ -152,10 +159,11 @@ end
 #####################################################
 
 nc_condition(_, t, integrator) = (length(integrator.p.ncout.t) >= 1) &&
-    (t >= integrator.p.ncout.t[integrator.p.ncout.k]) &&
-    (integrator.p.ncout.k <= length(integrator.p.ncout.t))
+    (integrator.p.ncout.k <= length(integrator.p.ncout.t)) &&
+    (t >= integrator.p.ncout.t[integrator.p.ncout.k])
 
 nout_condition(_, t, integrator) = (length(integrator.p.nout.t) >= 1) &&
+    (integrator.p.nout.k <= length(integrator.p.nout.t)) &&
     (t >= integrator.p.nout.t[integrator.p.nout.k])
 
 function nc_affect!(integrator)
@@ -264,9 +272,9 @@ function init_integrator(sim::Simulation)
 end
 
 function init_problem!(sim::Simulation)
-    update_V_af!(sim)
-    update_V_den!(sim)
-    update_V_pov!(sim)
+    update_V_af!(sim, sim.sealevel.volume_contribution)
+    update_V_den!(sim, sim.sealevel.density_contribution)
+    update_V_pov!(sim, sim.sealevel.adjustment_contribution)
     total_volume(sim)
     update_diagnostics!(sim.now.dudt, sim.now.u, sim, sim.tspan[1])
     return nothing

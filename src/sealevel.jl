@@ -1,4 +1,106 @@
-##################################################################
+# AbstractBSLcontributions
+"""
+$(TYPEDSIGNATURES)
+
+An abstract type for barystatic sea level contributions. Subtypes are:
+ - [`AbstractVolumeContribution`](@ref)
+ - [`AbstractDensityContribution`](@ref)
+ - [`AbstractAdjustmentContribution`](@ref)
+
+This is typically used during the initialisation of a [`RegionalSeaLevel`](@ref) struct. For instance, if we want to compute the volume and density contributions following [goelzer-brief-2020](@citet) and ignore the adjustment contribution, we would write:
+
+```julia
+sealevel = RegionalSeaLevel(
+    volume_contribution = GoelzerVolumeContribution(),
+    density_contribution = GoelzerDensityContribution(),
+    adjustment_contribution = NoAdjustmentContribution()
+)
+```
+
+"""
+abstract type AbstractBarystaticContribution end
+
+# AbstractVolumeContribution
+"""
+$(TYPEDSIGNATURES)
+
+An abstract subtype of [`AbstractBarystaticContribution`] that accounts for the volume contribution. Subtypes are:
+ - [`NoVolumeContribution`](@ref)
+ - [`GoelzerVolumeContribution`](@ref)
+"""
+abstract type AbstractVolumeContribution end
+
+"""
+$(TYPEDSIGNATURES)
+
+A struct to ignore volume contribution to barystatic sea level.
+"""
+struct NoVolumeContribution end
+
+"""
+$(TYPEDSIGNATURES)
+
+A struct to compute the volume contribtion to barystatic sea level following [goelzer-brief-2020](@citet).
+"""
+struct GoelzerVolumeContribution end
+
+"""
+$(TYPEDSIGNATURES)
+
+A struct to compute the volume contribtion to barystatic sea level following [adhikari-kinematic-2020](@citet).
+"""
+struct AdhikariVolumeContribution end
+
+
+# AbstractDensityContribution
+"""
+$(TYPEDSIGNATURES)
+
+An abstract subtype of [`AbstractBarystaticContribution`] that accounts for the density contribution. Subtypes are:
+ - [`NoDensityContribution`](@ref)
+ - [`GoelzerDensityContribution`](@ref)
+"""
+abstract type AbstractDensityContribution end
+
+"""
+$(TYPEDSIGNATURES)
+
+A struct to ignore density contribution to barystatic sea level.
+"""
+struct NoDensityContribution end
+
+"""
+$(TYPEDSIGNATURES)
+
+A struct to compute the density contribtion to barystatic sea level following [goelzer-brief-2020](@citet).
+"""
+struct GoelzerDensityContribution end
+
+# AbstractAdjustmentContribution
+"""
+$(TYPEDSIGNATURES)
+
+An abstract subtype of [`AbstractBarystaticContribution`] that accounts for the adjustment contribution. Subtypes are:
+ - [`NoAdjustmentContribution`](@ref)
+ - [`GoelzerAdjustmentContribution`](@ref)
+"""
+abstract type AbstractAdjustmentContribution end
+
+"""
+$(TYPEDSIGNATURES)
+
+An empty struct indicating that there is no adjustment contribution to barystatic sea level.
+"""
+struct NoAdjustmentContribution end
+
+"""
+$(TYPEDSIGNATURES)
+
+A struct to compute the adjustment contribtion to barystatic sea level following [goelzer-brief-2020](@citet).
+"""
+struct GoelzerAdjustmentContribution end
+
+################################################################
 # Sea level
 ################################################################
 
@@ -28,7 +130,7 @@ the gravitational response is included in the sea surface perturbation.
 struct LaterallyVariableSeaSurface <: AbstractSeaSurface end
 
 ##################################################################
-# SeaLevel
+# RegionalSeaLevel
 ################################################################
 
 """
@@ -39,18 +141,24 @@ It contains:
  - `surface`: an instance of [`AbstractSeaSurface`](@ref) to represent the sea surface.
  - `load`: an instance of [`AbstractSealevelLoad`](@ref) to represent the sea-level load.
  - `bsl`: an instance of [`AbstractBSL`](@ref) to represent the barystatic sea level.
- - `update_bsl`: an instance of [`AbstractUpdateBSL`](@ref) to represent the update mechanism for the barystatic sea level.
+ - `update_bsl`: an instance of [`AbstractBSLUpdate`](@ref) to represent the update mechanism for the barystatic sea level.
 """
-@kwdef struct SeaLevel{
+@kwdef struct RegionalSeaLevel{
     S,          # <:AbstractSeaSurface,
     L,          # <:AbstractSealevelLoad,
     BSL,        # <:AbstractBSL,
-    UBSL,       # <:AbstractUpdateBSL,
+    UBSL,       # <:AbstractBSLUpdate,
+    VC,         # <:AbstractVolumeContribution,
+    AC,         # <:AbstractAdjustmentContribution,
+    DC          # <:AbstractDensityContribution
 }
-    surface::S = LaterallyConstantSeaSurface()         # lc or lv
-    load::L = NoSealevelLoad()                         # no or interactive
-    bsl::BSL = ConstantBSL()                            # constant, imposed, pw constant or pw linear
-    update_bsl::UBSL = InternalUpdateBSL()              # internal or external
+    surface::S = LaterallyConstantSeaSurface()  # lc or lv
+    load::L = NoSealevelLoad()                  # no or interactive
+    bsl::BSL = ConstantBSL()                    # constant, imposed, pw-constant or -linear
+    update_bsl::UBSL = InternalBSLUpdate()      # internal or external
+    volume_contribution::VC = GoelzerVolumeContribution()
+    density_contribution::DC = GoelzerDensityContribution()
+    adjustment_contribution::AC = NoAdjustmentContribution()
 end
 
 """
@@ -60,7 +168,7 @@ Update the SSH perturbation `dz_ss` by convoluting the Green's function with the
 """
 function update_dz_ss!(sim::Simulation, sl::LaterallyVariableSeaSurface)
 
-    @. sim.tools.prealloc.buffer_x = mass_anom(sim.domain.A, sim.now.columnanoms.full)
+    update_mass_anom!(sim, sim.solidearth.lithosphere_column)
     samesize_conv!(sim.now.dz_ss, sim.tools.prealloc.buffer_x,
         sim.tools.dz_ss_convo, sim.tools.conv_helpers,
         sim.domain, sim.bcs.sea_surface_perturbation,
@@ -70,6 +178,16 @@ end
 
 function update_dz_ss!(sim::Simulation, sl::LaterallyConstantSeaSurface)
     return nothing
+end
+
+function update_mass_anom!(sim, lc::CompressibleLithosphereColumn)
+    @. sim.tools.prealloc.buffer_x = sim.now.columnanoms.load +
+        sim.solidearth.maskactive * sim.now.columnanoms.mantle
+    @. sim.tools.prealloc.buffer_x = mass_anom(sim.domain.A, sim.tools.prealloc.buffer_x)
+end
+
+function update_mass_anom!(sim, lc::IncompressibleLithosphereColumn)
+    @. sim.tools.prealloc.buffer_x = mass_anom(sim.domain.A, sim.now.columnanoms.full)
 end
 
 """
@@ -111,34 +229,29 @@ surface is not assumed to be constant. Furthermore, the contribution to ocean vo
 from the bedrock uplift is not included here since the volume displaced on site
 is arguably blanaced by the depression of the peripherial forebulge.
 """
-function internal_update_bsl!(sim::Simulation, up::InternalUpdateBSL)
+function internal_update_bsl!(sim::Simulation, up::InternalBSLUpdate)
     update_delta_V!(sim)
     update_bsl!(sim.sealevel.bsl, -sim.now.delta_V, sim.nout.t_steps_ode[end])
     sim.now.z_bsl = sim.sealevel.bsl.z
     return nothing
 end
 
-function internal_update_bsl!(sim::Simulation, up::ExternalUpdateBSL)
+function internal_update_bsl!(sim::Simulation, up::ExternalBSLUpdate)
     update_delta_V!(sim)
     return nothing
 end
 
 function update_delta_V!(sim::Simulation)
     Vold = total_volume(sim)
-    update_V_af!(sim)
-    update_V_pov!(sim)
-    update_V_den!(sim)
+    update_V_af!(sim, sim.sealevel.volume_contribution)
+    update_V_den!(sim, sim.sealevel.density_contribution)
+    update_V_pov!(sim, sim.sealevel.adjustment_contribution)
     Vnew = total_volume(sim)
     sim.now.delta_V = Vnew - Vold
     return nothing
 end
 
-total_volume(sim::Simulation) = sim.now.V_af * sim.c.rho_ice / sim.c.rho_seawater +
-    sim.now.V_den + sim.now.V_pov
-
-abstract type AbstractVolumeContribution end
-struct NoVolumeContribution end
-struct GoelzerVolumeContribution end
+total_volume(sim::Simulation) = sim.now.V_af + sim.now.V_den + sim.now.V_pov
 
 """
 $(TYPEDSIGNATURES)
@@ -147,15 +260,44 @@ Update the volume contribution from ice above floatation as in [goelzer-brief-20
 Note: we do not use (eq. 1) as it is only a special case of (eq. 13) that does not
 allow a correct representation of external sea-level forcings.
 """
-function update_V_af!(sim::Simulation)
-    sim.tools.prealloc.buffer_x .= sim.now.H_af .* sim.domain.A 
-    sim.now.V_af = sum(sim.tools.prealloc.buffer_x)
+function update_V_af!(sim::Simulation, vc::NoVolumeContribution)
+    sim.now.V_af = 0.0
     return nothing
 end
 
-abstract type AbstractAdjustmentContribution end
-struct NoAdjustmentContribution end
-struct GoelzerAdjustmentContribution end
+function update_V_af!(sim::Simulation, vc::GoelzerVolumeContribution)
+    sim.tools.prealloc.buffer_x .= sim.now.H_af .* sim.domain.A 
+    sim.now.V_af = sum(sim.tools.prealloc.buffer_x) * sim.c.rho_ice / sim.c.rho_seawater
+    return nothing
+end
+
+function update_V_af!(sim::Simulation, vc::AdhikariVolumeContribution)
+    L = 1 - mask_ocean
+    Lp1 = 1 - mask_ocean_p1
+    delta_H_m = delta_H * L * Lp1 + delta_H_f * (1 - L * Lp1)
+    delta_H_v = (1 - rho_water / rho_seawater) * (delta_H - delta_H_f) * (1 - L * Lp1)
+    sim.tools.prealloc.buffer_x .= (delta_H_m + delta_H_v) .* sim.domain.A
+    sim.now.V_af = sum(sim.tools.prealloc.buffer_x)
+end
+
+"""
+$(TYPEDSIGNATURES)
+
+Update the volume contribution associated with the density difference between meltwater and
+sea water, as in [goelzer-brief-2020](@cite) (eq. 10).
+"""
+function update_V_den!(sim::Simulation, dc::NoDensityContribution)
+    sim.now.V_den = 0.0
+    return nothing
+end
+
+function update_V_den!(sim::Simulation, dc::GoelzerDensityContribution)
+    density_factor = sim.c.rho_ice / sim.c.rho_water - sim.c.rho_ice / sim.c.rho_seawater
+    sim.tools.prealloc.buffer_x .= sim.now.H_ice .* sim.domain.A
+    sim.now.V_den = sum( sim.tools.prealloc.buffer_x ) * density_factor
+    return nothing
+end
+
 
 """
 $(TYPEDSIGNATURES)
@@ -165,28 +307,16 @@ which corresponds to the "potential ocean volume" in [goelzer-brief-2020](@cite)
 Note: we do not use eq. (8) as it is only a special case of eq. (14) that does not
 allow a correct representation of external sea-level forcings.
 """
-function update_V_pov!(sim::Simulation)
+function update_V_pov!(sim::Simulation, ac::NoAdjustmentContribution)
+    sim.now.V_pov = 0.0
+    return nothing
+end
+
+function update_V_pov!(sim::Simulation, ac::GoelzerAdjustmentContribution)
     # essentially watercolumn * surface
     sim.tools.prealloc.buffer_x .= sim.now.z_ss .- sim.now.z_b
     sim.tools.prealloc.buffer_x .= max.(sim.tools.prealloc.buffer_x, 0) .* sim.domain.A
 
     sim.now.V_pov = sum( sim.tools.prealloc.buffer_x )
-    return nothing
-end
-
-abstract type AbstractDensityContribution end
-struct NoDensityContribution end
-struct GoelzerDensityContribution end
-
-"""
-$(TYPEDSIGNATURES)
-
-Update the volume contribution associated with the density difference between meltwater and
-sea water, as in [goelzer-brief-2020](@cite) (eq. 10).
-"""
-function update_V_den!(sim::Simulation)
-    density_factor = sim.c.rho_ice / sim.c.rho_water - sim.c.rho_ice / sim.c.rho_seawater
-    sim.tools.prealloc.buffer_x .= sim.now.H_ice .* sim.domain.A
-    sim.now.V_den = sum( sim.tools.prealloc.buffer_x ) * density_factor
     return nothing
 end

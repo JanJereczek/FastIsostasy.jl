@@ -11,7 +11,7 @@ The previous examples focused on benchmarking FastIsostasy against analytical, n
 We start by generating a [`RegionalDomain`](@ref) with intermediate resolution for the sake of the example and load the ice history thanks to the convenience of [`load_dataset`](@ref). To get an idea of the ICE6G forcing, the ice thickness is visualised at the last glacial maximum (LGM):
 =#
 
-using CairoMakie, FastIsostasy
+using CairoMakie, FastIsostasy, Statistics
 
 N = 140
 domain = RegionalDomain(3500e3, 3500e3, N, N)   # resolution = 50 km
@@ -22,12 +22,12 @@ k_lgm = argmax([mean(Hice_vec[k]) for k in eachindex(Hice_vec)])
 plot_load(domain, Hice_vec[k_lgm])
 
 #=
-This already looks like a much more exciting ice thickness field! Here again, the ice history is wrapped into an interpolator, which is passed to an instance of `BoundaryConditions`. We define the `SeaLevel` to include the gravitational response by making the surface a `LaterallyVariableSeaSurface`. Furthermore, we allow the changes in sea level to affect the deformational response of the solid Earth by setting `InteractiveSealevelLoad`. Finally, we compute the evolution of the barystatic sea level (BSL) according to a piece-wise constant approximation of the ocean surface as a function of the BSL:
+This already looks like a much more exciting ice thickness field! Here again, the ice history is wrapped into an interpolator, which is passed to an instance of `BoundaryConditions`. We define the `RegionalSeaLevel` to include the gravitational response by making the surface a `LaterallyVariableSeaSurface`. Furthermore, we allow the changes in sea level to affect the deformational response of the solid Earth by setting `InteractiveSealevelLoad`. Finally, we compute the evolution of the barystatic sea level (BSL) according to a piece-wise constant approximation of the ocean surface as a function of the BSL:
 =#
 
 it = TimeInterpolatedIceThickness(t .* 1e3, Hice_vec, domain)
 bcs = BoundaryConditions(domain, ice_thickness = it)
-sealevel = SeaLevel(
+sealevel = RegionalSeaLevel(
     surface = LaterallyVariableSeaSurface(),
     load = InteractiveSealevelLoad(),
     bsl = PiecewiseConstantBSL(),
@@ -38,8 +38,8 @@ Finally, we load the interpolators of earth structure thanks to the convenience 
 =#
 
 (_, _), Tpan, Titp = load_dataset("Lithothickness_Pan2022")
-Tlitho = Titp.(Lon, Lat) .* 1e3                     # convert from m to km
-(_, _, _), _, logeta_itp = load_dataset("Viscosity_Pan2022")
+Tlitho = Titp.(Lon, Lat) .* 1e3                     # convert from km to m
+(_, _, _), _, logeta_itp = load_dataset("Viscosity_Pan2022");
 
 #=
 The number of layers and the depth of viscous half-space are arbitrary parameters that have to be defined by the user. We here use a relatively shallow model (half-space begins at 300 km depth) with 1 equalisation layer and 3 intermediate layers.
@@ -49,7 +49,7 @@ mindepth = maximum(Tlitho) + 1e3
 layerboundary_vec = range(mindepth, stop = 300e3, length = 3)
 lb = cat(Tlitho, [fill(lbval, domain.nx, domain.ny)
     for lbval in layerboundary_vec]..., dims=3)
-rlb = c.r_equator .- lb
+rlb = 6371e3 .- lb
 nlb = size(rlb, 3)
 lv_3D = 10 .^ cat([logeta_itp.(Lon, Lat, rlb[:, :, k]) for k in 1:nlb]..., dims=3)
 
@@ -80,7 +80,7 @@ Ok, that was fast! Let's visualise three snapshots of displacements that roughly
 =#
 
 copts = (colormap = :PuOr, colorrange = (-500, 500))
-fig = plot_out_over_time(sim, :u_tot, [-26f3, -12f3, 0], copts)
+fig = plot_out_over_time(sim, :u_tot, [-26e3, -12e3, 0], copts)
 
 #=
 This looks very much like what is obtained by Seakon (Swierczek-Jereczek et al., 2024, Fig.9.g), a 3D GIA model.

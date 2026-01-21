@@ -120,7 +120,7 @@ A boundary condition that applies an offset to the values at the boundaries of a
 computational domain. Contains:
 - `space`: the [`AbstractBCSpace`](@ref) in which the boundary condition is defined.
 - `x_border`: the offset value to be applied at the boundaries.
-- `W`: a weight matrix to apply the boundary condition according to some [ÀbstractBCRule](@ref).
+- `W`: a weight matrix to apply the boundary condition according to some [AbstractBCRule](@ref).
 """
 struct OffsetBC{T, M<:KernelMatrix{T}} <: AbstractBC
     space::AbstractBCSpace

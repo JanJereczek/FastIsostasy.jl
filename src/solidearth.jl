@@ -81,6 +81,33 @@ Not implemented yet!
 """
 struct BurgersMantle <: AbstractMantle end
 
+################################################################
+# Lithosphere behaviour in column anomaly
+################################################################
+
+"""
+$(TYPEDSIGNATURES)
+
+An abstract type for lithosphere column behaviour. Used to multiple dispatch the computation of the mass anomaly. Available subtypes are:
+ - [`CompressibleLithosphereColumn`](@ref)
+ - [`IncompressibleLithosphereColumn`](@ref)
+"""
+abstract type AbstractLithosphereColumn end
+
+"""
+$(TYPEDSIGNATURES)
+
+A subtype of [`AbstractLithosphereColumn`](@ref) to assume that the lithosphere does not contribute to gravity anomalies due to compression.
+"""
+struct CompressibleLithosphereColumn <: AbstractLithosphereColumn end
+
+"""
+$(TYPEDSIGNATURES)
+
+A subtype of [`AbstractLithosphereColumn`](@ref) to assume that the lithosphere contributes to gravity anomalies due to incompressiblity (and therefore flow within the lithosphere).
+"""
+struct IncompressibleLithosphereColumn <: AbstractLithosphereColumn end
+
 ###############################################################
 # Solid Earth
 ###############################################################
@@ -121,12 +148,14 @@ mutable struct SolidEarth{
     CA, # <:AbstractCalibration,
     CO, # <:AbstractCompressibility,
     LU, # <:AbstractLumping,
+    LC, # <:AbstractLithosphereColumn,
 }
     lithosphere::LI
     mantle::MA
     calibration::CA
     compressibility::CO
     lumping::LU
+    lithosphere_column::LC
     effective_viscosity::M
     pseudodiff_scaling::M
     scaled_pseudodiff_inv::M
@@ -150,6 +179,7 @@ function SolidEarth(
     calibration = NoCalibration(),
     compressibility = CompressibleMantle(),
     lumping = FreqDomainViscosityLumping(),
+    lithosphere_column = IncompressibleLithosphereColumn(),
     maskactive = domain.R .< Inf,
     layer_boundaries = T.([88e3, 400e3]),
     layer_viscosities = T.([1e19, 1e21]),           # (Pa*s) (Bueler 2007, Ivins 2022, Fig 12 WAIS)
@@ -194,7 +224,7 @@ function SolidEarth(
     litho_shearmodulus = get_shearmodulus(litho_youngmodulus, litho_poissonratio)
 
     return SolidEarth(
-        lithosphere, mantle, calibration, compressibility, lumping,
+        lithosphere, mantle, calibration, compressibility, lumping, lithosphere_column,
         effective_viscosity, pseudodiff_scaling, scaled_pseudodiff_inv,
         litho_thickness, litho_rigidity, kernelcollect(maskactive, domain),
         litho_poissonratio, mantle_poissonratio, tau, scale_elralength,

@@ -59,7 +59,7 @@ include("coordinates.jl")
 # export TimeInterpolation0D, TimeInterpolation2D, interpolate!
 
 # barystatic_sealevel.jl
-export AbstractUpdateBSL, InternalUpdateBSL, ExternalUpdateBSL, ReferenceBSL
+export AbstractBSLUpdate, InternalBSLUpdate, ExternalBSLUpdate, ReferenceBSL
 export AbstractBSL, ConstantBSL, ConstantOceanSurfaceBSL, PiecewiseConstantBSL
 export PiecewiseLinearBSL, ImposedBSL, CombinedBSL
 export update_bsl!
@@ -118,10 +118,13 @@ export height_above_floatation, columnanom_water!
 export get_maskgrounded, get_maskocean
 
 # sealevel.jl
-export SeaLevel
+export RegionalSeaLevel
 export AbstractSeaSurface, AbstractSealevelLoad
 export NoSealevelLoad, InteractiveSealevelLoad
 export LaterallyConstantSeaSurface, LaterallyVariableSeaSurface
+export AbstractVolumeContribution, GoelzerVolumeContribution, NoVolumeContribution
+export AbstractAdjustmentContribution, GoelzerAdjustmentContribution, NoAdjustmentContribution
+export AbstractDensityContribution, GoelzerDensityContribution, NoDensityContribution
 export update_dz_ss!
 
 # material.jl
@@ -135,13 +138,13 @@ export get_effective_viscosity_and_scaling, green_viscous
 
 export get_relaxation_time, get_relaxation_time_weaker, get_relaxation_time_stronger
 export get_rigidity, get_shearmodulus, get_elastic_green, get_flexural_lengthscale
-export calc_viscous_green
 
 # solidearth.jl
 export SolidEarth
 export AbstractLithosphere, AbstractMantle
 export RigidLithosphere, LaterallyConstantLithosphere, LaterallyVariableLithosphere
 export RigidMantle, RelaxedMantle, MaxwellMantle
+export AbstractLithosphereColumn, IncompressibleLithosphereColumn, CompressibleLithosphereColumn
 
 # deformation.jl
 export update_dudt!, update_deformation_rhs!, thinplate_horizontal_displacement

@@ -1,4 +1,4 @@
-# API reference
+# Public API
 
 ## Simulation
 
@@ -8,7 +8,7 @@ SolverOptions
 DiffEqOptions
 run!
 init_integrator
-OrdinaryDiffEqTsit5.step!
+PhysicalConstants
 ```
 
 ## Computation domains
@@ -54,18 +54,22 @@ MeanBC
 ## Sea level
 
 ```@docs
-SeaLevel
+RegionalSeaLevel
 ```
 
 ### Barystatic sea level (BSL)
 
 ```@docs
 AbstractBSL
+ReferenceBSL
 ConstantBSL
 ConstantOceanSurfaceBSL
 PiecewiseConstantBSL
 ImposedBSL
 CombinedBSL
+AbstractBSLUpdate
+InternalBSLUpdate
+ExternalBSLUpdate
 update_bsl!
 ```
 
@@ -148,7 +152,6 @@ get_rigidity
 get_shearmodulus
 get_elastic_green
 get_flexural_lengthscale
-calc_viscous_green
 get_relaxation_time
 get_relaxation_time_weaker
 get_relaxation_time_stronger

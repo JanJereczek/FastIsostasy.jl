@@ -3,7 +3,14 @@
 ❄ *Fast and flexible glacial isostatic adjustment on CPU and GPU.*
 
 !!! warning "Upgrade to v2.0!"
-    FastIsostasy.jl has been refactored to fix some performance issues, offer a more versatile API and propose new features. FastIsostasy v2.0 is currently being tested and will be out soon. If you are using v1.0, we strongly encourage you to uprade to v2.0 when it comes out!
+    FastIsostasy.jl has been refactored under v2.0 to fix some performance issues, offer a more versatile API and propose new features. We strongly encourage to download v2.0 by running:
+    
+    ```julia
+    ] add https://github.com/JanJereczek/FastIsostasy.jl
+    ```
+
+    This version will soon be registered and available through the usual `Pkg.add("FastIsostasy")` command.
+
 
 ![GlacialCycle](assets/isl-ice6g-N=350.gif)
 
@@ -26,7 +33,7 @@ Pkg.add("FastIsostasy")
 
 ## How to read the docs?
 
-If you want a quick introduction to GIA, please go to [Quick intro to GIA](@ref). If you want to have a thorough but still accessbile introduction to GIA, we highly recommend reading [whitehouse-solid-2019](@citet). If you want to get started right away, feel free to directly go to the [Tutorial](@ref). If you face any problem using the code or want to know more about the functionalities of the package, visit the [API reference](@ref). If you face a problem you cannot solve, please open a [GitHub issue](https://github.com/JanJereczek/FastIsostasy.jl/issues) with a minimal and reproduceable example. We also welcome feature requests!
+If you want a quick introduction to GIA, please go to [Quick intro to GIA](@ref). If you want to have a thorough but still accessbile introduction to GIA, we highly recommend reading [whitehouse-solid-2019](@citet). If you want to get started right away, feel free to directly go to the examples. If you face any problem using the code or want to know more about the functionalities of the package, visit the [Public API](@ref). If you face a problem you cannot solve, please open a [GitHub issue](https://github.com/JanJereczek/FastIsostasy.jl/issues) with a minimal and reproduceable example. We also welcome feature requests!
 
 ## How to cite?
 
