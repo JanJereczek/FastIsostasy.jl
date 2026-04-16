@@ -7,7 +7,7 @@ An abstract type for barystatic sea level contributions. Subtypes are:
  - [`AbstractDensityContribution`](@ref)
  - [`AbstractAdjustmentContribution`](@ref)
 
-This is typically used during the initialisation of a [`RegionalSeaLevel`](@ref) struct. For instance, if we want to compute the volume and density contributions following [goelzer-brief-2020](@citet) and ignore the adjustment contribution, we would write:
+This is typically used during the initialisation of a [`RegionalSeaLevel`](@ref) struct. For instance, if we want to compute the volume and density contributions following [goelzer_brief_2020](@citet) and ignore the adjustment contribution, we would write:
 
 ```julia
 sealevel = RegionalSeaLevel(
@@ -40,14 +40,14 @@ struct NoVolumeContribution end
 """
 $(TYPEDSIGNATURES)
 
-A struct to compute the volume contribtion to barystatic sea level following [goelzer-brief-2020](@citet).
+A struct to compute the volume contribtion to barystatic sea level following [goelzer_brief_2020](@citet).
 """
 struct GoelzerVolumeContribution end
 
 """
 $(TYPEDSIGNATURES)
 
-A struct to compute the volume contribtion to barystatic sea level following [adhikari-kinematic-2020](@citet).
+A struct to compute the volume contribtion to barystatic sea level following [adhikari_kinematic_2020](@citet).
 """
 struct AdhikariVolumeContribution end
 
@@ -72,7 +72,7 @@ struct NoDensityContribution end
 """
 $(TYPEDSIGNATURES)
 
-A struct to compute the density contribtion to barystatic sea level following [goelzer-brief-2020](@citet).
+A struct to compute the density contribtion to barystatic sea level following [goelzer_brief_2020](@citet).
 """
 struct GoelzerDensityContribution end
 
@@ -96,7 +96,7 @@ struct NoAdjustmentContribution end
 """
 $(TYPEDSIGNATURES)
 
-A struct to compute the adjustment contribtion to barystatic sea level following [goelzer-brief-2020](@citet).
+A struct to compute the adjustment contribtion to barystatic sea level following [goelzer_brief_2020](@citet).
 """
 struct GoelzerAdjustmentContribution end
 
@@ -128,6 +128,10 @@ Assume a laterally variable sea surface across the domain. This means that
 the gravitational response is included in the sea surface perturbation.
 """
 struct LaterallyVariableSeaSurface <: AbstractSeaSurface end
+
+struct ImposedSeaSurface{ITP} <: AbstractSeaSurface
+    dz_ss_itp::ITP
+end
 
 ##################################################################
 # RegionalSeaLevel
@@ -168,6 +172,7 @@ Update the SSH perturbation `dz_ss` by convoluting the Green's function with the
 """
 function update_dz_ss!(sim::Simulation, sl::LaterallyVariableSeaSurface)
 
+    # update_mass_anom! modifies sim.tools.prealloc.buffer_x in place
     update_mass_anom!(sim, sim.solidearth.lithosphere_column)
     samesize_conv!(sim.now.dz_ss, sim.tools.prealloc.buffer_x,
         sim.tools.dz_ss_convo, sim.tools.conv_helpers,
@@ -177,6 +182,11 @@ function update_dz_ss!(sim::Simulation, sl::LaterallyVariableSeaSurface)
 end
 
 function update_dz_ss!(sim::Simulation, sl::LaterallyConstantSeaSurface)
+    return nothing
+end
+
+function update_dz_ss!(sim::Simulation, sl::ImposedSeaSurface)
+    interpolate!(sim.now.dz_ss, sim.timer.t, sl.dz_ss_itp)
     return nothing
 end
 
@@ -211,7 +221,7 @@ end
 """
 $(TYPEDSIGNATURES)
 
-Update the sea-level by adding the various contributions as in [coulon-contrasting-2021](@cite).
+Update the sea-level by adding the various contributions as in [coulon_contrasting_2021](@cite).
 Here, the constant term is used to impose a zero dz_ss perturbation in the far field rather
 thank for mass conservation and is embedded in convolution operation.
 """
@@ -224,14 +234,14 @@ end
 $(TYPEDSIGNATURES)
 
 Update the sea-level contribution of melting above floatation and density correction.
-Note that this differs from [goelzer-brief-2020](@cite) (eq. 12) because the ocean
+Note that this differs from [goelzer_brief_2020](@cite) (eq. 12) because the ocean
 surface is not assumed to be constant. Furthermore, the contribution to ocean volume
 from the bedrock uplift is not included here since the volume displaced on site
 is arguably blanaced by the depression of the peripherial forebulge.
 """
 function internal_update_bsl!(sim::Simulation, up::InternalBSLUpdate)
     update_delta_V!(sim)
-    update_bsl!(sim.sealevel.bsl, -sim.now.delta_V, sim.nout.t_steps_ode[end])
+    update_bsl!(sim.sealevel.bsl, -sim.now.delta_V, sim.timer.t)
     sim.now.z_bsl = sim.sealevel.bsl.z
     return nothing
 end
@@ -256,7 +266,7 @@ total_volume(sim::Simulation) = sim.now.V_af + sim.now.V_den + sim.now.V_pov
 """
 $(TYPEDSIGNATURES)
 
-Update the volume contribution from ice above floatation as in [goelzer-brief-2020](@cite) (eq. 13).
+Update the volume contribution from ice above floatation as in [goelzer_brief_2020](@cite) (eq. 13).
 Note: we do not use (eq. 1) as it is only a special case of (eq. 13) that does not
 allow a correct representation of external sea-level forcings.
 """
@@ -284,7 +294,7 @@ end
 $(TYPEDSIGNATURES)
 
 Update the volume contribution associated with the density difference between meltwater and
-sea water, as in [goelzer-brief-2020](@cite) (eq. 10).
+sea water, as in [goelzer_brief_2020](@cite) (eq. 10).
 """
 function update_V_den!(sim::Simulation, dc::NoDensityContribution)
     sim.now.V_den = 0.0
@@ -303,7 +313,7 @@ end
 $(TYPEDSIGNATURES)
 
 Update the volume contribution to the ocean (from isostatic adjustement in ocean regions),
-which corresponds to the "potential ocean volume" in [goelzer-brief-2020](@cite) (eq. 14).
+which corresponds to the "potential ocean volume" in [goelzer_brief_2020](@cite) (eq. 14).
 Note: we do not use eq. (8) as it is only a special case of eq. (14) that does not
 allow a correct representation of external sea-level forcings.
 """

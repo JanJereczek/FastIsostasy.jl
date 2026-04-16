@@ -15,6 +15,7 @@ using OrdinaryDiffEqTsit5: init, ODEProblem, solve, DiscreteCallback, CallbackSe
 using ParallelStencil: ParallelStencil, @init_parallel_stencil, @parallel, @parallel_indices
 using Statistics: mean, cov, std
 using SpecialFunctions: besselj0, besselj1, besselk
+using OrdinaryDiffEqTsit5: step!
 
 # Init stencil on GPU. Will only be used if specified in RegionalDomain.
 allowscalar(false)
@@ -23,7 +24,7 @@ allowscalar(false)
 using Reexport: Reexport, @reexport
 @reexport using Interpolations
 @reexport using Proj
-@reexport using OrdinaryDiffEqTsit5: step!, Tsit5
+@reexport using OrdinaryDiffEqTsit5: Tsit5
 @reexport using OrdinaryDiffEqLowOrderRK: Euler, SplitEuler, Heun, Ralston,
     Midpoint, RK4, BS3, OwrenZen3, OwrenZen4, OwrenZen5, BS5, DP5, Anas5,
     RKO65, FRK65, RKM, MSRK5, MSRK6, PSRK4p7q6, PSRK3p5q4, PSRK3p6q5, Stepanov5,
@@ -56,7 +57,7 @@ include("inversion.jl")
 include("coordinates.jl")
 
 # interpolations.jl
-# export TimeInterpolation0D, TimeInterpolation2D, interpolate!
+export TimeInterpolation0D, TimeInterpolation2D, interpolate!
 
 # barystatic_sealevel.jl
 export AbstractBSLUpdate, InternalBSLUpdate, ExternalBSLUpdate, ReferenceBSL
@@ -86,6 +87,8 @@ export get_layer_boundaries, interpolate2layers
 # convolutions.jl
 # export ConvolutionPlan, convo!, nextfastfft, _zeropad!, samesize_conv!
 export gaussian_smooth, conv!, ConvolutionPlan, ConvolutionPlanHelpers
+export samesize_conv_indices
+
 
 # tools.jl
 export GIATools
@@ -121,7 +124,7 @@ export get_maskgrounded, get_maskocean
 export RegionalSeaLevel
 export AbstractSeaSurface, AbstractSealevelLoad
 export NoSealevelLoad, InteractiveSealevelLoad
-export LaterallyConstantSeaSurface, LaterallyVariableSeaSurface
+export LaterallyConstantSeaSurface, LaterallyVariableSeaSurface, ImposedSeaSurface
 export AbstractVolumeContribution, GoelzerVolumeContribution, NoVolumeContribution
 export AbstractAdjustmentContribution, GoelzerAdjustmentContribution, NoAdjustmentContribution
 export AbstractDensityContribution, GoelzerDensityContribution, NoDensityContribution
@@ -162,8 +165,8 @@ export load_spada2011, spada_cases
 export load_latychev_test3, load_latychev2023_ICE6G
 
 # simulation.jl
-export DiffEqOptions, SolverOptions, Simulation, run!, init_integrator, step!
-export update_diagnostics!
+export DiffEqOptions, SolverOptions, Simulation, run!, init_integrator
+export update_diagnostics!, step!
 
 include("plots.jl")
 

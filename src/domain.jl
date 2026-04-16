@@ -160,6 +160,7 @@ function RegionalDomain(
     i1, i2 = samesize_conv_indices(nx, mx)
     j1, j2 = samesize_conv_indices(ny, my)
     convo_offset = (ny - nx) ÷ 2
+    convo_offset = 0
 
     return RegionalDomain(Wx, Wy, nx, ny, mx, my, dx, dy, x, y, X, Y,
         i1, i2, j1, j2, convo_offset,

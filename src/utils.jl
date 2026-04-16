@@ -78,6 +78,7 @@ $(TYPEDSIGNATURES)
 
 Compute `Z = f(X,Y)` with `f` a Gaussian function parametrized by mean
 `mu` and covariance `sigma`.
+
 """
 function gauss_distr(X::M, Y::M, mu::Vector{T}, sigma::Matrix{T}) where
     {T<:AbstractFloat, M<:Matrix{T}}
@@ -99,15 +100,9 @@ function generate_gaussian_field(
     z_peak::T,
     sigma::Matrix{T},
 ) where {T<:AbstractFloat, M<:Matrix{T}}
-    if domain.nx == domain.ny
-        N = domain.nx
-    else
-        error("Automated generation of Gaussian parameter fields only supported for" *
-            "square domains.")
-    end
-    G = gauss_distr( domain.X, domain.Y, xy_peak, sigma )
+    G = gauss_distr(domain.X, domain.Y, xy_peak, sigma)
     G = G ./ maximum(G) .* z_peak
-    return fill(z_background, N, N) + G
+    return fill(z_background, domain.nx, domain.ny) + G
 end
 
 #####################################################

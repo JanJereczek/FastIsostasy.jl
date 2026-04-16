@@ -78,13 +78,17 @@ You can retrieve the result by calling `convplan.output_padded` but the
 result will be on the padded domain. To retrieve the result on the original
 domain, use [`samesize_conv!`](@ref).
 """
-struct ConvolutionPlan{C<:ComplexMatrix}
+struct ConvolutionPlan{
+    M,
+    C,
+}
+    kernel::M
     kernel_fft::C
 end
 
 function ConvolutionPlan(kernel::KernelMatrix{T}, helpers::ConvolutionPlanHelpers) where T
     _pad!(helpers.kernel_padded, kernel, 0)
-    return ConvolutionPlan(helpers.p_rfft * helpers.kernel_padded)
+    return ConvolutionPlan(kernel, helpers.p_rfft * helpers.kernel_padded)
 end
 
 function conv!(output, input, p::ConvolutionPlan, h::ConvolutionPlanHelpers)
@@ -173,6 +177,14 @@ function gaussian_smooth(input, domain::RegionalDomain, level::R, pad_val) where
     kernel = generate_gaussian_field(domain, T(0.0), T.([0.0, 0.0]), T(1.0), sigma)
     kernel ./= sum(kernel)
     return samesize_conv(kernel, input, domain; pad_val = pad_val)
+end
+
+function gaussian_smooth(input, X, Y, s_x, s_y)
+    T = eltype(input)
+    σ = T.(diagm([(s_x)^2, (s_y)^2]))
+    kernel = gauss_distr(X, Y, T.([0, 0]), σ)
+    kernel ./= sum(kernel)
+    return conv(kernel, input)
 end
 
 
