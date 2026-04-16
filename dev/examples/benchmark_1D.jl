@@ -1,9 +1,9 @@
 #=
 # 1D GIA benchmark
 
-To make things a bit more interesting, we now propose to reproduce one of experiments proposed in a benchmark study of 1D GIA models (Spada et al. 2011). Test 1/2 (Fig. 9 and 10) consists of a 1D ice cap with a maximum thickness of 1500 m and a maximum latitude of 10° (i.e. the ice cap has a radius of about 1000 km wide). The lithosphere is assumed to be 100 km thick and the mantle is assumed to be layered, with a viscosity of 1e21 Pa s in the upper mantle and 2e21 Pa s in the lower mantle. The lithosphere is assumed to be elastic, with a Young's modulus of 70 GPa and a Poisson's ratio of 0.28. The ice load is applied at time t = 0 and kept constant until t = 100 kyr. The gravitational response and the resulting change in sea-surface elevation is computed, however without affecting the load that is applied to the solid Earth.
+To make things a bit more interesting, we now propose to reproduce one of experiments proposed in a benchmark study of 1D GIA models [spada_benchmark_2011](@citep). Test 1/2 (Fig. 9 and 10) consists of a 1D ice cap with a maximum thickness of 1500 m and a maximum latitude of 10° (i.e. the ice cap has a radius of about 1000 km wide). The lithosphere is assumed to be 100 km thick and the mantle is assumed to be layered, with a viscosity of 1e21 Pa s in the upper mantle and 2e21 Pa s in the lower mantle. The lithosphere is assumed to be elastic, with a Young's modulus of 70 GPa and a Poisson's ratio of 0.28. The ice load is applied at time t = 0 and kept constant until t = 100 kyr. The gravitational response and the resulting change in sea-surface elevation is computed, however without affecting the load that is applied to the solid Earth.
 
-Note that Spada et al. (2011) use parameters that differ from FastIsostasy's default and that are passed to the simulation via `PhysicalConstants` and `SolidEarth`.
+Note that [spada_benchmark_2011](@citet) use parameters that differ from FastIsostasy's default and that are passed to the simulation via [`PhysicalConstants`](@ref) and [`SolidEarth`](@ref).
 =#
 
 using FastIsostasy, CairoMakie
@@ -19,10 +19,10 @@ H_ice_1 = stereo_ice_cap(domain, alpha, Hmax)
 fig = plot_load(domain, H_ice_1)
 
 #=
-This already looks a bit more like a real ice sheet! Again, let's wrap this into an interpolator passed to a `BoundaryConditions` instance. The current example is of interest because 1D GIA models include the elastic and the gravitational response to changes in the surface load. The former is included by default in `SolidEarth` (unless specified, as done in the previous example) and the latter can be specified in the `RegionalSeaLevel` instance:
+This already looks a bit more like a real ice sheet! Again, let's wrap this into an interpolator passed to a [`BoundaryConditions`](@ref) instance. The current example is of interest because 1D GIA models include the elastic and the gravitational response to changes in the surface load. The former is included by default in [`SolidEarth`](@ref) (unless specified, as done in the previous example) and the latter can be specified in the [`RegionalSeaLevel`](@ref) instance:
 =#
 
-t_ice = [-1f-3, 0, 100f3]
+t_ice = [0, 1f-6, 100f3]
 H_ice = [H_ice_0, H_ice_1, H_ice_1]
 it = TimeInterpolatedIceThickness(t_ice, H_ice, domain)     # Wrap in time interpolator
 bcs = BoundaryConditions(domain, ice_thickness = it)        # Pass to boundary conditions
@@ -46,7 +46,7 @@ solidearth = SolidEarth(
 
 nout = NativeOutput(vars = [:u, :ue, :dz_ss],               # Define the fields to be saved...
     t = [0, 10, 1_000, 2_000, 5_000, 10_000, 100_000f0])    # And the time steps!
-sim = Simulation(domain, bcs, sealevel, solidearth; nout = nout)
+sim = Simulation(domain, bcs, sealevel, solidearth, (0, 100f3); nout = nout)
 run!(sim)
 fig = plot_transect(sim, [:ue, :u, :dz_ss])
 
@@ -61,7 +61,7 @@ This is at least 2 orders of magnitude faster than typical 1D GIA models, withou
 
 ## Bonus
 
-[swierczek2024fastisostasy](@citet) provides a comparison between FastIsostasy and a 3D GIA model, while assuming a 1D Earth structure. The first case assumes a layered Earth corresponding to the preliminary reference Earth model (PREM, [dziewonski-preliminary-1981](@citet)) and can be reproduced as follows:
+[swierczek-jereczek_fastisostasy_2024](@citet) provides a comparison between FastIsostasy and a 3D GIA model, while assuming a 1D Earth structure. The first case assumes a layered Earth corresponding to the preliminary reference Earth model (PREM) and can be reproduced as follows:
 =#
 
 H_ice_0 = zeros(domain)             # Load: 0 at the beginning...
@@ -81,7 +81,7 @@ solidearth = SolidEarth(
 
 nout = NativeOutput(vars = [:u, :ue],                               # Define the fields to be saved...
     t = [0, 1f3, 2f3, 3f3, 4f3, 5f3, 10f3, 20f3, 30f3, 40f3, 50f3]) # And the time steps!
-sim1 = Simulation(domain, bcs, sealevel, solidearth; nout = nout)
+sim1 = Simulation(domain, bcs, sealevel, solidearth, (0, 50f3); nout = nout)
 run!(sim1)
 fig = plot_transect(sim1, [:ue, :u])
 
@@ -97,7 +97,7 @@ solidearth = SolidEarth(
 )
 nout = NativeOutput(vars = [:u, :ue],                               # Define the fields to be saved...
     t = [0, 1f3, 2f3, 3f3, 4f3, 5f3, 10f3, 20f3, 30f3, 40f3, 50f3]) # And the time steps!
-sim2 = Simulation(domain, bcs, sealevel, solidearth; nout = nout)
+sim2 = Simulation(domain, bcs, sealevel, solidearth, (0, 50f3); nout = nout)
 run!(sim2)
 fig = plot_transect(sim2, [:ue, :u])
 
@@ -105,5 +105,5 @@ fig = plot_transect(sim2, [:ue, :u])
 Finally, we can check the computation times:
 =#
 
-println("Computation time (s): $(sim1.nout.computation_time)")
-println("Computation time (s): $(sim2.nout.computation_time)")
+println("Computation time (s): $(sim1.timer.t_computation[end])")
+println("Computation time (s): $(sim2.timer.t_computation[end])")

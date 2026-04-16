@@ -2,10 +2,10 @@
 # Glacial cycle
 
 The previous examples focused on benchmarking FastIsostasy against analytical, numerical 1D and numerical 3D solutions. However, these cases were largely idealised. To test the model on more realistic simulations, we now provide compute the GIA response in Antarctica over the last glacial cycle. This includes the use of:
-- a heterogeneous lithosphere thickness [pan-influence-2022](@citep),
-- a heterogeneous upper-mantle viscosity [pan-influence-2022](@citep),
+- a heterogeneous lithosphere thickness [pan_influence_2022](@citep),
+- a heterogeneous upper-mantle viscosity [pan_influence_2022](@citep),
 - a stack of few viscous channels,
-- a more elaborate load that evolves over time [peltier-comment-2018](@citep),
+- a more elaborate load that evolves over time [peltier_comment_2018](@citep),
 - transient changes of the relative sea-level.
 
 We start by generating a [`RegionalDomain`](@ref) with intermediate resolution for the sake of the example and load the ice history thanks to the convenience of [`load_dataset`](@ref). To get an idea of the ICE6G forcing, the ice thickness is visualised at the last glacial maximum (LGM):
@@ -22,7 +22,7 @@ k_lgm = argmax([mean(Hice_vec[k]) for k in eachindex(Hice_vec)])
 plot_load(domain, Hice_vec[k_lgm])
 
 #=
-This already looks like a much more exciting ice thickness field! Here again, the ice history is wrapped into an interpolator, which is passed to an instance of `BoundaryConditions`. We define the `RegionalSeaLevel` to include the gravitational response by making the surface a `LaterallyVariableSeaSurface`. Furthermore, we allow the changes in sea level to affect the deformational response of the solid Earth by setting `InteractiveSealevelLoad`. Finally, we compute the evolution of the barystatic sea level (BSL) according to a piece-wise constant approximation of the ocean surface as a function of the BSL:
+This already looks like a much more exciting ice thickness field! Here again, the ice history is wrapped into an interpolator, which is passed to an instance of [`BoundaryConditions`](@ref). We define the [`RegionalSeaLevel`](@ref) to include the gravitational response by making the surface a [`LaterallyVariableSeaSurface`](@ref). Furthermore, we allow the changes in sea level to affect the deformational response of the solid Earth by setting [`InteractiveSealevelLoad`](@ref). Finally, we compute the evolution of the barystatic sea level (BSL) according to a piece-wise constant approximation of the ocean surface as a function of the BSL:
 =#
 
 it = TimeInterpolatedIceThickness(t .* 1e3, Hice_vec, domain)
@@ -60,28 +60,24 @@ solidearth = SolidEarth(
     domain,
     layer_boundaries = lb,
     layer_viscosities = lv_3D,
-    maskactive = maskactive,    # required when using `InteractiveSealevelLoad`
+    maskactive = maskactive,    # required when using InteractiveSealevelLoad
 )
 fig = plot_earth(domain, solidearth)
 
 #=
 This already looks like a much more exciting solid Earth structure!
 
-Finally, we define the output struct, the [`Simulation`](@ref) and `run!` it.
+Finally, we define the output struct, the [`Simulation`](@ref) and [`run!`](@ref) it.
 =#
 
 nout = NativeOutput(vars = [:u, :ue, :dz_ss, :z_ss, :H_ice], t = [-26f3, -12f3, 0])
-sim = Simulation(domain, bcs, sealevel, solidearth; nout = nout)
+sim = Simulation(domain, bcs, sealevel, solidearth, extrema(it.t_vec); nout = nout)
 run!(sim)
-println("Computation time: ", sim.nout.computation_time)
-
-#=
-Ok, that was fast! Let's visualise three snapshots of displacements that roughly correspond to LGM, the end of the meltwater pulse 1A and the present-day:
-=#
-
 copts = (colormap = :PuOr, colorrange = (-500, 500))
 fig = plot_out_over_time(sim, :u_tot, [-26e3, -12e3, 0], copts)
 
 #=
-This looks very much like what is obtained by Seakon (Swierczek-Jereczek et al., 2024, Fig.9.g), a 3D GIA model.
+This looks very much like what is obtained by Seakon ([swierczek-jereczek_fastisostasy_2024](@citet), Fig.9.g), a 3D GIA model. We can have a look at the evolution of the computation time as well:
 =#
+
+fig = plot_computation_time(sim)
