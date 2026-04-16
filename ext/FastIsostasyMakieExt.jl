@@ -175,4 +175,11 @@ xy_km(domain::RegionalDomain) = (domain.x ./ 1f3, domain.y ./ 1f3)
 #     arrowcolor = :gray10, linecolor = :gray10)
 # heatmap(u_h)
 
+function FastIsostasy.plot_computation_time(sim)
+    fig = Figure(size = (800, 450))
+    ax = Axis(fig[1, 1], xlabel = "Computation time (s)", ylabel = "Simulation year")
+    lines!(ax, sim.timer.t_computation, sim.timer.t_vec)
+    return fig
+end
+
 end # module
