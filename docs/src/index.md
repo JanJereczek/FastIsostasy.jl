@@ -15,8 +15,8 @@
 ![GlacialCycle](assets/isl-ice6g-N=350.gif)
 
 FastIsostasy is a collection of models to compute the regional glacial isostatic adjustment (GIA) resulting from changes in the surface load (ice, liquid water and sediments). It is:
-- Accessible: you can set up complex simulations with only a few lines of code, as demonstrated for the case of the last glacial cycle.
-- Flexible: you can easily permute parameters and modelling choices to play Earth System Modelling like it's lego.
+- Accessible: you can set up complex simulations with only a few lines of code (c.f. examples).
+- Flexible: you can easily permute parameters and modelling choices.
 - Performant: the results obtained only marginally differ from those obtained by 1D and 3D GIA models, while displaying a speed-up of 2 to 6 orders of magnitude.
 
 !!! tip "Star us on GitHub!"
@@ -33,7 +33,7 @@ Pkg.add("FastIsostasy")
 
 ## How to read the docs?
 
-If you want a quick introduction to GIA, please go to [Quick intro to GIA](@ref). If you want to have a thorough but still accessbile introduction to GIA, we highly recommend reading [whitehouse-solid-2019](@citet). If you want to get started right away, feel free to directly go to the examples. If you face any problem using the code or want to know more about the functionalities of the package, visit the [Public API](@ref). If you face a problem you cannot solve, please open a [GitHub issue](https://github.com/JanJereczek/FastIsostasy.jl/issues) with a minimal and reproduceable example. We also welcome feature requests!
+If you want a quick introduction to GIA, please go to [Quick intro to GIA](@ref). If you want to have a thorough but still accessbile introduction to GIA, we highly recommend reading [whitehouse_solid_2019](@citet). If you want to get started right away, feel free to directly go to the examples. If you face any problem using the code or want to know more about the functionalities of the package, visit the [Public API](@ref). If you face a problem you cannot solve, please open a [GitHub issue](https://github.com/JanJereczek/FastIsostasy.jl/issues) with a minimal and reproduceable example. We also welcome feature requests!
 
 ## How to cite?
 
