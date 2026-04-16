@@ -7,6 +7,7 @@ Simulation
 SolverOptions
 DiffEqOptions
 run!
+step!
 init_integrator
 PhysicalConstants
 ```
@@ -171,4 +172,5 @@ plot_load
 plot_earth
 plot_out_at_time
 plot_out_over_time
+plot_computation_time
 ```

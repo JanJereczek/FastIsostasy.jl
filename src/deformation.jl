@@ -15,7 +15,7 @@ Update the time derivative of the viscous displacement `dudt` based on an [`Abst
 - `MaxwellMantle` with `LaterallyConstantLithosphere` or `RigidLithosphere`: not implemented.
   This corresponds to what is described in Bueler et al. (2007) but is not yet implemented.
 - `MaxwellMantle` with `LaterallyVariableLithosphere`: This corresponds to the approach
-  of [swierczek2024fastisostasy](@citet).
+  of [swierczek-jereczek_fastisostasy_2024](@citet).
 """
 function update_dudt!(dudt, u, sim, t, earth::SolidEarth)
     update_dudt!(dudt, u, sim, t, earth.mantle, earth.lithosphere)

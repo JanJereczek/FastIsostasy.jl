@@ -10,7 +10,7 @@ function derivative_stdsetup(use_cuda::Bool)
     bcs = BoundaryConditions(domain, ice_thickness = it)
     solidearth = SolidEarth(domain)
     sealevel = RegionalSeaLevel()
-    sim = Simulation(domain, bcs, sealevel, solidearth, tspan = (0f0, 50f3))
+    sim = Simulation(domain, bcs, sealevel, solidearth, (0f0, 50f3))
 
     u = domain.X .^ 2 .* domain.Y .^ 2
     uxx = 2 .* domain.Y .^ 2

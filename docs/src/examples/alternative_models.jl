@@ -1,9 +1,9 @@
 #=
 # Alternative models
 
-## ELRA
+## Elastic Lithosphere, Relaxed Asthenosphere (ELRA)
 
-Sometimes people might want to use ELRA (LeMeur & Huybrechts, 1996):
+Sometimes people might want to use ELRA [le_meur_comparison_1996](@citep) for comparison purposes. This can be simply done by modfying [`SolidEarth`](@ref) as follows:
 =#
 
 using FastIsostasy, CairoMakie
@@ -28,25 +28,36 @@ solidearth = SolidEarth(
 nout = NativeOutput(vars = [:u, :ue, :dz_ss, :H_ice],
     t = [0, 1f2, 3f2, 1f3, 3f3, 1f4, 2f4, 5f4])
 
-sim = Simulation(domain, bcs, sealevel, solidearth; nout = nout)
+sim = Simulation(domain, bcs, sealevel, solidearth, (0, 50f3); nout = nout)
 run!(sim)
-println("Took $(sim.nout.computation_time) seconds!")
+println("Took $(sim.timer.t_computation[end]) seconds!")
 
 fig = plot_transect(sim, [:u])
 
 #=
+!!! warning "ELRA is not recommended for real applications"
+    ELRA presents many shortcomings and is not recommended for real applications. It is only implemented in FastIsostasy for comparison purposes, since it is still widely used in the literature.
 
 ## ELRA with 2D relaxation time
 
-Sometimes people might want to use ELRA with 2D maps of the relaxation time (Van Calcar et al., 2025)
+Sometimes people might want to use ELRA with 2D maps of the relaxation time, as suggested by [van_calcar_approximating_2026](@citet). This can be done by using [`get_relaxation_time_weaker`] or [`get_relaxation_time_stronger`](@ref) to generate a 2D map of the relaxation time from a 2D map of the viscosity. First let's generate an idealised 2D map of the viscosity, with a Gaussian-shaped low-viscosity anomaly in the center of the domain:
 =#
 using LinearAlgebra
 
 sigma = diagm([(W/4)^2, (W/4)^2])
 log10visc = generate_gaussian_field(domain, 21f0, [0f0, 0], -1f0, sigma)
 heatmap(log10visc)
-τ_weak = get_relaxation_time_weaker.(10 .^ log10visc)
-println("Extrema of weak 2D relaxation time: $(extrema(τ_weak))")
+
+#=
+Now let's use this map to generate a 2D map of the relaxation time:
+=#
+
+τ_weak = get_relaxation_time_weaker.(10 .^ log10visc)   # alternative: get_relaxation_time_stronger
+heatmap(τ_weak)
+
+#=
+Finally, we can use this map to define a new [`SolidEarth`](@ref) and run the simulation:
+=#
 
 solidearth_weak = SolidEarth(
     domain,
@@ -54,24 +65,11 @@ solidearth_weak = SolidEarth(
     lithosphere = RigidLithosphere(),
     mantle = RelaxedMantle(),
 )
-sim_weak = Simulation(domain, bcs, sealevel, solidearth_weak; nout = nout)
+sim_weak = Simulation(domain, bcs, sealevel, solidearth_weak, (0, 50f3); nout = nout)
 run!(sim_weak)
+println("Computation time (s): $(sim_weak.timer.t_computation[end])")
 fig = plot_transect(sim_weak, [:u])
 
 #=
-Alternatively:
+As expected, the center of the domain is displaced faster than the margins!
 =#
-
-τ_strong = get_relaxation_time_stronger.(10 .^ log10visc)
-println("Extrema of strong 2D relaxation time: $(extrema(τ_strong))")
-
-solidearth_strong = SolidEarth(
-    domain,
-    tau = T.(τ_strong),
-    lithosphere = RigidLithosphere(),
-    mantle = RelaxedMantle(),
-)
-sim_strong = Simulation(domain, bcs, sealevel, solidearth_strong; nout = nout)
-run!(sim_strong)
-println("Computation time (s): $(sim.nout.computation_time)")
-fig = plot_transect(sim_strong, [:u])

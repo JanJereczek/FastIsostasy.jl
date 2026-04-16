@@ -55,7 +55,7 @@ $(TYPEDSIGNATURES)
 
 Compute scaling factor of Lambert conformal conic projection for a given `Lat::AbstractMatrix`.
 This follows the example *Polar aspect with know scale factor*, beginning on page 314 of
-[snyder-projections-1987](@citet).
+[snyder_projections_1987](@citet).
 """
 function scalefactor(
     Lat::M,     # latitude array
@@ -78,7 +78,7 @@ end
 """
 $(TYPEDSIGNATURES)
 
-Compute `t` following (Eq. 15-9) of [snyder-projections-1987](@citet) for a given latitude
+Compute `t` following (Eq. 15-9) of [snyder_projections_1987](@citet) for a given latitude
 `phi` and eccentricity `e`.
 """
 lambert_t(phi; e = 0.0819919) = tan(π/4+phi/2) / ((1+e*sin(phi))/(1 - e * sin(phi)))^(e/2)
@@ -86,7 +86,7 @@ lambert_t(phi; e = 0.0819919) = tan(π/4+phi/2) / ((1+e*sin(phi))/(1 - e * sin(p
 """
 $(TYPEDSIGNATURES)
 
-Compute `m` following (Eq. 14-15) of [snyder-projections-1987](@citet) for a given latitude
+Compute `m` following (Eq. 14-15) of [snyder_projections_1987](@citet) for a given latitude
 `phi` and eccentricity `e`.
 """
 lambert_m(phi; e = 0.0819919) = cos(phi) / sqrt(1 - e^2 * sin(phi)^2)
@@ -94,7 +94,7 @@ lambert_m(phi; e = 0.0819919) = cos(phi) / sqrt(1 - e^2 * sin(phi)^2)
 """
 $(TYPEDSIGNATURES)
 
-Compute `rho` following (Eq. 21-34) of [snyder-projections-1987](@citet) for given
+Compute `rho` following (Eq. 21-34) of [snyder_projections_1987](@citet) for given
 `r`, `mc`, and `t` and `tc`.
 """
 lambert_rho(r, mc, t, tc) = r .* mc .* t ./ tc
@@ -102,7 +102,7 @@ lambert_rho(r, mc, t, tc) = r .* mc .* t ./ tc
 """
 $(TYPEDSIGNATURES)
 
-Compute `k` following (Eq. 21-32) of [snyder-projections-1987](@citet) for given
+Compute `k` following (Eq. 21-32) of [snyder_projections_1987](@citet) for given
 `rho`, `r`, and `m`.
 """
 lambert_k(rho, r, m) = rho ./ r ./ m
@@ -113,7 +113,7 @@ $(TYPEDSIGNATURES)
 
 Compute scaling factor of stereographic projection for a given `(lat, lon)` and origin
 `(lat_0, lon_0)`. Angles must be provided in radians. Reference:
-[snyder-projections-1987](@citet), solidearth. 157, eq. (21-4).
+[snyder_projections_1987](@citet), solidearth. 157, eq. (21-4).
 
 Note: this version of the function does not support a standard parallel different from
 the pole.

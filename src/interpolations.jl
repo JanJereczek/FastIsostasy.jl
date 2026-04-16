@@ -15,9 +15,13 @@ mutable struct TimeInterpolation2D{T<:AbstractFloat, M<:KernelMatrix{T}}
     flat_bc::Bool
 end
 
-function TimeInterpolation2D(t, X; flat_bc = false)
+function TimeInterpolation2D(t, X; flat_bc = false, enforce_cuda = false)
     @assert length(t) == length(X)
-    return TimeInterpolation2D(t, X, flat_bc)
+    if enforce_cuda
+        return TimeInterpolation2D(t, CuArray.(X), flat_bc)
+    else
+        return TimeInterpolation2D(t, X, flat_bc)
+    end
 end
 
 

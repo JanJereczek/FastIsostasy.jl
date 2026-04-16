@@ -183,6 +183,21 @@ io_dict[:maskactive] = Dict(
     "dims" => "x y",
     "map" => x -> x,
 )
+# io_dict[:green_elastic] = Dict(
+#     "shortname" => "green_elastic",
+#     "longname" => "Elastic Green's function",
+#     "units" => "?",
+#     "dims" => "x y",
+#     "map" => x -> x,
+# )
+# io_dict[:green_geoid] = Dict(
+#     "shortname" => "green_geoid",
+#     "longname" => "Geoid Green's function",
+#     "units" => "?",
+#     "dims" => "x y",
+#     "map" => x -> x,
+# )
+
 """
 $(TYPEDSIGNATURES)
 
@@ -320,7 +335,6 @@ nout = NativeOutput(vars = [:u, :ue, :b, :dz_ss, :H_ice, :H_water, :u_x, :u_y],
 """
 mutable struct NativeOutput{T<:AbstractFloat}
     t::Vector{T}
-    t_steps_ode::Vector{T}
     vars::Vector{Symbol}
     vals::Dict{Symbol, Vector{Matrix{T}}}
     computation_time::T
@@ -329,7 +343,7 @@ end
 
 function NativeOutput(; t = Float32[], vars = Symbol[], T = Float32)
     vals = Dict{Symbol, Vector{Matrix{T}}}(var => Matrix{T}[] for var in vars)
-    return NativeOutput(t, T[], vars, vals, T(0), 1)
+    return NativeOutput(t, vars, vals, T(0), 1)
 end
 
 function write_out!(nout::NativeOutput, now::CurrentState)
