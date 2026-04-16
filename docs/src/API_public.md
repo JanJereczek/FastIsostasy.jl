@@ -7,6 +7,7 @@ Simulation
 SolverOptions
 DiffEqOptions
 run!
+step!
 init_integrator
 PhysicalConstants
 ```

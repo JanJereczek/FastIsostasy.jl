@@ -16,7 +16,7 @@ nout = NativeOutput(vars = [:u],    # only store viscous displacement.
 sim = Simulation(domain, bcs, sealevel, solidearth, (0, 50f3); nout = nout)
 
 #=
-Now comes the key difference: Instead of using [`run`](@ref), we will manually control the time integration by using [`init_integrator`](@ref) and [`step!`](@ref):
+Now comes the key difference: Instead of using [`run!`](@ref), we will manually control the time integration by using [`init_integrator`](@ref) and [`step!`](@ref):
 =#
 
 integrator = init_integrator(sim)
@@ -28,7 +28,7 @@ H_ice_1 = 1f3 .* (domain.R .< 1f6)  # cylinder load as in first example
 
 while tt < 50f3
     sim.now.H_ice .= H_ice_1 .* (1-exp(-tt / τ))    # change load, replace with your own model!
-    step!(integrator, Δt, true)                     # "true" very important to stop at Δt
+    step!(integrator, Δt, true)                     # step until Δt
     global tt += Δt                                 # update time variable
     push!(max_H_ice, maximum(sim.now.H_ice))        # store max H_ice for plotting
 end
