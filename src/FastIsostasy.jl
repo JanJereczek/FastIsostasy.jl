@@ -6,7 +6,7 @@ using DocStringExtensions
 using Downloads: download
 using FiniteDifferences: central_fdm, forward_fdm, backward_fdm
 using FastGaussQuadrature: gausslegendre
-using FFTW: fft, ifft, plan_fft!, plan_ifft!, plan_rfft, plan_irfft
+using FFTW: fft, ifft, plan_fft!, plan_ifft!, plan_rfft, plan_irfft, MEASURE
 using LinearAlgebra: Diagonal, det, diagm, norm, mul!
 using NetCDF
 using OrdinaryDiffEqTsit5: init, ODEProblem, solve, DiscreteCallback, CallbackSet

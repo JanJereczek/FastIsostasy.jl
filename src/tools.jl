@@ -98,5 +98,5 @@ end
 
 
 function choose_fft_plans(X)
-    return plan_fft!(complex.(X)), plan_ifft!(complex.(X))
+    return plan_fft!(complex.(X); flags = MEASURE), plan_ifft!(complex.(X); flags = MEASURE)
 end

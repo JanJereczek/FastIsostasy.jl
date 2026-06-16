@@ -18,6 +18,12 @@ const FAST_FFT_SIZES = (2, 3, 5, 7)
 nextfastfft(n::Integer) = nextprod(FAST_FFT_SIZES, n)
 nextfastfft(ns::Tuple{Vararg{Integer}}) = nextfastfft.(ns)
 
+# CPU arrays get FFTW.MEASURE; GPU arrays fall through to the default (no-flag) method.
+_plan_rfft(X::Matrix) = plan_rfft(X; flags = MEASURE)
+_plan_rfft(X::AbstractMatrix) = plan_rfft(X)
+_plan_irfft(X::Matrix, n::Int) = plan_irfft(X, n; flags = MEASURE)
+_plan_irfft(X::AbstractMatrix, n::Int) = plan_irfft(X, n)
+
 struct ConvolutionPlanHelpers{T, M, C, FP, IP}
     nx::Int
     ny::Int
@@ -34,6 +40,7 @@ end
 
 function ConvolutionPlanHelpers(kernel::AbstractMatrix; pad_val = 0)
     nx, ny = size(kernel)
+    T = eltype(kernel)
     outsize = (2*nx-1, 2*ny-1)
     nffts = nextfastfft(outsize)
     kernel_padded = similar(kernel, T, nffts)
@@ -41,10 +48,10 @@ function ConvolutionPlanHelpers(kernel::AbstractMatrix; pad_val = 0)
     input_padded = similar(kernel_padded)
     output_padded = similar(kernel_padded)
     output_cropped = similar(kernel, outsize...)
-    p_rfft = plan_rfft(kernel_padded)
+    p_rfft = _plan_rfft(kernel_padded)
     kernel_fft = p_rfft * kernel_padded
     input_fft = similar(kernel_fft)
-    p_irfft = plan_irfft(kernel_fft, nffts[1])
+    p_irfft = _plan_irfft(kernel_fft, nffts[1])
     return ConvolutionPlanHelpers(nx, ny, p_rfft, p_irfft, nffts, kernel_padded,
         input_padded, output_padded, output_cropped, input_fft, T(pad_val))
 end
