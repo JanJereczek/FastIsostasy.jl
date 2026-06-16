@@ -1,4 +1,4 @@
-cudainfo() = CUDA.versioninfo()
+cudainfo() = error("CUDA not loaded. Add `using CUDA` before calling this.")
 
 #####################################################
 # Unit conversion utils

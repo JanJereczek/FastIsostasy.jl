@@ -1,13 +1,12 @@
 module FastIsostasy
 
 using AbstractFFTs: AbstractFFTs
-using CUDA: CuArray, CuMatrix, CUFFT, allowscalar
 using DelimitedFiles: readdlm
 using DocStringExtensions
 using Downloads: download
 using FiniteDifferences: central_fdm, forward_fdm, backward_fdm
 using FastGaussQuadrature: gausslegendre
-using FFTW: fft, ifft, plan_fft!, plan_ifft!, cFFTWPlan, rFFTWPlan, plan_rfft, plan_irfft
+using FFTW: fft, ifft, plan_fft!, plan_ifft!, plan_rfft, plan_irfft
 using LinearAlgebra: Diagonal, det, diagm, norm, mul!
 using NetCDF
 using OrdinaryDiffEqTsit5: init, ODEProblem, solve, DiscreteCallback, CallbackSet
@@ -16,8 +15,6 @@ using KernelAbstractions: @kernel, @index, get_backend, synchronize
 using Statistics: mean, cov, std
 using SpecialFunctions: besselj0, besselj1, besselk
 using OrdinaryDiffEqTsit5: step!
-
-allowscalar(false)
 
 using Reexport: Reexport, @reexport
 @reexport using Interpolations
@@ -28,7 +25,6 @@ using Reexport: Reexport, @reexport
     RKO65, FRK65, RKM, MSRK5, MSRK6, PSRK4p7q6, PSRK3p5q4, PSRK3p6q5, Stepanov5,
     SIR54, Alshina2, Alshina3, Alshina6
 
-include("convenience_types.jl")
 include("interpolations.jl")
 include("barystatic_sealevel.jl")
 include("domain.jl")

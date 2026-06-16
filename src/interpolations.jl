@@ -15,10 +15,10 @@ mutable struct TimeInterpolation2D{T, M}
     flat_bc::Bool
 end
 
-function TimeInterpolation2D(t, X; flat_bc = false, enforce_cuda = false)
+function TimeInterpolation2D(t, X; flat_bc = false, arraykernel = nothing)
     @assert length(t) == length(X)
-    if enforce_cuda
-        return TimeInterpolation2D(t, CuArray.(X), flat_bc)
+    if arraykernel !== nothing
+        return TimeInterpolation2D(t, arraykernel.(X), flat_bc)
     else
         return TimeInterpolation2D(t, X, flat_bc)
     end

@@ -85,7 +85,7 @@ function GIATools(domain, c, solidearth;
     end
 
     # FFT plans depening on CPU vs. GPU usage
-    pfft!, pifft! = choose_fft_plans(domain.K, domain.use_cuda)
+    pfft!, pifft! = choose_fft_plans(domain.K)
 
     n_cplx_matrices = 3
     realmatrices = [kernelzeros(domain) for _ in 
@@ -97,13 +97,6 @@ function GIATools(domain, c, solidearth;
 end
 
 
-function choose_fft_plans(X, use_cuda)
-    if use_cuda
-        pfft! = CUFFT.plan_fft!(complex.(X))
-        pifft! = CUFFT.plan_ifft!(complex.(X))
-    else
-        pfft! = plan_fft!(complex.(X))
-        pifft! = plan_ifft!(complex.(X))
-    end
-    return pfft!, pifft!
+function choose_fft_plans(X)
+    return plan_fft!(complex.(X)), plan_ifft!(complex.(X))
 end

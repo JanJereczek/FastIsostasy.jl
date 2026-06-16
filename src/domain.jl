@@ -114,7 +114,7 @@ function RegionalDomain(
     ny::Int,
     mx::Int,
     my::Int;
-    use_cuda::Bool = false,
+    arraykernel = Array,
     lat_ref::T = T(-71.0),      # Reference latitude for scale factor
     lon_ref::T = T(0.0),        # Reference longitude for scale factor
     lat_0::T = T(-90.0),        # Latitude of center point (allows oblique proj)
@@ -153,7 +153,7 @@ function RegionalDomain(
     # Tests show that it does not lead to errors wrt analytical or benchmark solutions.
     pseudodiff[1, 1] = 1e-3 * mean([pseudodiff[1,2], pseudodiff[2,1]])
     
-    arraykernel = use_cuda ? CuArray : Array
+    use_cuda = arraykernel !== Array
     zeros, K, pseudodiff = kernelpromote([zeros, K, pseudodiff], arraykernel)
 
     i1, i2 = samesize_conv_indices(nx, mx)
