@@ -22,8 +22,11 @@ Contains:
 - `H_vec`: a vector of ice thickness values corresponding to `t_vec`.
 - `H_itp`: a function that interpolates the ice thickness based on time.
 """
-struct TimeInterpolatedIceThickness{T, M, I} <: AbstractIceThickness
-
+struct TimeInterpolatedIceThickness{
+    T,
+    M,
+    I<:TimeInterpolation2D,
+} <: AbstractIceThickness
     t_vec::Vector{T}
     H_vec::Vector{M}
     H_itp::I
