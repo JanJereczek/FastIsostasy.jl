@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(git fetch *)",
-      "Bash(git merge *)"
+      "Bash(git merge *)",
+      "Bash(julia --project=/home/jan/.julia/dev/FastIsostasy -e ' *)",
+      "Bash(julia --project=/home/jan/.julia/dev/FastIsostasy -e 'import Pkg; println\\(names\\(Pkg.Registry, all=true\\)\\)')"
     ]
   }
 }

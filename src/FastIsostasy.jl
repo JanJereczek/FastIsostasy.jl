@@ -12,14 +12,12 @@ using LinearAlgebra: Diagonal, det, diagm, norm, mul!
 using NetCDF
 using OrdinaryDiffEqTsit5: init, ODEProblem, solve, DiscreteCallback, CallbackSet
 
-using ParallelStencil: ParallelStencil, @init_parallel_stencil, @parallel, @parallel_indices
+using KernelAbstractions: @kernel, @index, get_backend, synchronize
 using Statistics: mean, cov, std
 using SpecialFunctions: besselj0, besselj1, besselk
 using OrdinaryDiffEqTsit5: step!
 
-# Init stencil on GPU. Will only be used if specified in RegionalDomain.
 allowscalar(false)
-@init_parallel_stencil(CUDA, Float32, 3);
 
 using Reexport: Reexport, @reexport
 @reexport using Interpolations
