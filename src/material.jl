@@ -350,7 +350,7 @@ function get_elastic_green(
     @inbounds for i = 1:domain.nx, j = 1:domain.ny
         p = i - domain.mx - 1
         q = j - domain.my - 1
-        elasticgreen[j, i] = quadrature2D(
+        elasticgreen[i, j] = quadrature2D(
             greenintegrand_function,
             quad_support,
             quad_coeffs,

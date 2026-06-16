@@ -25,6 +25,33 @@ Return a struct containing the options relative to solving a [`Simulation`](@ref
     verbose::Bool = true
 end
 
+mutable struct Timer{T}
+    t::T
+    t_span::Tuple{T, T}
+    t_vec::Vector{T}
+    t_computation_0::T
+    t_computation::Vector{T}
+end
+
+function Timer(t_span; T = Float32)
+    return Timer(
+        T(t_span[1]),
+        T.(t_span),
+        T[],
+        T(0),
+        T[],
+    )
+end
+
+function t_computation!(tt::Timer)
+    t_elapsed = time() - tt.t_computation_0
+    if tt.t > tt.t_span[1]
+        push!(tt.t_computation, t_elapsed)
+        push!(tt.t_vec, tt.t)
+    end
+    return nothing
+end
+
 #########################################################
 # Problem definition
 #########################################################
@@ -42,9 +69,9 @@ model over `domain::RegionalDomain` with parameters `c::PhysicalConstants` and
 To perform the whole simulation, `run!(sim::Simulation)` and to perform a single step:
 
 ```julia
-tspan = (t_start, t_end)
+t_span = (t_start, t_end)
 integrator = init_integrator(sim)
-step!(integrator, tspan)
+step!(integrator, t_span)
 ```
 """
 struct Simulation{
@@ -59,7 +86,7 @@ struct Simulation{
     CS,     # <:CurrentState
     NCO,    # <:NetcdfOutput
     NO,     # <:NativeOutput
-    TS,     # <:Tuple{<:Real, <:Real}
+    TM,     # <:Timer
 }
     domain::CD
     c::PC
@@ -72,16 +99,16 @@ struct Simulation{
     now::CS
     ncout::NCO
     nout::NO
-    tspan::TS
+    timer::TM
 end
 
 function Simulation(
     domain,         # RegionalDomain
     bcs,            # BoundaryConditions
     sealevel,       # RegionalSeaLevel
-    solidearth;     # SolidEarth
+    solidearth,     # SolidEarth
+    t_span;          # Time span
     T = eltype(domain.R),
-    tspan = extrema(bcs.ice_thickness.t_vec),
     opts = SolverOptions(),
     u_ref = zeros(domain),
     ue_ref = zeros(domain),
@@ -100,10 +127,11 @@ function Simulation(
     end
 
     tools = GIATools(domain, c, solidearth)
+    timer = Timer(t_span, T = T)
 
     # Initialise the reference state
     H_ice_ref = kernelzeros(domain)
-    apply_bc!(H_ice_ref, tspan[1], bcs.ice_thickness)
+    apply_bc!(H_ice_ref, timer.t, bcs.ice_thickness)
 
     u_ref, ue_ref, dz_ss_ref, z_b_ref, H_ice_ref = kernelpromote([u_ref, ue_ref,
         dz_ss_ref, z_b_ref, H_ice_ref], domain.arraykernel)
@@ -124,7 +152,7 @@ function Simulation(
     now = CurrentState(domain, ref, sealevel.bsl.z)
 
     return Simulation(domain, c, bcs, sealevel, solidearth, opts, tools, ref, now,
-        ncout, deepcopy(nout), tspan)
+        ncout, deepcopy(nout), timer)
 end
 
 function Base.show(io::IO, ::MIME"text/plain", sim::Simulation)
@@ -141,7 +169,8 @@ function Base.show(io::IO, ::MIME"text/plain", sim::Simulation)
         "Current state" => typeof(sim.now),
         "Netcdf output" => typeof(sim.ncout),
         "Native output" => typeof(sim.nout),
-        "t_out" => sim.nout.t,
+        "native t_out" => sim.nout.t,
+        "nc t_out" => sim.ncout.t,
         "nx, ny" => [domain.nx, domain.ny],
         "dx, dy" => [domain.dx, domain.dy],
         "Wx, Wy" => [domain.Wx, domain.Wy],
@@ -205,17 +234,17 @@ $(TYPEDSIGNATURES)
 Solve the isostatic adjustment problem defined in `sim::Simulation`.
 """
 function run!(sim::Simulation)
-    t1 = time()
     init_problem!(sim)
-    prob = ODEProblem(update_diagnostics!, sim.now.u, sim.tspan, sim)
+    prob = ODEProblem(update_diagnostics!, sim.now.u, sim.timer.t_span, sim)
     ncout_callback = DiscreteCallback(nc_condition, nc_affect!)
     nout_callback = DiscreteCallback(nout_condition, nout_affect!)
     out_callback = CallbackSet(ncout_callback, nout_callback)
+    sim.timer.t_computation_0 = time()
 
     if sim.opts.diffeq.dt_min isa Real
         if sim.opts.diffeq.alg isa Euler
             solve(prob, sim.opts.diffeq.alg, reltol=sim.opts.diffeq.reltol,
-                saveat=[sim.tspan[end]], tstops=vcat(sim.nout.t, sim.ncout.t),
+                saveat=[sim.timer.t_span[2]], tstops=sort(vcat(sim.nout.t, sim.ncout.t)),
                 callback=out_callback, progress=sim.opts.verbose,
                 dtmin = sim.opts.diffeq.dt_min, force_dtmin = true,
                 dt = sim.opts.diffeq.dt_min)
@@ -224,29 +253,30 @@ function run!(sim::Simulation)
         end
     else
         solve(prob, sim.opts.diffeq.alg, reltol=sim.opts.diffeq.reltol,
-            saveat=[sim.tspan[end]], tstops=vcat(sim.nout.t, sim.ncout.t),
+            saveat=[sim.timer.t_span[2]], tstops=sort(vcat(sim.nout.t, sim.ncout.t)),
             callback=out_callback, progress=sim.opts.verbose)
     end
-    sim.nout.computation_time = time()-t1
+
+    sim.timer.t_computation .-= sim.timer.t_computation[1]
     return nothing
 end
 
 # In the best case, we would like something like:
-# restart!(sim, tspan)                # restarts the simulation over tspan
-# restart!(sim, tspan, refine = 2)    # same but refines the mesh by a factor of 2
+# restart!(sim, t_span)                # restarts the simulation over t_span
+# restart!(sim, t_span, refine = 2)    # same but refines the mesh by a factor of 2
 
-# function run!(sim::Simulation, tspan)
-#     if maximum(tspan) > maximum(sim.bcs.ice_thickness.t) ||
+# function run!(sim::Simulation, t_span)
+#     if maximum(t_span) > maximum(sim.bcs.ice_thickness.t) ||
 #         sim.bcs.ice_thickness.flat_bc == false
         
-#         error("tspan must be larger than the maximum time of the ice thickness BC")
+#         error("t_span must be larger than the maximum time of the ice thickness BC")
 #     end
-#     sim.tspan = tspan
+#     sim.t_span = t_span
 #     run!(sim)
 #     return nothing
 # end
 
-# function run!(sim::Simulation, tspan; refine_factor = 2)
+# function run!(sim::Simulation, t_span; refine_factor = 2)
 #     domain = RegionalDomain(sim.domain.Wx, sim.domain.Wy,
 #         refine_factor * sim.domain.nx, refine_factor * sim.domain.ny)
     
@@ -262,10 +292,11 @@ integrated forward in time by using `step!`.
 """
 function init_integrator(sim::Simulation)
     init_problem!(sim)
-    prob = ODEProblem(update_diagnostics!, sim.now.u, extrema(sim.nout.t), sim)
+    prob = ODEProblem(update_diagnostics!, sim.now.u, sim.timer.t_span, sim)
     ncout_callback = DiscreteCallback(nc_condition, nc_affect!)
     nout_callback = DiscreteCallback(nout_condition, nout_affect!)
     out_callback = CallbackSet(ncout_callback, nout_callback)
+    sim.timer.t_computation_0 = time()
     integrator = init(prob, sim.opts.diffeq.alg, reltol=sim.opts.diffeq.reltol,
         saveat=sim.nout.t[end:end], tstops=sim.nout.t, callback=out_callback)
     return integrator
@@ -276,10 +307,19 @@ function init_problem!(sim::Simulation)
     update_V_den!(sim, sim.sealevel.density_contribution)
     update_V_pov!(sim, sim.sealevel.adjustment_contribution)
     total_volume(sim)
-    update_diagnostics!(sim.now.dudt, sim.now.u, sim, sim.tspan[1])
+    update_diagnostics!(sim.now.dudt, sim.now.u, sim, sim.timer.t)
     return nothing
 end
 
+"""
+$(TYPEDSIGNATURES)
+
+Wraps `SciMLBase.step!` and should always be used with `force_dt = true` to ensure that the integrator takes steps of size `Δt`.
+"""
+function FastIsostasy.step!(integrator, Δt, force_dt)
+    OrdinaryDiffEqTsit5.step!(integrator, Δt, force_dt)
+    return nothing
+end
 
 function write_nc!(sim::Simulation)
     write_nc!(sim.ncout, sim.now, sim.ncout.k)
@@ -294,9 +334,9 @@ from the displacement, which requires an integrator.
 """
 function update_diagnostics!(dudt, u, sim::Simulation, t)
 
-    # CAUTION: Order really matters here!
-    push!(sim.nout.t_steps_ode, t)                          # Add time step to output
+    sim.timer.t = t
 
+    # CAUTION: Order really matters here!
     # Update the mantle anomaly and the bedrock elevation
     apply_bc!(u, sim.bcs.viscous_displacement)              # Make sure that u satisfies BC
     update_bedrock!(sim, u)
@@ -312,7 +352,7 @@ function update_diagnostics!(dudt, u, sim::Simulation, t)
     # As integration requires smaller time steps than what we typically want
     # for the elastic displacement and the sea-surface elevation,
     # we only update them every sim.opts.dt_sparse_diagnostics
-    update_diagnostics = ((t / sim.opts.dt_sparse_diagnostics) >=
+    update_diagnostics = (((t - sim.timer.t_span[1]) / sim.opts.dt_sparse_diagnostics) >=
         sim.now.count_sparse_updates)   # +1
 
     # if elastic update placed after dz_ss, worse match with (Spada et al. 2011)
@@ -347,5 +387,7 @@ function update_diagnostics!(dudt, u, sim::Simulation, t)
     # Update the derivative of the viscous displacement based on the new load
     update_dudt!(dudt, u, sim, t, sim.solidearth)
     sim.now.dudt .= dudt
+
+    t_computation!(sim.timer)  # Add computation time
     return nothing
 end

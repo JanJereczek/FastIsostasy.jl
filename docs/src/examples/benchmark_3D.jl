@@ -1,11 +1,11 @@
 #=
 # 3D GIA benchmark
 
-After comparing our results against analytical and 1D numerical solution, the obvious next step is to compare our results against 3D numerical solutions, where the lithospheric thickness and the mantle viscosity vary in x and y. We reproduce Test 3 from [swierczek2024fastisostasy](@citet), where a 1D Earth structure is perturbed by a Gaussian field in 4 different ways:
-1. A reduction of the lithospheric thickness from 150 km (at margin of the domain) to 50 km (at the center of the domain).
-2. An increase of the lithospheric thickness from 150 km (at margin of the domain) to 250 km (at the center of the domain).
-3. A reduction of the mantle viscosity from 10^21 Pa s (at margin of the domain) to 10^20 Pa s (at the center of the domain).
-4. An increase of the mantle viscosity from 10^21 Pa s (at margin of the domain) to 10^22 Pa s (at the center of the domain).
+After comparing our results against analytical and 1D numerical solution, the obvious next step is to compare our results against 3D numerical solutions, where the lithospheric thickness and the mantle viscosity vary in x and y. We reproduce Test 3 from [swierczek-jereczek_fastisostasy_2024](@citet), where a 1D Earth structure is perturbed by a Gaussian field in 4 different ways:
+1. A reduction of the lithospheric thickness from 150 km (at the domain margin) to 50 km (at the domain center).
+2. An increase of the lithospheric thickness from 150 km (at the domain margin) to 250 km (at the domain center).
+3. A reduction of the mantle viscosity from 10^21 Pa s (at the domain margin) to 10^20 Pa s (at the domain center).
+4. An increase of the mantle viscosity from 10^21 Pa s (at the domain margin) to 10^22 Pa s (at the domain center).
 
 The ice load used as a forcing is the same as in the analytical example and the sea level computation is turned off to isolate the effect of a 3D Earth structure on the deformational response.
 
@@ -38,12 +38,12 @@ Now let's see what result we obtain:
 =#
 
 nout = NativeOutput(vars = [:u, :ue], t = vcat(0, 1f3:1f3:4f3, 5f3, 10f3:10f3:50f3))
-sim1 = Simulation(domain, bcs, sealevel, solidearth; nout = nout)
+sim1 = Simulation(domain, bcs, sealevel, solidearth, (0, 50f3); nout = nout)
 run!(sim1)
 fig = plot_transect(sim1, [:u, :ue])
 
 #=
-This is very similar to the result obtained by Seakon (3D GIA model) as presented in Swierczek-Jereczek et al. (2024, Fig. 8.a)! Let's dig into the other cases:
+This is very similar to the result obtained by Seakon (3D GIA model) as presented in [swierczek-jereczek_fastisostasy_2024](@citet) (Fig. 8.a)! Let's dig into the other cases:
 
 ## Case 2: Increase of lithospheric thickness
 =#
@@ -63,7 +63,7 @@ Which is basically the opposite of Case 1!
 Now let's see what result we obtain:
 =#
 
-sim2 = Simulation(domain, bcs, sealevel, solidearth; nout = nout)
+sim2 = Simulation(domain, bcs, sealevel, solidearth, (0, 50f3); nout = nout)
 
 run!(sim2)
 fig = plot_transect(sim2, [:u, :ue])
@@ -71,7 +71,7 @@ fig = plot_transect(sim2, [:u, :ue])
 #=
 It looks like a thicker lithosphere prevents flexure! This tends to "spread" the deformation by creating a higher lateral coupling between neighbouring cells. In comparison, a thin lithosphere makes the displacement more localized, as the flexural rigidity is lower and the cells are more decoupled from each other.
 
-Comparing these results to those of Seakon gives a good match (Swierczek-Jereczek et al., 2024, Fig. 8.b). Now let's dive into cases of laterally-varying mantle viscosities.
+Comparing these results to those of Seakon gives a good match ([swierczek-jereczek_fastisostasy_2024](@citet), Fig. 8.b). Now let's dive into cases of laterally-varying mantle viscosities.
 
 ## Case 3: Reduction of mantle viscosity
 =#
@@ -86,15 +86,15 @@ solidearth = SolidEarth(
 fig = plot_earth(domain, solidearth)
 
 #=
-Here we used `SeakonCalibration` as calibration passed to `SolidEarth`. As described in Appendix C of [swierczek2024fastisostasy](@citet), this allows to include the effect of a laterally varying shear modulus on the effective viscosity, which yields about 1f20.5 instead of the expected 1f20.
+Here we used [`SeakonCalibration`](@ref) as calibration passed to [`SolidEarth`](@ref). As described in Appendix C of [swierczek-jereczek_fastisostasy_2024](@citet), this allows to include the effect of a laterally varying shear modulus on the effective viscosity, which yields about 1f20.5 instead of the expected 1f20.
 =#
 
-sim3 = Simulation(domain, bcs, sealevel, solidearth; nout = nout)
+sim3 = Simulation(domain, bcs, sealevel, solidearth, (0, 50f3); nout = nout)
 run!(sim3)
 fig = plot_transect(sim3, [:u, :ue])
 
 #=
-As expected, the displacement takes place much faster than in the previous cases. Comparing these results to those of Seakon gives a good match (Swierczek-Jereczek et al., 2024, Fig. 8.c).
+As expected, the displacement takes place much faster than in the previous cases. Comparing these results to those of Seakon gives a good match ([swierczek-jereczek_fastisostasy_2024](@citet), Fig. 8.c).
 
 ## Case 4: Increase of mantle viscosity
 
@@ -114,16 +114,16 @@ fig = plot_earth(domain, solidearth)
 Due to the applied calibration, the effective viscosity yields about 1f21.5 instead of the expected 1f22. This means that the calibration tends to reduce the difference between the viscosity and the reference one, set in [`SeakonCalibration`](@ref).
 =#
 
-sim4 = Simulation(domain, bcs, sealevel, solidearth; nout = nout)
+sim4 = Simulation(domain, bcs, sealevel, solidearth, (0, 50f3); nout = nout)
 run!(sim4)
 fig = plot_transect(sim4, [:u, :ue])
 
 #=
-As expected, the displacement takes place much slower than in the previous cases. Comparing these results to those of Seakon gives a good match (Swierczek-Jereczek et al., 2024, Fig. 8.d).
+As expected, the displacement takes place much slower than in the previous cases. Comparing these results to those of Seakon gives a good match ([swierczek-jereczek_fastisostasy_2024](@citet), Fig. 8.d).
 
 FastIsostasy performs these runs much faster than 3D GIA models (several orders of magnitude). For instance:
 =#
 
 for sim in (sim1, sim2, sim3, sim4)
-    println("Computation time (s): $(sim.nout.computation_time)")
+    println("Computation time (s): $(sim.timer.t_computation[end])")
 end

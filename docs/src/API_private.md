@@ -2,5 +2,4 @@
 
 ```@docs
 GIATools
-ReferenceSolidEarth
 ```

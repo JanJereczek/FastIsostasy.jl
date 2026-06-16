@@ -10,11 +10,12 @@ ENV["JULIA_DEBUG"] = "Documenter"
 using FastIsostasy
 
 bib = CitationBibliography(
-    joinpath(@__DIR__, "src", "refs.bib");
+    joinpath(@__DIR__, "src", "fastiso.bib");
     style=:authoryear
 )
 
 Literate.markdown("src/examples/benchmark_analytic.jl", "src/examples"; credit = false)
+Literate.markdown("src/examples/coupling.jl", "src/examples"; credit = false)
 Literate.markdown("src/examples/benchmark_1D.jl", "src/examples"; credit = false)
 Literate.markdown("src/examples/benchmark_3D.jl", "src/examples"; credit = false)
 Literate.markdown("src/examples/alternative_models.jl", "src/examples"; credit = false)
@@ -22,13 +23,20 @@ Literate.markdown("src/examples/glacialcycle.jl", "src/examples"; credit = false
 
 example_pages = [
     "examples/benchmark_analytic.md",
+    "examples/coupling.md",
     "examples/benchmark_1D.md",
     "examples/benchmark_3D.md",
     "examples/alternative_models.md",
     "examples/glacialcycle.md",
 ]
 
-ref_pages = ["API_public.md", "API_private.md", "fortran.md", "references.md"]
+ref_pages = [
+    "API_public.md",
+    "API_private.md",
+    "fortran.md",
+    "publications.md",
+    "references.md",
+]
 # %% Build docs
 PAGES = [
     "index.md",
