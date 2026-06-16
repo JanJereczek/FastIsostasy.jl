@@ -5,10 +5,10 @@
 $(TYPEDSIGNATURES)
 
 Contains:
-- `alg::ODEsolvers`: the algorithm to integrate the ODE forward in time.
+- `alg`: the algorithm to integrate the ODE forward in time.
 - `reltol`: the relative error tolerance of the integrator.
 """
-@kwdef struct DiffEqOptions{S<:ODEsolvers}
+@kwdef struct DiffEqOptions{S}
     alg::S = BS3()
     reltol::AbstractFloat = 1f-5
     dt_min::Union{Real, Nothing} = nothing
