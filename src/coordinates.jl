@@ -61,7 +61,7 @@ function scalefactor(
     Lat::M,     # latitude array
     lat_s::T;   # standard parallel
     kwargs...,
-) where {T<:AbstractFloat, M<:KernelMatrix{T}}
+) where {T<:AbstractFloat, M}
 
     lat_s = deg2rad(lat_s)
     t_s = lambert_t(lat_s)
@@ -123,7 +123,7 @@ function scalefactor(lat::T, lon::T, lat_0::T, lon_0::T; k0::T = T(1)) where {T<
 end
 
 function scalefactor(lat::M, lon::M, lat_0::T, lon_0::T; kwargs...,
-    ) where {T<:Real, M<:KernelMatrix{T}}
+    ) where {T<:Real, M}
     K = similar(lat)
     @inbounds for idx in CartesianIndices(lat)
         K[idx] = scalefactor(lat[idx], lon[idx], lat_0, lon_0; kwargs...)

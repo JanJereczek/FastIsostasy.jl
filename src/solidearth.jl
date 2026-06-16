@@ -141,8 +141,8 @@ lateral variability of each layer on the grid of `domain::RegionalDomain`.
 """
 mutable struct SolidEarth{
     T,  # <:AbstractFloat,
-    M,  # <:KernelMatrix{T},
-    B,  # <:KernelMatrix{Bool},
+    M,  # <:AbstractMatrix{T},
+    B,  # <:AbstractMatrix{Bool},
     LI, # <:AbstractLithosphere,
     MA, # <:AbstractMantle,
     CA, # <:AbstractCalibration,

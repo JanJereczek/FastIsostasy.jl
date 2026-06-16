@@ -210,7 +210,7 @@ function channel_scaling_timedomain(
     visc_ratio::Matrix{T},
     channel_thickness::Matrix{T},
     characteristic_loadlength::T,
-) where {T<:AbstractFloat, M<:KernelMatrix{T}}
+) where {T<:AbstractFloat, M}
 
     # kappa is the wavenumber of the harmonic load. (see Cathles 1975, solidearth.43)
     # for the default value, we assume this is related to the size of the domain!
@@ -222,7 +222,7 @@ function channel_scaling_freqdomain_0D(
     domain::RegionalDomain{T, M},
     visc_ratio::T,
     channel_thickness::T,
-) where {T<:AbstractFloat, M<:KernelMatrix{T}}
+) where {T<:AbstractFloat, M}
 
     # kappa is here the pseudodiff operator in Fourier space (Bueler et al., 2007)
     kappa = Array(domain.pseudodiff)
@@ -266,7 +266,7 @@ function channel_scaling_freqdomain_2D(
     visc_ratio::Matrix{T},
     channel_thickness::Matrix{T},
     maskactive,
-) where {T<:AbstractFloat, M<:KernelMatrix{T}}
+) where {T<:AbstractFloat, M}
 
     # actually only compute mean over maskactive
     R = channel_scaling_freqdomain_0D(

@@ -300,7 +300,7 @@ function crop_promote!(out, state, var, Tout, M, oc)
 end
 
 function write_nc!(ncout::NetcdfOutput{Tout}, state::CurrentState{T, M}, k::Int) where {
-    T<:AbstractFloat, M<:KernelMatrix{T}, Tout<:AbstractFloat}
+    T<:AbstractFloat, M, Tout<:AbstractFloat}
     for i in eachindex(ncout.vars3D)
         j = ncout.vars3D[i]
         crop_promote!(ncout.buffer, state, ncout.vars3D[i], Tout, M, ncout.oc)

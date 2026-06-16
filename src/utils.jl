@@ -251,7 +251,7 @@ function mask_disc(X, Y, R; center = [0, 0])
     return mask_disc(sqrt.((X .- center[1]) .^ 2 + (Y .- center[2]) .^ 2), R)
 end
 
-function mask_disc(r::KernelMatrix{T}, R) where {T<:AbstractFloat}
+function mask_disc(r::AbstractMatrix{T}, R) where {T<:AbstractFloat}
     return T.(r .< R)
 end
 

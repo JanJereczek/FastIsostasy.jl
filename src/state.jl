@@ -1,4 +1,4 @@
-mutable struct ColumnAnomalies{T<:AbstractFloat, M<:KernelMatrix{T}}
+mutable struct ColumnAnomalies{M}
     ice::M
     seawater::M
     sediment::M
@@ -20,11 +20,7 @@ $(TYPEDSIGNATURES)
 
 Return a struct containing the reference state.
 """
-struct ReferenceState{
-    T<:AbstractFloat,
-    M<:KernelMatrix{T},
-    B<:BoolMatrix,
-} <: AbstractState
+struct ReferenceState{T, M, B} <: AbstractState
 
     u::M                    # viscous displacement
     ue::M                   # elastic displacement
@@ -46,11 +42,7 @@ $(TYPEDSIGNATURES)
 Return a mutable struct containing the geostate which will be updated over the simulation.
 The geostate contains all the states of the [`Simulation`] to be solved.
 """
-mutable struct CurrentState{
-    T<:AbstractFloat,
-    M<:KernelMatrix{T},
-    B<:BoolMatrix,
-} <: AbstractState
+mutable struct CurrentState{T, M, B} <: AbstractState
 
     u::M                        # viscous displacement
     ue::M                       # elastic displacement
@@ -61,7 +53,7 @@ mutable struct CurrentState{
     H_ice::M                    # current height of ice column
     H_af::M                     # current height of ice column above floatation
     H_water::M                  # current height of water column
-    columnanoms::ColumnAnomalies{T, M}         # column anomalies
+    columnanoms::ColumnAnomalies{M}             # column anomalies
     z_b::M                      # vertical bedrock position
     dz_ss::M                    # current z_ss perturbation
     z_ss::M                     # current z_ss field

@@ -9,7 +9,7 @@ function TimeInterpolation0D(t, y; flat_bc = false)
     return TimeInterpolation0D(t, y, flat_bc)
 end
 
-mutable struct TimeInterpolation2D{T<:AbstractFloat, M<:KernelMatrix{T}}
+mutable struct TimeInterpolation2D{T, M}
     t::Vector{T}
     X::Vector{M}
     flat_bc::Bool
@@ -48,8 +48,7 @@ function interpolate(t_out, itp::TimeInterpolation0D)
     end
 end
 
-function interpolate!(X_out::M, t::T, ti::TimeInterpolation2D{T, M}) where
-    {T<:AbstractFloat, M<:KernelMatrix{T}}
+function interpolate!(X_out::M, t::T, ti::TimeInterpolation2D{T, M}) where {T, M}
     if t < minimum(ti.t)
         if ti.flat_bc
             X_out .= ti.X[1]

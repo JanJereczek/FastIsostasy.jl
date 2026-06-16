@@ -18,13 +18,7 @@ const FAST_FFT_SIZES = (2, 3, 5, 7)
 nextfastfft(n::Integer) = nextprod(FAST_FFT_SIZES, n)
 nextfastfft(ns::Tuple{Vararg{Integer}}) = nextfastfft.(ns)
 
-struct ConvolutionPlanHelpers{
-    T<:AbstractFloat,
-    M<:KernelMatrix{T},
-    C<:ComplexMatrix{T},
-    FP,         # <:rFFTWPlan,
-    IP,         #<:AbstractFFTs.ScaledPlan
-}
+struct ConvolutionPlanHelpers{T, M, C, FP, IP}
     nx::Int
     ny::Int
     p_rfft::FP
@@ -38,7 +32,7 @@ struct ConvolutionPlanHelpers{
     pad_val::T
 end
 
-function ConvolutionPlanHelpers(kernel::KernelMatrix{T}; pad_val = 0) where T
+function ConvolutionPlanHelpers(kernel::AbstractMatrix; pad_val = 0)
     nx, ny = size(kernel)
     outsize = (2*nx-1, 2*ny-1)
     nffts = nextfastfft(outsize)
@@ -86,7 +80,7 @@ struct ConvolutionPlan{
     kernel_fft::C
 end
 
-function ConvolutionPlan(kernel::KernelMatrix{T}, helpers::ConvolutionPlanHelpers) where T
+function ConvolutionPlan(kernel::AbstractMatrix, helpers::ConvolutionPlanHelpers)
     _pad!(helpers.kernel_padded, kernel, 0)
     return ConvolutionPlan(kernel, helpers.p_rfft * helpers.kernel_padded)
 end
@@ -122,7 +116,7 @@ function samesize_conv!(output, input, p::EmptyConvolution, h, domain)
 end
 
 function samesize_conv!(output::M, input::M, p::ConvolutionPlan,
-    h::ConvolutionPlanHelpers, domain) where {T<:AbstractFloat, M<:KernelMatrix{T}}
+    h::ConvolutionPlanHelpers, domain) where {M}
     
     conv!(input, p, h)
     output .= view(h.output_cropped,
@@ -132,7 +126,7 @@ function samesize_conv!(output::M, input::M, p::ConvolutionPlan,
 end
 
 function samesize_conv!(output::M, input::M, p::ConvolutionPlan, h::ConvolutionPlanHelpers,
-    domain, bc, bc_space::ExtendedBCSpace) where {T<:AbstractFloat, M<:KernelMatrix{T}}
+    domain, bc, bc_space::ExtendedBCSpace) where {M}
     
     conv!(input, p, h)
     apply_bc!(h.output_cropped, bc)
@@ -143,7 +137,7 @@ function samesize_conv!(output::M, input::M, p::ConvolutionPlan, h::ConvolutionP
 end
 
 function samesize_conv!(output::M, input::M, p::ConvolutionPlan, h::ConvolutionPlanHelpers,
-    domain, bc, bc_space::RegularBCSpace) where {T<:AbstractFloat, M<:KernelMatrix{T}}
+    domain, bc, bc_space::RegularBCSpace) where {M}
     
     conv!(input, p, h)
     output .= view(h.output_cropped,

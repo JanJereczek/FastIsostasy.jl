@@ -155,7 +155,7 @@ function thinplate_horizontal_displacement!(u_x::M, u_y::M, u::M,
 end
 
 function thinplate_horizontal_displacement!(u_x::M, u_y::M, u::M,
-    litho_thickness::M, domain) where {T<:AbstractFloat, M<:CuMatrix{T}}
+    litho_thickness::M, domain) where {M<:CuMatrix{<:AbstractFloat}}
     dx!(u_x, u, domain.Dx, domain.nx, domain.ny)
     dy!(u_y, u, domain.Dx, domain.nx, domain.ny)
     @. u_x *= -litho_thickness / 2  # T(30e3)

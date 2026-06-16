@@ -22,11 +22,7 @@ Contains:
 - `H_vec`: a vector of ice thickness values corresponding to `t_vec`.
 - `H_itp`: a function that interpolates the ice thickness based on time.
 """
-struct TimeInterpolatedIceThickness{
-    T<:AbstractFloat,
-    M<:KernelMatrix{T},
-    I<:TimeInterpolation2D{T, M},
-} <: AbstractIceThickness
+struct TimeInterpolatedIceThickness{T, M, I} <: AbstractIceThickness
 
     t_vec::Vector{T}
     H_vec::Vector{M}
@@ -122,7 +118,7 @@ computational domain. Contains:
 - `x_border`: the offset value to be applied at the boundaries.
 - `W`: a weight matrix to apply the boundary condition according to some [`AbstractBC`](@ref).
 """
-struct OffsetBC{T, M<:KernelMatrix{T}} <: AbstractBC
+struct OffsetBC{T, M} <: AbstractBC
     space::AbstractBCSpace
     x_border::T
     W::M
@@ -296,7 +292,7 @@ A struct containing the boundary conditions of the problem:
 """
 struct BoundaryConditions{
     T,      # <:AbstractFloat,
-    M,      # <:KernelMatrix{T},
+    M,      # <:AbstractMatrix{T},
     IT,     # <:AbstractIceThickness,
 }
     ice_thickness::IT

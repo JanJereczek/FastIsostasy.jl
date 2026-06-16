@@ -1,7 +1,7 @@
 #########################################################
 # Prealloc
 #########################################################
-mutable struct PreAllocated{T<:AbstractFloat, M<:KernelMatrix{T}, C<:ComplexMatrix{T}}
+mutable struct PreAllocated{M, C}
     rhs::M
     buffer_xx::M
     buffer_yy::M
@@ -31,9 +31,9 @@ struct GIATools{
     I1<:ConvolutionPlan,
     I2<:ConvolutionPlan,
     I3<:ConvolutionPlan,
-    I4, # <:ConvolutionPlan or EmptyConvolution,
-    FP<:ForwardPlan,
-    IP<:InversePlan,
+    I4,     # <:ConvolutionPlan or EmptyConvolution,
+    FP,     # <:ForwardPlan,
+    IP,     # <:InversePlan,
     PA<:PreAllocated,
 }
     conv_helpers::CPH

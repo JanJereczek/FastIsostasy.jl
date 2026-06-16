@@ -32,8 +32,7 @@ If a rectangular domain is needed, run:
 domain = RegionalDomain(Wx, Wy, nx, ny)
 ```
 """
-struct RegionalDomain{T<:AbstractFloat, L<:Matrix{T},
-    M<:KernelMatrix{T}} <: AbstractDomain
+struct RegionalDomain{T, L, M} <: AbstractDomain
 
     Wx::T                       # Domain half-width in x (m)
     Wy::T                       # Domain half-width in y (m)
