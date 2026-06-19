@@ -77,6 +77,23 @@ struct MaxwellMantle <: AbstractMantle end
 """
 $(TYPEDSIGNATURES)
 
+Same physics as [`MaxwellMantle`](@ref) but uses real-valued FFT plans (`plan_rfft` /
+`plan_irfft`) instead of complex ones. The frequency-domain arrays are of size
+`(nx÷2+1, ny)` rather than `(nx, ny)`, roughly halving the memory and arithmetic cost
+of the spectral step.
+
+!!! warning "Experimental"
+    `RealMaxwellMantle` is experimental. In laterally-variable lithosphere setups the
+    half-spectrum views introduce extra complexity that can produce larger numerical errors
+    than `MaxwellMantle`. The expected performance gain may also not materialise on all
+    hardware. Prefer `MaxwellMantle` for production runs; a runtime warning is emitted
+    when this type is used.
+"""
+struct RealMaxwellMantle <: AbstractMantle end
+
+"""
+$(TYPEDSIGNATURES)
+
 Not implemented yet!
 """
 struct BurgersMantle <: AbstractMantle end

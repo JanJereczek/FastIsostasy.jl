@@ -140,7 +140,7 @@ export get_rigidity, get_shearmodulus, get_elastic_green, get_flexural_lengthsca
 export SolidEarth
 export AbstractLithosphere, AbstractMantle
 export RigidLithosphere, LaterallyConstantLithosphere, LaterallyVariableLithosphere
-export RigidMantle, RelaxedMantle, MaxwellMantle
+export RigidMantle, RelaxedMantle, MaxwellMantle, RealMaxwellMantle
 export AbstractLithosphereColumn, IncompressibleLithosphereColumn, CompressibleLithosphereColumn
 
 # deformation.jl

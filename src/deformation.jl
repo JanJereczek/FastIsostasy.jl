@@ -88,6 +88,61 @@ function update_dudt!(dudt, u, sim, t, mantle::MaxwellMantle,
     return nothing
 end
 
+function update_dudt!(dudt, u, sim, t, mantle::RealMaxwellMantle,
+    litho::L) where {L<:AbstractLithosphere}
+
+    tools = sim.tools
+    P = tools.prealloc
+    domain = sim.domain
+    dt = sim.opts.diffeq.dt_min * sim.c.seconds_per_year
+    nx2 = domain.nx ÷ 2 + 1
+
+    # frequency-domain coefficient arrays: borrow the first nx2 rows of real buffers.
+    # @. is NOT used here because it would turn view(...) into view.(...) (broadcasted view).
+    nabla = view(P.buffer_xx, 1:nx2, :)
+    nabla .= 2 .* view(sim.solidearth.effective_viscosity, 1:nx2, :) .*
+        view(domain.pseudodiff, 1:nx2, :) .* view(sim.solidearth.pseudodiff_scaling, 1:nx2, :)
+
+    beta = view(P.buffer_x, 1:nx2, :)
+    beta .= sim.solidearth.rho_uppermantle .* sim.c.g .+
+        view(sim.solidearth.litho_rigidity, 1:nx2, :) .* view(domain.pseudodiff, 1:nx2, :) .^ 4
+
+    # rfft of load — stage into P.rhs (real), then transform out-of-place into P.fftF
+    @. P.rhs = -(sim.now.columnanoms.load + sim.now.columnanoms.litho) *
+        sim.c.g * domain.K ^ 2
+    mul!(P.fftF, tools.pfft!, P.rhs)
+
+    # rfft of u
+    mul!(P.fftU, tools.pfft!, u)
+
+    # frequency-domain update
+    @. P.fftrhs = ((nabla - (dt/2)*beta) * P.fftU + dt * P.fftF) / (nabla + (dt/2)*beta)
+
+    # irfft → result is directly real, no real.(.) needed
+    mul!(P.rhs, tools.pifft!, P.fftrhs)
+
+    apply_bc!(P.rhs, sim.bcs.viscous_displacement)
+    u .= P.rhs
+    sim.now.u .= u
+    return nothing
+end
+
+function update_dudt!(dudt, u, sim, t, mantle::RealMaxwellMantle,
+    lithosphere::LaterallyVariableLithosphere)
+    domain, P = sim.domain, sim.tools.prealloc
+    nx2 = domain.nx ÷ 2 + 1
+    update_deformation_rhs!(sim, u)
+    # stage the real-valued input in P.buffer_yy (P.fftrhs is now complex/half-sized)
+    @. P.buffer_yy = P.rhs * domain.K / (2 * sim.solidearth.effective_viscosity)
+    mul!(P.fftrhs, sim.tools.pfft!, P.buffer_yy)
+    P.fftrhs .*= view(sim.solidearth.scaled_pseudodiff_inv, 1:nx2, :)
+    mul!(P.rhs, sim.tools.pifft!, P.fftrhs)
+    dudt .= P.rhs
+    dudt .*= sim.c.seconds_per_year
+    apply_bc!(dudt, sim.bcs.viscous_displacement)
+    return nothing
+end
+
 function update_dudt!(dudt, u, sim, t, mantle::MaxwellMantle,
     lithosphere::LaterallyVariableLithosphere)
     domain, P = sim.domain, sim.tools.prealloc
