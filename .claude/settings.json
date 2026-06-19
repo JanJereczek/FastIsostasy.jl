@@ -4,7 +4,11 @@
       "Bash(git fetch *)",
       "Bash(git merge *)",
       "Bash(julia --project=/home/jan/.julia/dev/FastIsostasy -e ' *)",
-      "Bash(julia --project=/home/jan/.julia/dev/FastIsostasy -e 'import Pkg; println\\(names\\(Pkg.Registry, all=true\\)\\)')"
+      "Bash(julia --project=/home/jan/.julia/dev/FastIsostasy -e 'import Pkg; println\\(names\\(Pkg.Registry, all=true\\)\\)')",
+      "Bash(julia --project docs/src/examples/benchmark_realfft.jl)",
+      "Bash(julia --project=docs docs/src/examples/benchmark_realfft.jl)",
+      "Bash(julia --project=docs -e ' *)",
+      "Bash(julia --project -e ' *)"
     ]
   }
 }
