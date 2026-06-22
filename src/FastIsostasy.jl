@@ -12,6 +12,7 @@ using NetCDF
 using OrdinaryDiffEqTsit5: init, ODEProblem, solve, DiscreteCallback, CallbackSet
 
 using KernelAbstractions: @kernel, @index, get_backend, synchronize
+using LoopVectorization: @turbo
 using Statistics: mean, cov, std
 using SpecialFunctions: besselj0, besselj1, besselk
 using OrdinaryDiffEqTsit5: step!

@@ -65,10 +65,12 @@ end
 
 function dxx!(du::M, u::M, domain::RegionalDomain{T, L, M}) where
     {T<:AbstractFloat, L<:Matrix{T}, M<:Matrix{T}}
-    @inbounds for j in axes(du, 2)
-        for i in axes(du, 1)[2:domain.nx-1]
+    @turbo for j in axes(du, 2)
+        for i in 2:domain.nx-1
             du[i, j] = (u[i+1, j] - 2*u[i, j] + u[i-1, j]) / (domain.Dx[i, j] ^ 2)
         end
+    end
+    @inbounds for j in axes(du, 2)
         du[1, j] = (u[3, j] - 2*u[2, j] + u[1, j]) / (domain.Dx[1, j] ^ 2)
         du[domain.nx, j] = (u[domain.nx, j] - 2*u[domain.nx-1, j] + u[domain.nx-2, j]) /
             (domain.Dx[domain.nx, j] ^ 2)
@@ -113,10 +115,12 @@ end
 
 function dyy!(du::M, u::M, domain::RegionalDomain{T, L, M}) where
     {T<:AbstractFloat, L<:Matrix{T}, M<:Matrix{T}}
-    @inbounds for i in axes(du, 1)
-        for j in axes(du, 2)[2:domain.ny-1]
+    @turbo for j in 2:domain.ny-1
+        for i in axes(du, 1)
             du[i, j] = (u[i, j+1] - 2*u[i, j] + u[i, j-1]) / (domain.Dy[i, j] ^ 2)
         end
+    end
+    @inbounds for i in axes(du, 1)
         du[i, 1] = (u[i, 3] - 2*u[i, 2] + u[i, 1]) / (domain.Dy[i, 1] ^ 2)
         du[i, domain.ny] = (u[i, domain.ny] - 2*u[i, domain.ny-1] + u[i, domain.ny-2]) /
             (domain.Dy[i, domain.ny] ^ 2)
@@ -170,10 +174,12 @@ end
 
 function dx!(du::M, u::M, domain::RegionalDomain{T, L, M}) where
     {T<:AbstractFloat, L<:Matrix{T}, M<:Matrix{T}}
-    @inbounds for j in axes(du, 2)
-        for i in axes(du, 1)[2:domain.nx-1]
-            du[i,j] = (u[i+1, j] - u[i-1, j]) / (2 * domain.Dx[i, j])
+    @turbo for j in axes(du, 2)
+        for i in 2:domain.nx-1
+            du[i, j] = (u[i+1, j] - u[i-1, j]) / (2 * domain.Dx[i, j])
         end
+    end
+    @inbounds for j in axes(du, 2)
         du[1, j] = (u[2, j] - u[1, j]) / domain.Dx[1, j]
         du[domain.nx, j] = (u[domain.nx, j] - u[domain.nx-1, j]) / domain.Dx[domain.nx, j]
     end
@@ -181,10 +187,12 @@ end
 
 function dy!(du::M, u::M, domain::RegionalDomain{T, L, M}) where
     {T<:AbstractFloat, L<:Matrix{T}, M<:Matrix{T}}
-    @inbounds for i in axes(du, 1)
-        for j in axes(du, 2)[2:domain.ny-1]
-            du[i, j] = (u[i,j+1] - u[i,j-1]) / (2 * domain.Dy[i, j])
+    @turbo for j in 2:domain.ny-1
+        for i in axes(du, 1)
+            du[i, j] = (u[i, j+1] - u[i, j-1]) / (2 * domain.Dy[i, j])
         end
+    end
+    @inbounds for i in axes(du, 1)
         du[i, 1] = (u[i, 2] - u[i, 1]) / domain.Dy[i, 1]
         du[i, domain.ny] = (u[i, domain.ny] - u[i, domain.ny-1]) / domain.Dy[i, domain.ny]
     end
