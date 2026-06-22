@@ -8,7 +8,10 @@
       "Bash(julia --project docs/src/examples/benchmark_realfft.jl)",
       "Bash(julia --project=docs docs/src/examples/benchmark_realfft.jl)",
       "Bash(julia --project=docs -e ' *)",
-      "Bash(julia --project -e ' *)"
+      "Bash(julia --project -e ' *)",
+      "Bash(julia --project -e 'using Pkg; Pkg.add\\(\"LoopVectorization\"\\)')",
+      "Bash(julia --project benchmarks/ka-derivatives.jl)",
+      "Bash(julia --project -e 'using Pkg; Pkg.status\\(\"CUDA\"; mode=PKGMODE_MANIFEST\\)')"
     ]
   }
 }
