@@ -66,20 +66,22 @@ function update_dudt!(dudt, u, sim, t, mantle::MaxwellMantle,
     @. beta = sim.solidearth.rho_uppermantle * sim.c.g + sim.solidearth.litho_rigidity *
         sim.domain.pseudodiff ^ 4
 
-    # fourier transform load
-    @. P.fftF = - (sim.now.columnanoms.load +
+    # Out-of-place plans (mul!) preserve their inputs, so stage each real field into
+    # P.fftrhs and transform it into a distinct buffer.
+    # fourier transform load -> P.fftF
+    @. P.fftrhs = - (sim.now.columnanoms.load +
         sim.now.columnanoms.litho) * sim.c.g * sim.domain.K ^ 2
-    tools.pfft! * P.fftF
+    mul!(P.fftF, tools.pfft!, P.fftrhs)
 
-    # fourier transform u
-    P.fftU .= u
-    tools.pfft! * P.fftU
+    # fourier transform u -> P.fftU
+    @. P.fftrhs = u
+    mul!(P.fftU, tools.pfft!, P.fftrhs)
 
-    # compute the right-hand side of the deformation equation
+    # compute the right-hand side of the deformation equation, then inverse-transform
     @. P.fftrhs = ((nabla - (dt/2)*beta) * P.fftU + dt * P.fftF) / (nabla + (dt/2)*beta)
-    tools.pifft! * P.fftrhs
+    mul!(P.fftF, tools.pifft!, P.fftrhs)
 
-    P.rhs .= real.(P.fftrhs)
+    P.rhs .= real.(P.fftF)
     apply_bc!(P.rhs, sim.bcs.viscous_displacement)
     u .= P.rhs
     sim.now.u .= u
@@ -147,11 +149,13 @@ function update_dudt!(dudt, u, sim, t, mantle::MaxwellMantle,
     lithosphere::LaterallyVariableLithosphere)
     domain, P = sim.domain, sim.tools.prealloc
     update_deformation_rhs!(sim, u)
-    @. P.fftrhs = P.rhs * domain.K / (2 * sim.solidearth.effective_viscosity)
-    sim.tools.pfft! * P.fftrhs
+    # Stage the real-valued rhs into a complex buffer, then apply the out-of-place
+    # plans with `mul!` (dest ≠ src) so each transform's input is preserved.
+    @. P.fftU = P.rhs * domain.K / (2 * sim.solidearth.effective_viscosity)
+    mul!(P.fftrhs, sim.tools.pfft!, P.fftU)
     @. P.fftrhs *= sim.solidearth.scaled_pseudodiff_inv
-    sim.tools.pifft! * P.fftrhs
-    dudt .= real.(P.fftrhs)
+    mul!(P.fftU, sim.tools.pifft!, P.fftrhs)
+    dudt .= real.(P.fftU)
     dudt .*= sim.c.seconds_per_year
     apply_bc!(dudt, sim.bcs.viscous_displacement)
     return nothing
@@ -201,7 +205,7 @@ function thinplate_horizontal_displacement(u, litho_thickness, domain)
 end
 
 function thinplate_horizontal_displacement!(u_x::M, u_y::M, u::M,
-    litho_thickness::M, domain) where {M<:Matrix}
+    litho_thickness::M, domain) where {M<:AbstractMatrix}
     dx!(u_x, u, domain)
     dy!(u_y, u, domain)
     @. u_x *= -litho_thickness / 2

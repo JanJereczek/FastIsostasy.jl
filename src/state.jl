@@ -94,3 +94,45 @@ function CurrentState(domain::RegionalDomain, ref::ReferenceState, z_bsl)
         0,                          # count_sparse_updates
     )
 end
+
+"""
+$(TYPEDSIGNATURES)
+
+Reset the integrated + diagnostic fields of `sim.now` back to the initial
+condition defined by `sim.ref`, and rewind the timer to `t_span[1]`. Used to
+re-run the forward model from scratch (e.g. between inversion `loss`
+evaluations) without reallocating the state. Does **not** touch model
+parameters (viscosity, densities, ice snapshots), so it composes with
+`reconstruct!`.
+"""
+function reset_state!(sim)
+    now, ref = sim.now, sim.ref
+    T = eltype(now.u)
+    now.u .= ref.u
+    now.ue .= ref.ue
+    now.u_x .= 0
+    now.u_y .= 0
+    now.dudt .= 0
+    now.u_eq .= ref.u
+    now.H_ice .= ref.H_ice
+    now.H_af .= ref.H_af
+    now.H_water .= ref.H_water
+    for f in fieldnames(ColumnAnomalies)
+        getfield(now.columnanoms, f) .= 0
+    end
+    now.z_b .= ref.z_b
+    now.dz_ss .= 0
+    now.z_ss .= ref.z_ss
+    now.V_af = ref.V_af
+    now.V_pov = ref.V_pov
+    now.V_den = ref.V_den
+    now.delta_V = T(0)
+    now.z_bsl = T(sim.sealevel.bsl.z)
+    now.maskgrounded .= ref.maskgrounded
+    now.maskocean .= ref.maskocean
+    now.count_sparse_updates = 0
+    sim.timer.t = sim.timer.t_span[1]
+    empty!(sim.timer.t_computation)
+    empty!(sim.timer.t_vec)
+    return nothing
+end

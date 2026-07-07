@@ -28,10 +28,11 @@ $(TYPEDSIGNATURES)
 
 Return a struct containing the options relative to solving a [`Simulation`](@ref).
 """
-@kwdef struct SolverOptions
+@kwdef struct SolverOptions{TR<:AbstractTransition}
     diffeq::DiffEqOptions = DiffEqOptions()
     dt_sparse_diagnostics::Float64 = 10.0
     verbose::Bool = true
+    transition::TR = SharpTransition()
 end
 
 mutable struct Timer{T}
@@ -146,16 +147,17 @@ function Simulation(
         dz_ss_ref, z_b_ref, H_ice_ref], domain.arraykernel)
     z_ss_ref = sealevel.bsl.ref.z .+ dz_ss_ref
 
+    tr = opts.transition
     if domain.use_cuda
-        maskgrounded = get_maskgrounded(H_ice_ref, z_b_ref, z_ss_ref, c)
-        maskocean = get_maskocean(z_ss_ref, z_b_ref, maskgrounded)
+        maskgrounded = get_maskgrounded(H_ice_ref, z_b_ref, z_ss_ref, c, tr)
+        maskocean = get_maskocean(z_ss_ref, z_b_ref, maskgrounded, tr)
     else
-        maskgrounded = collect(get_maskgrounded(H_ice_ref, z_b_ref, z_ss_ref, c))
-        maskocean = collect(get_maskocean(z_ss_ref, z_b_ref, maskgrounded))
+        maskgrounded = collect(get_maskgrounded(H_ice_ref, z_b_ref, z_ss_ref, c, tr))
+        maskocean = collect(get_maskocean(z_ss_ref, z_b_ref, maskgrounded, tr))
     end
 
-    H_af_ref = height_above_floatation(H_ice_ref, z_b_ref, z_ss_ref, c)
-    H_water_ref = watercolumn(H_ice_ref, maskgrounded, z_b_ref, z_ss_ref, c)
+    H_af_ref = height_above_floatation(H_ice_ref, z_b_ref, z_ss_ref, c, tr)
+    H_water_ref = watercolumn(H_ice_ref, maskgrounded, z_b_ref, z_ss_ref, c, tr)
     ref = ReferenceState(u_ref, ue_ref, H_ice_ref, H_af_ref, H_water_ref, z_b_ref, z_ss_ref,
         T(0), T(0), T(0), maskgrounded, maskocean)
     now = CurrentState(domain, ref, sealevel.bsl.z)

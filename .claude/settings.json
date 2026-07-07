@@ -11,7 +11,15 @@
       "Bash(julia --project -e ' *)",
       "Bash(julia --project -e 'using Pkg; Pkg.add\\(\"LoopVectorization\"\\)')",
       "Bash(julia --project benchmarks/ka-derivatives.jl)",
-      "Bash(julia --project -e 'using Pkg; Pkg.status\\(\"CUDA\"; mode=PKGMODE_MANIFEST\\)')"
+      "Bash(julia --project -e 'using Pkg; Pkg.status\\(\"CUDA\"; mode=PKGMODE_MANIFEST\\)')",
+      "Bash(timeout 600 julia --project=. -e ' *)",
+      "Bash(timeout 900 julia --project=. benchmarks/benchmark_integrators.jl)",
+      "Bash(timeout 900 julia --project=. /tmp/claude-1003/-home-jan--julia-dev-FastIsostasy/67de65ee-551e-4795-89fb-decd12e18cd5/scratchpad/verify_native.jl)",
+      "Bash(timeout 900 julia --project=. -e ' *)",
+      "Bash(timeout 1200 julia --project=. benchmarks/benchmark_integrators.jl)",
+      "Bash(timeout 600 julia --project=. -e 'using Pkg; Pkg.resolve\\(\\); Pkg.precompile\\(\\)')",
+      "Bash(timeout 900 julia --project=. -e 'using FastIsostasy, LinearAlgebra, Test; include\\(\"test/test_integrators.jl\"\\)')",
+      "Bash(timeout 1500 julia --project=. -e 'using Pkg; Pkg.test\\(\\)')"
     ]
   }
 }

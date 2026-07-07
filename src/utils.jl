@@ -38,6 +38,8 @@ end
 #####################################################
 
 not(x::Bool) = !x
+# Complement for smooth (floating-point) masks in [0, 1].
+not(x::AbstractFloat) = one(x) - x
 
 Base.zeros(domain::RegionalDomain) = zeros(eltype(domain.x), domain.nx, domain.ny)
 

@@ -68,11 +68,11 @@ end
 
 function watercolumn!(sim::Simulation)
     watercolumn!(sim.now.H_water, sim.now.H_ice, sim.now.maskgrounded, sim.now.z_b,
-        sim.now.z_ss, sim.c, sim.tools.prealloc.buffer_x)
+        sim.now.z_ss, sim.c, sim.tools.prealloc.buffer_x, sim.opts.transition)
     return nothing
 end
 
-function watercolumn!(H_water, H_ice, maskgrounded, z_b, z_ss, c, buffer)
+function watercolumn!(H_water, H_ice, maskgrounded, z_b, z_ss, c, buffer, ::SharpTransition)
     # water column height in absence of ice
     buffer .= max.(z_ss .- z_b, 0)
 
@@ -84,9 +84,20 @@ function watercolumn!(H_water, H_ice, maskgrounded, z_b, z_ss, c, buffer)
     return nothing
 end
 
-function watercolumn(H_ice, maskgrounded, z_b, z_ss, c)
+function watercolumn!(H_water, H_ice, maskgrounded, z_b, z_ss, c, buffer, tr::SmoothTransition)
+    e = tr.eps
+    # smooth max(z_ss - z_b, 0); the ice-thickness switch at 1 m becomes a smooth,
+    # partition-of-unity blend (sheaviside(1 - H) + sheaviside(H - 1) == 1).
+    buffer .= srelu.(z_ss .- z_b, e)
+    H_water .= sheaviside.(1 .- H_ice, e) .* buffer .+
+        not.(maskgrounded) .* sheaviside.(H_ice .- 1, e) .*
+        (buffer .- (H_ice .* (c.rho_ice / c.rho_seawater)))
+    return nothing
+end
+
+function watercolumn(H_ice, maskgrounded, z_b, z_ss, c, tr::AbstractTransition = SharpTransition())
     H_water, buffer = similar(H_ice), similar(H_ice)
-    watercolumn!(H_water, H_ice, maskgrounded, z_b, z_ss, c, buffer)
+    watercolumn!(H_water, H_ice, maskgrounded, z_b, z_ss, c, buffer, tr)
     return H_water
 end
 

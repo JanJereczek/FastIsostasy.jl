@@ -97,8 +97,11 @@ function GIATools(domain, c, solidearth;
 end
 
 
+# Out-of-place complex plans: applied via `mul!(dest, plan, src)`, which preserves
+# `src`. Input preservation is required for AD (the primal input to each transform
+# must survive for the reverse pass) and keeps the forward code allocation-free.
 function choose_fft_plans(X)
-    return plan_fft!(complex.(X); flags = MEASURE), plan_ifft!(complex.(X); flags = MEASURE)
+    return plan_fft(complex.(X); flags = MEASURE), plan_ifft(complex.(X); flags = MEASURE)
 end
 
 function choose_fft_plans(X, mantle)

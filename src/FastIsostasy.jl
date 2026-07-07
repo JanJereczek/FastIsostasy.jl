@@ -4,14 +4,12 @@ using AbstractFFTs: AbstractFFTs
 using DelimitedFiles: readdlm
 using DocStringExtensions
 using Downloads: download
-using FiniteDifferences: central_fdm, forward_fdm, backward_fdm
 using FastGaussQuadrature: gausslegendre
-using FFTW: fft, ifft, plan_fft!, plan_ifft!, plan_rfft, plan_irfft, MEASURE
+using FFTW: fft, ifft, plan_fft, plan_ifft, plan_rfft, plan_irfft, MEASURE
 using LinearAlgebra: Diagonal, det, diagm, norm, mul!
 using NetCDF
 
 using KernelAbstractions: @kernel, @index, get_backend, synchronize
-using LoopVectorization: @turbo
 using Statistics: mean, cov, std
 using SpecialFunctions: besselj0, besselj1, besselk
 
@@ -24,6 +22,7 @@ include("barystatic_sealevel.jl")
 include("domain.jl")
 include("boundary_conditions.jl")
 include("constants.jl")
+include("transitions.jl")
 include("layering.jl")
 include("material.jl")
 include("solidearth.jl")
@@ -44,6 +43,13 @@ include("dataloaders.jl")
 include("inversion.jl")
 include("coordinates.jl")
 include("integrators.jl")
+
+# inverse problem API (new; src/inverse/)
+include("inverse/diffmode.jl")
+include("inverse/observables.jl")
+include("inverse/encodings.jl")
+include("inverse/regularization.jl")
+include("inverse/problem.jl")
 
 # interpolations.jl
 export TimeInterpolation0D, TimeInterpolation2D, interpolate!
@@ -67,6 +73,9 @@ export apply_bc!
 
 # constants.jl
 export PhysicalConstants    #, ReferenceSolidEarthModel
+
+# transitions.jl
+export AbstractTransition, SharpTransition, SmoothTransition
 
 # layering.jl
 export AbstractLayering
@@ -99,7 +108,7 @@ export uniform_ice_cylinder, stereo_ice_cylinder, stereo_ice_cap
 export zeros, not, cudainfo, kernelpromote, kernelzeros
 
 # derivatives.jl
-export update_second_derivatives!   #, dxx!, dyy!, FiniteDiffParams
+export update_second_derivatives!   #, dxx!, dyy!
 
 # loads.jl
 export height_above_floatation, columnanom_water!
@@ -165,5 +174,16 @@ include("plots.jl")
 # inversion.jl
 export InversionConfig, InversionData, InversionProblem, ParameterReduction
 export ViscositySnippet
+
+# inverse/ (new inversion API)
+export AbstractDiffMode, TangentMode, AdjointMode
+export AbstractObservable, VerticalUpliftObservable, VerticalUpliftRateObservable,
+    RelativeSeaLevelObservable, Observation
+export AbstractEncoding, Test1Encoding, Test2Encoding,
+    EOFEncoding, AutoEncoding, VariationalAutoEncoding, nparams
+# note: `reconstruct!` is already exported by inversion.jl (shared generic)
+export AbstractRegularization, L2Reg, SurfaceSmoothnessReg, DecodedBounds,
+    BoundedQuantity, Log10Viscosity, UpperMantleDensity, LithoDensity
+export AbstractInversion, IceLoadInversion, ParameterInversion, loss, gradient!, solve!
 
 end
