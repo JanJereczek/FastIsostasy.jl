@@ -74,7 +74,7 @@ solidearth = SolidEarth(
     layer_boundaries = [88f3],
     layer_viscosities = [1f21],
 )
-opts = SolverOptions(diffeq = DiffEqOptions(alg = Euler(), dt_min = 100f0))
+opts = SolverOptions(diffeq = DiffEqOptions(alg = FIEuler(), dt_min = 100f0))
 sim_implicit = Simulation(domain, bcs, sealevel, solidearth, (0, 50f3); nout = nout, opts = opts)
 run!(sim_implicit)
 fig_implicit = plot_transect(sim_implicit, [:u], analytic_cylinder_solution = true)

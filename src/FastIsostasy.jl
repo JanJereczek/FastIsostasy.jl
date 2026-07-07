@@ -9,22 +9,15 @@ using FastGaussQuadrature: gausslegendre
 using FFTW: fft, ifft, plan_fft!, plan_ifft!, plan_rfft, plan_irfft, MEASURE
 using LinearAlgebra: Diagonal, det, diagm, norm, mul!
 using NetCDF
-using OrdinaryDiffEqTsit5: init, ODEProblem, solve, DiscreteCallback, CallbackSet
 
 using KernelAbstractions: @kernel, @index, get_backend, synchronize
 using LoopVectorization: @turbo
 using Statistics: mean, cov, std
 using SpecialFunctions: besselj0, besselj1, besselk
-using OrdinaryDiffEqTsit5: step!
 
 using Reexport: Reexport, @reexport
 @reexport using Interpolations
 @reexport using Proj
-@reexport using OrdinaryDiffEqTsit5: Tsit5
-@reexport using OrdinaryDiffEqLowOrderRK: Euler, SplitEuler, Heun, Ralston,
-    Midpoint, RK4, BS3, OwrenZen3, OwrenZen4, OwrenZen5, BS5, DP5, Anas5,
-    RKO65, FRK65, RKM, MSRK5, MSRK6, PSRK4p7q6, PSRK3p5q4, PSRK3p6q5, Stepanov5,
-    SIR54, Alshina2, Alshina3, Alshina6
 
 include("interpolations.jl")
 include("barystatic_sealevel.jl")
@@ -50,6 +43,7 @@ include("analytic_solutions.jl")
 include("dataloaders.jl")
 include("inversion.jl")
 include("coordinates.jl")
+include("integrators.jl")
 
 # interpolations.jl
 export TimeInterpolation0D, TimeInterpolation2D, interpolate!
@@ -162,6 +156,9 @@ export load_latychev_test3, load_latychev2023_ICE6G
 # simulation.jl
 export DiffEqOptions, SolverOptions, Simulation, run!, init_integrator
 export update_diagnostics!, step!
+
+# integrators.jl
+export FIAlgorithm, FIEuler, FIBS3, FITsit5, fi_solve, init_fi
 
 include("plots.jl")
 

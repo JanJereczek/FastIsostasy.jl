@@ -10,6 +10,7 @@ include("test_convolution.jl")
 include("test_dataloaders.jl")
 include("test_derivatives.jl")
 include("test_dimensions.jl")
+include("test_integrators.jl")
 
 # const SAVE_PLOTS = true
 

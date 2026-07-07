@@ -41,6 +41,7 @@ ref_pages = [
 PAGES = [
     "index.md",
     "introGIA.md",
+    "integrators.md",
     "Examples" => example_pages,
     "References" => ref_pages,
 ]

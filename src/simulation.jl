@@ -5,13 +5,22 @@
 $(TYPEDSIGNATURES)
 
 Contains:
-- `alg`: the algorithm to integrate the ODE forward in time.
-- `reltol`: the relative error tolerance of the integrator.
+- `alg`: the [`FIAlgorithm`](@ref) used to integrate the ODE forward in time,
+  one of `FIBS3()` (adaptive, default), `FITsit5()` (adaptive) or `FIEuler()`
+  (fixed step, requires `dt_min`).
+- `reltol`: the relative error tolerance of the adaptive controller.
+- `abstol`: the absolute error tolerance of the adaptive controller.
+- `dt_min`: fixed step size for `FIEuler`, and a lower bound on the adaptive
+  step size otherwise.
+- `dt0`: initial step size for the adaptive backend (`nothing` picks a
+  conservative default).
 """
 @kwdef struct DiffEqOptions{S}
-    alg::S = BS3()
+    alg::S = FIBS3()
     reltol::AbstractFloat = 1f-5
+    abstol::AbstractFloat = 1f-6
     dt_min::Union{Real, Nothing} = nothing
+    dt0::Union{Real, Nothing} = nothing
 end
 
 """
@@ -184,17 +193,11 @@ function Base.show(io::IO, ::MIME"text/plain", sim::Simulation)
 end
 
 #####################################################
-# I/O Callbacks
+# Output writing
 #####################################################
 
-nc_condition(_, t, integrator) = (length(integrator.p.ncout.t) >= 1) &&
-    (integrator.p.ncout.k <= length(integrator.p.ncout.t)) &&
-    (t >= integrator.p.ncout.t[integrator.p.ncout.k])
-
-nout_condition(_, t, integrator) = (length(integrator.p.nout.t) >= 1) &&
-    (integrator.p.nout.k <= length(integrator.p.nout.t)) &&
-    (t >= integrator.p.nout.t[integrator.p.nout.k])
-
+# `integrator` is an `FIIntegrator` (see integrators.jl); only its `.p`
+# (the `Simulation`) and `.t` fields are used here.
 function nc_affect!(integrator)
     sim = integrator.p
 
@@ -227,39 +230,9 @@ end
 #####################################################
 # Forward integration
 #####################################################
-
-"""
-$(TYPEDSIGNATURES)
-
-Solve the isostatic adjustment problem defined in `sim::Simulation`.
-"""
-function run!(sim::Simulation)
-    init_problem!(sim)
-    prob = ODEProblem(update_diagnostics!, sim.now.u, sim.timer.t_span, sim)
-    ncout_callback = DiscreteCallback(nc_condition, nc_affect!)
-    nout_callback = DiscreteCallback(nout_condition, nout_affect!)
-    out_callback = CallbackSet(ncout_callback, nout_callback)
-    sim.timer.t_computation_0 = time()
-
-    if sim.opts.diffeq.dt_min isa Real
-        if sim.opts.diffeq.alg isa Euler
-            solve(prob, sim.opts.diffeq.alg, reltol=sim.opts.diffeq.reltol,
-                saveat=[sim.timer.t_span[2]], tstops=sort(vcat(sim.nout.t, sim.ncout.t)),
-                callback=out_callback, progress=sim.opts.verbose,
-                dtmin = sim.opts.diffeq.dt_min, force_dtmin = true,
-                dt = sim.opts.diffeq.dt_min)
-        else
-            error("The `dt_min` option is only compatible with the Euler algorithm.")
-        end
-    else
-        solve(prob, sim.opts.diffeq.alg, reltol=sim.opts.diffeq.reltol,
-            saveat=[sim.timer.t_span[2]], tstops=sort(vcat(sim.nout.t, sim.ncout.t)),
-            callback=out_callback, progress=sim.opts.verbose)
-    end
-
-    sim.timer.t_computation .-= sim.timer.t_computation[1]
-    return nothing
-end
+#
+# `run!`, `init_integrator` and `step!` are defined in integrators.jl, on top
+# of the built-in explicit RK stepper (no external ODE dependency).
 
 # In the best case, we would like something like:
 # restart!(sim, t_span)                # restarts the simulation over t_span
@@ -284,40 +257,12 @@ end
 
 
 
-"""
-$(TYPEDSIGNATURES)
-
-Initialise the integrator of `sim::Simulation`, which can be subsequently
-integrated forward in time by using `step!`.
-"""
-function init_integrator(sim::Simulation)
-    init_problem!(sim)
-    prob = ODEProblem(update_diagnostics!, sim.now.u, sim.timer.t_span, sim)
-    ncout_callback = DiscreteCallback(nc_condition, nc_affect!)
-    nout_callback = DiscreteCallback(nout_condition, nout_affect!)
-    out_callback = CallbackSet(ncout_callback, nout_callback)
-    sim.timer.t_computation_0 = time()
-    integrator = init(prob, sim.opts.diffeq.alg, reltol=sim.opts.diffeq.reltol,
-        saveat=sim.nout.t[end:end], tstops=sim.nout.t, callback=out_callback)
-    return integrator
-end
-
 function init_problem!(sim::Simulation)
     update_V_af!(sim, sim.sealevel.volume_contribution)
     update_V_den!(sim, sim.sealevel.density_contribution)
     update_V_pov!(sim, sim.sealevel.adjustment_contribution)
     total_volume(sim)
     update_diagnostics!(sim.now.dudt, sim.now.u, sim, sim.timer.t)
-    return nothing
-end
-
-"""
-$(TYPEDSIGNATURES)
-
-Wraps `SciMLBase.step!` and should always be used with `force_dt = true` to ensure that the integrator takes steps of size `Δt`.
-"""
-function FastIsostasy.step!(integrator, Δt, force_dt)
-    OrdinaryDiffEqTsit5.step!(integrator, Δt, force_dt)
     return nothing
 end
 
