@@ -99,9 +99,13 @@ end
 
 # Out-of-place complex plans: applied via `mul!(dest, plan, src)`, which preserves
 # `src`. Input preservation is required for AD (the primal input to each transform
-# must survive for the reverse pass) and keeps the forward code allocation-free.
+# must survive for the reverse pass) and keeps the forward code allocation-free. The
+# inverse plan is wrapped by `normalize_plan` (→ `NormalizedPlan`): numerically
+# identical to the `ScaledPlan` from `plan_ifft`, but carrying its scale as a type
+# parameter so Enzyme doesn't treat the (constant) normalization as differentiable.
 function choose_fft_plans(X)
-    return plan_fft(complex.(X); flags = MEASURE), plan_ifft(complex.(X); flags = MEASURE)
+    return plan_fft(complex.(X); flags = MEASURE),
+        normalize_plan(plan_ifft(complex.(X); flags = MEASURE))
 end
 
 function choose_fft_plans(X, mantle)
@@ -111,7 +115,8 @@ function choose_fft_plans(X, mantle)
               "expected performance gain may not materialise on all hardware. " *
               "Prefer MaxwellMantle for production runs."
         rfft_buf = similar(X, Complex{eltype(X)}, size(X, 1) ÷ 2 + 1, size(X, 2))
-        return plan_rfft(copy(X); flags = MEASURE), plan_irfft(rfft_buf, size(X, 1); flags = MEASURE)
+        return plan_rfft(copy(X); flags = MEASURE),
+            normalize_plan(plan_irfft(rfft_buf, size(X, 1); flags = MEASURE))
     else
         return choose_fft_plans(X)
     end
