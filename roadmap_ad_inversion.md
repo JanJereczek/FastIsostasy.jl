@@ -23,6 +23,8 @@ reading §1 (decisions) and finding the first unticked box.
 | Inversion types | `AbstractInversion`; **`IceLoadInversion`** (application 1), `ParameterInversion` (application 2). |
 | Observables | Lightweight tag types defining only `extract!`; generic `Observation{O}` wrapper bundles tag + sampling + times + data + noise `σ`. Active tags: `VerticalUpliftObservable`, `VerticalUpliftRateObservable`, `RelativeSeaLevelObservable`. `HorizontalDisplacementRateObservable` stays **undefined** for now (future work, §11). Loss = Σₒ ½‖(Gₒ(θ) − yₒ)/σₒ‖² + reg. |
 | Obs sampling | **Grid indices** (CartesianIndex) in v1. Physical coords + differentiable bilinear interpolation after Test 2 (user will provide real coordinate observations then). |
+| Obs extraction | **Vector-based, GPU-accelerated (2026-07-08).** Stored indices converted to **linear/global** indices at `Observation` construction; `extract!` is a KA gather kernel `y[i] = field[idx[i]]` over a 1D range, backend-dispatched via `get_backend` (same dual-path shape as `src/derivatives.jl`; CPU = plain indexed loop, GPU = kernel). Closes the §11 GPU-gather item. |
+| Regularization | **One configurable Tikhonov regularizer (2026-07-08)** with two DOFs: a **target** (a decoded field via a `BoundedQuantity`-style selector, or a θ-subset) and an **order** — `0` = magnitude `‖·‖²` (with optional per-component weights, which retires the §11 large-magnitude/Float32 domination issue), `1` = **gradient** `‖∇·‖²` via the FD stencils. Gradient/smoothness is the common case; magnitude is the exception. `SurfaceSmoothnessReg` = `(order=1, surface)`, `L2Reg` = `(order=0)` — kept as thin constructors over the general type. |
 | Bounds/priors | No priors on encoded θ (hard to specify). Bounds imposed on **decoded** quantities via differentiable soft hinge penalties: `λ_b Σ [smooth_relu(lo − d)² + smooth_relu(d − hi)²]` on decoded fields/scalars. Optim's Fminbox (θ-space bounds) available as a fallback but not the primary mechanism. |
 | Optimizer | **Optim.jl** (L-BFGS) via a weakdep extension. Core exposes `loss_and_gradient!` so any optimizer works. |
 | Weakdeps | `FastIsostasyEnzymeExt` (engines + EnzymeRules), `FastIsostasyCheckpointingExt` gated on `[Enzyme, Checkpointing]`, `FastIsostasyOptimExt`. EnsembleKalman path dropped for now. |
@@ -106,7 +108,9 @@ Enzyme-legal.
       of `update_diagnostics!` calls `t_computation!(sim.timer)`, which calls `time()`
       (wall clock) and `push!`es to `sim.timer.t_computation`/`t_vec`. Must be
       `EnzymeRules.inactive` (Phase 2) or lifted out of the RHS. `sim.timer.t = t`
-      (scalar write) is benign/inactive. → recorded for Phase 2 activity map.
+      (scalar write) is benign/inactive. → **resolved (2026-07-08): `EnzymeRules.inactive`
+      one-liner in the ext (not lifted — lifting would change *when* it fires,
+      per-RHS-eval → per-accepted-step, altering what the timer measures); see §4.**
 - [x] **RHS `u`-mutation audit** (2026-07-07): `update_diagnostics!` calls
       `apply_bc!(u, sim.bcs.viscous_displacement)` on its **input** `u`
       (simulation.jl:288). For the default `OffsetBC` this is a weighted-global-mean
@@ -116,10 +120,13 @@ Enzyme-legal.
       `ks[1]` is computed on `integ.u`, so the projection persists into the state
       (probably intentional: keeps `u` on the zero-mean manifold). Enzyme can
       differentiate input mutation, but "input is also output" complicates the
-      activity map. **Decision deferred to Phase 2**: either (a) mark the reduction
-      an in-place linear op Enzyme handles, or (b) move the projection into the
-      driver (once per accepted step). `bc.buffer` mutation also means the BC object
-      is not `Const` — must be shadowed or the buffer thread-local.
+      activity map. **Resolved (2026-07-08):** option (a) — the projection is a plain
+      linear in-place op Enzyme handles natively, no custom rule; `u` → `Duplicated`.
+      To make `bc` `Const` (rather than shadow it), **drop `bc.buffer`** and compute
+      the reduction as `dot(bc.W, X)` (== old `sum(bc.buffer)`, allocation-free) — `bc`
+      then mutates nothing. Also removes a temp write from every RHS eval. The
+      "input-is-output / persists via FSAL `ks[1]`" note is intended semantics
+      (zero-mean manifold), not an Enzyme issue. See §4.
 - [x] **Perf regression gate** (2026-07-07): benchmarked forward runs (AD off) vs. a
       `HEAD` worktree (`@turbo` + in-place FFT), lat-variable Maxwell, min over reps.
       The interim KA-only build regressed badly; the **dual path (adopted) recovers
@@ -175,6 +182,12 @@ still uses it). Tests: `test/test_inversion_api.jl` (16/16, wired into runtests)
       (Σₖ‖∇(Hₖ+b_ref)‖² via FD stencils), `DecodedBounds(quantity, lo, hi, λ)` with
       named `BoundedQuantity` types (`Log10Viscosity`/`UpperMantleDensity`/
       `LithoDensity`, no closures) → `λ·Σ[relu(lo−d)²+relu(d−hi)²]`.
+  - [ ] **Generalize to one configurable Tikhonov regularizer** (decided 2026-07-08;
+        §1 Regularization row): a `target` selector (decoded field or θ-subset) × an
+        `order` (0 = magnitude with optional per-component weights, 1 = gradient
+        `‖∇·‖²`). Refactor `L2Reg`/`SurfaceSmoothnessReg` into thin constructors over
+        it. Folds in the §11 parameter-normalization fix (per-component weights on
+        order-0). Gradient/smoothness is the default expectation.
 - [x] `loss(prob, θ)` = reconstruct! → reset_state! → forward run to obs times →
       ½Σ‖(pred−data)/σ‖² + Σ penalties. **Verified**: `loss(θ_true)=0` exactly,
       monotone increase under viscosity perturbation, realistic subsidence data.
@@ -184,39 +197,158 @@ still uses it). Tests: `test/test_inversion_api.jl` (16/16, wired into runtests)
       `FastIsostasyOptimExt` (real `solve!` via Optim L-BFGS, runnable once
       `gradient!` exists). Core resolves & loads without the weakdeps.
 
-**Caveats surfaced for later:** (1) `L2Reg` on raw θ is dominated by the largest-
-magnitude components (Gaussian centres ~10⁶ m) and in Float32 can hide the misfit —
-encoded θ should be normalized, or `L2Reg` given per-component scales (→ §11).
-(2) Observation extraction uses scalar indexing (CPU); a GPU gather kernel is a
-later item. (3) The Vialov `(·)^(3/8)` has an infinite margin slope — steep centre
-gradients (noted in code).
+**Caveats surfaced for later — all three resolved 2026-07-08:**
+(1) **[resolved]** `L2Reg` raw-θ domination → the generalized Tikhonov regularizer
+(§1 Regularization row, §3 refactor box) makes order-0 magnitude penalties accept
+per-component weights; user's steer: usually apply the **gradient** (`order=1`,
+smoothness) penalty anyway.
+(2) **[resolved]** Observation extraction → vector-based KA gather on linear indices,
+`get_backend`-dispatched (§1 Obs-extraction row); replaces the CPU scalar indexing.
+(3) **[resolved / non-issue]** The Vialov `(·)^(3/8)` infinite margin slope never
+enters an AD path: `reconstruct!` writes `H` directly and the loss depends on `H`
+and displacement, not on the analytic `∂H/∂r`. The only ∇H is the FD stencil inside
+the surface-smoothness reg — bounded by construction, not the analytic singularity.
 
-## 4. Phase 2 — Tangent (forward) engine + AD validity test ⟵ go/no-go
+## 4. Phase 2 — Tangent (forward) engine + AD validity test — **go/no-go PASSED (2026-07-09)**
 
 - [ ] `FastIsostasyEnzymeExt`:
-  - [ ] **Enzyme activity map for `Simulation`**: document which fields are
-        `Const` (domain, FFT/conv plans, tableau, opts, output configs) vs
-        `Duplicated`/shadowed (now, prealloc buffers, solidearth parameter fields,
-        load/BC data). This is the reference for every autodiff call.
-  - [ ] `EnzymeRules.inactive` for timers, printing, NetCDF writers.
-  - [ ] Forward-mode `EnzymeRules` for plan application `mul!(y, plan, x)`:
-        complex fft/ifft (explicit path) **and** rfft/irfft (ConvolutionPlan —
-        already on the differentiated path via `update_deformation_rhs!` smoothing
-        and `update_elasticresponse!`). Tangent rule = same transform on tangents.
-        Test each rule in isolation against finite differences.
-  - [ ] `gradient!(g, prob, θ, ::TangentMode)` via `Enzyme.autodiff(Forward, ...)`
-        with `BatchDuplicated` shadows of the full `Simulation` (θ seeded through
-        `reconstruct!`), chunked over θ.
-- [ ] **AD validity test (the go/no-go)**: 32×32 grid, explicit
-      `MaxwellMantle` + `LaterallyVariableLithosphere`, fixed-step `FIEuler`, few
-      steps, `SmoothTransition`; Enzyme-forward gradient of a toy loss w.r.t. a
-      ~5-dim θ vs central finite differences, rtol ~1e-5 (Float64). Start with a
-      *single* `advance_step!`/RHS evaluation, then the full short run.
-- [ ] Gradient through adaptive stepping (`FIBS3`/`FITsit5`): validate, or restrict
-      TangentMode v1 to fixed-step and record the restriction here.
-- [ ] Wire tests into `test/runtests.jl` (new `test/test_ad_validity.jl`).
+  - [x] **Enzyme activity map for `Simulation`** (2026-07-08): written as
+        `docs/src/inversion_ad_activity_map.md` — the field-by-field `Const` vs
+        `Duplicated` reference (domain/constants/opts/plans/outputs/timer Const;
+        `now`, `solidearth`, `prealloc` buffers, and the ice-load `H_itp.X` shadowed).
+        **`apply_bc!` done (2026-07-08, §2 audit):** OffsetBC projection rewritten as
+        `X .-= (dot(bc.W, X) − bc.x_border)`, `bc.buffer` field dropped → `bc` is
+        `Const`, `u` is `Duplicated`, no custom rule. Full suite passes (physics
+        unchanged); all 7 `precompute_bc` constructors updated.
+  - [x] `EnzymeRules.inactive` for `t_computation!` (2026-07-08): one-liner in the
+        ext (`EnzymeRules.inactive(::typeof(t_computation!), args...) = nothing`);
+        core stays Enzyme-free. Validated in `test/test_ad_rules.jl` (a function that
+        pushes to the live timer still differentiates to the exact primal derivative).
+        Printing / NetCDF writers live off the RHS; left undeclared for now.
+  - [x] Forward-mode `EnzymeRules` for plan application `mul!(Y, plan, X)`
+        (2026-07-08): one rule on `plan::Const{<:AbstractFFTs.Plan}` (tangent = same
+        transform on each shadow column; handles `Const` input → zero tangent, and
+        width>1 `BatchDuplicated`). Covers complex fft/ifft **and** rfft/irfft.
+        Validated vs central FD in `test/test_ad_rules.jl` (rtol 1e-5): both a
+        directional derivative and the full component-wise gradient.
+  - [x] `gradient!(g, prob, θ, ::TangentMode)` (2026-07-09): `Enzyme.autodiff(Forward,
+        loss, Duplicated(prob, dprob), Duplicated(θ, dθ))` with a `make_zero` shadow of
+        the whole `prob` (re-zeroed per direction via **`remake_zero!`** — `make_zero!`
+        trips on the plans' immutable-nonzero type-params), seeding one θ component at a
+        time; `set_runtime_activity(Forward)` throughout. One forward pass per θ
+        component (fine for encoded low-dim θ). **`BatchDuplicated` chunking deferred**
+        (loop is correct + simple; batching is a later perf optimisation). Validated in
+        `test/test_ad_validity.jl` component-wise vs FD (rtol 1e-5).
+- [x] **AD validity test (the go/no-go) — FULL RUN PASSES (2026-07-09).**
+      `test/test_ad_validity.jl` (6/6, wired into `runtests.jl`): forward-mode Enzyme
+      gradient of the **full inversion `loss`** — `reconstruct!` → fixed-step `FIEuler`
+      run → data misfit, lat-variable Maxwell, 32², `SmoothTransition` — w.r.t. θ,
+      `make_zero` shadow + `set_runtime_activity`, **matches central FD to rel ≈ 1e-9**
+      (directional) and component-wise via `gradient!` (rtol 1e-5). `loss(θ_true) <
+      1e-6` confirms the AD forward reproduces the integrator's synthetic data.
+      **Two forward-path fixes to get here:**
+      (a) `forward_predict!` dispatches on the algorithm — `FIEuler` uses a direct
+      explicit-Euler loop (`_advance_euler!`, mathematically identical to the
+      integrator) that avoids the `FIIntegrator`'s `Vector{Matrix}` stage buffers +
+      deep nested type, which overflow Enzyme's static type analysis
+      (`EnzymeNoTypeError` in `perform_step!`); adaptive algs keep the integrator (not
+      differentiable — TangentMode v1 is fixed-step only).
+      (b) `advance_with_output!` was dropped from the inversion path (its
+      `_next_output_time` returns `Union{Nothing,T}` → `IllegalTypeAnalysis`); obs
+      extraction now uses a precomputed `extract_plan` (θ-independent `(obs,time)` index
+      map) so no `findfirst`/`Union` is on the differentiated path.
+      Verified correct along the way (single-RHS bisection): custom `mul!` plan rule,
+      complex `real.()`, `apply_bc!` (dot), in-place complex-buffer reuse, and routing
+      θ through the shadowed sim.
+      **Root cause found & fixed — `ScaledPlan` scale activation.** `plan_ifft`/
+      `plan_irfft` return `AbstractFFTs.ScaledPlan`s carrying a `Float64` `scale`.
+      Inside the `make_zero`'d sim Enzyme spuriously treated that scale as active and
+      its shadow corrupted the tangent (1.46 instead of −0.0082); `inactive_type` and
+      `set_runtime_activity` did **not** fix it (immutable `Float64` leaf activated
+      by-value). **Fix:** `NormalizedPlan{P,S}` (src/convolutions.jl) wraps the raw
+      unnormalized plan `P` with the exact scale `S` **as a type parameter** (compile-
+      time constant → Enzyme-invisible); `normalize_plan(::ScaledPlan)` extracts
+      `sp.p`/`sp.scale` (build-extract-discard) so `mul!` reproduces the `ScaledPlan`
+      result **bit-for-bit** (verified max|Δ| = 0). Wired into `choose_fft_plans`
+      (tools.jl) and `_plan_irfft`/`ConvolutionPlanHelpers` (convolutions.jl) + the
+      CUDA ext. Full suite passes unchanged (integrators 31/31, convolutions,
+      barystatic, derivatives); `test_ad_rules` 4/4.
+      **`gradient!(::TangentMode)` must use `set_runtime_activity`** (for the in-place
+      complex-buffer reuse) + `make_zero` shadow.
+      Ext also: `inactive_type(<:AbstractFFTs.Plan)` + `inactive_type(<:NormalizedPlan)`;
+      `mul!` rule narrowed to raw `cFFTWPlan`/`rFFTWPlan` (so `ScaledPlan` is traced,
+      not custom-ruled — matching it tripped Enzyme's `roots_activep` assertion).
+- [x] Gradient through adaptive stepping (`FIBS3`/`FITsit5`): **restricted — TangentMode
+      v1 is fixed-step (`FIEuler`) only** (2026-07-09). `forward_predict!` dispatches the
+      differentiable direct-Euler loop for `FIEuler` and errors/uses the (non-diff)
+      integrator otherwise. Adaptive-step AD (freezing the dt-sequence) is Phase 5+.
+- [x] Wire tests into `test/runtests.jl` (2026-07-08): `test/test_ad_rules.jl`
+      (foundational rules) added; `test/test_ad_validity.jl` (full go/no-go) still to
+      come. `Enzyme` + `FFTW` added to `test/Project.toml`.
+
+## 4b. Pre-Phase-3 review findings (2026-07-09) — target before the docs examples
+
+Please address points A1 and A2 of section 4b of roadmap_ad_inversion.md
+
+Code review of Phases 0–2 + the inversion API. Grouped by priority; B items are
+silent-wrongness traps, A items are locked decisions the code doesn't yet match.
+
+**A — roadmap/code mismatches:**
+- [ ] **Obs extraction still CPU scalar loop** (`src/inverse/observables.jl`,
+      `extract!`): the §1 row claims linear-index KA gather resolved 2026-07-08,
+      but code stores `Vector{CartesianIndex{2}}` + scalar loop (fails on
+      `CuArray`). Implement the decided design or re-mark the row pending.
+- [ ] **`loss_and_gradient!` missing** (§1 Optimizer row says core exposes it):
+      Optim ext passes separate `f`/`g!` → one wasted forward run per L-BFGS
+      iteration. Forward mode gets the primal free (`ForwardWithPrimal` on one
+      seed); add `loss_and_gradient!` + `Optim.only_fg!` in the ext.
+- [ ] **Generalized Tikhonov regularizer** (§3 unticked box): do the refactor
+      *before* the docs examples so the reg API doesn't churn after docs exist.
+
+**B — correctness traps (fix before Test 1):**
+- [ ] **Vialov margin NaN under AD** (`add_vialov!`, encodings.jl): w.r.t. centers,
+      far-field cells hit `d(base^{3/8})` at `base=0, dbase=0` → pow rule gives
+      `Inf·0 = NaN`. §3 caveat (3) only reasoned about ∂H/∂r, not the θ-chain.
+      Unit-check Enzyme's pow at 0; if NaN, guard `ifelse(base > 0, base^(3//8), 0)`
+      (forward-mode select discards the poisoned branch).
+- [ ] **`Test1Encoding` never validates ice snapshots**: `reconstruct!` writes
+      `snaps[1:K]` without checking `length(ice_snapshots(sim)) == K` or
+      `H_itp.t == enc.knot_times` → silent wrong-time mapping. Validate at
+      `IceLoadInversion` construction.
+- [ ] **Duplicate times in one `Observation` corrupt the misfit silently**:
+      `_extract_plan` uses `findfirst`, so the duplicate's `preds` slice stays 0
+      and contributes a bogus residual. Validate `allunique(obs.times)` in the
+      `Observation` constructor.
+- [ ] **Obs times outside `t_span` unvalidated**: before `t_span[1]` → silent
+      wrong-time extraction; after `t_span[2]` → run silently extended. Check in
+      the inversion constructors.
+- [ ] **No `length(θ) == nparams(encoding)` check in `loss`** — too-long θ is
+      silently truncated by indexed reads. One-liner.
+- [ ] **TangentMode + adaptive alg = cryptic `EnzymeNoTypeError`**: guard at the
+      top of `gradient!(::TangentMode)` requiring `FIEuler`, with the documented
+      "TangentMode v1 is fixed-step only" message.
+
+**C — API polish (optional):**
+- [ ] `gradient!` without the Enzyme ext is a bare `MethodError`: move the 3-arg
+      dispatcher into core + informative 4-arg error fallback; ext overrides only
+      the mode-specific method.
+- [ ] `Test2Encoding{T}` type param unused, defaults `Float32` (inversion precision
+      decision is Float64): drop or use it.
+- [ ] `NormalizedPlan` hardcodes `Float64(scale)`: not bit-for-bit vs a Float32
+      `ScaledPlan` (verified parity was Float64-only). Parametrize the scale type
+      if Float32 forward parity matters.
+
+**D — noted, fine to defer:** `SurfaceSmoothnessReg.penalty` allocates 3 work
+arrays per loss eval; `TangentMode.batch` dead (deferred by design);
+`_extract_times(())` on empty observations errors cryptically.
 
 ## 5. Phase 3+4 — Synthetic inversion tests (both TangentMode)
+
+**Docs examples (decided 2026-07-09):** each test doubles as a dedicated docs
+example — Test 1 → **"Inverse ice history"** (`IceLoadInversion`), Test 2 →
+**"Inverse calibration"** (`ParameterInversion`). Write them as docs pages under
+`docs/src/examples/` wired into `docs/make.jl`, not just test files; the §7
+`inversion_ad.md` docs item then links to them instead of duplicating.
 
 ### Test 1 — joint ice + bimodal viscosity (`test/test_inversion_vialov.jl`)
 
@@ -341,15 +473,14 @@ Target design (when this phase starts):
 
 ## 11. Open questions / future work (decide when reached)
 
-- [ ] **Parameter normalization / `L2Reg` scaling** (raised 2026-07-07, Phase 1).
-      `L2Reg(λ)=λ‖θ‖²` on raw θ is dominated by the largest-magnitude components
-      (Gaussian centres in metres ~10⁶), and in Float32 that penalty (~10⁷) can swamp
-      the data misfit past the precision floor. Fix before the tests rely on
-      regularized θ: either work in a normalized θ-space (encodings map [-1,1]-ish
-      latents to physical units) or give `L2Reg` per-component weights. Normalized θ
-      also helps L-BFGS conditioning. Ties into the encoded-θ bounds interface below.
-- [ ] **GPU observation gather** (Phase 1 left CPU-only). `observable_value` uses
-      scalar indexing; a KA gather kernel is needed for `CuArray` sampling.
+- [x] **Parameter normalization / `L2Reg` scaling** (raised 2026-07-07; resolved
+      2026-07-08). Addressed by the generalized Tikhonov regularizer (§1 Regularization
+      row, §3 refactor box): order-0 magnitude penalties take per-component weights,
+      and the common case is the order-1 gradient/smoothness penalty. Normalized
+      θ-space (for L-BFGS conditioning) remains a possible later refinement but is no
+      longer required for the reg to behave.
+- [x] **GPU observation gather** (resolved 2026-07-08): vector-based KA gather on
+      linear indices, `get_backend`-dispatched (§1 Obs-extraction row).
 - [x] **CPU stencils: dual path chosen** (resolved 2026-07-07). Perf gate showed
       KA-CPU ~10–20× slower than `@turbo`; user chose plain `@inbounds` CPU loops +
       KA on GPU (option a). Implemented in `src/derivatives.jl`; perf recovered to
