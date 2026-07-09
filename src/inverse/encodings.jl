@@ -23,17 +23,23 @@ function nparams end
 
 # --- Enzyme-legal field builders --------------------------------------------
 
-# Add an isotropic Gaussian bump `amp * exp(-r²/2σ²)` centred at (μx, μy) to
-# `field`. Differentiable w.r.t. μx, μy, σ, amp.
+"""
+$(TYPEDSIGNATURES)
+
+Add an isotropic Gaussian bump `amp * exp(-r²/2σ²)` centred at `(μx, μy)` to `field`. Differentiable w.r.t. `μx`, `μy`, `σ`, `amp`.
+"""
 function add_gaussian!(field, X, Y, μx, μy, σ, amp)
     @. field += amp * exp(-((X - μx)^2 + (Y - μy)^2) / (2 * σ^2))
     return nothing
 end
 
-# Add a radially-symmetric Vialov dome of central thickness `Hc`, radius `L`,
-# centred at (xc, yc): H(r) = Hc * max(1 − (r/L)^(4/3), 0)^(3/8).
-# NB: the (·)^(3/8) has an infinite slope at the margin (base → 0⁺); gradients
-# w.r.t. the centre are steep there but the bulk dominates.
+"""
+$(TYPEDSIGNATURES)
+
+Add a radially-symmetric Vialov dome of central thickness `Hc`, radius `L`, centred at `(xc, yc)`:
+`H(r) = Hc * max(1 − (r/L)^(4/3), 0)^(3/8)`. Differentiable w.r.t. `xc`, `yc`, `L`, `Hc`.
+N.B.: the `(·)^(3/8)` has an infinite slope at the margin (`base → 0⁺`); gradients w.r.t. the centre are steep there but the bulk dominates.
+"""
 function add_vialov!(H, X, Y, xc, yc, L, Hc)
     @. H += Hc * max(1 - (sqrt((X - xc)^2 + (Y - yc)^2) / L)^(4//3), 0)^(3//8)
     return nothing
@@ -61,8 +67,8 @@ amplitudes, e.g. `(-1, +1)` decades).
 """
 struct Test1Encoding{T} <: AbstractEncoding{T}
     knot_times::Vector{T}
-    radii::NTuple{3, T}
-    visc_amps::NTuple{2, T}
+    radii::NTuple{3, T}     # TODO: replace 3 by N1
+    visc_amps::NTuple{2, T} # TODO: replace 2 by N2
 end
 
 nparams(enc::Test1Encoding) = 3 * length(enc.knot_times) + 13

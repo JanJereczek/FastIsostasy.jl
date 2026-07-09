@@ -14,8 +14,9 @@ abstract type AbstractDiffMode end
     TangentMode(; batch = 8)
 
 Forward-mode (tangent) differentiation. Cost scales with the number of
-parameters, so it **requires a low-dimensional encoding**. `batch` is the number
-of tangent directions propagated together (chunking).
+parameters, so it **requires a low number of parameter to estimate**
+(which can be achieved via a low-dimensional encoding). `batch` is the
+number of tangent directions propagated together (chunking).
 """
 struct TangentMode <: AbstractDiffMode
     batch::Int

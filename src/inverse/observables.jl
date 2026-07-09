@@ -2,15 +2,22 @@
 # Observables and observations.
 #
 # An *observable* is a lightweight tag type that only says *which* model quantity
-# is measured; it implements `observable_value(tag, sim, idx)` returning the
-# scalar model prediction at grid index `idx` (a `CartesianIndex{2}`) at the
-# current simulation time.
+# is measured; it implements `observable_field(tag, sim)` returning the full 2-D
+# scalar field the tag reads (materialized via a plain elementwise broadcast —
+# backend-agnostic, Enzyme-legal, no scalar GPU reads).
 #
 # An *observation* (`Observation`) bundles a tag with the sampling locations
 # (`points`), the times, the measured `data` and the noise `σ`. Several
 # observations of possibly different tags are passed to an inversion as a vector.
 #
-# v1 samples on grid nodes (`CartesianIndex{2}`). Physical coordinates with
+# v1 samples on grid nodes (`CartesianIndex{2}`, the user-facing API). `extract!`
+# reads from precomputed *linear* indices (backend-promoted `Vector{Int}` /
+# `CuVector{Int}`, built once by the inversion constructor via
+# `_obs_linear_indices` in problem.jl) via a `field[idx[i]]` gather, dual-path
+# dispatched like `src/derivatives.jl`: a plain `@inbounds` loop on `Matrix`
+# (CPU), a KA kernel otherwise (GPU) — scalar `CartesianIndex` reads on a
+# `CuArray` are disallowed, so the gather must happen inside a kernel launch,
+# not via one-index-at-a-time host code. Physical coordinates with
 # differentiable bilinear interpolation are a later addition.
 # =============================================================================
 
@@ -41,16 +48,14 @@ struct RelativeSeaLevelObservable <: AbstractObservable end
 
 # `HorizontalDisplacementRateObservable` is intentionally left undefined for now.
 
-# --- per-index model predictions (scalar reads; CPU grid-index sampling) ------
+# --- per-tag full-field materialization (elementwise; backend-agnostic) ------
 
-@inline observable_value(::VerticalUpliftObservable, sim, idx) =
-    sim.now.u[idx] + sim.now.ue[idx]
+observable_field(::VerticalUpliftObservable, sim) = sim.now.u .+ sim.now.ue
 
-@inline observable_value(::VerticalUpliftRateObservable, sim, idx) =
-    sim.now.dudt[idx]
+observable_field(::VerticalUpliftRateObservable, sim) = sim.now.dudt
 
-@inline observable_value(::RelativeSeaLevelObservable, sim, idx) =
-    (sim.now.z_ss[idx] - sim.ref.z_ss[idx]) - (sim.now.u[idx] + sim.now.ue[idx])
+observable_field(::RelativeSeaLevelObservable, sim) =
+    (sim.now.z_ss .- sim.ref.z_ss) .- (sim.now.u .+ sim.now.ue)
 
 """
     Observation(tag, points, times, data; σ = 1)
@@ -85,12 +90,33 @@ nentries(obs::Observation) = length(obs.points) * length(obs.times)
     return (it - 1) * np + 1 : it * np
 end
 
-# Fill `pred[time_slice]` with the model values at `obs.points` for the time whose
-# index in `obs.times` is `it`. Assumes the sim is currently at that time.
-function extract!(pred::AbstractVector, obs::Observation, it::Int, sim)
-    sl = time_slice(obs, it)
-    @inbounds for (k, idx) in enumerate(obs.points)
-        pred[sl[k]] = observable_value(obs.tag, sim, idx)
+# --- linear-index gather (dual path, mirrors src/derivatives.jl) -------------
+
+@kernel function gather_kernel!(y, field, idx, offset::Int)
+    i = @index(Global)
+    y[offset + i] = field[idx[i]]
+end
+
+function gather!(y, field, idx, offset::Int)   # GPU / generic
+    backend = get_backend(field)
+    gather_kernel!(backend)(y, field, idx, offset; ndrange = length(idx))
+    synchronize(backend)
+    return nothing
+end
+
+function gather!(y::AbstractVector, field::Matrix, idx, offset::Int)   # CPU
+    @inbounds for i in eachindex(idx)
+        y[offset + i] = field[idx[i]]
     end
+    return nothing
+end
+
+# Fill `pred[time_slice]` with the model values at the observation's (precomputed,
+# backend-promoted linear) indices `lidx`, for the time whose index in `obs.times`
+# is `it`. Assumes the sim is currently at that time.
+function extract!(pred::AbstractVector, obs::Observation, it::Int, sim, lidx)
+    sl = time_slice(obs, it)
+    field = observable_field(obs.tag, sim)
+    gather!(pred, field, lidx, first(sl) - 1)
     return nothing
 end
