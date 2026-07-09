@@ -6,7 +6,8 @@ using DocStringExtensions
 using Downloads: download
 using FastGaussQuadrature: gausslegendre
 using FFTW: fft, ifft, plan_fft, plan_ifft, plan_rfft, plan_irfft, MEASURE
-using LinearAlgebra: Diagonal, det, diagm, norm, mul!
+import LinearAlgebra
+using LinearAlgebra: Diagonal, det, diagm, norm, mul!, dot
 using NetCDF
 
 using KernelAbstractions: @kernel, @index, get_backend, synchronize
