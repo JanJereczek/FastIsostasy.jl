@@ -1,4 +1,14 @@
-cudainfo() = error("CUDA not loaded. Add `using CUDA` before calling this.")
+"""
+    cudainfo()
+
+Print CUDA version information. Requires `using CUDA` (which loads
+`FastIsostasyCUDAExt`); errors otherwise.
+"""
+function cudainfo()
+    ext = Base.get_extension(@__MODULE__, :FastIsostasyCUDAExt)
+    ext === nothing && error("CUDA not loaded. Add `using CUDA` before calling this.")
+    return ext.cudainfo()
+end
 
 #####################################################
 # Unit conversion utils
