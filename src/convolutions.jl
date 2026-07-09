@@ -18,11 +18,35 @@ const FAST_FFT_SIZES = (2, 3, 5, 7)
 nextfastfft(n::Integer) = nextprod(FAST_FFT_SIZES, n)
 nextfastfft(ns::Tuple{Vararg{Integer}}) = nextfastfft.(ns)
 
+# An unnormalized inverse FFT plan (the `bfft`/`brfft` inside a `ScaledPlan`) paired
+# with the exact normalization `S` that the `ScaledPlan` (`ifft`/`irfft`) would apply.
+# `S` is carried as a TYPE PARAMETER — a compile-time constant, hence invisible to
+# Enzyme. A `Float64` *field* here would be spuriously treated as differentiable when
+# the plan lives inside an autodiff'd `Simulation`, corrupting gradients (the plan's
+# scale is a constant, not a differentiable quantity). `mul!(y, np, x)` reproduces the
+# `ScaledPlan` result bit-for-bit: `(raw_inverse * x) * S`, matching `lmul!(S, …)`.
+struct NormalizedPlan{P, S}
+    p::P
+end
+NormalizedPlan(p, scale::Real) = NormalizedPlan{typeof(p), Float64(scale)}(p)
+
+# Replace a `ScaledPlan` (from `plan_ifft`/`plan_irfft`) with the equivalent
+# `NormalizedPlan`, extracting its raw plan and exact scale (build-extract-discard).
+normalize_plan(sp::AbstractFFTs.ScaledPlan) = NormalizedPlan(sp.p, sp.scale)
+normalize_plan(p) = p
+
+function LinearAlgebra.mul!(y::AbstractArray, np::NormalizedPlan{P, S},
+        x::AbstractArray) where {P, S}
+    LinearAlgebra.mul!(y, np.p, x)
+    y .*= S
+    return y
+end
+
 # CPU arrays get FFTW.MEASURE; GPU arrays fall through to the default (no-flag) method.
 _plan_rfft(X::Matrix) = plan_rfft(X; flags = MEASURE)
 _plan_rfft(X::AbstractMatrix) = plan_rfft(X)
-_plan_irfft(X::Matrix, n::Int) = plan_irfft(X, n; flags = MEASURE)
-_plan_irfft(X::AbstractMatrix, n::Int) = plan_irfft(X, n)
+_plan_irfft(X::Matrix, n::Int) = normalize_plan(plan_irfft(X, n; flags = MEASURE))
+_plan_irfft(X::AbstractMatrix, n::Int) = normalize_plan(plan_irfft(X, n))
 
 struct ConvolutionPlanHelpers{T, M, C, FP, IP}
     nx::Int
