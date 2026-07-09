@@ -125,7 +125,6 @@ struct OffsetBC{T, M} <: AbstractBC
     space::AbstractBCSpace
     x_border::T
     W::M
-    buffer::M
 end
 
 """
@@ -141,8 +140,9 @@ struct NoBC <: AbstractBC end
 Apply the boundary condition `bc` to the matrix `X` in-place.
 """
 function apply_bc!(X, bc::OffsetBC)
-    bc.buffer .= bc.W .* X
-    X .-= (sum(bc.buffer) - bc.x_border)
+    # `dot(bc.W, X) == sum(bc.W .* X)` for real arrays, computed allocation-free and
+    # without mutating `bc` (so `bc` stays Enzyme-`Const`). Linear in-place op on `X`.
+    X .-= (dot(bc.W, X) - bc.x_border)
     return nothing
 end
 
@@ -231,35 +231,35 @@ function precompute_bc(bc::CornerBC, sp::RegularBCSpace, domain::RegionalDomain)
     T = eltype(domain.R)
     W = domain.arraykernel(corner_ones(T, domain.nx, domain.ny))
     norm!(W)
-    return OffsetBC(bc.space, bc.x_border, W, similar(W))
+    return OffsetBC(bc.space, bc.x_border, W)
 end
 
 function precompute_bc(bc::CornerBC, sp::ExtendedBCSpace, domain::RegionalDomain)
     T = eltype(domain.R)
     W = domain.arraykernel(corner_ones(T, 2*domain.nx-1, 2*domain.ny-1))
     norm!(W)
-    return OffsetBC(bc.space, bc.x_border, W, similar(W))
+    return OffsetBC(bc.space, bc.x_border, W)
 end
 
 function precompute_bc(bc::BorderBC, sp::RegularBCSpace, domain::RegionalDomain)
     T = eltype(domain.R)
     W = domain.arraykernel(border_ones(T, domain.nx, domain.ny))
     norm!(W)
-    return OffsetBC(bc.space, bc.x_border, W, similar(W))
+    return OffsetBC(bc.space, bc.x_border, W)
 end
 
 function precompute_bc(bc::BorderBC, sp::ExtendedBCSpace, domain::RegionalDomain)
     T = eltype(domain.R)
     W = domain.arraykernel(border_ones(T, 2*domain.nx-1, 2*domain.ny-1))
     norm!(W)
-    return OffsetBC(bc.space, bc.x_border, W, similar(W))
+    return OffsetBC(bc.space, bc.x_border, W)
 end
 
 function precompute_bc(bc::DistanceWeightedBC, sp::RegularBCSpace, domain::RegionalDomain)
     T = eltype(domain.R)
     W = domain.arraykernel(border_ones(T, domain.nx, domain.ny) .* domain.R)
     norm!(W)
-    return OffsetBC(bc.space, bc.x_border, W, similar(W))
+    return OffsetBC(bc.space, bc.x_border, W)
 end
 
 function precompute_bc(bc::DistanceWeightedBC, sp::ExtendedBCSpace, domain::RegionalDomain)
@@ -270,14 +270,14 @@ function precompute_bc(bc::MeanBC, sp::RegularBCSpace, domain::RegionalDomain)
     T = eltype(domain.R)
     W = domain.arraykernel(ones(T, domain.nx, domain.ny))
     norm!(W)
-    return OffsetBC(bc.space, bc.x_border, W, similar(W))
+    return OffsetBC(bc.space, bc.x_border, W)
 end
 
 function precompute_bc(bc::MeanBC, sp::ExtendedBCSpace, domain::RegionalDomain)
     T = eltype(domain.R)
     W = domain.arraykernel(ones(T, 2*domain.nx-1, 2*domain.ny-1))
     norm!(W)
-    return OffsetBC(bc.space, bc.x_border, W, similar(W))
+    return OffsetBC(bc.space, bc.x_border, W)
 end
 
 #########################################################################
