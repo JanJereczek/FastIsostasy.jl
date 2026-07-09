@@ -19,7 +19,10 @@
       "Bash(timeout 1200 julia --project=. benchmarks/benchmark_integrators.jl)",
       "Bash(timeout 600 julia --project=. -e 'using Pkg; Pkg.resolve\\(\\); Pkg.precompile\\(\\)')",
       "Bash(timeout 900 julia --project=. -e 'using FastIsostasy, LinearAlgebra, Test; include\\(\"test/test_integrators.jl\"\\)')",
-      "Bash(timeout 1500 julia --project=. -e 'using Pkg; Pkg.test\\(\\)')"
+      "Bash(timeout 1500 julia --project=. -e 'using Pkg; Pkg.test\\(\\)')",
+      "Bash(timeout 900 julia --startup-file=no --project=test /tmp/claude-1000/-home-jan--julia-dev-FastIsostasy/1f863f35-b4be-48b2-9b70-3be7163ffa88/scratchpad/ad_loss.jl)",
+      "Bash(timeout 1200 julia --startup-file=no --project=test /tmp/claude-1000/-home-jan--julia-dev-FastIsostasy/1f863f35-b4be-48b2-9b70-3be7163ffa88/scratchpad/runval.jl)",
+      "Bash(timeout 1800 julia --startup-file=no --project=test -e 'using Pkg; Pkg.develop\\(PackageSpec\\(path=\".\"\\)\\); include\\(\"test/runtests.jl\"\\)')"
     ]
   }
 }
