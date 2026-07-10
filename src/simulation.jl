@@ -97,6 +97,7 @@ struct Simulation{
     NCO,    # <:NetcdfOutput
     NO,     # <:NativeOutput
     TM,     # <:Timer
+    VO,     # <:AbstractVector{<:SimulatedObservable} (inverse/observables.jl)
 }
     domain::CD
     c::PC
@@ -110,6 +111,7 @@ struct Simulation{
     ncout::NCO
     nout::NO
     timer::TM
+    simobs::VO
 end
 
 function Simulation(
@@ -127,6 +129,7 @@ function Simulation(
     ncout = NetcdfOutput(domain, T[], ""),
     nout = NativeOutput(t = T[]),
     c = PhysicalConstants{T}(),
+    simobs = SimulatedObservable[],
 )
 
     if (sealevel.load isa NoSealevelLoad)
@@ -163,7 +166,7 @@ function Simulation(
     now = CurrentState(domain, ref, sealevel.bsl.z)
 
     return Simulation(domain, c, bcs, sealevel, solidearth, opts, tools, ref, now,
-        ncout, deepcopy(nout), timer)
+        ncout, deepcopy(nout), timer, simobs)
 end
 
 function Base.show(io::IO, ::MIME"text/plain", sim::Simulation)
@@ -182,6 +185,7 @@ function Base.show(io::IO, ::MIME"text/plain", sim::Simulation)
         "Native output" => typeof(sim.nout),
         "native t_out" => sim.nout.t,
         "nc t_out" => sim.ncout.t,
+        "n simulated observables" => length(sim.simobs),
         "nx, ny" => [domain.nx, domain.ny],
         "dx, dy" => [domain.dx, domain.dy],
         "Wx, Wy" => [domain.Wx, domain.Wy],

@@ -20,6 +20,8 @@ Literate.markdown("src/examples/benchmark_1D.jl", "src/examples"; credit = false
 Literate.markdown("src/examples/benchmark_3D.jl", "src/examples"; credit = false)
 Literate.markdown("src/examples/alternative_models.jl", "src/examples"; credit = false)
 Literate.markdown("src/examples/glacialcycle.jl", "src/examples"; credit = false)
+Literate.markdown("src/examples/inverse_ice_history.jl", "src/examples"; credit = false)
+Literate.markdown("src/examples/inverse_calibration.jl", "src/examples"; credit = false)
 
 example_pages = [
     "examples/benchmark_analytic.md",
@@ -28,6 +30,8 @@ example_pages = [
     "examples/benchmark_3D.md",
     "examples/alternative_models.md",
     "examples/glacialcycle.md",
+    "examples/inverse_ice_history.md",
+    "examples/inverse_calibration.md",
 ]
 
 ref_pages = [

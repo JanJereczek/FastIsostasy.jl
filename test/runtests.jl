@@ -11,9 +11,13 @@ include("test_dataloaders.jl")
 include("test_derivatives.jl")
 include("test_dimensions.jl")
 include("test_integrators.jl")
+include("test_simulated_observable.jl")
+include("test_snapshot.jl")
 include("test_inversion_api.jl")
 include("test_ad_rules.jl")
 include("test_ad_validity.jl")
+include("test_inversion_vialov.jl")
+include("test_inversion_viscdens.jl")
 
 # const SAVE_PLOTS = true
 

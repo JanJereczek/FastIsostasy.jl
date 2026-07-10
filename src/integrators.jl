@@ -419,15 +419,28 @@ function build_integrator(sim)
         reltol = opts.reltol, abstol = opts.abstol, dt0 = dt0, dtmin = dtmin)
 end
 
-# Next pending output time across the native and netCDF output streams.
+# Earliest pending recording time across all attached `SimulatedObservable`s
+# (roadmap §4c item 2), or `nothing` if none are pending.
+function _next_simobs_time(sim)
+    t = nothing
+    for so in sim.simobs
+        tso = next_simobs_time(so)
+        tso === nothing && continue
+        t = t === nothing ? tso : min(t, tso)
+    end
+    return t
+end
+
+# Next pending output time across the native, netCDF and simulated-observable
+# streams.
 function _next_output_time(sim)
     tn = (length(sim.nout.t) >= 1 && sim.nout.k <= length(sim.nout.t)) ?
         sim.nout.t[sim.nout.k] : nothing
     tc = (length(sim.ncout.t) >= 1 && sim.ncout.k <= length(sim.ncout.t)) ?
         sim.ncout.t[sim.ncout.k] : nothing
-    tn === nothing && return tc
-    tc === nothing && return tn
-    return min(tn, tc)
+    ts = _next_simobs_time(sim)
+    t = tn === nothing ? tc : (tc === nothing ? tn : min(tn, tc))
+    return t === nothing ? ts : (ts === nothing ? t : min(t, ts))
 end
 
 # Advance the integrator up to `target`, stopping exactly on every output time
@@ -442,7 +455,8 @@ function advance_with_output!(integ::FIIntegrator, sim, target, maxiters = STEPP
             return integ
         end
         solve_to!(integ, te, maxiters)
-        # Fire netCDF first then native output (matches previous callback order).
+        # Fire netCDF first then native output (matches previous callback order),
+        # then any simulated observables pending at this time.
         if length(sim.ncout.t) >= 1 && sim.ncout.k <= length(sim.ncout.t) &&
                 sim.ncout.t[sim.ncout.k] == te
             nc_affect!(integ)
@@ -450,6 +464,9 @@ function advance_with_output!(integ::FIIntegrator, sim, target, maxiters = STEPP
         if length(sim.nout.t) >= 1 && sim.nout.k <= length(sim.nout.t) &&
                 sim.nout.t[sim.nout.k] == te
             nout_affect!(integ)
+        end
+        for so in sim.simobs
+            next_simobs_time(so) == te && record!(so, sim)
         end
     end
 end

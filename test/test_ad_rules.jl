@@ -62,6 +62,35 @@ fd_dir(f, x, dx; ε = 1e-6) = (f(x .+ ε .* dx) - f(x .- ε .* dx)) / (2ε)
         @test isapprox(gθ, gθ_fd; rtol = 1e-5)
     end
 
+    @testset "reverse plan mul! rule (complex fft/ifft)" begin
+        n = 6
+        pfft = plan_fft(zeros(ComplexF64, n, n))
+        ## normalized inverse plan (the differentiated-path `pifft!`)
+        pifft = FastIsostasy.normalize_plan(plan_ifft(zeros(ComplexF64, n, n)))
+        f(x) = _loss_cfft(x, n, pfft, pifft)
+
+        x = randn(n * n)
+        ## reverse-mode gradient
+        g = zeros(n * n)
+        Enzyme.autodiff(Reverse, _loss_cfft, Active,
+            Duplicated(x, g), Const(n), Const(pfft), Const(pifft))
+
+        ## vs component-wise finite differences
+        g_fd = map(1:length(x)) do i
+            e = zeros(length(x)); e[i] = 1.0
+            fd_dir(f, x, e)
+        end
+        @test isapprox(g, g_fd; rtol = 1e-5)
+
+        ## and vs forward-mode AD (should agree to ~machine precision)
+        g_fwd = map(1:length(x)) do i
+            e = zeros(length(x)); e[i] = 1.0
+            only(Enzyme.autodiff(Forward, _loss_cfft, Duplicated(x, e),
+                Const(n), Const(pfft), Const(pifft)))
+        end
+        @test isapprox(g, g_fwd; rtol = 1e-8)
+    end
+
     @testset "forward plan mul! rule (rfft/irfft)" begin
         n = 8
         prfft = plan_rfft(zeros(n, n))

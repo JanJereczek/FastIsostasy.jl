@@ -30,6 +30,7 @@ include("solidearth.jl")
 include("convolutions.jl")
 include("tools.jl")
 include("state.jl")
+include("snapshot.jl")
 include("io.jl")
 include("simulation.jl")
 include("loads.jl")
@@ -58,7 +59,7 @@ export TimeInterpolation0D, TimeInterpolation2D, interpolate!
 # barystatic_sealevel.jl
 export AbstractBSLUpdate, InternalBSLUpdate, ExternalBSLUpdate, ReferenceBSL
 export AbstractBSL, ConstantBSL, ConstantOceanSurfaceBSL, PiecewiseConstantBSL
-export PiecewiseLinearBSL, ImposedBSL, CombinedBSL
+export PiecewiseLinearOceanSurfaceBSL, ImposedBSL, CombinedBSL
 export update_bsl!
 
 # domain.jl
@@ -94,6 +95,9 @@ export GIATools
 
 # state.jl
 export CurrentState, ReferenceState
+
+# snapshot.jl
+export StateSnapshot, snapshot!, restore!
 
 # io.jl
 export NetcdfOutput, NativeOutput, write_nc!, write_out!
@@ -180,11 +184,16 @@ export ViscositySnippet
 export AbstractDiffMode, TangentMode, AdjointMode
 export AbstractObservable, VerticalUpliftObservable, VerticalUpliftRateObservable,
     RelativeSeaLevelObservable, Observation
+export SimulatedObservable, attach_simobs!
 export AbstractEncoding, Test1Encoding, Test2Encoding,
     EOFEncoding, AutoEncoding, VariationalAutoEncoding, nparams
 # note: `reconstruct!` is already exported by inversion.jl (shared generic)
-export AbstractRegularization, L2Reg, SurfaceSmoothnessReg, DecodedBounds,
-    BoundedQuantity, Log10Viscosity, UpperMantleDensity, LithoDensity
-export AbstractInversion, IceLoadInversion, ParameterInversion, loss, gradient!, solve!
+export AbstractRegularization, TikhonovReg, L2Reg, SurfaceSmoothnessReg,
+    DecodedBounds, BoundedQuantity, Log10Viscosity, UpperMantleDensity, LithoDensity
+export AbstractRegTarget, ThetaTarget, FieldTarget, SurfaceTarget
+export AbstractRegOrder, Order0, Order1
+export AbstractInversion, IceLoadInversion, ParameterInversion, loss, gradient!,
+    loss_and_gradient!, solve!
+export AbstractLoss, DefaultLoss, misfit
 
 end

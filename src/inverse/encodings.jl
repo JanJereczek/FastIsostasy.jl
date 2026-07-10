@@ -36,12 +36,30 @@ end
 """
 $(TYPEDSIGNATURES)
 
+Vialov shape function `max(base, 0)^(3/8)`, guarded against the pow rule's
+`Inf·0 = NaN` at the clamped margin: for `base ≤ 0`, `max(base,0) = 0` with a
+*correct* zero forward-mode tangent (the constant branch of `max` is exactly
+0, tangent 0), but differentiating `0^(3//8)` itself still forms `(3/8)·0^(-5/8)
+= Inf`, and `Inf · 0 = NaN` once multiplied by that zero tangent. The outer
+`ifelse` sidesteps this: Enzyme's forward-mode `ifelse` selects between the two
+branches' *already-computed* tangents based on the primal predicate, so the
+poisoned `b^(3//8)` tangent (only ever `Inf` or finite, never itself `NaN`) is
+simply discarded when `b ≤ 0`, rather than being combined with a zero weight.
+"""
+@inline function _vialov_shape(base)
+    b = max(base, zero(base))
+    return ifelse(b > 0, b^(3//8), zero(b))
+end
+
+"""
+$(TYPEDSIGNATURES)
+
 Add a radially-symmetric Vialov dome of central thickness `Hc`, radius `L`, centred at `(xc, yc)`:
 `H(r) = Hc * max(1 − (r/L)^(4/3), 0)^(3/8)`. Differentiable w.r.t. `xc`, `yc`, `L`, `Hc`.
 N.B.: the `(·)^(3/8)` has an infinite slope at the margin (`base → 0⁺`); gradients w.r.t. the centre are steep there but the bulk dominates.
 """
 function add_vialov!(H, X, Y, xc, yc, L, Hc)
-    @. H += Hc * max(1 - (sqrt((X - xc)^2 + (Y - yc)^2) / L)^(4//3), 0)^(3//8)
+    @. H += Hc * _vialov_shape(1 - (sqrt((X - xc)^2 + (Y - yc)^2) / L)^(4//3))
     return nothing
 end
 
@@ -56,7 +74,7 @@ ice_snapshots(sim) = sim.bcs.ice_thickness.H_itp.X
 # =============================================================================
 
 """
-    Test1Encoding(knot_times, radii, visc_amps)
+    Test1Encoding(knot_times, radii, visc_amps; scale = ones)
 
 Encoding for Test 1. Fixed config: `knot_times` (K ice-interpolation times),
 `radii` (the 3 fixed Vialov radii `Lᵢ`), `visc_amps` (the 2 fixed log10 anomaly
@@ -64,11 +82,30 @@ amplitudes, e.g. `(-1, +1)` decades).
 
 θ layout (length `3K + 13`):
 `[Hc₁(1:K), Hc₂(1:K), Hc₃(1:K), x₁,y₁, x₂,y₂, x₃,y₃, log10η_bg, μ₁ₓ,μ₁ᵧ,σ₁, μ₂ₓ,μ₂ᵧ,σ₂]`.
+
+`scale` (length `3K + 13`, default all-ones) rescales each parameter before it
+is used: the physical value is `θ[i] * scale[i]`. This lets the *optimization*
+variable `θ` be dimensionless and O(1) even though the physical parameters span
+many orders of magnitude (metres of thickness, metres of position, decades of
+viscosity) — essential for L-BFGS conditioning. With the default ones, θ is the
+physical parameter vector directly. The mapping is a plain broadcast, so it stays
+Enzyme-legal.
 """
 struct Test1Encoding{T} <: AbstractEncoding{T}
     knot_times::Vector{T}
     radii::NTuple{3, T}     # TODO: replace 3 by N1
     visc_amps::NTuple{2, T} # TODO: replace 2 by N2
+    scale::Vector{T}
+end
+
+function Test1Encoding(knot_times::AbstractVector, radii, visc_amps; scale = nothing)
+    T = eltype(knot_times)
+    np = 3 * length(knot_times) + 13
+    s = scale === nothing ? ones(T, np) : convert(Vector{T}, scale)
+    length(s) == np || throw(ArgumentError(
+        "Test1Encoding scale must have length 3K+13 = $np, got $(length(s))."))
+    return Test1Encoding{T}(collect(T, knot_times), NTuple{3, T}(radii),
+        NTuple{2, T}(visc_amps), s)
 end
 
 nparams(enc::Test1Encoding) = 3 * length(enc.knot_times) + 13
@@ -76,6 +113,7 @@ nparams(enc::Test1Encoding) = 3 * length(enc.knot_times) + 13
 function reconstruct!(sim, θ, enc::Test1Encoding)
     X, Y = sim.domain.X, sim.domain.Y
     K = length(enc.knot_times)
+    θ = θ .* enc.scale          # dimensionless θ → physical (broadcast, AD-legal)
 
     # --- viscosity: background + two log10 Gaussian anomalies ---
     off = 3K + 6
@@ -104,19 +142,36 @@ end
 # =============================================================================
 
 """
-    Test2Encoding()
+    Test2Encoding(; scale = ones(19))
 
 Encoding for Test 2. θ layout (length 19):
 `[log10η_bg, (μₓ,μᵧ,σ,amp)×4, ρ_uppermantle, ρ_litho]`. Ice thickness is not
-touched (assumed known).
+touched (assumed known). Concrete `Float64` (the inversion-run precision
+decision, §1 Precision row).
+
+`scale` (length 19, default all-ones) rescales each parameter before use: the
+physical value is `θ[i] * scale[i]`. As with `Test1Encoding`, this lets the
+optimization variable `θ` be dimensionless and O(1) even though the physical
+parameters span decades of viscosity, metres of anomaly position/width and
+thousands of kg/m³ of density — essential for L-BFGS conditioning. The mapping is
+a plain broadcast, so it stays Enzyme-legal.
 """
-struct Test2Encoding{T} <: AbstractEncoding{T} end
-Test2Encoding(; T = Float32) = Test2Encoding{T}()
+struct Test2Encoding <: AbstractEncoding{Float64}
+    scale::Vector{Float64}
+end
+
+function Test2Encoding(; scale = nothing)
+    s = scale === nothing ? ones(19) : convert(Vector{Float64}, scale)
+    length(s) == 19 || throw(ArgumentError(
+        "Test2Encoding scale must have length 19, got $(length(s))."))
+    return Test2Encoding(s)
+end
 
 nparams(::Test2Encoding) = 19
 
-function reconstruct!(sim, θ, ::Test2Encoding)
+function reconstruct!(sim, θ, enc::Test2Encoding)
     X, Y = sim.domain.X, sim.domain.Y
+    θ = θ .* enc.scale          # dimensionless θ → physical (broadcast, AD-legal)
     logη = fill!(similar(sim.solidearth.effective_viscosity), θ[1])
     for i in 1:4
         b = 1 + (i - 1) * 4

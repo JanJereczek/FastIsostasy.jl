@@ -29,7 +29,8 @@ import FFTW
 # here); custom-ruling `ScaledPlan` instead trips Enzyme's `roots_activep` assertion.
 const _RawPlan = Union{FFTW.cFFTWPlan, FFTW.rFFTWPlan}
 
-import FastIsostasy: gradient!, loss, AbstractInversion, TangentMode, AdjointMode
+import FastIsostasy: gradient!, loss_and_gradient!, loss, AbstractInversion,
+    TangentMode, AdjointMode
 import FastIsostasy
 
 # =============================================================================
@@ -114,6 +115,74 @@ function EnzymeRules.forward(
 end
 
 # =============================================================================
+# 2b. Reverse-mode rule for planned-FFT application `mul!(Y, plan, X)` (Phase 5).
+#
+# For a fixed linear operator `P`, `Y = P·X` has pullback `X̄ += Pᴴ·Ȳ` (and the
+# output cotangent is consumed, so `Ȳ` is zeroed — `mul!` fully overwrites `Y`,
+# and the code always uses distinct dest/src buffers). Each raw DFT operator is
+# *complex-symmetric* (`Wᵀ = W`, and `(W̄)ᵀ = W̄`), so its Hermitian adjoint equals
+# its elementwise conjugate: `Pᴴ = conj(P)`, and `conj(P)·v = conj(P·conj(v))`.
+# Hence `Pᴴ·Ȳ = conj(P·conj(Ȳ))` — realised with the *same* plan, no separate
+# inverse/forward plan needed. This one formula is correct for both raw plans: the
+# forward `W` (adjoint `Wᴴ = conj W`) and the raw unnormalized-inverse `W̄` inside a
+# `NormalizedPlan` (adjoint `W`). As in forward mode, the rule is on the raw
+# `_RawPlan` only; a `NormalizedPlan`'s `y .*= scale` is differentiated natively and
+# its inner raw `mul!` lands here.
+# =============================================================================
+
+@inline _rev_shadows(x::Duplicated) = (x.dval,)
+@inline _rev_shadows(x::BatchDuplicated) = x.dval
+
+function EnzymeRules.augmented_primal(
+        config::EnzymeRules.RevConfig,
+        ::Const{typeof(mul!)},
+        ::Type{RT},
+        Y::Annotation{<:AbstractArray},
+        plan::Const{<:_RawPlan},
+        X::Annotation{<:AbstractArray},
+    ) where {RT}
+
+    # Forward sweep: run the actual transform (writes `Y.val`, preserves `X.val`).
+    mul!(Y.val, plan.val, X.val)
+
+    primal = EnzymeRules.needs_primal(config) ? Y.val : nothing
+    shadow = EnzymeRules.needs_shadow(config) ? Y.dval : nothing
+    # Linear operator: the pullback needs only the (Const) plan, available again in
+    # `reverse` — nothing to tape.
+    return EnzymeRules.AugmentedReturn(primal, shadow, nothing)
+end
+
+function EnzymeRules.reverse(
+        config::EnzymeRules.RevConfig,
+        ::Const{typeof(mul!)},
+        ::Type{RT},
+        tape,
+        Y::Annotation{<:AbstractArray},
+        plan::Const{<:_RawPlan},
+        X::Annotation{<:AbstractArray},
+    ) where {RT}
+
+    if !(Y isa Const)
+        Yshs = _rev_shadows(Y)
+        Xshs = X isa Const ? nothing : _rev_shadows(X)
+        for b in 1:EnzymeRules.width(config)
+            Ȳ = Yshs[b]
+            if Xshs !== nothing
+                # X̄ += Pᴴ·Ȳ = conj(P·conj(Ȳ))
+                cy = conj.(Ȳ)
+                tmp = similar(cy)
+                mul!(tmp, plan.val, cy)
+                @. Xshs[b] += conj(tmp)
+            end
+            # `Y` is fully overwritten by the primal `mul!`, so its cotangent is
+            # consumed here (prevents double-counting through the reused buffer).
+            fill!(Ȳ, zero(eltype(Ȳ)))
+        end
+    end
+    return (nothing, nothing, nothing)
+end
+
+# =============================================================================
 # 3. `gradient!` — forward-mode (TangentMode).
 #
 # `∇_θ loss(prob, θ)` by seeding one θ direction at a time and reading the tangent
@@ -123,13 +192,23 @@ end
 # ifft-output, which static activity analysis mishandles (see the activity-map doc).
 # Cost is one forward pass per θ component — affordable only for low-dim (encoded) θ,
 # which `TangentMode` enforces.
+#
+# `forward_predict!` only has an Enzyme-legal path for `FIEuler` (the direct-Euler
+# loop, roadmap §4 note (a)); adaptive algorithms fall through to the stateful
+# `FIIntegrator`, whose `Vector{Matrix}` stage buffers overflow Enzyme's static
+# type analysis (`EnzymeNoTypeError`, opaque unless you already know this). Guard
+# up front with the documented restriction instead of surfacing that error.
 # =============================================================================
 
-function gradient!(g, prob::AbstractInversion, θ)
-    return gradient!(g, prob, θ, prob.diffmode)
-end
+_require_fieuler(prob) = prob.sim.opts.diffeq.alg isa FastIsostasy.FIEuler || error(
+    "TangentMode v1 is fixed-step only: gradient!/loss_and_gradient! require " *
+    "prob.sim.opts.diffeq.alg isa FIEuler (got " *
+    "$(typeof(prob.sim.opts.diffeq.alg))). Adaptive algorithms build the " *
+    "FIIntegrator inside forward_predict!, which Enzyme's static type analysis " *
+    "cannot handle (surfaces as a cryptic EnzymeNoTypeError instead).")
 
 function gradient!(g, prob::AbstractInversion, θ, ::TangentMode)
+    _require_fieuler(prob)
     length(g) == length(θ) || throw(DimensionMismatch(
         "gradient buffer length $(length(g)) ≠ θ length $(length(θ))"))
     mode = Enzyme.set_runtime_activity(Enzyme.Forward)
@@ -149,6 +228,41 @@ end
 
 function gradient!(g, prob::AbstractInversion, θ, ::AdjointMode)
     error("Reverse-mode `gradient!` (AdjointMode) requires " *
+          "FastIsostasyCheckpointingExt (roadmap Phase 5).")
+end
+
+# =============================================================================
+# 4. `loss_and_gradient!` — forward-mode (TangentMode), primal along for free.
+#
+# Same seeding loop as `gradient!`, but each pass uses `ForwardWithPrimal` instead
+# of `Forward`: `loss(prob, θ)` doesn't depend on which θ-direction is seeded, so
+# the primal read off any one pass equals `loss(prob, θ)` itself — no extra forward
+# run is needed to also get the objective value (what a separate `loss`/`gradient!`
+# pair would cost, one extra pass per optimizer iteration).
+# =============================================================================
+
+function loss_and_gradient!(g, prob::AbstractInversion, θ, ::TangentMode)
+    _require_fieuler(prob)
+    length(g) == length(θ) || throw(DimensionMismatch(
+        "gradient buffer length $(length(g)) ≠ θ length $(length(θ))"))
+    mode = Enzyme.set_runtime_activity(Enzyme.ForwardWithPrimal)
+    dprob = Enzyme.make_zero(prob)
+    dθ = zero(θ)
+    l = zero(eltype(θ))
+    for i in eachindex(θ)
+        Enzyme.remake_zero!(dprob)
+        fill!(dθ, zero(eltype(dθ)))
+        dθ[i] = one(eltype(dθ))
+        dval, val = Enzyme.autodiff(mode, loss,
+            Duplicated(prob, dprob), Duplicated(θ, dθ))
+        g[i] = dval
+        l = val
+    end
+    return l
+end
+
+function loss_and_gradient!(g, prob::AbstractInversion, θ, ::AdjointMode)
+    error("Reverse-mode `loss_and_gradient!` (AdjointMode) requires " *
           "FastIsostasyCheckpointingExt (roadmap Phase 5).")
 end
 

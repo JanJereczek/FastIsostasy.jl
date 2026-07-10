@@ -84,6 +84,36 @@ end
         @test loss(prob, θ_true) == loss(prob, θ_true)
     end
 
+    @testset "pluggable loss (AbstractLoss)" begin
+        sim, se = build_test_sim()
+        enc = Test2Encoding()
+        θ_true = Float32[21.0, -1f6,-1f6,8f5,0.3, 1f6,1f6,8f5,-0.3,
+            -1f6,1f6,8f5,0.2, 1f6,-1f6,8f5,-0.2, se.rho_uppermantle, se.rho_litho]
+        pts = [CartesianIndex(i, j) for i in 14:18 for j in 15:17][1:8]
+
+        reconstruct!(sim, θ_true, enc)
+        FastIsostasy.reset_state!(sim)
+        FastIsostasy.init_problem!(sim)
+        integ = FastIsostasy.build_integrator(sim)
+        FastIsostasy.advance_with_output!(integ, sim, 5f3)
+        data = Float32[sim.now.u[p] + sim.now.ue[p] for p in pts]
+        obs = Observation(VerticalUpliftObservable(), pts, Float32[5f3], data; σ = 0.1f0)
+
+        # default constructor ⇒ DefaultLoss(), matching the explicit default
+        prob_default = ParameterInversion(sim, enc, [obs])
+        @test prob_default.lossmodel isa DefaultLoss
+
+        # a custom AbstractLoss rescales the misfit — no other machinery changes
+        struct ScaledLoss <: AbstractLoss
+            scale::Float32
+        end
+        FastIsostasy.misfit(l::ScaledLoss, preds, observations) =
+            l.scale * FastIsostasy.misfit(DefaultLoss(), preds, observations)
+
+        prob_scaled = ParameterInversion(sim, enc, [obs]; lossmodel = ScaledLoss(3f0))
+        @test loss(prob_scaled, θ_true) ≈ 3f0 * loss(prob_default, θ_true)
+    end
+
     @testset "regularization penalties" begin
         sim, se = build_test_sim()
         reconstruct!(sim, Float32[21.0, 0f0,0f0,8f5,0f0, 0f0,0f0,8f5,0f0,
