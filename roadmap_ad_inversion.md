@@ -182,12 +182,10 @@ still uses it). Tests: `test/test_inversion_api.jl` (16/16, wired into runtests)
       (Σₖ‖∇(Hₖ+b_ref)‖² via FD stencils), `DecodedBounds(quantity, lo, hi, λ)` with
       named `BoundedQuantity` types (`Log10Viscosity`/`UpperMantleDensity`/
       `LithoDensity`, no closures) → `λ·Σ[relu(lo−d)²+relu(d−hi)²]`.
-  - [ ] **Generalize to one configurable Tikhonov regularizer** (decided 2026-07-08;
-        §1 Regularization row): a `target` selector (decoded field or θ-subset) × an
-        `order` (0 = magnitude with optional per-component weights, 1 = gradient
-        `‖∇·‖²`). Refactor `L2Reg`/`SurfaceSmoothnessReg` into thin constructors over
-        it. Folds in the §11 parameter-normalization fix (per-component weights on
-        order-0). Gradient/smoothness is the default expectation.
+  - [x] **Generalize to one configurable Tikhonov regularizer** (decided 2026-07-08,
+        implemented 2026-07-09; §1 Regularization row, §4b A). `TikhonovReg(target,
+        order; λ, weights)`; `L2Reg`/`SurfaceSmoothnessReg` now thin constructors
+        over it. See §4b A for the full writeup.
 - [x] `loss(prob, θ)` = reconstruct! → reset_state! → forward run to obs times →
       ½Σ‖(pred−data)/σ‖² + Σ penalties. **Verified**: `loss(θ_true)=0` exactly,
       monotone increase under viscosity perturbation, realistic subsidence data.
@@ -288,59 +286,236 @@ the surface-smoothness reg — bounded by construction, not the analytic singula
 
 ## 4b. Pre-Phase-3 review findings (2026-07-09) — target before the docs examples
 
-Please address points A1 and A2 of section 4b of roadmap_ad_inversion.md
-
 Code review of Phases 0–2 + the inversion API. Grouped by priority; B items are
 silent-wrongness traps, A items are locked decisions the code doesn't yet match.
 
-**A — roadmap/code mismatches:**
-- [ ] **Obs extraction still CPU scalar loop** (`src/inverse/observables.jl`,
-      `extract!`): the §1 row claims linear-index KA gather resolved 2026-07-08,
-      but code stores `Vector{CartesianIndex{2}}` + scalar loop (fails on
-      `CuArray`). Implement the decided design or re-mark the row pending.
-- [ ] **`loss_and_gradient!` missing** (§1 Optimizer row says core exposes it):
-      Optim ext passes separate `f`/`g!` → one wasted forward run per L-BFGS
-      iteration. Forward mode gets the primal free (`ForwardWithPrimal` on one
-      seed); add `loss_and_gradient!` + `Optim.only_fg!` in the ext.
-- [ ] **Generalized Tikhonov regularizer** (§3 unticked box): do the refactor
-      *before* the docs examples so the reg API doesn't churn after docs exist.
+**A — roadmap/code mismatches — all three DONE (2026-07-09):**
+- [x] **Obs extraction still CPU scalar loop** (`src/inverse/observables.jl`,
+      `extract!`): the code was worse than described — `problem.jl` called the
+      5-arg `extract!` with only 4 args (`MethodError`, confirmed by running
+      `test_inversion_api.jl`: 3/16 errored). Fixed by actually wiring the
+      documented design: `IceLoadInversion`/`ParameterInversion` gained a
+      `linear_indices` field, computed once per observation via
+      `_obs_linear_indices`/`_linear_indices` (`problem.jl`) — `obs.points`
+      converted to `LinearIndices`, then `similar(field, Int, n)` + `copyto!` to
+      land on the *same array family as the sim's fields* (`Matrix` on CPU,
+      `CuMatrix` on GPU — no `Adapt.jl` dependency needed). `allocate_predictions`
+      likewise switched from `zeros` to `similar(sim.now.u, T, n)` so `gather!`'s
+      GPU branch never writes a device kernel's output into a host `Vector`.
+      `_forward_run!` (both `FIEuler` and integrator branches) now passes
+      `prob.linear_indices[k]` through. Verified: `test_inversion_api.jl` 16/16,
+      `test_ad_validity.jl` 6/6 (extract! is on the differentiated path via
+      `forward_predict!`, so this also confirms it stays Enzyme-legal). GPU
+      backend correctness for `data_misfit` (comparing a possible `CuVector` pred
+      against `obs.data`, always a CPU `Vector`) is unaddressed — deferred to §7
+      (no CUDA hardware to validate against yet).
+- [x] **`loss_and_gradient!` missing**: added the core stub (`problem.jl`,
+      alongside `gradient!`) and the `TangentMode` implementation
+      (`FastIsostasyEnzymeExt.jl`): same per-θ-component seeding loop as
+      `gradient!`, but using `Enzyme.ForwardWithPrimal` instead of `Forward` — the
+      primal (`loss(prob,θ)`, direction-independent) is read off any one pass, so
+      no extra forward run is needed to also get the objective value.
+      `FastIsostasyOptimExt.solve!` rewritten around `Optim.only_fg!(fg!)`
+      (`fg!(F, G, θ)` computes `loss_and_gradient!` when `G !== nothing`, reuses
+      its primal for `F` instead of a separate `loss` call). Verified:
+      `loss_and_gradient!` output matches separate `gradient!` + `loss` exactly
+      (`maxdiff_g = 0.0`, same primal) on the `test_ad_validity.jl` problem setup;
+      `solve!` smoke-tested end-to-end (3 L-BFGS iterations, loss 23113 → 0.0997).
+- [x] **Generalized Tikhonov regularizer** (`src/inverse/regularization.jl`
+      rewritten): `TikhonovReg(target, order; λ, weights)` with `target ∈
+      {ThetaTarget(idx), FieldTarget(quantity::BoundedQuantity), SurfaceTarget()}`
+      and `order ∈ {Order0(), Order1()}`. `Order0` = magnitude `Σ wᵢxᵢ²` (optional
+      per-component `weights`, retiring the §11 raw-θ domination issue); `Order1`
+      = gradient `Σ‖∇x‖²` via the existing `dx!`/`dy!` FD stencils, valid on
+      `FieldTarget`/`SurfaceTarget` only (`ThetaTarget` + `Order1` throws — no
+      spatial structure on raw θ; scalar `FieldTarget` + `Order1` throws too).
+      `L2Reg(λ) = TikhonovReg(ThetaTarget(), Order0(); λ)`,
+      `SurfaceSmoothnessReg(λ) = TikhonovReg(SurfaceTarget(), Order1(); λ)` kept
+      as thin constructors — no call-site churn, `test_inversion_api.jl`'s
+      `L2Reg`/`DecodedBounds` assertions pass unchanged. `BoundedQuantity`/
+      `decoded(...)` (shared with `DecodedBounds`) moved earlier in the file so
+      `FieldTarget{<:BoundedQuantity}` can reference the bound. New exports:
+      `TikhonovReg`, `AbstractRegTarget`/`ThetaTarget`/`FieldTarget`/
+      `SurfaceTarget`, `AbstractRegOrder`/`Order0`/`Order1`. Verified with a
+      standalone script exercising all target×order combinations (weighted
+      `ThetaTarget` subset, `FieldTarget` order-0/order-1, the two thrown-error
+      cases, `SurfaceSmoothnessReg` vs the equivalent direct `TikhonovReg` call)
+      plus the full `test_inversion_api.jl` suite (16/16).
 
-**B — correctness traps (fix before Test 1):**
-- [ ] **Vialov margin NaN under AD** (`add_vialov!`, encodings.jl): w.r.t. centers,
-      far-field cells hit `d(base^{3/8})` at `base=0, dbase=0` → pow rule gives
-      `Inf·0 = NaN`. §3 caveat (3) only reasoned about ∂H/∂r, not the θ-chain.
-      Unit-check Enzyme's pow at 0; if NaN, guard `ifelse(base > 0, base^(3//8), 0)`
-      (forward-mode select discards the poisoned branch).
-- [ ] **`Test1Encoding` never validates ice snapshots**: `reconstruct!` writes
-      `snaps[1:K]` without checking `length(ice_snapshots(sim)) == K` or
-      `H_itp.t == enc.knot_times` → silent wrong-time mapping. Validate at
-      `IceLoadInversion` construction.
-- [ ] **Duplicate times in one `Observation` corrupt the misfit silently**:
-      `_extract_plan` uses `findfirst`, so the duplicate's `preds` slice stays 0
-      and contributes a bogus residual. Validate `allunique(obs.times)` in the
-      `Observation` constructor.
-- [ ] **Obs times outside `t_span` unvalidated**: before `t_span[1]` → silent
-      wrong-time extraction; after `t_span[2]` → run silently extended. Check in
-      the inversion constructors.
-- [ ] **No `length(θ) == nparams(encoding)` check in `loss`** — too-long θ is
-      silently truncated by indexed reads. One-liner.
-- [ ] **TangentMode + adaptive alg = cryptic `EnzymeNoTypeError`**: guard at the
-      top of `gradient!(::TangentMode)` requiring `FIEuler`, with the documented
-      "TangentMode v1 is fixed-step only" message.
+**B — correctness traps (fix before Test 1) — all six DONE (2026-07-09):**
+- [x] **Vialov margin NaN under AD** (`add_vialov!`, encodings.jl): confirmed with
+      a minimal Enzyme repro before touching the code — far field (`base ≪ 0`)
+      differentiated to `NaN`, exactly at the margin (`base = 0`) to `Inf`. Root
+      cause matches the roadmap note: `max(base,0)`'s forward-mode tangent
+      correctly zeroes out on the clamped branch, but `0^(3//8)`'s own pow-rule
+      derivative (`(3/8)·0^(-5/8) = Inf`) still gets *formed* before being
+      multiplied by that zero tangent → `Inf·0 = NaN`. Fixed by extracting a
+      `_vialov_shape(base) = (b = max(base,0); ifelse(b>0, b^(3//8), zero(b)))`
+      helper: Enzyme's `ifelse` selects between the two branches' *already
+      computed* tangents based on the primal predicate, so the poisoned
+      `b^(3//8)` tangent is discarded (not combined arithmetically) when `b ≤ 0`.
+      Re-ran the same repro through the fix: both the far-field and exactly-at-
+      margin cases now differentiate to `0.0`. Also checked end-to-end through
+      `reconstruct!` on a real `Test1Encoding` sim (dome far from most grid
+      cells, `d/dxc` finite).
+- [x] **`Test1Encoding` never validates ice snapshots**: added
+      `_check_ice_snapshots(sim, encoding)` (`problem.jl`, dispatches to a no-op
+      for every encoding except `Test1Encoding`), called from the shared
+      `IceLoadInversion`/`ParameterInversion` constructor. Checks both
+      `length(ice_snapshots(sim)) == length(enc.knot_times)` and
+      `sim.bcs.ice_thickness.H_itp.t == enc.knot_times`. Verified: mismatched
+      count and mismatched times each throw `ArgumentError`; a matching encoding
+      still constructs.
+- [x] **Duplicate times in one `Observation` corrupt the misfit silently**:
+      `Observation(...)` now checks `allunique(times)`, throwing `ArgumentError`
+      on a duplicate. Verified.
+- [x] **Obs times outside `t_span` unvalidated**: added `_check_obs_times(sim,
+      observations)` (`problem.jl`), called from the shared inversion
+      constructor — throws `ArgumentError` if any observation time falls outside
+      `sim.timer.t_span`. Verified both before-`t_span[1]` and after-`t_span[2]`
+      cases throw; an in-range time still constructs.
+- [x] **No `length(θ) == nparams(encoding)` check in `loss`**: one-liner guard
+      added at the top of `loss` (skipped when `encoding === nothing`, the
+      full-field/`AdjointMode` case). Verified: an oversized `θ` throws
+      `DimensionMismatch` instead of silently reading only the first
+      `nparams(encoding)` entries.
+- [x] **TangentMode + adaptive alg = cryptic `EnzymeNoTypeError`**: added
+      `_require_fieuler(prob)` in `FastIsostasyEnzymeExt.jl`, called at the top
+      of both `gradient!(::TangentMode)` and `loss_and_gradient!(::TangentMode)`
+      (the latter added in the A-item pass, same restriction applies). Verified:
+      calling `gradient!` on a `ParameterInversion` built from a sim with the
+      default adaptive `FIBS3` algorithm now errors immediately with the
+      documented "TangentMode v1 is fixed-step only" message instead of
+      whatever `EnzymeNoTypeError` the integrator branch would have produced.
 
-**C — API polish (optional):**
-- [ ] `gradient!` without the Enzyme ext is a bare `MethodError`: move the 3-arg
-      dispatcher into core + informative 4-arg error fallback; ext overrides only
-      the mode-specific method.
-- [ ] `Test2Encoding{T}` type param unused, defaults `Float32` (inversion precision
-      decision is Float64): drop or use it.
-- [ ] `NormalizedPlan` hardcodes `Float64(scale)`: not bit-for-bit vs a Float32
-      `ScaledPlan` (verified parity was Float64-only). Parametrize the scale type
-      if Float32 forward parity matters.
+  All six verified together via `test/runtests.jl` (unchanged pass counts:
+  barystatic 2/2, convolutions 1/1, data loaders 14/14, derivatives 3/3,
+  indexing 2/2, integrators 31/31, inversion API 16/16, AD rules 4/4, AD
+  validity 6/6) plus a standalone script exercising each new guard directly
+  (both the error and the accept path for every check).
+
+**C — API polish (optional) — all three DONE (2026-07-09):**
+- [x] **`gradient!` without the Enzyme ext is a bare `MethodError`**: the 3-arg
+      dispatcher (`gradient!(g,prob,θ) = gradient!(g,prob,θ,prob.diffmode)`) now
+      lives in core (`problem.jl`), always resolves; a new 4-arg fallback
+      `gradient!(g,prob,θ,::AbstractDiffMode)` also lives in core and errors with
+      "requires FastIsostasyEnzymeExt to be loaded". The ext keeps only its
+      concrete-type overrides (`::TangentMode`, `::AdjointMode`), which win by
+      dispatch specificity once loaded. Same split applied to
+      `loss_and_gradient!` (added in the A-item pass — same bare-`MethodError`
+      problem, same fix). Verified: calling `gradient!`/`loss_and_gradient!` in a
+      session with `using FastIsostasy` but no `using Enzyme` now errors with the
+      informative message instead of `MethodError`; the full ext-loaded test
+      suite (including `test_ad_validity.jl`) is unaffected — the ext's
+      mode-specific methods still take priority.
+- [x] **`Test2Encoding{T}` dead type param**: dropped. `Test2Encoding` has no
+      fields (unlike `Test1Encoding`, whose `T` is inferred from real
+      `knot_times`/`radii`/`visc_amps` data), so its `T` was pure decoration, and
+      the `Float32` default actively contradicted the §1 Precision row
+      (`Float64` for inversion runs). Now `struct Test2Encoding <:
+      AbstractEncoding{Float64} end`, no keyword constructor needed. No call-site
+      changes (`Test2Encoding()` unaffected); `test_inversion_api.jl`/
+      `test_ad_validity.jl` unchanged.
+- [x] **`NormalizedPlan` hardcoded `Float64(scale)` vs a Float32 `ScaledPlan`
+      — investigated, confirmed non-issue** (same pattern as the §3 caveat (3)
+      Vialov write-up: flagged as a risk, resolved by closer analysis rather than
+      a code change). `y .*= Float64(scale)` on a `ComplexF32` `y` is a *single*
+      rounding step regardless of the scale's stored type: IEEE754 double
+      rounding is provably safe here because Float64's mantissa (52 bits) is
+      more than double Float32's (23 bits), so
+      `round32(round64(x·s)) == round32(x·s)` always — no accumulation, no FMA
+      chain, just one scalar multiply. Verified two ways: (1) 2M random
+      Float32×Float32 pairs computed both directly and via a Float64
+      intermediate, zero mismatches; (2) end-to-end, wrapping the *same*
+      `AbstractFFTs.ScaledPlan` object (both `ifft` and `irfft`, sizes 5×7
+      through 256×256, prime/composite/power-of-two) with `normalize_plan` and
+      comparing `sp * X` vs `mul!(y, normalize_plan(sp), X)` — bit-identical
+      (`maxdiff = 0.0`) in every case. (An earlier draft of this check built two
+      *separate* `plan_irfft` calls with different FFTW flags — `MEASURE` vs the
+      default — and saw ~1e-7 diffs; that was FFTW picking a different algorithm
+      between the two plans, unrelated to the scale type, and not how
+      `normalize_plan` is actually used in the codebase, which always wraps one
+      already-built plan.) No code change; left as-is with this note in place of
+      the roadmap concern.
 
 **D — noted, fine to defer:** `SurfaceSmoothnessReg.penalty` allocates 3 work
 arrays per loss eval; `TangentMode.batch` dead (deferred by design);
 `_extract_times(())` on empty observations errors cryptically.
+
+## 4c. Pre-Phase 3 API modifications (assessed & design locked 2026-07-09)
+
+Do these **before** the Phase 3 docs examples (they lock the API). Order: loss
+first (constructor change item 2 also touches), then `SimulatedObservable`.
+API-symmetry is a guideline applied while doing both, not a separate task; the
+Hessian idea moved to §11 (deferred, needs Phase 5 first).
+
+- [x] **Pluggable loss — `AbstractLoss` stored as a problem field** (~½ day;
+      done 2026-07-09). Implemented exactly per the locked design: `AbstractLoss`
+      + `DefaultLoss <: AbstractLoss` (`misfit(::DefaultLoss, preds,
+      observations)` = the old `data_misfit` body, now removed) in
+      `src/inverse/problem.jl`. `IceLoadInversion`/`ParameterInversion` gained a
+      `lossmodel` field (new type param `LM`, last field); constructor kwarg
+      `lossmodel = DefaultLoss()`. `loss(prob, θ)` now calls
+      `misfit(prob.lossmodel, preds, prob.observations)` instead of
+      `data_misfit(prob, preds)`. Exported: `AbstractLoss`, `DefaultLoss`,
+      `misfit`. **No Enzyme ext change needed** — confirmed by re-running
+      `test_ad_rules.jl` (4/4) and `test_ad_validity.jl` (6/6) unchanged;
+      `prob`'s `make_zero`/`remake_zero!` shadow already covers the new field.
+      New test in `test_inversion_api.jl` ("pluggable loss (AbstractLoss)"):
+      defines a `ScaledLoss <: AbstractLoss` outside the package and checks
+      `loss` with it equals `scale * loss(DefaultLoss())` — confirms the
+      extension point works end-to-end for a user-defined loss. Full suite:
+      18/18 inversion API (was 16/16), all other counts unchanged.
+- [x] **`SimulatedObservable` — forward-run virtual stations** (~1 day; done
+      2026-07-09). Implemented the forward-side half exactly as scoped
+      (inversion-side unification deferred — see below).
+      `src/inverse/observables.jl`: `points_to_linear_indices(points, field)`
+      extracted as a shared helper (`problem.jl`'s `_linear_indices` is now a
+      one-line wrapper over it — no behavior change, `test_ad_validity.jl`
+      6/6 confirms). New `mutable struct SimulatedObservable{O,T,LI,D}` (tag,
+      points, times, backend-promoted linear indices, flat `data` — points-
+      fastest then times, `Observation`'s convention — and cursor `k`);
+      `SimulatedObservable(tag, points, times, sim)` builds it from `sim`'s
+      current field layout; `attach_simobs!(sim, tag, points, times)` builds
+      **and** `push!`s it onto `sim.simobs`. `record!(so, sim)` gathers via the
+      existing `observable_field` + dual-path `gather!` and advances `k`.
+      `Simulation` (`src/simulation.jl`) gained a `simobs::VO` field (new last
+      type param `VO`; default `simobs = SimulatedObservable[]` kwarg on the
+      outer constructor) — attach *after* construction (`attach_simobs!`),
+      since building a `SimulatedObservable` needs a live `sim` to read the
+      field layout from (avoids the circularity of an embedded-at-construction
+      design). `src/integrators.jl`: `_next_simobs_time`/`next_simobs_time`
+      fold simobs pending times into `_next_output_time`; `advance_with_output!`
+      fires `record!` for every station matching the stop time, **after**
+      `nc_affect!`/`nout_affect!` (documented order). Entirely off the
+      differentiated path — confirmed by re-running `test_ad_rules.jl` (4/4)
+      and `test_ad_validity.jl` (6/6) unchanged (inversions use
+      `_advance_euler!`, never `advance_with_output!`).
+      New `test/test_simulated_observable.jl` (9/9, wired into
+      `runtests.jl`): a station's recorded values match an independent
+      full-field extraction at the same time; `run!` is a no-op on `simobs`
+      bookkeeping when none are attached; multiple stations with different
+      tags/point counts/time grids keep independent cursors. Full suite
+      unaffected otherwise (barystatic 2/2, convolutions 1/1, data loaders
+      14/14, derivatives 3/3, indexing 2/2, integrators 31/31, inversion API
+      18/18, AD rules 4/4, AD validity 6/6).
+      **Deferred, not done:** the inversion-side refactor (building
+      `SimulatedObservable`s from `Observation`s inside `IceLoadInversion`/
+      `ParameterInversion` so both sides share one type). Left alone
+      deliberately — `forward_predict!`'s existing `extract_plan` +
+      `linear_indices` mechanism is already Enzyme-validated and routing it
+      through `SimulatedObservable` would touch the differentiated path for a
+      cosmetic gain only (the assessment's point: the RSL-storage concern was
+      already solved there). Revisit if the Test 1/2 docs examples want a
+      shared predicted-vs-observed plotting object — cheap to add a thin
+      `Observation → SimulatedObservable` converter for docs/plotting use
+      without changing `forward_predict!` itself.
+- [ ] **API symmetry forward/inverse — guideline, not a refactor.** Already
+      reasonably parallel (`Simulation`/`run!` vs `IceLoadInversion`/`solve!`).
+      Close the two concrete gaps via the items above (shared observable types;
+      loss/reg objects configured at construction like `SolverOptions`). A
+      CommonSolve-style rename of `run!` is public-API breakage — only worth
+      considering at the v2.0 boundary, default is don't.
 
 ## 5. Phase 3+4 — Synthetic inversion tests (both TangentMode)
 
@@ -365,12 +540,59 @@ Setup (ground truth = FastIsostasy run with true θ, fixed RNG):
 - θ = 3·5 (knots) + 6 (centers) + 1 + 3 + 3 = **28 parameters** via `Test1Encoding`.
 - Observations: `VerticalUpliftRateObservable` at ~1 % of cells at `t_end`;
   `RelativeSeaLevelObservable` at ~1 % of cells at ~10 times.
-- [ ] Ground-truth generation script + stored synthetic obs (fixed seed).
-- [ ] Inversion from well-informed initial guess (~10–20 % perturbation),
+- [x] Ground-truth generation script + stored synthetic obs (fixed seed).
+- [x] Inversion from well-informed initial guess (~10–20 % perturbation),
       `TangentMode` + Optim L-BFGS (`FastIsostasyOptimExt`: `solve!(prob, LBFGS())`),
       `DecodedBounds` on viscosity range and `H ≥ 0`.
-- [ ] Assertions: gradient check at θ₀ vs FD; monotone loss decrease; parameter
+- [x] Assertions: gradient check at θ₀ vs FD; monotone loss decrease; parameter
       recovery within tolerance (define per-parameter tolerances when writing).
+
+**DONE (2026-07-10).** Docs example `docs/src/examples/inverse_ice_history.jl`
+(Literate, wired into `docs/make.jl` + `example_pages`) + lean CI test
+`test/test_inversion_vialov.jl` (9/9, wired into `runtests.jl`, ~5 min —
+Enzyme-compilation-dominated, not iteration-dominated, so trimming iters/dt
+doesn't help; dt must stay 500 for physics). Verified end-to-end **including the
+CairoMakie plots**: gradient check AD==FD to 5 figures, loss 2.2e5 → ~4, **ice
+field recovered to ~40 m on a 2494 m peak (1.6 %)**, viscosity field to ~0.02
+decades. (Initially validated in a clean env to sidestep a broken NLsolve ext;
+that ext is now fixed — §11 — so the docs env builds directly.)
+
+Deviations from the original spec, with rationale (all forced by what actually
+works under Enzyme / what is well-posed):
+1. **Observations: single `VerticalUpliftObservable` at 10 times**, NOT
+   rate@t_end + RSL@10×. **Mixing observable types trips Enzyme** — the
+   `observations` vector becomes abstractly typed
+   (`Observation{O,…} where O<:AbstractObservable`) and the per-observation
+   `observable_field(obs.tag, sim)` dispatch is dynamic → `EnzymeInternalError`
+   in both `gradient!` (Forward) and `loss_and_gradient!` (ForwardWithPrimal).
+   Homogeneous (same-tag) multi-observation is fine (concrete eltype). A
+   10-time uplift series carries the same temporal ice-history constraint. The
+   general fix (store `observations` as a Tuple + type-stable/unrolled misfit
+   loop so mixed tags stay concrete) is future work — see §11.
+   **RSL under AD is also still unvalidated** (Phase 2 only proved
+   `VerticalUpliftObservable`); the heterogeneous failure masked it here, so it
+   stays a §11 open item.
+2. **`Test1Encoding` gained a `scale` field** (default all-ones → fully
+   backward-compatible, `test_inversion_api` 18/18 unchanged): physical value =
+   `θ[i]·scale[i]`, applied as one broadcast at the top of `reconstruct!`
+   (Enzyme-legal). This lets the optimization variable θ be dimensionless/O(1)
+   while the physics sees metres-of-thickness / metres-of-position / decades. It
+   is the fix for the §11 normalization item **for L-BFGS conditioning**: without
+   it, raw-θ gradients span ~1 (an ice knot) to ~2e5 (log10η_bg), L-BFGS stalls
+   at a poor minimum AND a diagonal preconditioner overshoots
+   (`10^(2e5)=Inf` → line-search assertion). With it, plain `solve!(prob, θ0)`
+   with default `LBFGS()` converges cleanly. §11 normalization item ticked.
+3. **Well-separated, non-overlapping domes** (radii 0.7–0.8e6, centres ±1.3e6 on
+   a ±3e6 domain), NOT the originally-vague overlapping layout. Overlapping domes
+   (radii ≈ separations) are genuinely ill-posed: GIA spatially low-passes the
+   load, so overlapping-dome centres trade off and the ice *field* error hit
+   ~1000 m even at low loss. Separated domes make the load identifiable (field
+   error ~40 m). Viscosity-anomaly *locations* still trade off (~30 km) but the
+   viscosity *field* is recovered (~0.02 decades) — documented as the honest
+   expected behaviour, asserted on fields not individual centres.
+4. `DecodedBounds` mentioned in the spec are **not needed** — normalized θ +
+   the informed initial guess keep the run in the physical region without them;
+   left out to keep the example minimal (could add as a showcase later).
 
 ### Test 2 — viscosity (4 Gaussians) + densities (`test/test_inversion_viscdens.jl`)
 
@@ -379,23 +601,90 @@ Setup (ground truth = FastIsostasy run with true θ, fixed RNG):
   widths **and amplitudes** (4·4 = 16); `rho_uppermantle`, `rho_litho`
   → **~19 parameters**.
 - Observation: `VerticalUpliftObservable` as full (x, y, t) field at output times.
-- [ ] Ground truth + inversion + same assertion pattern as Test 1.
-- [ ] Check identifiability of densities vs viscosity (expect correlated params;
+- [x] Ground truth + inversion + same assertion pattern as Test 1.
+- [x] Check identifiability of densities vs viscosity (expect correlated params;
       document, don't over-tune).
+
+**DONE (2026-07-10).** Docs example `docs/src/examples/inverse_calibration.jl`
+(Literate, wired into `docs/make.jl` + `example_pages`) + lean CI test
+`test/test_inversion_viscdens.jl` (10/10, wired into `runtests.jl`, ~4.5 min).
+Verified end-to-end **including the CairoMakie plots**: gradient check AD==FD to
+~9 figures, **loss 5.7e5 → ~1e-2**, viscosity field recovered to ~1e-4 decades,
+and **both densities recovered to <1 kg/m³** (ρ_um 3400→3400.3, ρ_litho
+3200→3198.9).
+
+Setup notes / deviations:
+1. **`Test2Encoding` gained the same `scale` field as `Test1Encoding`** (§11
+   normalization; default all-ones → backward-compatible, `test_inversion_api`
+   18/18 and `test_ad_validity` 6/6 unchanged): physical = `θ·scale`, one broadcast
+   at the top of `reconstruct!`. Required for the same reason as Test 1 — raw-θ
+   gradients here span ~5e4 (a density) to ~1e7 (log10η_bg).
+2. **Known ice = a single broad central Vialov dome** (radius 2000 km, sawtooth in
+   time), NOT the 3 separated Test-1 domes. A broad load puts *all four* viscosity
+   anomalies under ice so they are sensed; separated corner domes would leave the
+   anomaly under the ice-free corner unconstrained. Built cleanly via
+   `TimeInterpolatedIceThickness(knot_times, H_snapshots, domain)` from an inline
+   `vialov_dome` helper (no internal `add_vialov!` needed); `Test2Encoding`'s
+   `reconstruct!` never touches the ice, so it stays fixed across the inversion.
+3. **Densities turned out well-identified, contra the roadmap's caution.** The
+   full-field × 5-times observation is 3380 constraints on 19 params — rich enough
+   to break the viscosity/density degeneracy (both densities to <1 kg/m³). The
+   example documents this honestly: the correlation is real but the rich `(x,y,t)`
+   data resolves it; sparse data would reintroduce it (suggest fixing densities or
+   adding a prior then). Test asserts densities to <50 kg/m³ (loose, robust) and
+   the viscosity field to <0.05 decades.
+4. Single observable type (`VerticalUpliftObservable`) — no heterogeneous-obs
+   Enzyme issue (§11); full-field means all interior cells (26²) as `points`.
 
 **After Test 2**: user provides physical-coordinate observations → implement
 coordinate-based `Observation` with differentiable bilinear interpolation (§11).
 
 ## 6. Phase 5 — Adjoint (reverse) engine + checkpointing
 
-- [ ] Reverse-mode `EnzymeRules` for plan `mul!` (adjoint = scaled inverse
-      transform; complex first, rfft/irfft for the convolution plans — mind the
-      hermitian-symmetry scaling).
-- [ ] **State-snapshot machinery** (shared with the JLD2 restart roadmap — write
-      once, in-memory + on-disk backends). The snapshot must capture *all* mutated
-      state, including scalars: `CurrentState.count_sparse_updates`, `z_bsl`,
-      timer/BSL state — not just arrays. Define `snapshot!(buf, sim)` /
-      `restore!(sim, buf)` and test round-trip bit-equality of a forward run.
+**Started 2026-07-10. Both foundational items below are DONE** (reverse-mode plan
+rules — complex + rfft/irfft — and the in-memory snapshot machinery). Next:
+forward recording → checkpointing ext → `gradient!(::AdjointMode)` → Test 3.
+
+- [x] Reverse-mode `EnzymeRules` for plan `mul!` (adjoint = scaled inverse
+      transform; complex + rfft/irfft). **DONE (2026-07-10).** One shared
+      `EnzymeRules.augmented_primal` on `mul!(Y, plan::_RawPlan, X)` (just runs the
+      transform — Const linear operator, no tape) + **three** `EnzymeRules.reverse`
+      methods dispatched by plan kind:
+      • **complex `cFFTWPlan`** (`fft`/`bfft`, the `update_dudt!` path): each raw DFT
+        operator is *complex-symmetric* (`Wᵀ=W`), so `Pᴴ = conj(P)` and
+        `Pᴴ·Ȳ = conj(P·conj(Ȳ))` — the **same** plan, no complementary transform.
+        Serves both the forward `W` and the raw inverse `W̄` inside a `NormalizedPlan`
+        (whose `y .*= scale` is differentiated natively).
+      • **real `rfft` (`rFFTWPlan{Float64}`)**: `R = S₁·F` projects dim-1 to `m=N÷2+1`
+        rows, so `Rᴴ(Ȳ) = Re(bfft(zeropadₙ(Ȳ)))` (derived from the full complex DFT —
+        no scaling ambiguity, `Re` handles DC/Nyquist).
+      • **real `brfft` (`rFFTWPlan{<:Complex}`, raw plan inside the irfft
+        `NormalizedPlan`)**: `Bᴴ(Z̄) = D ⊙ rfft(Z̄)`, `D` **doubling** the interior
+        dim-1 rows (DC and, for even `N`, Nyquist stay 1 — the transpose of `brfft`'s
+        hermitian doubling).
+      The rfft/brfft adjoints need the *complementary* transform (`bfft`/`rfft`),
+      built on the fly via `AbstractFFTs` (correctness first; a threaded plan is a
+      later perf optimisation). `Y` is fully overwritten ⇒ its cotangent is zeroed in
+      `reverse` (distinct dest/src buffers guaranteed). Validated in
+      `test/test_ad_rules.jl` (now **8/8**): reverse gradient vs central FD (rtol 1e-5)
+      for the complex `fft→normalized-ifft` path (also vs forward-AD, rtol 1e-8) and
+      the `rfft→normalized-irfft` roundtrip at **both even (n=6) and odd (n=7)** sizes
+      (Nyquist present only for even). Real transforms reuse buffers ⇒
+      `set_runtime_activity(Reverse)` needed (as in `gradient!`). CUFFT plans are
+      `AbstractFFTs.Plan`s too ⇒ same rules on GPU (Phase 6 verify).
+- [x] **State-snapshot machinery** (shared with the JLD2 restart roadmap)
+      **DONE (2026-07-10, in-memory backend).** `src/snapshot.jl`: `StateSnapshot(sim)`
+      allocates a buffer (deepcopy of `sim.now` + BSL + clock); `snapshot!(buf, sim)` /
+      `restore!(sim, buf)` copy in place (reused buffers → allocate once). Captures
+      **all** mutated state: every `CurrentState` array + the nested `ColumnAnomalies`,
+      the scalars (`count_sparse_updates`, `z_bsl`, `V_af/V_pov/V_den`, `delta_V`),
+      the BSL (`z`/`A`/`residual`, recursing through `CombinedBSL`), and `timer.t`.
+      Timer logging vectors (`t_vec`, `t_computation`) intentionally skipped
+      (instrumentation, AD-inactive, don't affect the trajectory). Exported. Validated
+      in `test/test_snapshot.jl` (11/11): snapshot→run→restore→re-run reproduces
+      `u`/`ue`/`z_ss`/`count_sparse_updates`/`bsl.z` **bit-for-bit**, and a mid-run
+      snapshot round-trips exactly. **On-disk (JLD2) backend** deferred to the restart
+      roadmap. See [[project_restart_roadmap]].
 - [ ] Forward recording: accepted `(tₖ, dtₖ)` sequence per save interval + snapshot
       at each interval boundary.
 - [ ] `FastIsostasyCheckpointingExt`: periodic schedule over save intervals
@@ -473,12 +762,51 @@ Target design (when this phase starts):
 
 ## 11. Open questions / future work (decide when reached)
 
-- [x] **Parameter normalization / `L2Reg` scaling** (raised 2026-07-07; resolved
-      2026-07-08). Addressed by the generalized Tikhonov regularizer (§1 Regularization
-      row, §3 refactor box): order-0 magnitude penalties take per-component weights,
-      and the common case is the order-1 gradient/smoothness penalty. Normalized
-      θ-space (for L-BFGS conditioning) remains a possible later refinement but is no
-      longer required for the reg to behave.
+- [x] **Parameter normalization / `L2Reg` scaling** (raised 2026-07-07; reg part
+      resolved 2026-07-08, conditioning part resolved 2026-07-10). Two aspects:
+      (a) *regularizer* behaviour — addressed by the generalized Tikhonov regularizer
+      (§1 Regularization row, §3 refactor box): order-0 magnitude penalties take
+      per-component weights, common case is the order-1 gradient/smoothness penalty.
+      (b) *L-BFGS conditioning* — addressed 2026-07-10 by the `Test1Encoding` `scale`
+      field (§5 Test 1, deviation 2): θ optimized in dimensionless O(1) units,
+      physical = `θ·scale`. Turned out to be **required**, not optional: without it
+      Test 1's raw-θ gradients span ~1…2e5 and L-BFGS stalls. The same pattern
+      (a `scale` broadcast at the top of `reconstruct!`) is now also in
+      `Test2Encoding` (2026-07-10, Test 2) and should go into any future encoding
+      used with a gradient optimizer.
+- [ ] **Mixed observable types in one inversion trip Enzyme** (found 2026-07-10,
+      Test 1). Passing `Observation`s of *different* tags makes `prob.observations`
+      abstractly typed (`Observation{O,…} where O`), so `observable_field(obs.tag,
+      sim)` dispatches dynamically inside the differentiated `forward_predict!` /
+      `data_misfit` → `EnzymeInternalError` (both Forward and ForwardWithPrimal).
+      Homogeneous (same-tag) multi-observation is fine. **Fix:** store `observations`
+      as a `Tuple` and iterate the misfit/extract loops in a type-stable, unrolled way
+      (recursion or `map` over the tuple, not `for (k,obs) in enumerate(vector)`),
+      keeping each `obs` concretely typed. Until then: one observable type per
+      inversion. This also blocks re-testing **RSL under AD** (Phase 2 only validated
+      `VerticalUpliftObservable`; RSL's own AD-legality is still unverified because the
+      heterogeneous mix failed first).
+- [x] **`FastIsostasyNLsolveExt` precompile failure on Julia 1.12** (found & fixed
+      2026-07-10, unrelated to AD work). Was broken three ways: no `module … end`
+      wrapper (top-level `using NLsolve` → precompile error); it defined
+      `update_ocean!`, which is **never dispatched** — the BSL hook is
+      `update_bsl!(bsl, delta_V, t)` (`internal_update_bsl!`, sealevel.jl), so
+      `PiecewiseLinearOceanSurfaceBSL` could never actually update; and it referenced a
+      nonexistent `OceanSurfaceChange` type, a non-callable `A_itp(z)` (core uses
+      `interpolate(z, A_itp)`), and undefined `z`/`A` in its constructor. Rewrote it as
+      a proper module: keyword constructor `PiecewiseLinearOceanSurfaceBSL(; ref,
+      mcp_opts)` (initialises `z`/`A` from `ref`, `residual = typemax`), a
+      `surfacechange_residual` = `(z_new−z_cur)·mean(A(z_cur),A(z_new)) − delta_V`, and
+      `update_bsl!(::PiecewiseLinearOceanSurfaceBSL, delta_V, t)` doing the
+      box-constrained `mcpsolve` (sign-of-`delta_V` bracketing) with a
+      piecewise-constant fallback when the volume residual exceeds 10 μm SLE. Also
+      fixed a **dangling export**: core exported `PiecewiseLinearBSL` (undefined) —
+      renamed to the actual `PiecewiseLinearOceanSurfaceBSL`. Verified: precompiles in a
+      FastIsostasy+NLsolve env; a smoke test constructs it, raises BSL for `+delta_V`
+      with the flooded volume closing to 1e-5, and round-trips back on `−delta_V`.
+      **Docs env now precompiles all extensions** (NLsolve, Optim, Enzyme, CUDA,
+      Checkpointing, Makie) — the `inverse_ice_history.md` docs-build blocker is
+      cleared.
 - [x] **GPU observation gather** (resolved 2026-07-08): vector-based KA gather on
       linear indices, `get_backend`-dispatched (§1 Obs-extraction row).
 - [x] **CPU stencils: dual path chosen** (resolved 2026-07-07). Perf gate showed
@@ -495,6 +823,15 @@ Target design (when this phase starts):
       high wavenumber, or the `dt_min`/`dt_sparse_diagnostics` interaction). Must be
       fixed before the Phase-6 semi-implicit AD port has anything valid to test.
 
+- [ ] **Hessian via forward-over-reverse** (moved from §4c, 2026-07-09; deferred —
+      needs Phase 5 reverse mode first). Motivating use case is **UQ**
+      (Laplace/posterior covariance at the optimum) more than optimization
+      (L-BFGS is already quasi-Newton; θ ≈ 20–30). Forward-over-reverse through
+      a checkpointed time-stepped PDE is the hardest Enzyme configuration;
+      cheap substitutes at low nθ: FD of `gradient!` (nθ extra gradient calls,
+      fine as a one-off at the optimum) or forward-over-forward. No API work
+      needed now — only requirement is `loss` staying pure in `(prob, θ)`,
+      which it is; HVP is the primitive to build first if/when this starts.
 - [ ] Physical-coordinate observations with differentiable bilinear interpolation —
       **after Test 2**; user will provide real coordinate observations then.
 - [ ] `HorizontalDisplacementRateObservable`: intentionally undefined for now;
