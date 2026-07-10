@@ -281,12 +281,15 @@ end
 # Drive the integrator up to `target` (a save/stop time)
 # -----------------------------------------------------------------------------
 
-function solve_to!(integ::FIIntegrator, target, maxiters)
-    isadaptive(integ.alg) ? solve_to_adaptive!(integ, target, maxiters) :
-        solve_to_fixed!(integ, target, maxiters)
+# `steplog`, when a `Vector{<:Tuple}`, receives one `(t, dt)` entry per *accepted*
+# step (`t` = time before the step, exactly as passed to the RHS) — the frozen
+# dt-sequence the Phase-5 adjoint replays; `nothing` (default) records nothing.
+function solve_to!(integ::FIIntegrator, target, maxiters, steplog = nothing)
+    isadaptive(integ.alg) ? solve_to_adaptive!(integ, target, maxiters, steplog) :
+        solve_to_fixed!(integ, target, maxiters, steplog)
 end
 
-function solve_to_adaptive!(integ::FIIntegrator, target, maxiters)
+function solve_to_adaptive!(integ::FIIntegrator, target, maxiters, steplog = nothing)
     tab = integ.tableau
     T = typeof(integ.t)
     target = T(target)
@@ -301,6 +304,7 @@ function solve_to_adaptive!(integ::FIIntegrator, target, maxiters)
 
         if err <= 1 || dt <= integ.dtmin
             # accept
+            steplog === nothing || push!(steplog, (integ.t, dt))
             integ.t += dt
             copyto!(integ.u, integ.unew)
             tab.fsal && copyto!(integ.ks[1], integ.ks[end])   # FSAL carry-over
@@ -320,7 +324,7 @@ function solve_to_adaptive!(integ::FIIntegrator, target, maxiters)
     return integ
 end
 
-function solve_to_fixed!(integ::FIIntegrator, target, maxiters)
+function solve_to_fixed!(integ::FIIntegrator, target, maxiters, steplog = nothing)
     T = typeof(integ.t)
     target = T(target)
     iters = 0
@@ -330,6 +334,7 @@ function solve_to_fixed!(integ::FIIntegrator, target, maxiters)
 
         dt = min(integ.dt, target - integ.t)
         perform_step!(integ, dt)
+        steplog === nothing || push!(steplog, (integ.t, dt))
         integ.t += dt
         copyto!(integ.u, integ.unew)
         # Euler is not FSAL: refresh the first stage for the next step.

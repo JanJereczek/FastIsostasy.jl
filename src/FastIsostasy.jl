@@ -52,6 +52,7 @@ include("inverse/observables.jl")
 include("inverse/encodings.jl")
 include("inverse/regularization.jl")
 include("inverse/problem.jl")
+include("inverse/recording.jl")
 
 # interpolations.jl
 export TimeInterpolation0D, TimeInterpolation2D, interpolate!
@@ -195,5 +196,6 @@ export AbstractRegOrder, Order0, Order1
 export AbstractInversion, IceLoadInversion, ParameterInversion, loss, gradient!,
     loss_and_gradient!, solve!
 export AbstractLoss, DefaultLoss, misfit
+export ForwardRecord, record_forward!, replay_interval!
 
 end
