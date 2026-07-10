@@ -103,6 +103,29 @@ fd_dir(f, x, dx; ε = 1e-6) = (f(x .+ ε .* dx) - f(x .- ε .* dx)) / (2ε)
         @test isapprox(d_enzyme, fd_dir(f, x, dx); rtol = 1e-5)
     end
 
+    @testset "reverse plan mul! rule (rfft/irfft)" begin
+        ## even and odd n: Nyquist row exists only for even n, and the rfft/brfft
+        ## adjoints scale the interior frequencies differently around it.
+        for n in (6, 7)
+            m = n ÷ 2 + 1
+            prfft = plan_rfft(zeros(n, n))
+            pirfft = FastIsostasy.normalize_plan(plan_irfft(zeros(ComplexF64, m, n), n))
+            f(x) = _loss_rfft(x, n, prfft, pirfft)
+
+            x = randn(n * n)
+            g = zeros(n * n)
+            ## real transforms reuse buffers ⇒ runtime activity, as in `gradient!`
+            Enzyme.autodiff(Enzyme.set_runtime_activity(Reverse), _loss_rfft, Active,
+                Duplicated(x, g), Const(n), Const(prfft), Const(pirfft))
+
+            g_fd = map(1:length(x)) do i
+                e = zeros(length(x)); e[i] = 1.0
+                fd_dir(f, x, e)
+            end
+            @test isapprox(g, g_fd; rtol = 1e-5)
+        end
+    end
+
     @testset "t_computation! inactive rule" begin
         timer = FastIsostasy.Timer((0.0, 10.0); T = Float64)
         timer.t = 5.0    # past t_span[1] ⇒ the push! branch is live if not inactive

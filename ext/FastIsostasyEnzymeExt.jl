@@ -115,20 +115,35 @@ function EnzymeRules.forward(
 end
 
 # =============================================================================
-# 2b. Reverse-mode rule for planned-FFT application `mul!(Y, plan, X)` (Phase 5).
+# 2b. Reverse-mode rules for planned-FFT application `mul!(Y, plan, X)` (Phase 5).
 #
-# For a fixed linear operator `P`, `Y = P·X` has pullback `X̄ += Pᴴ·Ȳ` (and the
-# output cotangent is consumed, so `Ȳ` is zeroed — `mul!` fully overwrites `Y`,
-# and the code always uses distinct dest/src buffers). Each raw DFT operator is
-# *complex-symmetric* (`Wᵀ = W`, and `(W̄)ᵀ = W̄`), so its Hermitian adjoint equals
-# its elementwise conjugate: `Pᴴ = conj(P)`, and `conj(P)·v = conj(P·conj(v))`.
-# Hence `Pᴴ·Ȳ = conj(P·conj(Ȳ))` — realised with the *same* plan, no separate
-# inverse/forward plan needed. This one formula is correct for both raw plans: the
-# forward `W` (adjoint `Wᴴ = conj W`) and the raw unnormalized-inverse `W̄` inside a
-# `NormalizedPlan` (adjoint `W`). As in forward mode, the rule is on the raw
-# `_RawPlan` only; a `NormalizedPlan`'s `y .*= scale` is differentiated natively and
-# its inner raw `mul!` lands here.
+# For a fixed linear operator `P`, `Y = P·X` has pullback `X̄ += Pᴴ·Ȳ`, and the
+# output cotangent is consumed (`Ȳ` zeroed — `mul!` fully overwrites `Y`, always
+# with distinct dest/src buffers). The augmented-primal is shared (just run the
+# transform, no tape — the Const plan is available again in `reverse`); only the
+# adjoint `Pᴴ` differs by plan kind, so there are three `reverse` methods:
+#
+#  • complex `cFFTWPlan` (`fft`/`bfft`, the `update_dudt!` path): each raw DFT
+#    operator is *complex-symmetric* (`Wᵀ = W`), so `Pᴴ = conj(P)` and
+#    `Pᴴ·Ȳ = conj(P·conj(Ȳ))` — the *same* plan, no separate transform. Serves both
+#    the forward `W` and the raw inverse `W̄` inside a `NormalizedPlan` (whose
+#    `y .*= scale` is differentiated natively).
+#  • real forward `rfft` (`rFFTWPlan{Float64}`): `R = S₁·F` projects dim-1 to
+#    `m = N÷2+1` rows, so `Rᴴ(Ȳ) = Re(bfft(zeropadₙ(Ȳ)))` — zero-pad the dropped
+#    rows, 2-D complex `bfft`, take the real part (`X` is real).
+#  • real backward `brfft` (`rFFTWPlan{<:Complex}`, the raw plan inside the irfft
+#    `NormalizedPlan`): `Bᴴ(Z̄) = D ⊙ rfft(Z̄)`, where `D` *doubles* the interior
+#    dim-1 frequencies (DC and, for even `N`, Nyquist stay 1) — the transpose of the
+#    hermitian doubling `brfft` applies on the way forward.
+#
+# The rfft/brfft adjoints need the *complementary* transform (`bfft`/`rfft`), built
+# on the fly via `AbstractFFTs` here (correctness first; a threaded plan is a later
+# optimisation). CUFFT plans are `AbstractFFTs.Plan`s too, so the same rules apply
+# on GPU (Phase 6 verification).
 # =============================================================================
+
+const _RfftPlan = FFTW.rFFTWPlan{Float64}       # real → complex half (forward rfft)
+const _BrfftPlan = FFTW.rFFTWPlan{<:Complex}    # complex half → real (backward brfft)
 
 @inline _rev_shadows(x::Duplicated) = (x.dval,)
 @inline _rev_shadows(x::BatchDuplicated) = x.dval
@@ -147,37 +162,101 @@ function EnzymeRules.augmented_primal(
 
     primal = EnzymeRules.needs_primal(config) ? Y.val : nothing
     shadow = EnzymeRules.needs_shadow(config) ? Y.dval : nothing
-    # Linear operator: the pullback needs only the (Const) plan, available again in
-    # `reverse` — nothing to tape.
     return EnzymeRules.AugmentedReturn(primal, shadow, nothing)
 end
 
-function EnzymeRules.reverse(
-        config::EnzymeRules.RevConfig,
-        ::Const{typeof(mul!)},
-        ::Type{RT},
-        tape,
-        Y::Annotation{<:AbstractArray},
-        plan::Const{<:_RawPlan},
-        X::Annotation{<:AbstractArray},
-    ) where {RT}
+# --- adjoint kernels ---------------------------------------------------------
 
+# complex `Pᴴ·Ȳ = conj(P·conj(Ȳ))` accumulated into `Xbar`.
+function _accum_cplan_adjoint!(Xbar, plan, Ȳ)
+    cy = conj.(Ȳ)
+    tmp = similar(cy)
+    mul!(tmp, plan, cy)
+    @. Xbar += conj(tmp)
+    return nothing
+end
+
+# rfft adjoint: `X̄ += Re(bfft(zeropadₙ(Ȳ)))`. `Ȳ` is `m×n` complex, `Xbar` is
+# `N×n` real (`N = size(Xbar,1)`, `m = N÷2+1`).
+function _accum_rfft_adjoint!(Xbar, Ȳ)
+    N, ncol = size(Xbar)
+    padded = zeros(eltype(Ȳ), N, ncol)
+    @views padded[1:size(Ȳ, 1), :] .= Ȳ
+    z = AbstractFFTs.bfft(padded)
+    @. Xbar += real(z)
+    return nothing
+end
+
+# brfft adjoint: `X̄ += D ⊙ rfft(Ȳ)`, `D` doubling the interior dim-1 rows. `Ȳ` is
+# `N×n` real, `Xbar` is `m×n` complex (`N = size(Ȳ,1)`).
+function _accum_brfft_adjoint!(Xbar, Ȳ)
+    N = size(Ȳ, 1)
+    R = AbstractFFTs.rfft(Ȳ)                 # m×n complex, m = N÷2+1
+    m = size(R, 1)
+    @views Xbar[1, :] .+= R[1, :]            # DC row: not doubled
+    hi = iseven(N) ? m - 1 : m               # last interior row
+    hi >= 2 && (@views Xbar[2:hi, :] .+= 2 .* R[2:hi, :])
+    iseven(N) && (@views Xbar[m, :] .+= R[m, :])   # Nyquist row: not doubled
+    return nothing
+end
+
+# --- reverse methods (one per plan kind) -------------------------------------
+
+# Zero the (fully-overwritten) output cotangents after the adjoint accumulation,
+# for every batch member.
+@inline function _zero_output!(Yshs)
+    for Ȳ in Yshs
+        fill!(Ȳ, zero(eltype(Ȳ)))
+    end
+end
+
+function EnzymeRules.reverse(
+        config::EnzymeRules.RevConfig, ::Const{typeof(mul!)}, ::Type{RT}, tape,
+        Y::Annotation{<:AbstractArray}, plan::Const{<:FFTW.cFFTWPlan},
+        X::Annotation{<:AbstractArray}) where {RT}
     if !(Y isa Const)
         Yshs = _rev_shadows(Y)
-        Xshs = X isa Const ? nothing : _rev_shadows(X)
-        for b in 1:EnzymeRules.width(config)
-            Ȳ = Yshs[b]
-            if Xshs !== nothing
-                # X̄ += Pᴴ·Ȳ = conj(P·conj(Ȳ))
-                cy = conj.(Ȳ)
-                tmp = similar(cy)
-                mul!(tmp, plan.val, cy)
-                @. Xshs[b] += conj(tmp)
+        if !(X isa Const)
+            Xshs = _rev_shadows(X)
+            for b in 1:EnzymeRules.width(config)
+                _accum_cplan_adjoint!(Xshs[b], plan.val, Yshs[b])
             end
-            # `Y` is fully overwritten by the primal `mul!`, so its cotangent is
-            # consumed here (prevents double-counting through the reused buffer).
-            fill!(Ȳ, zero(eltype(Ȳ)))
         end
+        _zero_output!(Yshs)
+    end
+    return (nothing, nothing, nothing)
+end
+
+function EnzymeRules.reverse(
+        config::EnzymeRules.RevConfig, ::Const{typeof(mul!)}, ::Type{RT}, tape,
+        Y::Annotation{<:AbstractArray}, plan::Const{<:_RfftPlan},
+        X::Annotation{<:AbstractArray}) where {RT}
+    if !(Y isa Const)
+        Yshs = _rev_shadows(Y)
+        if !(X isa Const)
+            Xshs = _rev_shadows(X)
+            for b in 1:EnzymeRules.width(config)
+                _accum_rfft_adjoint!(Xshs[b], Yshs[b])
+            end
+        end
+        _zero_output!(Yshs)
+    end
+    return (nothing, nothing, nothing)
+end
+
+function EnzymeRules.reverse(
+        config::EnzymeRules.RevConfig, ::Const{typeof(mul!)}, ::Type{RT}, tape,
+        Y::Annotation{<:AbstractArray}, plan::Const{<:_BrfftPlan},
+        X::Annotation{<:AbstractArray}) where {RT}
+    if !(Y isa Const)
+        Yshs = _rev_shadows(Y)
+        if !(X isa Const)
+            Xshs = _rev_shadows(X)
+            for b in 1:EnzymeRules.width(config)
+                _accum_brfft_adjoint!(Xshs[b], Yshs[b])
+            end
+        end
+        _zero_output!(Yshs)
     end
     return (nothing, nothing, nothing)
 end
