@@ -22,16 +22,26 @@ Literate.markdown("src/examples/alternative_models.jl", "src/examples"; credit =
 Literate.markdown("src/examples/glacialcycle.jl", "src/examples"; credit = false)
 Literate.markdown("src/examples/inverse_ice_history.jl", "src/examples"; credit = false)
 Literate.markdown("src/examples/inverse_calibration.jl", "src/examples"; credit = false)
+Literate.markdown("src/examples/inverse_fullfield.jl", "src/examples"; credit = false)
 
-example_pages = [
+forward_examples = [
     "examples/benchmark_analytic.md",
     "examples/coupling.md",
     "examples/benchmark_1D.md",
     "examples/benchmark_3D.md",
     "examples/alternative_models.md",
     "examples/glacialcycle.md",
+]
+
+inverse_examples = [
     "examples/inverse_ice_history.md",
     "examples/inverse_calibration.md",
+    "examples/inverse_fullfield.md",
+]
+
+advanced_topics = [
+    "integrators.md",
+    "inversion_ad_activity_map.md",
 ]
 
 ref_pages = [
@@ -45,8 +55,9 @@ ref_pages = [
 PAGES = [
     "index.md",
     "introGIA.md",
-    "integrators.md",
-    "Examples" => example_pages,
+    "Forward run examples" => forward_examples,
+    "Inverse problem examples" => inverse_examples,
+    "Advanced Topics" => advanced_topics,
     "References" => ref_pages,
 ]
 
