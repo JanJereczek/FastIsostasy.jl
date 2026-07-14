@@ -1,0 +1,6 @@
+# Enzyme + CUDA: CUDA.jl's non-blocking synchronization runs stream syncs on a
+# foreign worker thread (`synchronization_worker`, CUDACore/lib/cudadrv/
+# synchronization.jl). Under Enzyme-generated code that worker segfaults, so force
+# the blocking path (`cuStreamSynchronize` inline) for the GPU AD tests.
+[CUDACore]
+nonblocking_synchronization = false

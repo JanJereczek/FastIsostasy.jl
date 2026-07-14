@@ -10,7 +10,13 @@
 - [ ] Restart files
 - [ ] externalise the proj functionalities
 - [x] Put time integration into dev notes (add the AD notes, the EBM explanation... etc)
-- [ ] Fix "arraykernel::Any" You rightfully pointed out that "arraykernel::Any" in the definition of RegionalDomain leads to type instability. Please suggest a simple way to fix it (you can also give several options to choose from if you want).
+- [x] Fix "arraykernel::Any". `RegionalDomain` gained a trailing type parameter `K` and
+      the field is now `arraykernel::Type{K}`. `Array`/`CuArray` are `UnionAll`s, so
+      `Type{K}` lifts the value into the type domain: `K` is a compile-time constant and
+      `domain.arraykernel(x)` infers concretely (e.g. `kernelzeros` went `Any` →
+      `Matrix{Float64}`) instead of dispatching dynamically. Zero call-site changes —
+      `domain.arraykernel` still works verbatim — and because `K` is *last*, partially
+      applied signatures (`RegionalDomain{T, L, M}`) keep dispatching.
 - [x] forward and inverse problems split
 - [ ] calibration can be split: observations vs. 3D model
 - [x] increment collapse level

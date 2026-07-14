@@ -93,10 +93,10 @@ set_viscosity_from_log10!(sim, logη) = (@. sim.solidearth.effective_viscosity =
 # Coordinate grids on the same array kind as `ref`. `domain.X`/`domain.Y` are always
 # CPU `Matrix`es (they are only promoted for setup), but on a GPU simulation the
 # *differentiated* `reconstruct!` broadcasts them against device fields, which cannot
-# mix host and device arrays. Dispatch on `ref`'s concrete type — `domain.arraykernel`
-# is stored as `::Any`, so using it here would make `reconstruct!` type-unstable and
-# trip Enzyme. On CPU (`ref::Array`) this returns the grid untouched (zero copy,
-# byte-identical to before); on GPU it copies the const grid onto the device once.
+# mix host and device arrays. Dispatching on `ref`'s concrete type keeps this decision
+# in the type domain, so `reconstruct!` stays inferrable and Enzyme can see through it.
+# On CPU (`ref::Array`) this returns the grid untouched (zero copy, byte-identical to
+# before); on GPU it copies the const grid onto the device once.
 match_array(ref::Array, X) = X
 match_array(ref, X) = copyto!(similar(ref, eltype(X), size(X)), X)
 
