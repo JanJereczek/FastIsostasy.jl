@@ -17,6 +17,8 @@ include("test_forward_recording.jl")
 include("test_inversion_api.jl")
 include("test_ad_rules.jl")
 include("test_ad_validity.jl")
+include("test_adjoint_validity.jl")
+include("test_inversion_fullfield.jl")
 include("test_inversion_vialov.jl")
 include("test_inversion_viscdens.jl")
 
