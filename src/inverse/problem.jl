@@ -39,11 +39,19 @@ struct DefaultLoss <: AbstractLoss end
 function misfit(::DefaultLoss, preds, observations)
     l = zero(eltype(first(preds)))
     for (k, obs) in enumerate(observations)
-        r = (preds[k] .- obs.data) ./ obs.σ
+        p = preds[k]
+        # `preds` live on the sim's array kind (device on a GPU sim), but
+        # `Observation.data`/`σ` are host `Vector`s — promote them to `p`'s kind so
+        # the broadcast stays on one device. `match_array` is a no-op on CPU
+        # (byte-identical) and a scalar `σ` passes through untouched.
+        r = (p .- match_array(p, obs.data)) ./ _match_sigma(p, obs.σ)
         l += sum(abs2, r) / 2
     end
     return l
 end
+
+_match_sigma(ref, σ::Number) = σ
+_match_sigma(ref, σ::AbstractVector) = match_array(ref, σ)
 
 struct IceLoadInversion{S, E, OB, RG, DM, T, LI, LM} <: AbstractInversion
     sim::S
@@ -270,9 +278,13 @@ function gradient!(g, prob::AbstractInversion, θ)
 end
 
 function gradient!(g, prob::AbstractInversion, θ, mode::AbstractDiffMode)
-    error("gradient!(::$(typeof(mode))) requires FastIsostasyEnzymeExt to be " *
-          "loaded (`using Enzyme`) — the core package doesn't implement AD itself.")
+    error("gradient!(::$(typeof(mode))) is unavailable: " * _missing_ad_ext(mode))
 end
+
+# Which extension provides the AD for a given mode (for the not-loaded error).
+_missing_ad_ext(::AbstractDiffMode) = "load FastIsostasyEnzymeExt (`using Enzyme`)."
+_missing_ad_ext(::AdjointMode) =
+    "reverse mode requires FastIsostasyCheckpointingExt (`using Enzyme, Checkpointing`)."
 
 """
     loss_and_gradient!(g, prob, θ) -> loss_value
@@ -289,9 +301,8 @@ function loss_and_gradient!(g, prob::AbstractInversion, θ)
 end
 
 function loss_and_gradient!(g, prob::AbstractInversion, θ, mode::AbstractDiffMode)
-    error("loss_and_gradient!(::$(typeof(mode))) requires FastIsostasyEnzymeExt " *
-          "to be loaded (`using Enzyme`) — the core package doesn't implement AD " *
-          "itself.")
+    error("loss_and_gradient!(::$(typeof(mode))) is unavailable: " *
+          _missing_ad_ext(mode))
 end
 
 """

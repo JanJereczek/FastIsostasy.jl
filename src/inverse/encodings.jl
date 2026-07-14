@@ -66,6 +66,35 @@ end
 # Write the physical viscosity field from a log10 field held in `logη`.
 set_viscosity_from_log10!(sim, logη) = (@. sim.solidearth.effective_viscosity = 10^logη; nothing)
 
+# Coordinate grids on the same array kind as `ref`. `domain.X`/`domain.Y` are always
+# CPU `Matrix`es (they are only promoted for setup), but on a GPU simulation the
+# *differentiated* `reconstruct!` broadcasts them against device fields, which cannot
+# mix host and device arrays. Dispatch on `ref`'s concrete type — `domain.arraykernel`
+# is stored as `::Any`, so using it here would make `reconstruct!` type-unstable and
+# trip Enzyme. On CPU (`ref::Array`) this returns the grid untouched (zero copy,
+# byte-identical to before); on GPU it copies the const grid onto the device once.
+match_array(ref::Array, X) = X
+match_array(ref, X) = copyto!(similar(ref, eltype(X), size(X)), X)
+
+# =============================================================================
+# Full-field "encoding" (`encoding === nothing`) — direct 2-D viscosity control.
+# =============================================================================
+
+# No encoding: θ *is* the full 2-D effective-viscosity field, controlled in log10
+# space (the natural, well-conditioned parameterization — physical value 10^θ),
+# flattened column-major to match `effective_viscosity`'s `Matrix` layout. This is
+# the full-field inversion target of AdjointMode (roadmap Phase 5, Test 3): with a
+# reverse sweep the gradient cost is independent of the (grid-sized) parameter
+# count, so no dimensionality-reducing encoding is needed. Reuses the same broadcast
+# `set_viscosity_from_log10!` that the encoded paths differentiate, so it is
+# Enzyme-legal by construction (`reshape` is a view; the `10^` broadcast is the
+# proven path).
+function reconstruct!(sim, θ, ::Nothing)
+    logη = reshape(θ, size(sim.solidearth.effective_viscosity))
+    set_viscosity_from_log10!(sim, logη)
+    return nothing
+end
+
 # The ice-thickness snapshots an encoding writes into (for time interpolation).
 ice_snapshots(sim) = sim.bcs.ice_thickness.H_itp.X
 
@@ -111,7 +140,8 @@ end
 nparams(enc::Test1Encoding) = 3 * length(enc.knot_times) + 13
 
 function reconstruct!(sim, θ, enc::Test1Encoding)
-    X, Y = sim.domain.X, sim.domain.Y
+    eff = sim.solidearth.effective_viscosity
+    X, Y = match_array(eff, sim.domain.X), match_array(eff, sim.domain.Y)
     K = length(enc.knot_times)
     θ = θ .* enc.scale          # dimensionless θ → physical (broadcast, AD-legal)
 
@@ -170,7 +200,8 @@ end
 nparams(::Test2Encoding) = 19
 
 function reconstruct!(sim, θ, enc::Test2Encoding)
-    X, Y = sim.domain.X, sim.domain.Y
+    eff = sim.solidearth.effective_viscosity
+    X, Y = match_array(eff, sim.domain.X), match_array(eff, sim.domain.Y)
     θ = θ .* enc.scale          # dimensionless θ → physical (broadcast, AD-legal)
     logη = fill!(similar(sim.solidearth.effective_viscosity), θ[1])
     for i in 1:4
