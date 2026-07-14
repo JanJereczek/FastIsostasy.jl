@@ -35,6 +35,7 @@ Optim = "429524aa-4258-5aef-a3af-852621145aeb"
 [extensions]
 FastIsostasyCUDAExt = ["CUDA"]
 FastIsostasyCheckpointingExt = ["Checkpointing", "Enzyme"]
+FastIsostasyEnzymeCUDAExt = ["Enzyme", "CUDA"]
 FastIsostasyEnsembleKalmanProcessesExt = ["EnsembleKalmanProcesses", "Distributions"]
 FastIsostasyEnzymeExt = ["Enzyme"]
 FastIsostasyMakieExt = ["Makie"]
