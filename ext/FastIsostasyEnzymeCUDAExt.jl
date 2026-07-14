@@ -89,13 +89,13 @@ function EnzymeRules.forward(
     if EnzymeRules.width(config) == 1
         dp = x isa Const ? zero(p) : 2 * _blas_reinner(x.val, _shadow(x, 1))
         RT <: DuplicatedNoNeed && return dp
-        RT <: Duplicated && return Duplicated(p, dp)
+        RT <: Duplicated && return RT(p, dp)
     else
         dps = ntuple(EnzymeRules.width(config)) do b
             x isa Const ? zero(p) : 2 * _blas_reinner(x.val, _shadow(x, b))
         end
         RT <: BatchDuplicatedNoNeed && return dps
-        RT <: BatchDuplicated && return BatchDuplicated(p, dps)
+        RT <: BatchDuplicated && return RT(p, dps)
     end
     return nothing
 end
@@ -130,13 +130,50 @@ function EnzymeRules.forward(
     if EnzymeRules.width(config) == 1
         dp = x isa Const ? zero(p) : _blas_total(_shadow(x, 1))
         RT <: DuplicatedNoNeed && return dp
-        RT <: Duplicated && return Duplicated(p, dp)
+        RT <: Duplicated && return RT(p, dp)
     else
         dps = ntuple(EnzymeRules.width(config)) do b
             x isa Const ? zero(p) : _blas_total(_shadow(x, b))
         end
         RT <: BatchDuplicatedNoNeed && return dps
-        RT <: BatchDuplicated && return BatchDuplicated(p, dps)
+        RT <: BatchDuplicated && return RT(p, dps)
+    end
+    return nothing
+end
+
+# --- `match_array` (host constant → device) -----------------------------------
+#
+# `match_array(ref, X)` lifts a host-resident **constant** (the domain's coordinate
+# grids in `reconstruct!`; `Observation.data`/`σ` in `misfit`) onto `ref`'s device.
+# Its body is `copyto!(similar(ref, …), X)`, and because `similar` is taken off the
+# *active* `ref`, Enzyme treats the result as active and tries to differentiate the
+# `cuMemcpyHtoDAsync_v2` — for which it has no derivative
+# (`EnzymeNoDerivativeError`).
+#
+# `X` is constant data in every call site, so the derivative is exactly zero. This
+# rule performs the copy (opaque to Enzyme) and hands back a zeroed shadow.
+# `CUDA.zeros` lowers to a memset, not a kernel launch, so it is safe inside a rule
+# body. (The H2D copy happens once per `loss` evaluation; caching it per host array
+# would save a small transfer but is a perf, not correctness, matter.)
+function EnzymeRules.forward(
+        config::FwdConfig,
+        ::Const{typeof(FastIsostasy.match_array)},
+        ::Type{RT},
+        ref::Annotation{<:CuArray},
+        X::Annotation,
+    ) where {RT}
+
+    p = FastIsostasy.match_array(ref.val, X.val)
+    RT <: Const && return nothing
+
+    mkzero() = CUDA.zeros(eltype(p), size(p))
+    if EnzymeRules.width(config) == 1
+        RT <: DuplicatedNoNeed && return mkzero()
+        RT <: Duplicated && return RT(p, mkzero())
+    else
+        dps = ntuple(_ -> mkzero(), EnzymeRules.width(config))
+        RT <: BatchDuplicatedNoNeed && return dps
+        RT <: BatchDuplicated && return RT(p, dps)
     end
     return nothing
 end
@@ -170,11 +207,11 @@ function EnzymeRules.forward(
     if EnzymeRules.width(config) == 1
         dp = dpart(1)
         RT <: DuplicatedNoNeed && return dp
-        RT <: Duplicated && return Duplicated(p, dp)
+        RT <: Duplicated && return RT(p, dp)
     else
         dps = ntuple(dpart, EnzymeRules.width(config))
         RT <: BatchDuplicatedNoNeed && return dps
-        RT <: BatchDuplicated && return BatchDuplicated(p, dps)
+        RT <: BatchDuplicated && return RT(p, dps)
     end
     return nothing
 end
