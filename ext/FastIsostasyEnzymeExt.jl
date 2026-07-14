@@ -305,10 +305,9 @@ function gradient!(g, prob::AbstractInversion, θ, ::TangentMode)
     return g
 end
 
-function gradient!(g, prob::AbstractInversion, θ, ::AdjointMode)
-    error("Reverse-mode `gradient!` (AdjointMode) requires " *
-          "FastIsostasyCheckpointingExt (roadmap Phase 5).")
-end
+# AdjointMode (reverse) lives in `FastIsostasyCheckpointingExt` (triggered by
+# `Checkpointing` + `Enzyme`); with only Enzyme loaded, AdjointMode falls to the
+# core mode-aware fallback in problem.jl.
 
 # =============================================================================
 # 4. `loss_and_gradient!` — forward-mode (TangentMode), primal along for free.
@@ -338,11 +337,6 @@ function loss_and_gradient!(g, prob::AbstractInversion, θ, ::TangentMode)
         l = val
     end
     return l
-end
-
-function loss_and_gradient!(g, prob::AbstractInversion, θ, ::AdjointMode)
-    error("Reverse-mode `loss_and_gradient!` (AdjointMode) requires " *
-          "FastIsostasyCheckpointingExt (roadmap Phase 5).")
 end
 
 end # module
