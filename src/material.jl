@@ -206,11 +206,13 @@ end
 $(TYPEDSIGNATURES)
 """
 function channel_scaling_timedomain(
-    domain::RegionalDomain{T, M},
-    visc_ratio::Matrix{T},
-    channel_thickness::Matrix{T},
-    characteristic_loadlength::T,
-) where {T<:AbstractFloat, M}
+    domain::RegionalDomain,
+    visc_ratio,             # <: AbstractMatrix{T}
+    channel_thickness,      # <: AbstractMatrix{T}
+    characteristic_loadlength,
+)
+
+    T = eltype(domain)
 
     # kappa is the wavenumber of the harmonic load. (see Cathles 1975, solidearth.43)
     # for the default value, we assume this is related to the size of the domain!
@@ -219,10 +221,10 @@ function channel_scaling_timedomain(
 end
 
 function channel_scaling_freqdomain_0D(
-    domain::RegionalDomain{T, M},
-    visc_ratio::T,
-    channel_thickness::T,
-) where {T<:AbstractFloat, M}
+    domain::RegionalDomain,
+    visc_ratio,
+    channel_thickness,
+)
 
     # kappa is here the pseudodiff operator in Fourier space (Bueler et al., 2007)
     kappa = Array(domain.pseudodiff)
@@ -262,11 +264,11 @@ function channel_scaling(domain, kappa, channel_thickness, visc_ratio; show_step
 end
 
 function channel_scaling_freqdomain_2D(
-    domain::RegionalDomain{T, M},
-    visc_ratio::Matrix{T},
-    channel_thickness::Matrix{T},
+    domain::RegionalDomain,
+    visc_ratio,
+    channel_thickness,
     maskactive,
-) where {T<:AbstractFloat, M}
+)
 
     # actually only compute mean over maskactive
     R = channel_scaling_freqdomain_0D(
@@ -315,12 +317,12 @@ Compute the integrands of the Green's function resulting from a load at a given
 `distance` and based on provided `greenintegrand_coeffs`.
 Reference: Deformation of the Earth by surface Loads, Farell 1972, table A3.
 """
-function get_loadgreen(
-    r::T,
-    rm::Vector{T},
-    greenintegrand_coeffs::Vector{T},
-    interp_greenintegrand_::Interpolations.Extrapolation,
-) where {T<:AbstractFloat}
+function get_loadgreen(r, rm, greenintegrand_coeffs, interp_greenintegrand_)
+
+    # `1e12` rescales Farell's tabulated coefficients; it is a unit conversion, not a
+    # differentiable quantity, so it is cast to the *data* eltype rather than to the
+    # eltype of `r` (which may be an AD-active number).
+    T = eltype(greenintegrand_coeffs)
 
     if r < 0.01
         return greenintegrand_coeffs[1] / ( rm[2] * T(1e12) )

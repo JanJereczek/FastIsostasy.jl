@@ -32,7 +32,7 @@ If a rectangular domain is needed, run:
 domain = RegionalDomain(Wx, Wy, nx, ny)
 ```
 """
-struct RegionalDomain{T, L, M} <: AbstractDomain
+struct RegionalDomain{T, L, M, K} <: AbstractDomain
 
     Wx::T                       # Domain half-width in x (m)
     Wy::T                       # Domain half-width in y (m)
@@ -63,7 +63,12 @@ struct RegionalDomain{T, L, M} <: AbstractDomain
     zeros::M                     # a zero matrix of size nx x ny
     pseudodiff::M               # pseudodiff operator as matrix (Hadamard product)
     use_cuda::Bool
-    arraykernel::Any            # Array or CuArray depending on chosen hardware
+    # `Array` or `CuArray` depending on chosen hardware. Both are `UnionAll`s, so
+    # typing the field `Type{K}` lifts the value into the type domain: `K` is then a
+    # compile-time constant and `domain.arraykernel(x)` infers concretely instead of
+    # dispatching dynamically. `K` is the *last* parameter so that partially applied
+    # signatures (`RegionalDomain{T, L, M}`) keep dispatching.
+    arraykernel::Type{K}
 end
 
 function RegionalDomain(W::T, n::Int; kwargs...) where {T<:AbstractFloat}
