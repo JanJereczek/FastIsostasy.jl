@@ -23,6 +23,7 @@ Literate.markdown("src/examples/glacialcycle.jl", "src/examples"; credit = false
 Literate.markdown("src/examples/inverse_ice_history.jl", "src/examples"; credit = false)
 Literate.markdown("src/examples/inverse_calibration.jl", "src/examples"; credit = false)
 Literate.markdown("src/examples/inverse_fullfield.jl", "src/examples"; credit = false)
+Literate.markdown("src/treestructure.jl", "src"; credit = false)
 
 forward_examples = [
     "examples/benchmark_analytic.md",
@@ -42,6 +43,7 @@ inverse_examples = [
 advanced_topics = [
     "integrators.md",
     "inversion_ad_activity_map.md",
+    "treestructure.md",
 ]
 
 ref_pages = [
