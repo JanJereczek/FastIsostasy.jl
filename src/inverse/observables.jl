@@ -21,6 +21,22 @@
 # differentiable bilinear interpolation are a later addition.
 # =============================================================================
 
+"""
+    AbstractObservable
+
+Supertype of the observable tags — lightweight, field-free types naming *what* is
+measured, which an [`Observation`](@ref) pairs with *where* and *when*.
+
+Available tags: [`VerticalUpliftObservable`](@ref) (`u + ue`),
+[`VerticalUpliftRateObservable`](@ref) (`dudt`) and
+[`RelativeSeaLevelObservable`](@ref) (`(z_ss − z_ss_ref) − (u + ue)`).
+
+!!! warning "One observable type per inversion"
+    All observations passed to an inversion must currently share the same tag. A
+    mixed collection is abstractly typed, which makes the per-observation field
+    lookup dynamically dispatched inside the differentiated forward run and trips
+    Enzyme.
+"""
 abstract type AbstractObservable end
 
 """
