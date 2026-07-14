@@ -277,7 +277,7 @@ end
 
 function update_V_af!(sim::Simulation, vc::GoelzerVolumeContribution)
     sim.tools.prealloc.buffer_x .= sim.now.H_af .* sim.domain.A 
-    sim.now.V_af = sum(sim.tools.prealloc.buffer_x) * sim.c.rho_ice / sim.c.rho_seawater
+    sim.now.V_af = totalsum(sim.tools.prealloc.buffer_x) * sim.c.rho_ice / sim.c.rho_seawater
     return nothing
 end
 
@@ -287,7 +287,7 @@ function update_V_af!(sim::Simulation, vc::AdhikariVolumeContribution)
     delta_H_m = delta_H * L * Lp1 + delta_H_f * (1 - L * Lp1)
     delta_H_v = (1 - rho_water / rho_seawater) * (delta_H - delta_H_f) * (1 - L * Lp1)
     sim.tools.prealloc.buffer_x .= (delta_H_m + delta_H_v) .* sim.domain.A
-    sim.now.V_af = sum(sim.tools.prealloc.buffer_x)
+    sim.now.V_af = totalsum(sim.tools.prealloc.buffer_x)
 end
 
 """
@@ -304,7 +304,7 @@ end
 function update_V_den!(sim::Simulation, dc::GoelzerDensityContribution)
     density_factor = sim.c.rho_ice / sim.c.rho_water - sim.c.rho_ice / sim.c.rho_seawater
     sim.tools.prealloc.buffer_x .= sim.now.H_ice .* sim.domain.A
-    sim.now.V_den = sum( sim.tools.prealloc.buffer_x ) * density_factor
+    sim.now.V_den = totalsum(sim.tools.prealloc.buffer_x) * density_factor
     return nothing
 end
 
@@ -327,6 +327,6 @@ function update_V_pov!(sim::Simulation, ac::GoelzerAdjustmentContribution)
     sim.tools.prealloc.buffer_x .= sim.now.z_ss .- sim.now.z_b
     sim.tools.prealloc.buffer_x .= max.(sim.tools.prealloc.buffer_x, 0) .* sim.domain.A
 
-    sim.now.V_pov = sum( sim.tools.prealloc.buffer_x )
+    sim.now.V_pov = totalsum(sim.tools.prealloc.buffer_x)
     return nothing
 end

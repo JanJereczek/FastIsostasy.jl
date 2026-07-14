@@ -142,7 +142,7 @@ Apply the boundary condition `bc` to the matrix `X` in-place.
 function apply_bc!(X, bc::OffsetBC)
     # `dot(bc.W, X) == sum(bc.W .* X)` for real arrays, computed allocation-free and
     # without mutating `bc` (so `bc` stays Enzyme-`Const`). Linear in-place op on `X`.
-    X .-= (dot(bc.W, X) - bc.x_border)
+    X .-= (inner(bc.W, X) - bc.x_border)
     return nothing
 end
 

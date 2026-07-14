@@ -24,9 +24,9 @@ module FastIsostasyEnzymeCUDAExt
 using Enzyme: Enzyme, Const, Duplicated, BatchDuplicated,
     DuplicatedNoNeed, BatchDuplicatedNoNeed, Annotation, EnzymeRules
 using Enzyme.EnzymeRules: FwdConfig
-using LinearAlgebra: mul!
+using LinearAlgebra: mul!, dot
 using AbstractFFTs: AbstractFFTs
-using CUDA: CUDA
+using CUDA: CUDA, CuArray
 import FastIsostasy
 
 const _CuPlan = CUDA.CUFFT.CuFFTPlan
@@ -46,6 +46,138 @@ EnzymeRules.inactive_type(::Type{<:_CuPlan}) = true
 
 @inline _shadow(x::Duplicated, ::Int) = x.dval
 @inline _shadow(x::BatchDuplicated, b::Int) = x.dval[b]
+
+# =============================================================================
+# Forward-mode rule for `sumabs2` on a `CuArray`.
+#
+# Enzyme cannot differentiate a GPU reduction: unshielded, its `cufunction` rule
+# has no method for the `partial_mapreduce_grid{abs2, add_sum}` kernel. Shielding
+# it behind this rule fixes that — but the rule *body* must also avoid CUDA's
+# `mapreduce`, because `mapreducedim!` → `launch_configuration` →
+# `cuOccupancyMaxPotentialBlockSize` calls back into Julia through a `@cfunction`
+# (`shmem_cint`) that segfaults when invoked from inside Enzyme's JIT frame.
+#
+# So both value and tangent go through CUBLAS `dot`, which touches neither path:
+#   f(x) = Σ|xᵢ|²  = dot(x, x)
+#   df   = 2·Re⟨x, dx⟩ = 2·real(dot(x, dx))
+# (`dot` conjugates its first argument, so this is correct for complex `x` too.)
+#
+# `vec` is essential, not cosmetic: only `dot(::StridedCuVector{<:CublasFloat}, …)`
+# reaches the real `cublasDdot`. `dot` on a `CuMatrix` falls back to cuBLAS's
+# generic `AnyCuArray` reduction (linalg.jl), which hand-rolls a kernel and calls
+# `launch_configuration(...; shmem = …)` — i.e. the very occupancy callback we are
+# avoiding, and it segfaults here exactly like `sum` does. Our inputs are freshly
+# allocated contiguous arrays, so `vec` is a free reshape.
+#
+# Dispatched on `CuArray` only — on CPU `sumabs2` keeps its native, already
+# validated `sum(abs2, ·)` derivative.
+# =============================================================================
+
+@inline _blas_sumabs2(x) = (xv = vec(x); real(dot(xv, xv)))
+@inline _blas_reinner(x, y) = real(dot(vec(x), vec(y)))
+
+function EnzymeRules.forward(
+        config::FwdConfig,
+        ::Const{typeof(FastIsostasy.sumabs2)},
+        ::Type{RT},
+        x::Annotation{<:CuArray},
+    ) where {RT}
+
+    p = _blas_sumabs2(x.val)
+    RT <: Const && return nothing
+
+    if EnzymeRules.width(config) == 1
+        dp = x isa Const ? zero(p) : 2 * _blas_reinner(x.val, _shadow(x, 1))
+        RT <: DuplicatedNoNeed && return dp
+        RT <: Duplicated && return Duplicated(p, dp)
+    else
+        dps = ntuple(EnzymeRules.width(config)) do b
+            x isa Const ? zero(p) : 2 * _blas_reinner(x.val, _shadow(x, b))
+        end
+        RT <: BatchDuplicatedNoNeed && return dps
+        RT <: BatchDuplicated && return BatchDuplicated(p, dps)
+    end
+    return nothing
+end
+
+# --- `totalsum` (Σxᵢ) ---------------------------------------------------------
+#
+# `sum(x) = dot(ones, x)`, so both value and tangent stay on the `cublasDdot` path.
+# The `ones` vector is cached per (eltype, length) and **built on the host**
+# (`CuArray(ones(...))` = a plain H2D memcpy): `CUDA.ones`/`fill!` would be another
+# kernel launch, and kernel launches inside a rule body are exactly what we are
+# trying to avoid. The cache is opaque to Enzyme (rule bodies are not
+# differentiated), so mutating it here is safe.
+const _ONES = Dict{Tuple{DataType, Int}, Any}()
+
+function _ones_like(x::CuArray)
+    T, n = eltype(x), length(x)
+    return get!(() -> CuArray(ones(T, n)), _ONES, (T, n))::CuArray{T, 1}
+end
+
+@inline _blas_total(x) = dot(_ones_like(x), vec(x))
+
+function EnzymeRules.forward(
+        config::FwdConfig,
+        ::Const{typeof(FastIsostasy.totalsum)},
+        ::Type{RT},
+        x::Annotation{<:CuArray},
+    ) where {RT}
+
+    p = _blas_total(x.val)
+    RT <: Const && return nothing
+
+    if EnzymeRules.width(config) == 1
+        dp = x isa Const ? zero(p) : _blas_total(_shadow(x, 1))
+        RT <: DuplicatedNoNeed && return dp
+        RT <: Duplicated && return Duplicated(p, dp)
+    else
+        dps = ntuple(EnzymeRules.width(config)) do b
+            x isa Const ? zero(p) : _blas_total(_shadow(x, b))
+        end
+        RT <: BatchDuplicatedNoNeed && return dps
+        RT <: BatchDuplicated && return BatchDuplicated(p, dps)
+    end
+    return nothing
+end
+
+# --- `inner` (⟨a, b⟩) ---------------------------------------------------------
+#
+# Bilinear: d⟨a,b⟩ = ⟨da,b⟩ + ⟨a,db⟩. In `apply_bc!` the weights `a = bc.W` are
+# `Const`, so in practice only the second term survives — but both are handled.
+# Enzyme has no derivative for `dot(::CuArray, ::CuArray)` at all
+# (`EnzymeNoDerivativeError`), which is why this shim exists.
+@inline _blas_inner(a, b) = dot(vec(a), vec(b))
+
+function EnzymeRules.forward(
+        config::FwdConfig,
+        ::Const{typeof(FastIsostasy.inner)},
+        ::Type{RT},
+        a::Annotation{<:CuArray},
+        b::Annotation{<:CuArray},
+    ) where {RT}
+
+    p = _blas_inner(a.val, b.val)
+    RT <: Const && return nothing
+
+    dpart(bi) = begin
+        d = zero(p)
+        a isa Const || (d += _blas_inner(_shadow(a, bi), b.val))
+        b isa Const || (d += _blas_inner(a.val, _shadow(b, bi)))
+        d
+    end
+
+    if EnzymeRules.width(config) == 1
+        dp = dpart(1)
+        RT <: DuplicatedNoNeed && return dp
+        RT <: Duplicated && return Duplicated(p, dp)
+    else
+        dps = ntuple(dpart, EnzymeRules.width(config))
+        RT <: BatchDuplicatedNoNeed && return dps
+        RT <: BatchDuplicated && return BatchDuplicated(p, dps)
+    end
+    return nothing
+end
 
 function EnzymeRules.forward(
         config::FwdConfig,

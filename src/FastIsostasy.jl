@@ -18,6 +18,7 @@ using Reexport: Reexport, @reexport
 @reexport using Interpolations
 @reexport using Proj
 
+include("reductions.jl")
 include("interpolations.jl")
 include("barystatic_sealevel.jl")
 include("domain.jl")
