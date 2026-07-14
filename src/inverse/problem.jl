@@ -14,6 +14,14 @@
 # `gradient!` / `solve!` are stubs the extensions implement.
 # =============================================================================
 
+"""
+    AbstractInversion
+
+Supertype of the inversion problems, [`IceLoadInversion`](@ref) and
+[`ParameterInversion`](@ref). Both share the same machinery — decode `θ` into a
+[`Simulation`](@ref) template, run the forward model to every observation time,
+and score the result with [`loss`](@ref) — and differ only in intent and defaults.
+"""
 abstract type AbstractInversion end
 
 # --- loss model ----------------------------------------------------------------
@@ -27,6 +35,18 @@ abstract type AbstractInversion end
 # reconstruct!/forward/regularization orchestration is NOT customizable here —
 # only the norm applied to (prediction, data, σ) triples — to keep the
 # Enzyme-legality invariants (roadmap §4) in one place (`loss`, below).
+"""
+    AbstractLoss
+
+Supertype of the loss models, which customize **only** the misfit term of
+[`loss`](@ref) — the norm applied to the `(prediction, data, σ)` triples — via
+`misfit(lossmodel, preds, observations)`. The default is [`DefaultLoss`](@ref).
+
+A loss model is stored as a field of the inversion problem (like `diffmode`), so
+any arrays it carries (e.g. a noise-covariance factor) are picked up automatically
+by the AD engines. Implement a new one by subtyping and adding a [`misfit`](@ref)
+method.
+"""
 abstract type AbstractLoss end
 
 """
@@ -36,6 +56,14 @@ The weighted-L2 misfit ½·Σₒ‖(predₒ − dataₒ)/σₒ‖², summed over
 """
 struct DefaultLoss <: AbstractLoss end
 
+"""
+    misfit(lossmodel, preds, observations) -> scalar
+
+The data-misfit term of [`loss`](@ref): the norm of the residual between the
+predictions `preds` (one vector per observation, already gathered by the forward
+run) and the observed `data`. Extension point of [`AbstractLoss`](@ref) — subtype
+it and add a method here to plug in a custom norm.
+"""
 function misfit(::DefaultLoss, preds, observations)
     l = zero(eltype(first(preds)))
     for (k, obs) in enumerate(observations)
@@ -45,7 +73,7 @@ function misfit(::DefaultLoss, preds, observations)
         # the broadcast stays on one device. `match_array` is a no-op on CPU
         # (byte-identical) and a scalar `σ` passes through untouched.
         r = (p .- match_array(p, obs.data)) ./ _match_sigma(p, obs.σ)
-        l += sum(abs2, r) / 2
+        l += sumabs2(r) / 2
     end
     return l
 end
@@ -53,6 +81,33 @@ end
 _match_sigma(ref, σ::Number) = σ
 _match_sigma(ref, σ::AbstractVector) = match_array(ref, σ)
 
+"""
+    IceLoadInversion(sim, encoding, observations; regularizations = (),
+        diffmode = TangentMode(), lossmodel = DefaultLoss())
+
+Infer an unknown **ice load** (and, jointly, solid-Earth parameters) from surface
+observations. `encoding` maps the parameter vector `θ` onto the ice-thickness
+snapshots and any other model inputs via [`reconstruct!`](@ref) — e.g.
+[`Test1Encoding`](@ref), which writes time-varying Vialov domes plus a viscosity
+field.
+
+Arguments and keywords are shared with [`ParameterInversion`](@ref):
+
+- `sim`: the [`Simulation`](@ref) template. It is reset to its initial condition on
+  every `loss` evaluation, so one problem can be evaluated repeatedly.
+- `encoding`: an [`AbstractEncoding`](@ref), or `nothing` for full-field control
+  (see [`ParameterInversion`](@ref)).
+- `observations`: a collection of [`Observation`](@ref)s. All must currently carry
+  the **same** observable type — a mixed collection is abstractly typed and trips
+  Enzyme.
+- `regularizations`: a collection of [`AbstractRegularization`](@ref)s (e.g.
+  [`SurfaceSmoothnessReg`](@ref)) added to the misfit.
+- `diffmode`: [`TangentMode`](@ref) (forward, low-dimensional `θ`) or
+  [`AdjointMode`](@ref) (reverse, cost independent of `length(θ)`).
+- `lossmodel`: an [`AbstractLoss`](@ref) defining the misfit norm.
+
+See also [`loss`](@ref), [`gradient!`](@ref), [`solve!`](@ref).
+"""
 struct IceLoadInversion{S, E, OB, RG, DM, T, LI, LM} <: AbstractInversion
     sim::S
     encoding::E
@@ -65,6 +120,27 @@ struct IceLoadInversion{S, E, OB, RG, DM, T, LI, LM} <: AbstractInversion
     lossmodel::LM
 end
 
+"""
+    ParameterInversion(sim, encoding, observations; regularizations = (),
+        diffmode = TangentMode(), lossmodel = DefaultLoss())
+
+Calibrate **solid-Earth parameters** (mantle viscosity, densities, …) against
+observed deformation, with the ice load held known and fixed. Same fields and
+keywords as [`IceLoadInversion`](@ref); the two differ only in intent.
+
+The `encoding` decides the parameterization:
+
+- an [`AbstractEncoding`](@ref) such as [`Test2Encoding`](@ref) reduces the
+  unknowns to a handful of numbers (a background viscosity plus Gaussian anomalies
+  and densities), which suits [`TangentMode`](@ref);
+- `nothing` selects **full-field** control: `θ` *is* the flattened `log10`
+  effective-viscosity field (column-major, so `reshape(θ, size(domain.X))` is the
+  map) and the physical field is `10^θ`. There is then one unknown per grid cell,
+  which is only affordable with [`AdjointMode`](@ref), whose gradient cost is
+  independent of `length(θ)`.
+
+See also [`loss`](@ref), [`gradient!`](@ref), [`solve!`](@ref).
+"""
 struct ParameterInversion{S, E, OB, RG, DM, T, LI, LM} <: AbstractInversion
     sim::S
     encoding::E
