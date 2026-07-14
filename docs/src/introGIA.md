@@ -1,4 +1,4 @@
-# Quick intro to GIA
+# What is GIA?
 
 Glacial isostatic adjustment (GIA) is the response of the solid Earth — together
 with its gravity field, its oceans and even its rotation axis — to the
@@ -68,10 +68,8 @@ For GIA purposes the Earth is usually described as a layered body:
 - a **mantle** beneath it that flows viscously, often subdivided into an upper and
   a lower mantle with different viscosities.
 
-Radial profiles of density and elastic moduli are commonly taken from seismically
-derived reference models such as PREM [dziewonski_preliminary_1981](@cite), while
-viscosity is inferred more indirectly, e.g. from post-glacial rebound and mantle
-convection studies [cathles_viscosity_1975](@cite). Real Earth structure is not
+Radial profiles of density, viscosity and elastic moduli are commonly taken from seismically
+derived reference models such as PREM [dziewonski_preliminary_1981](@cite). Real Earth structure is not
 only radially layered but also **laterally variable**, and viscosity in particular
 can change by several orders of magnitude over relatively short distances. Whether,
 and how well, a GIA model captures this lateral variability is one of the main
@@ -126,16 +124,16 @@ humanity lives along coasts.
 
 ## How is GIA modelled?
 
-Two broad families of models have traditionally been used:
+Three broad families of models have traditionally been used:
 
-- **Spectral / normal-mode models** treat the Earth as spherically symmetric (1-D,
+- **Regional GIA models** focus on a limited domain that can be considered as flat with an appropriate projection. They are computationally cheap, but rely on strong simplifications of the physics and often don't represent the lateral variations in viscosity or lithosphere thickness.
+- **Global 1D GIA models** treat the Earth as spherically symmetric (1-D,
   radially layered) and are elegant and efficient, but by construction cannot
   represent lateral variations in viscosity or lithosphere thickness.
-- **Finite-element models** can resolve fully 3-D Earth structure, including lateral
+- **Gloabl 3D GIA models** can resolve fully 3-D Earth structure, including lateral
   variability, but at a considerable computational cost that makes long or repeated
   simulations expensive — a real obstacle when GIA must be coupled to an evolving
-  ice sheet or explored across many parameter choices
-  [kachuck_rapid_2020](@cite).
+  ice sheet.
 
 FastIsostasy sits between these extremes. It captures the laterally variable
 lithosphere thickness and mantle viscosity that matter for regions like Antarctica,
