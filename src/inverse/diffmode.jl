@@ -8,6 +8,19 @@
 # stays AD-free; the extension maps them onto `Enzyme.Forward` / `Enzyme.Reverse`.
 # =============================================================================
 
+"""
+    AbstractDiffMode
+
+Supertype of the differentiation modes, [`TangentMode`](@ref) (forward) and
+[`AdjointMode`](@ref) (reverse). A diff mode carries *policy* — which Enzyme mode
+to use, the tangent batch size / checkpoint schedule, and whether a
+low-dimensional encoding is required — without referencing Enzyme, so the core
+package stays AD-free; the extensions map it onto the actual engine.
+
+Rule of thumb: forward mode costs one forward run **per parameter**, so it suits
+encoded (low-dimensional) `θ`; reverse mode costs one checkpointed sweep
+**regardless** of `length(θ)`, so it is what makes full-field inversion feasible.
+"""
 abstract type AbstractDiffMode end
 
 """

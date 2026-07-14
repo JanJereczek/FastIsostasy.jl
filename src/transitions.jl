@@ -17,6 +17,18 @@
 # array-operation level (on the transition type), never per element.
 # =============================================================================
 
+"""
+    AbstractTransition
+
+Supertype of the transition traits, which decide how the model's non-smooth
+switches — grounded/ocean masks, the `max(0, ·)` clamps in the water column — are
+evaluated. Stored on [`SolverOptions`](@ref).
+
+[`SharpTransition`](@ref) (the default) keeps the exact `max`/Heaviside behaviour
+at zero cost. [`SmoothTransition`](@ref) replaces them by `ε`-smoothed
+counterparts, which is what makes the model **differentiable** across the
+grounding line; the masks then become eltype-`T` arrays instead of `Bool`.
+"""
 abstract type AbstractTransition end
 
 """

@@ -17,8 +17,32 @@
 # application needs to live here and be Enzyme-legal.
 # =============================================================================
 
+"""
+    AbstractEncoding{T}
+
+Supertype of the encodings, which map a low-dimensional parameter vector `θ` onto
+the high-dimensional model inputs (effective viscosity, densities, ice-thickness
+snapshots) through [`reconstruct!`](@ref). Encoding the unknowns is what makes
+forward-mode ([`TangentMode`](@ref)) inversion affordable.
+
+Concrete encodings: [`Test1Encoding`](@ref) (joint Vialov ice + bimodal
+viscosity), [`Test2Encoding`](@ref) (4-Gaussian viscosity + densities).
+[`EOFEncoding`](@ref) / [`AutoEncoding`](@ref) / [`VariationalAutoEncoding`](@ref)
+are stubs for trained decoders.
+
+Passing `encoding = nothing` to an inversion instead selects full-field control
+(one unknown per grid cell); see [`ParameterInversion`](@ref).
+
+An encoding must be Enzyme-legal: indexed reads of `θ` and in-place broadcasts
+into `sim` fields, no closures over untracked state.
+"""
 abstract type AbstractEncoding{T<:AbstractFloat} end
 
+"""
+    nparams(encoding) -> Int
+
+The number of parameters the encoding expects, i.e. the required `length(θ)`.
+"""
 function nparams end
 
 # --- Enzyme-legal field builders --------------------------------------------
