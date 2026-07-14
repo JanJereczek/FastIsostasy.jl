@@ -23,16 +23,53 @@
 # smoothness) and read better at call sites than the fully general form.
 # =============================================================================
 
+"""
+    AbstractRegularization
+
+Supertype of the regularizers and soft bounds added to the data misfit in
+[`loss`](@ref). Each implements `penalty(reg, sim, θ)`, evaluated with `sim`
+already holding the decoded parameters, so field-based penalties can read the
+model state directly.
+
+Concrete types: [`TikhonovReg`](@ref) (the one configurable regularizer, with the
+[`L2Reg`](@ref) and [`SurfaceSmoothnessReg`](@ref) shorthands) and
+[`DecodedBounds`](@ref) (soft two-sided hinge bounds).
+"""
 abstract type AbstractRegularization end
 
 # --- decoded-quantity selectors (shared by FieldTarget and DecodedBounds) ----
 
 """
-Bounded decoded quantities, selected without closures (Enzyme-friendly).
+    BoundedQuantity
+
+Supertype of the decoded-quantity selectors, which name a physical quantity to
+penalise without closing over state (Enzyme-friendly). Used by
+[`FieldTarget`](@ref) and [`DecodedBounds`](@ref).
+
+Available: [`Log10Viscosity`](@ref), [`UpperMantleDensity`](@ref),
+[`LithoDensity`](@ref).
 """
 abstract type BoundedQuantity end
+
+"""
+    Log10Viscosity()
+
+Selects `log10.(sim.solidearth.effective_viscosity)` — a **field**.
+"""
 struct Log10Viscosity <: BoundedQuantity end
+
+"""
+    UpperMantleDensity()
+
+Selects `sim.solidearth.rho_uppermantle` — a **scalar**.
+"""
 struct UpperMantleDensity <: BoundedQuantity end
+
+"""
+    LithoDensity()
+
+Selects `sim.solidearth.rho_litho` — a **scalar**.
+"""
 struct LithoDensity <: BoundedQuantity end
 
 decoded(::Log10Viscosity, sim) = log10.(sim.solidearth.effective_viscosity)
@@ -41,6 +78,14 @@ decoded(::LithoDensity, sim) = sim.solidearth.rho_litho
 
 # --- regularization targets ---------------------------------------------
 
+"""
+    AbstractRegTarget
+
+Supertype of the [`TikhonovReg`](@ref) targets, i.e. *what* is penalised:
+[`ThetaTarget`](@ref) (the raw parameter vector or a subset),
+[`FieldTarget`](@ref) (a decoded field or scalar) or [`SurfaceTarget`](@ref) (the
+implied ice surface at every snapshot).
+"""
 abstract type AbstractRegTarget end
 
 """
@@ -79,6 +124,19 @@ struct SurfaceTarget <: AbstractRegTarget end
 
 # --- regularization orders ---------------------------------------------
 
+"""
+    AbstractRegOrder
+
+Supertype of the [`TikhonovReg`](@ref) orders, i.e. *how* the target is penalised:
+[`Order0`](@ref) penalises magnitude, [`Order1`](@ref) penalises the spatial
+gradient (smoothness).
+
+!!! note "Order1 carries physical units"
+    The gradient penalty `Σ‖∇x‖²` is evaluated with the finite-difference stencils,
+    so it is measured in (units of `x`) per **metre** squared. On a coarse grid
+    `∇x` is tiny and `λ` must be correspondingly large (it carries m²) for the
+    penalty to matter — this is a units artifact, not a pathology.
+"""
 abstract type AbstractRegOrder end
 
 "Magnitude penalty `Σ wᵢ xᵢ²` (optionally weighted)."
