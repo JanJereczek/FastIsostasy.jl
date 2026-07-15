@@ -72,7 +72,7 @@ end
 function load_oceansurface_data(; T = Float64, verbose = true)
     link = "$isos_data/raw/main/tools/ocean_surface/dz=0.1m.txt"
     tmp = download(link)
-    data = readdlm(tmp)
+    data = readdlm(tmp)::Matrix{Float64}
     z, A = T.(data[:, 1]), T.(data[:, 2])
     return z, A, nothing
 end
@@ -153,7 +153,7 @@ Load Preliminary Reference Earth Model (PREM) from Dzewonski and Anderson (1981)
 """
 function load_prem()
     # radius, depth, density, Vpv, Vph, Vsv, Vsh, eta, Q-mu, Q-kappa
-    M = readdlm(joinpath(@__DIR__, "input/PREM_1s.csv"), ',')[:, 1:7]
+    M = (readdlm(joinpath(@__DIR__, "input/PREM_1s.csv"), ',')::Matrix{Float64})[:, 1:7]
     M .*= 1e3
     return ReferenceSolidEarthModel([M[:, j] for j in axes(M, 2)]...)
 end
@@ -191,7 +191,7 @@ function load_spada2011(case)
     theta, t = spada_dims()
     link = "$isos_data/raw/main/model_outputs/Spada-2011/$case.txt"
     tmp = download(link, tempdir() *"/"* basename(link))
-    X = readdlm(tmp)
+    X = readdlm(tmp)::Matrix{Float64}
     if occursin("n_", case)
         reverse!(X, dims = 1)
     end
@@ -214,9 +214,11 @@ function load_latychev2023_ICE6G(; case = "1D", var = "R")
         latydir = joinpath(@__DIR__, "../data/Latychev/ICE6G/dense/1D/$var")
     elseif case == "3D"
         latydir = joinpath(@__DIR__, "../data/Latychev/ICE6G/dense/3D/$var")
+    else
+        throw(ArgumentError("case must be \"1D\" or \"3D\", got: $case"))
     end
     timestep_file = joinpath(@__DIR__, "../data/Latychev/ICE6G/dense/tt_25.dat")
-    tlaty = vec(readdlm(timestep_file))
+    tlaty = vec(readdlm(timestep_file)::Matrix{Float64})
     latyfiles = readdir(latydir)
 
     latyfiles = latyfiles[1:end-1]
@@ -225,7 +227,7 @@ function load_latychev2023_ICE6G(; case = "1D", var = "R")
     # X = Array{Float64, 3}(undef, nlon, nlat, length(tlaty))
     X = zeros(nlon, nlat, length(tlaty))
     for k in eachindex(latyfiles)
-        X[:, :, k] = reshape(vec(readdlm(joinpath(latydir, latyfiles[k]))),
+        X[:, :, k] = reshape(vec(readdlm(joinpath(latydir, latyfiles[k]))::Matrix{Float64}),
             nlon, nlat)
     end
 
@@ -264,7 +266,7 @@ function get_greenintegrand_coeffs(T::Type;
     else
         tmp = local_path
     end
-    data = readdlm(tmp)
+    data = readdlm(tmp)::Matrix{Float64}
 
     # rm is column 1 converted to meters (and some extra factor)
     # GE /(10^12 rm) is vertical displacement in meters (applied load is 1kg)

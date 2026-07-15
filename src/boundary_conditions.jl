@@ -205,7 +205,7 @@ function corner_ones(T, nx, ny)
     return W
 end
 
-function border_ones(T, nx, ny)
+function border_ones(T::Type{<:AbstractFloat}, nx::Integer, ny::Integer)
     W = zeros(T, nx, ny)
     for i in 1:nx
         for j in 1:ny

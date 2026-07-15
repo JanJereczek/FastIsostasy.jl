@@ -108,7 +108,7 @@ export PaddedOutputCrop, AsymetricOutputCrop
 # utils.jl
 export years2seconds, seconds2years, m_per_sec2mm_per_yr
 export lon360tolon180
-export reinit_structs_cpu, meshgrid, kernelcollect
+export meshgrid, kernelcollect
 
 export get_quad_coeffs, get_r, gauss_distr, generate_gaussian_field
 export uniform_ice_cylinder, stereo_ice_cylinder, stereo_ice_cap
@@ -163,7 +163,7 @@ export analytic_solution
 
 # data loaders
 export load_dataset, get_greenintegrand_coeffs
-export load_etopo2022, load_wiens2022
+export load_wiens2022
 export load_lithothickness_pan2022, load_logvisc_pan2022
 export load_ice6gd
 export load_spada2011, spada_cases
@@ -180,7 +180,6 @@ include("plots.jl")
 
 # inversion.jl
 export InversionConfig, InversionData, InversionProblem, ParameterReduction
-export ViscositySnippet
 
 # inverse/ (new inversion API)
 export AbstractDiffMode, TangentMode, AdjointMode

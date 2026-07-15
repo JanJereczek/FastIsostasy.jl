@@ -1,5 +1,5 @@
 #=
-# Inverse ice history
+# Inverse ice history - Step by step
 
 The previous examples all ran FastIsostasy *forward*: given an ice-loading
 history and a solid-Earth structure, compute the deformation and sea-level
@@ -38,14 +38,14 @@ using Printf
 ## Fixed configuration
 
 We work on a 32×32 regional grid over a 6000 km × 6000 km domain and a 10 kyr
-glacial cycle. The ice history is sampled at five time knots, placed
+glacial cycle. The ice history is defined by five time knots, placed
 asymmetrically so the rapid deglaciation at the end of the cycle is resolved.
 =#
 
 W, n = 3.0e6, 5
 domain = RegionalDomain(W, n)
-knot_times = [0.0, 5.0e3, 8.0e3, 9.0e3, 1.0e4]   # K = 5
-K = length(knot_times)
+knot_times = [0.0, 5.0e3, 8.0e3, 9.0e3, 1.0e4]   # nt = 5
+nt = length(knot_times)
 t_span = (0.0, 1.0e4)
 radii = (0.8e6, 0.7e6, 0.7e6)      # the three (fixed) Vialov dome radii
 visc_amps = (-1.0, 1.0)            # the two (fixed) log10-viscosity anomaly amplitudes
@@ -61,7 +61,7 @@ exactly this: the physical value of parameter `i` is `θ[i] * scale[i]`, so the
 optimization variable `θ` is O(1) while the physics sees the true magnitudes.
 =#
 
-scales = vcat(fill(2.0e3, 3K),     # H_c(t) knots  (≈ km)
+scales = vcat(fill(2.0e3, 3*nt),     # H_c(t) knots  (≈ km)
               fill(1.0e6, 6),       # dome centres  (≈ 1000 km)
               1.0,                  # background log10 viscosity
               fill(1.0e6, 6))       # viscosity-anomaly centres & widths
@@ -154,15 +154,15 @@ components.
 
 seed!(2)
 θ0 = copy(θ_true)
-θ0[1:3K]      .+= 0.12 .* randn(3K)     # ice-thickness knots
-θ0[3K+1:3K+6] .+= 0.08 .* randn(6)      # ice-dome centres
-θ0[3K+7]       += 0.15 * randn()        # background viscosity
-θ0[3K+8:end]  .+= 0.08 .* randn(6)      # viscosity anomalies
+θ0[1:3*nt]      .+= 0.12 .* randn(3*nt)     # ice-thickness knots
+θ0[3*nt+1:3*nt+6] .+= 0.08 .* randn(6)      # ice-dome centres
+θ0[3*nt+7]       += 0.15 * randn()        # background viscosity
+θ0[3*nt+8:end]  .+= 0.08 .* randn(6)      # viscosity anomalies
 
-fd_dir(p, θ, e; ε = 1e-4) = (loss(p, θ .+ ε .* e) - loss(p, θ .- ε .* e)) / (2ε)
+fd_dir(p, θ, e; ε = 1e-4) = (loss(p, θ .+ ε .* e) - loss(p, θ .- ε .* e)) / (2*ε)
 g = similar(θ0)
 FastIsostasy.gradient!(g, prob, θ0)
-for i in (1, 3K + 1, 3K + 7)
+for i in (1, 3*nt + 1, 3*nt + 7)
     e = zeros(length(θ0)); e[i] = 1.0
     @printf("θ[%2d]:  AD = % .4e   FD = % .4e\n", i, g[i], fd_dir(prob, θ0, e))
 end
@@ -198,7 +198,7 @@ The headline result is the reconstructed central-thickness curves `H_c(t)` of th
 three domes. Dashed lines are the truth, solid the inversion.
 =#
 
-hc(θ, i) = (θ .* scales)[(i - 1) * K + 1 : i * K]
+hc(θ, i) = (θ .* scales)[(i - 1) * nt + 1 : i * nt]
 fig = Figure(size = (800, 300))
 cols = [:tomato, :seagreen, :slateblue]
 ax = Axis(fig[1, 1], xlabel = "time (kyr)", ylabel = "central thickness Hc (m)",
@@ -249,4 +249,7 @@ data only weakly constrains the exact *location* of the viscosity anomalies. Thi
 is the expected behaviour of GIA inversions: the solid Earth acts as a spatial
 low-pass filter on the load, so integrated quantities (the loading history, the
 smoothed fields) are well determined while fine placement is not.
+
+# Inverse ice history - The short version
+
 =#

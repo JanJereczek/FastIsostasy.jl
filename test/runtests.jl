@@ -5,6 +5,8 @@ using LinearAlgebra
 using Statistics
 using Test
 
+include("test_aqua.jl")
+include("test_jet.jl")
 include("test_barystatic_sea_level.jl")
 include("test_convolution.jl")
 include("test_dataloaders.jl")

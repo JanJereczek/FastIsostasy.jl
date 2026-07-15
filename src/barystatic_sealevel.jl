@@ -206,6 +206,9 @@ mutable struct CombinedBSL{T, B1<:ImposedBSL, B2<:AbstractBSL} <: AbstractBSL{T}
     bsl2::B2
 end
 
+CombinedBSL(bsl1::ImposedBSL{T}, bsl2::AbstractBSL{T}) where {T} =
+    CombinedBSL{T, typeof(bsl1), typeof(bsl2)}(bsl1, bsl2)
+
 """
 $(TYPEDSIGNATURES)
 

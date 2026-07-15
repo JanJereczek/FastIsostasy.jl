@@ -282,12 +282,13 @@ function update_V_af!(sim::Simulation, vc::GoelzerVolumeContribution)
 end
 
 function update_V_af!(sim::Simulation, vc::AdhikariVolumeContribution)
-    L = 1 - mask_ocean
-    Lp1 = 1 - mask_ocean_p1
-    delta_H_m = delta_H * L * Lp1 + delta_H_f * (1 - L * Lp1)
-    delta_H_v = (1 - rho_water / rho_seawater) * (delta_H - delta_H_f) * (1 - L * Lp1)
-    sim.tools.prealloc.buffer_x .= (delta_H_m + delta_H_v) .* sim.domain.A
-    sim.now.V_af = totalsum(sim.tools.prealloc.buffer_x)
+    # Sketch of the intended implementation (Adhikari et al., 2020):
+    #   L = 1 - mask_ocean; Lp1 = 1 - mask_ocean_p1
+    #   delta_H_m = delta_H * L * Lp1 + delta_H_f * (1 - L * Lp1)
+    #   delta_H_v = (1 - rho_water / rho_seawater) * (delta_H - delta_H_f) * (1 - L * Lp1)
+    #   V_af = totalsum((delta_H_m + delta_H_v) .* sim.domain.A)
+    error("AdhikariVolumeContribution is not implemented yet; use " *
+        "GoelzerVolumeContribution or NoVolumeContribution.")
 end
 
 """

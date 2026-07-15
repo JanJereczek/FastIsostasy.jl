@@ -3,12 +3,20 @@
 ### Still pending before v2.0
 
 - [ ] progressmeter
-- [ ] add Aqua testing!
+- [ ] check whether the distortion factor is well implemented ==> think about the NHIS inversion!
+- [x] add JET & Aqua testing!
 - [x] AD
 - [ ] Burgers rheology
 - [ ] Adhikari
-- [ ] Restart files
+- [ ] Restart files (I see you just removed the JLD2 dependence but we'd need that for having functional restart files.)
 - [ ] externalise the proj functionalities
+- [ ] glacial cycle should be over 100 kyr and no optimization of the solid-earth parameters (just the ice history) -- this way we have a more gradual entry into AD.
+- [ ] unify parameter and icethickness inversion - they should be able to be combined into a single inversion
+- [ ] autonorm optimisation
+- [ ] inverse ice history has arguably wrong observations (2% observed throughout the time -- I'd prefer RSL which isn't functional yet)
+- [ ] Do we need forward_predict? Just doing run would avoid additional functions.
+- [ ] add short version to the inverse ice history example
+- [ ] Make the initial guess 20% off
 - [x] Put time integration into dev notes (add the AD notes, the EBM explanation... etc)
 - [x] Fix "arraykernel::Any". `RegionalDomain` gained a trailing type parameter `K` and
       the field is now `arraykernel::Type{K}`. `Array`/`CuArray` are `UnionAll`s, so

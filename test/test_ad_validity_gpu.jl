@@ -60,7 +60,11 @@ function ad_validity_gpu_setup(arraykernel; n = 4, dt = 100.0, tend = 400.0)
     return ParameterInversion(sim, enc, [obs]), θ
 end
 
-function central_difference(prob, θ, i; ε = 1.0e-5)
+# Step size relative to the component magnitude: θ spans O(0.1) Gaussian
+# amplitudes to O(1e3) densities, and an absolute ε would be a ~1e-9 relative
+# perturbation on the latter — pure cancellation noise.
+function central_difference(prob, θ, i; ε_rel = 1.0e-5)
+    ε = ε_rel * max(1.0, abs(θ[i]))
     e = zeros(length(θ)); e[i] = 1.0
     return (loss(prob, θ .+ ε .* e) - loss(prob, θ .- ε .* e)) / (2ε)
 end
