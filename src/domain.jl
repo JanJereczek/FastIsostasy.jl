@@ -154,9 +154,20 @@ function RegionalDomain(
     # Differential operators in Fourier space
     pseudodiff, _, _ = get_differential_fourier(Wx, Wy, nx, ny)
 
-    # Avoid division by zero. Tolerance ϵ of the order of the neighboring terms.
-    # Tests show that it does not lead to errors wrt analytical or benchmark solutions.
-    pseudodiff[1, 1] = 1e-3 * mean([pseudodiff[1,2], pseudodiff[2,1]])
+    # Avoid division by zero in scaled_pseudodiff_inv (src/solidearth.jl) by
+    # setting the DC mode to the mean of its neighbours rather than exactly
+    # zero. Do NOT scale this down further (e.g. by 1e-3): under a normalised
+    # BC (CornerBC/BorderBC), apply_bc! projects out the constant mode every
+    # RHS evaluation, so this value never reaches the solution there — scaling
+    # it down only manufactures a large constant that is created and cancelled
+    # every step (costing precision, esp. in Float32) and, under NoBC, turns
+    # the mean mode into an artificial stiff eigenmode that throttles explicit
+    # time steppers for no dynamical reason. (An alternative, exact-removal fix
+    # is scaled_pseudodiff_inv[1,1] = 0 in src/solidearth.jl, per Bueler et al.
+    # 2007's corner normalisation — the constant is then supplied by the BC,
+    # not the dynamics; it only differs from this under NoBC.) See
+    # roadmaps/stabilise_dt.md §1/§4.
+    pseudodiff[1, 1] = mean([pseudodiff[1,2], pseudodiff[2,1]])
     
     use_cuda = arraykernel !== Array
     zeros, K, pseudodiff = kernelpromote([zeros, K, pseudodiff], arraykernel)

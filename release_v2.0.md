@@ -3,7 +3,9 @@
 ### Still pending before v2.0
 
 - [ ] progressmeter
+- [x] add a way to deactivate AD for testing purposes
 - [ ] check whether the distortion factor is well implemented ==> think about the NHIS inversion!
+- [ ] Time step stabilisation would be amazing if possible
 - [x] add JET & Aqua testing!
 - [x] AD
 - [ ] Burgers rheology

@@ -46,6 +46,7 @@ include("dataloaders.jl")
 include("inversion.jl")
 include("coordinates.jl")
 include("integrators.jl")
+include("stability.jl")
 
 # inverse problem API (new; src/inverse/)
 include("inverse/diffmode.jl")
@@ -175,6 +176,11 @@ export update_diagnostics!, step!
 
 # integrators.jl
 export FIAlgorithm, FIEuler, FIBS3, FITsit5, fi_solve, init_fi
+
+# stability.jl
+export stability_function, real_axis_stability_limit, stability_limit
+export spectral_radius_estimate, simulation_rhs_probe
+export analytic_lambda_bound, stiffness_report
 
 include("plots.jl")
 
