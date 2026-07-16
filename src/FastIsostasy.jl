@@ -175,7 +175,7 @@ export DiffEqOptions, SolverOptions, Simulation, run!, init_integrator
 export update_diagnostics!, step!
 
 # integrators.jl
-export FIAlgorithm, FIEuler, FIBS3, FITsit5, fi_solve, init_fi
+export FIAlgorithm, FIEuler, FIBS3, FITsit5, FIRKC, fi_solve, init_fi
 
 # stability.jl
 export stability_function, real_axis_stability_limit, stability_limit

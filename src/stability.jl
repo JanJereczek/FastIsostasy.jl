@@ -51,7 +51,7 @@ real-axis stability boundary of `tab`. Assumes stability holds continuously
 from the origin up to the first crossing — true for every tableau currently
 defined in `integrators.jl` (`FIEuler`, `FIBS3`, `FITsit5`).
 """
-function real_axis_stability_limit(tab::RKTableau{T}; tol = T(1e-10)) where {T}
+function real_axis_stability_limit(tab::RKTableau{T}; tol = sqrt(eps(T))) where {T}
     stable(β) = abs(stability_function(-β, tab)) <= 1 + sqrt(eps(T))
     lo, hi = zero(T), T(4 * nstages(tab)^2)
     while stable(hi)

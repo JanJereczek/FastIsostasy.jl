@@ -129,5 +129,130 @@ observed_order(errN, err2N) = log2(errN / err2N)
         @test maximum(abs, final_u(FITsit5()) .- ref) < 1f-3 * peak
         # Fixed-step Euler is cruder (first-order); allow ~0.5 % of the peak.
         @test maximum(abs, final_u(FIEuler(); dt_min = 100f0) .- ref) < 5f-3 * peak
+        # FIRKC's error estimate is a documented, more conservative simplification
+        # (roadmap stabilise_dt.md §5/§6) than FITsit5's — a tighter reltol is
+        # needed for comparable global accuracy, so use one here rather than the
+        # shared default.
+        @test maximum(abs, final_u(FIRKC(); reltol = 1f-7) .- ref) < 1f-2 * peak
+    end
+end
+
+# Tests for `FIRKC` (roadmap stabilise_dt.md, Phase 2): the stabilised
+# Runge-Kutta-Chebyshev stepper. Its coefficient formulas were sourced and
+# cross-checked against SUNDIALS' LSRKStep (`arkode_lsrkstep.c`) after two
+# independent from-memory reconstructions were empirically falsified — see the
+# roadmap's Phase 2 notes. These tests exist specifically to catch a
+# regression back to either of those falsified variants.
+@testset "FIRKC" begin
+    decay!(du, u, p, t) = (du .= -1.0 .* u; nothing)
+    u_exact(t) = exp(-t)
+
+    @testset "recurrence is second order (Taylor coefficients on u'=λu)" begin
+        # Y_s/Y_0 must equal 1 + z + z²/2 + O(z³) for every stage count and
+        # damping tested — the defining property of RKC2, and the property
+        # both falsified reconstructions failed (one gave order 1, the other
+        # failed even that).
+        for (s, damping) in ((2, 2/13), (5, 2/13), (13, 2/13), (37, 2/13), (13, 0.3))
+            mu, nu, mutilde, gammatilde, _ = FastIsostasy.rkc_coeffs(Float64, s, damping)
+            function Ys_over_Y0(z)
+                F0 = z; y0 = 1.0
+                y1 = y0 + mutilde[1] * F0
+                y2 = y0
+                for j in 2:s
+                    Fjm1 = z * y1
+                    ynext = mu[j]*y1 + nu[j]*y2 + (1-mu[j]-nu[j])*y0 +
+                        mutilde[j]*Fjm1 + gammatilde[j]*F0
+                    y2, y1 = y1, ynext
+                end
+                return y1
+            end
+            h = 1e-5
+            p0, pp, pm = Ys_over_Y0(0.0), Ys_over_Y0(h), Ys_over_Y0(-h)
+            @test isapprox(p0, 1.0; atol = 1e-10)
+            @test isapprox((pp - pm) / (2h), 1.0; atol = 1e-4)         # p'(0) = 1
+            @test isapprox((pp - 2p0 + pm) / h^2, 1.0; atol = 1e-2)    # p''(0) = 1
+        end
+    end
+
+    @testset "stability boundary scales as ~0.653 s² (SSV default damping)" begin
+        # Literature/roadmap value (§1/§2.2); the falsified 1st-order-only
+        # reconstruction gave ~1.82 s² instead (larger boundary, wrong method).
+        for s in (25, 50, 100, 200)
+            beta = FastIsostasy.rkc_stability_boundary(s, 2/13)
+            @test isapprox(beta / s^2, 0.653; atol = 0.03)
+        end
+        # Monotone in s (larger stage budget -> larger stability interval).
+        betas = [FastIsostasy.rkc_stability_boundary(s, 2/13) for s in (5, 10, 25, 50)]
+        @test issorted(betas)
+    end
+
+    @testset "damping <= 0 is rejected (w1's closed form is singular at w0=1)" begin
+        @test_throws ArgumentError FastIsostasy.rkc_coeffs(Float64, 10, 0.0)
+        @test_throws ArgumentError FastIsostasy.rkc_coeffs(Float64, 10, -0.1)
+    end
+
+    @testset "adaptive accuracy vs analytic" begin
+        ts, us = fi_solve(decay!, [1.0], (0.0, 5.0), FIRKC();
+            reltol = 1e-9, abstol = 1e-11, saveat = 0.0:1.0:5.0)
+        @test length(ts) == 6
+        for (t, u) in zip(ts, us)
+            @test isapprox(u[1], u_exact(t); atol = 1e-6)
+        end
+    end
+
+    @testset "tighter tolerance -> smaller error" begin
+        err(reltol) = begin
+            _, us = fi_solve(decay!, [1.0], (0.0, 5.0), FIRKC();
+                reltol = reltol, abstol = reltol * 1e-2)
+            abs(us[end][1] - u_exact(5.0))
+        end
+        @test err(1e-3) > err(1e-6) > err(1e-9)
+    end
+
+    @testset "fixed-step convergence order is 2" begin
+        function fixed_step_solve_rkc(f!, u0, tspan, N)
+            dt = (tspan[2] - tspan[1]) / N
+            integ = init_fi(f!, u0, tspan, FIRKC(); dt0 = dt)
+            for _ in 1:N
+                FastIsostasy.perform_step!(integ, dt)
+                integ.t += dt
+                copyto!(integ.u, integ.unew)
+            end
+            return integ.u
+        end
+        errs = Float64[]
+        for N in (20, 40, 80)
+            uN = fixed_step_solve_rkc(decay!, [1.0], (0.0, 5.0), N)
+            push!(errs, abs(uN[1] - u_exact(5.0)))
+        end
+        @test observed_order(errs[1], errs[2]) > 1.4   # nominal 2, allow slack
+        @test observed_order(errs[2], errs[3]) > 1.4
+    end
+
+    @testset "steplog widens to (t, dt, s)" begin
+        integ = init_fi(decay!, [1.0], (0.0, 5.0), FIRKC(); reltol = 1e-6)
+        steplog = Tuple[]
+        FastIsostasy.solve_to!(integ, 5.0, 10_000, steplog)
+        @test !isempty(steplog)
+        @test all(length(entry) == 3 for entry in steplog)
+        @test all(entry[3] >= 2 for entry in steplog)   # stage count, always >= 2
+    end
+
+    @testset "stiff decay: far fewer RHS evaluations than FITsit5" begin
+        # The core value proposition of RKC2 (roadmap §2.2): cost scales with
+        # sqrt(stiffness) instead of stiffness. lambda chosen well beyond
+        # FITsit5's stability-limited micro-stepping regime.
+        lambda = -5e4
+        stiffdecay!(du, u, p, t) = (du .= lambda .* u; nothing)
+        u0 = [1.0]
+
+        integ_rkc = init_fi(stiffdecay!, u0, (0.0, 1.0), FIRKC(); reltol = 1e-5, abstol = 1e-7)
+        FastIsostasy.solve_to!(integ_rkc, 1.0, 10_000_000)
+
+        integ_tsit = init_fi(stiffdecay!, u0, (0.0, 1.0), FITsit5(); reltol = 1e-5, abstol = 1e-7)
+        FastIsostasy.solve_to!(integ_tsit, 1.0, 10_000_000)
+
+        @test integ_rkc.nf * 5 < integ_tsit.nf   # at least 5x fewer RHS evals
+        @test isapprox(integ_rkc.u[1], 0.0; atol = 1e-6)
     end
 end
