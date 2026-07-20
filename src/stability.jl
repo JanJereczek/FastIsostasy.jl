@@ -136,34 +136,52 @@ end
 """
 $(TYPEDSIGNATURES)
 
-Wrap a [`Simulation`](@ref)'s [`update_diagnostics!`](@ref) into an
-`f!(du, u, p, t)` closure suitable for [`spectral_radius_estimate`](@ref) (and,
-in Phase 2, `FIRKC`'s own spectral-radius estimator).
+Wrap any `f!(du, u, p, t)` that mutates a [`Simulation`](@ref) `sim` beyond
+`du` into a closure safe for repeated, throwaway evaluation — the pattern
+`spectral_radius_estimate`'s power iteration needs (and `FIRKC`'s own
+spectral-radius estimator, `init_fi`/`maybe_reestimate!` in
+`src/integrators.jl`, reuses for exactly the same reason).
 
-`update_diagnostics!` mutates far more of `sim` than just `du`: `update_bedrock!`
-writes the trial `u` straight into `sim.now.u`, and the sparse-diagnostics block
-(elastic response, barystatic sea level, ocean/grounded masks — normally only
-recomputed once per `dt_sparse_diagnostics` window, gated by
-`sim.now.count_sparse_updates`) mutates several more `sim.now`/`sim.sealevel.bsl`
-fields. Left unguarded, a multi-evaluation probe like the power iteration would
-(a) permanently corrupt the live simulation's state with whatever trial point
-was last evaluated, and (b) only let the gated block run on the *first*
-evaluation at a given `t`, contaminating later finite differences with a
-spurious jump unrelated to the true Jacobian-vector product. This closure
-snapshots `sim`'s state once at construction (via the existing
+A `Simulation`-backed RHS like `update_diagnostics!` mutates far more than just
+`du`: `update_bedrock!` writes the trial `u` straight into `sim.now.u`, and the
+sparse-diagnostics block (elastic response, barystatic sea level,
+ocean/grounded masks — normally only recomputed once per
+`dt_sparse_diagnostics` window, gated by `sim.now.count_sparse_updates`)
+mutates several more `sim.now`/`sim.sealevel.bsl` fields. Left unguarded, a
+multi-evaluation probe like the power iteration would (a) permanently corrupt
+the live simulation's state with whatever trial point was last evaluated —
+including the very `u0` array the probe was seeded from, since `update_bedrock!`
+writes into `sim.now.u` in place and callers typically pass `sim.now.u` as
+`u0` — and (b) only let the gated block run on the *first* evaluation at a
+given `t`, contaminating later finite differences with a spurious jump
+unrelated to the true Jacobian-vector product. This closure snapshots `sim`'s
+state once at construction (via the existing
 [`StateSnapshot`](@ref)/[`snapshot!`](@ref)/[`restore!`](@ref) checkpointing
 machinery, `src/snapshot.jl`) and restores it after every call, so `sim` is
 left exactly as found regardless of how many trial states are evaluated, and
 every call sees the gated block exactly as it would at the snapshot time.
 """
-function simulation_rhs_probe(sim::Simulation)
+function snapshotting_probe(f!, sim::Simulation)
     buf = StateSnapshot(sim)
-    return (du, u, p, t) -> begin
-        update_diagnostics!(du, u, sim, t)
+    # `sim` is injected in the third slot regardless of whatever `p` the caller
+    # threads through `spectral_radius_estimate`: `Simulation`-backed RHS's like
+    # `update_diagnostics!(dudt, u, sim, t)` take `sim` there by convention, not
+    # a generic parameter object, and callers (e.g. `simulation_rhs_probe`) may
+    # legitimately pass `p = nothing` since it is otherwise unused.
+    return (du, u, _, t) -> begin
+        f!(du, u, sim, t)
         restore!(sim, buf)
         return nothing
     end
 end
+
+"""
+$(TYPEDSIGNATURES)
+
+Wrap `sim`'s own [`update_diagnostics!`](@ref) with [`snapshotting_probe`](@ref)
+— the specific instance `stiffness_report` and the Phase-0 diagnostics use.
+"""
+simulation_rhs_probe(sim::Simulation) = snapshotting_probe(update_diagnostics!, sim)
 
 """
 $(TYPEDSIGNATURES)

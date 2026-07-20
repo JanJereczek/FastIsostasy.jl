@@ -129,11 +129,12 @@ observed_order(errN, err2N) = log2(errN / err2N)
         @test maximum(abs, final_u(FITsit5()) .- ref) < 1f-3 * peak
         # Fixed-step Euler is cruder (first-order); allow ~0.5 % of the peak.
         @test maximum(abs, final_u(FIEuler(); dt_min = 100f0) .- ref) < 5f-3 * peak
-        # FIRKC's error estimate is a documented, more conservative simplification
-        # (roadmap stabilise_dt.md §5/§6) than FITsit5's — a tighter reltol is
-        # needed for comparable global accuracy, so use one here rather than the
-        # shared default.
-        @test maximum(abs, final_u(FIRKC(); reltol = 1f-7) .- ref) < 1f-2 * peak
+        # FIRKC uses SSV's own embedded estimate, so `reltol` means the same
+        # thing as it does for FITsit5/FIBS3: it must agree just as tightly at
+        # the shared default tolerance, with no special-cased reltol. (It used
+        # to need reltol=1f-7 here to reach even 1 % — see the estimator note in
+        # `perform_step!` for why that indicator was replaced.)
+        @test maximum(abs, final_u(FIRKC()) .- ref) < 1f-3 * peak
     end
 end
 
@@ -254,5 +255,37 @@ end
 
         @test integ_rkc.nf * 5 < integ_tsit.nf   # at least 5x fewer RHS evals
         @test isapprox(integ_rkc.u[1], 0.0; atol = 1e-6)
+    end
+
+    @testset "spectral-radius probe does not corrupt sim.now.u at init (regression)" begin
+        # Regression test: FIRKC's init_fi used to run the spectral-radius power
+        # iteration directly on `update_diagnostics!`, which writes every trial
+        # state into `sim.now.u` (via `update_bedrock!`) — the very array object
+        # passed in as `u0`. Without routing through `snapshotting_probe` (the
+        # roadmap stabilise_dt.md §3 fix, previously wired only into
+        # `simulation_rhs_probe`/`stiffness_report`, not into FIRKC's own
+        # estimator), `sim.now.u` — and hence the integrator's initial condition —
+        # was left at the last probe trial instead of the true initial condition.
+        W, n = 3.0e6, 5
+        domain = RegionalDomain(W, n)
+        H0 = zeros(domain)
+        H1 = 1.0e3 .* (domain.R .< 1.0e6)
+        it = TimeInterpolatedIceThickness([0.0, 1.0, 5.0e4], [H0, H1, H1], domain)
+        bcs = BoundaryConditions(domain, ice_thickness = it)
+        se = SolidEarth(domain; lithosphere = LaterallyVariableLithosphere(),
+            layer_boundaries = [88.0e3], layer_viscosities = [1.0e19])
+        opts = SolverOptions(verbose = false, diffeq = DiffEqOptions(alg = FIRKC()))
+        nout = FastIsostasy.NativeOutput(t = Float64[], vars = Symbol[], T = Float64)
+        sim = Simulation(domain, bcs, RegionalSeaLevel(), se, (0.0, 100.0);
+            opts = opts, nout = nout)
+        FastIsostasy.init_problem!(sim)
+        u_before = copy(sim.now.u)
+        n_before = sim.now.count_sparse_updates
+
+        integ = FastIsostasy.build_integrator(sim)
+
+        @test sim.now.u == u_before
+        @test sim.now.count_sparse_updates == n_before
+        @test integ.u == u_before
     end
 end

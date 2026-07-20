@@ -29,21 +29,27 @@
 
 Preallocated recording buffers for `record_forward!`: one `StateSnapshot` per
 save/observation-interval boundary (`length(prob.extract_times) + 1`, including
-the state at the end of the run) and one accepted-`(t, dt)` vector per interval.
+the state at the end of the run) and one accepted-steplog-entry vector per
+interval. The entry type `E` follows `prob.sim.opts.diffeq.alg` via
+`steplog_entry_type` (`Tuple{T,T}` for the tableau algorithms, widened to
+`Tuple{T,T,Int}` for `FIRKC` — see `steplog_entry`/`steplog_entry_type` in
+`src/integrators.jl`), so `push!`ing whatever `steplog_entry` a given
+algorithm's integrator produces always matches the buffer's element type.
 Reusable across recordings — step vectors are emptied, snapshots overwritten.
 """
-struct ForwardRecord{T, SS}
-    checkpoints::Vector{SS}             # [i] = state at the start of interval i;
-                                        # [end] = state at the end of the run
-    steps::Vector{Vector{Tuple{T, T}}}  # accepted (t, dt) per interval
+struct ForwardRecord{T, SS, E}
+    checkpoints::Vector{SS}      # [i] = state at the start of interval i;
+                                 # [end] = state at the end of the run
+    steps::Vector{Vector{E}}     # accepted steplog entries per interval
 end
 
 function ForwardRecord(prob::AbstractInversion)
     T = promote_type(eltype(prob.sim.now.u), eltype(prob.extract_times))
     n = length(prob.extract_times)
     checkpoints = [StateSnapshot(prob.sim) for _ in 1:(n + 1)]
-    steps = [Tuple{T, T}[] for _ in 1:n]
-    return ForwardRecord(checkpoints, steps)
+    E = steplog_entry_type(prob.sim.opts.diffeq.alg, T)
+    steps = [E[] for _ in 1:n]
+    return ForwardRecord{T, eltype(checkpoints), E}(checkpoints, steps)
 end
 
 nintervals(rec::ForwardRecord) = length(rec.steps)

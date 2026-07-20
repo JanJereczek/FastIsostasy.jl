@@ -140,6 +140,31 @@ end
         @test_throws ErrorException replay_interval!(u, dudt, reca, proba, 1)
     end
 
+    @testset "FIRKC: widened (t, dt, s) steplog entries record without error" begin
+        # Regression test: FIRKC's steplog_entry is a 3-tuple (t, dt, s), unlike
+        # every other FIAlgorithm's (t, dt). Before ForwardRecord sized its step
+        # buffers per-algorithm (via steplog_entry_type), pushing a FIRKC entry
+        # into a Tuple{T,T}-typed buffer threw a MethodError.
+        probr = build_recording_prob(alg = FIRKC())
+        preds0r = FastIsostasy.allocate_predictions(probr)
+        FastIsostasy.forward_predict!(preds0r, probr)
+
+        recr = ForwardRecord(probr)
+        predsr = FastIsostasy.allocate_predictions(probr)
+        record_forward!(predsr, recr, probr)
+
+        @test all(predsr[k] == preds0r[k] for k in eachindex(preds0r))
+        @test all(!isempty, recr.steps)
+        for i in 1:3
+            ts, hs, ss = first.(recr.steps[i]), getindex.(recr.steps[i], 2), last.(recr.steps[i])
+            @test all(>(0), hs)
+            @test all(>=(2), ss)                        # stage count, always >= 2
+            @test sum(hs) ≈ bounds[i + 1] - bounds[i]
+        end
+        u, dudt = similar(probr.sim.now.u), similar(probr.sim.now.u)
+        @test_throws ErrorException replay_interval!(u, dudt, recr, probr, 1)
+    end
+
     @testset "mismatched record/problem throws" begin
         prob2 = build_recording_prob(obstimes = [200.0, 400.0])
         preds = FastIsostasy.allocate_predictions(prob2)

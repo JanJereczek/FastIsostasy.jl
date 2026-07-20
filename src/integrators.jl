@@ -59,39 +59,13 @@ isadaptive(::FIEuler) = false
     FIRKC(; damping = 2/13, safety = 1.2, smax = 200, reestimate_every = 0)
 
 Stabilised explicit Runge-Kutta-Chebyshev method (RKC2, Sommeijer-Shampine-
-Verwer 1997), second order, damped. Unlike a classical RK tableau, its
-real-axis stability interval grows with the *square* of the stage count
-instead of being fixed per stage, so the number of RHS evaluations needed to
-advance a stiff step scales with `sqrt(stiffness)` rather than `stiffness`
-(roadmap `stabilise_dt.md` §2.2). All coefficients are generated at each step
-from a closed-form three-term Chebyshev recurrence (no tabulated data, see
-`rkc_coeffs`); the stage count is chosen from `dt` and an internally
-estimated spectral radius, then the usual PI step-size controller adjusts
-`dt` from a local error estimate — same conventions as `FIBS3`/`FITsit5`.
-**Caveat:** the error estimate is a simplified embedded-Euler indicator (see
-`perform_step!`), not SSV's own calibration — at a given `reltol` it is
-measurably more conservative (lower global accuracy) than `FITsit5`; use a
-visibly tighter `reltol` for comparable accuracy. This does not affect
-stability, which comes from the independent stage-count selection.
+Verwer 1997), second order, damped. Real-axis stability interval grows with the
+*square* of the stage count. For stiff systems with ~1.75x speedup.
 
-- `damping`: SSV's damping parameter `ε`, trading a small reduction in the
-  real-axis stability boundary for internal stability (robustness to
-  non-normal/complex spectra). Must be `> 0` — the closed-form `w1` below has
-  a removable singularity at the undamped limit `ε = 0` (`w0 = 1`) that is not
-  handled specially; use a small positive value (the SSV default `2/13`) if
-  in doubt.
-- `safety`: multiplicative safety factor applied to `dt * λ_max` when picking
-  the stage count (as in the original RKC/ROCK codes).
-- `smax`: hard cap on the stage count per step. If the ideal stage count for a
-  proposed `dt` would exceed this, the step is attempted at `smax` stages
-  anyway; if that is genuinely insufficient the step's error estimate comes
-  back large and the *existing* reject/shrink cycle (not a special code path)
-  drives `dt` down until `smax` stages are enough.
-- `reestimate_every`: re-run the spectral-radius power iteration every this
-  many *accepted* steps (`0`, the default, disables re-estimation — the
-  estimate from `init_fi` is assumed valid for the lifetime of the
-  integration, correct as long as the coefficient fields defining the RHS's
-  Jacobian are time-independent; see roadmap §5/§8).
+- `damping`: SSV damping parameter `ε` (default `2/13`); must be `> 0`.
+- `safety`: safety factor for `dt * λ_max` when choosing stage count.
+- `smax`: hard cap on stage count per step.
+- `reestimate_every`: re-run power iteration every N accepted steps (`0` = never).
 """
 @kwdef struct FIRKC <: FIAlgorithm
     damping::Float64 = 2 / 13
@@ -328,6 +302,12 @@ steplog_entry(integ::FIIntegrator, dt) = (integ.t, dt)
 # Optional periodic spectral-radius re-estimation hook (roadmap §5); a no-op
 # for tableau methods, which have no spectral-radius state.
 maybe_reestimate!(::FIIntegrator) = nothing
+
+# Element type of one `steplog_entry(integ, dt)` for `alg`, keyed on the
+# *algorithm* rather than the integrator: `ForwardRecord` (src/inverse/recording.jl)
+# needs this to size its step-log buffers before any integrator exists. Must be
+# kept in sync with `steplog_entry`'s per-integrator-type return tuple above.
+steplog_entry_type(::FIAlgorithm, ::Type{T}) where {T} = Tuple{T, T}
 
 # -----------------------------------------------------------------------------
 # Step-size controller (Hairer's PI controller, cf. dopri5)
@@ -670,7 +650,8 @@ function init_fi(f!, u0::A, tspan, alg::FIRKC, p = nothing;
     dtmn = dtmin === nothing ? eps(T) * max(abs(t0), abs(tend)) : T(dtmin)
     dt = clamp(dt, dtmn, dtmx)
 
-    counted_f!, nf0 = _counting_wrapper(f!)
+    probe = p isa Simulation ? snapshotting_probe(f!, p) : f!
+    counted_f!, nf0 = _counting_wrapper(probe)
     lambda_max = spectral_radius_estimate(counted_f!, u0, p, t0;
         maxiter = lambda_maxiter, tol = T(lambda_tol))
 
@@ -720,23 +701,34 @@ function perform_step!(integ::FIRKCIntegrator, dt)
     end
     # Y_s now lives in `y1` (the final rotation moved the last-computed stage there).
 
-    # Embedded low-order (Euler) reference error indicator: zero extra RHS
-    # evaluations (F0 already computed above), reuses the same scaled RMS norm
-    # as the tableau path. This is a deliberate simplification of "the SSV
-    # paper's embedded estimate" (roadmap §5) — a legitimate O(dt) truncation
-    # proxy either way (same embedded-pair paradigm as `btilde` for BS3/Tsit5:
-    # the *lower*-order method's error controls the step while the higher-order
-    # solution is propagated), not guaranteed bit-identical to SSV's own
-    # internal calibration. Safety is unaffected regardless: stability comes
-    # from `rkc_choose_stages`, not from this estimate. It IS measurably more
-    # conservative than FITsit5's embedded estimate at a given `reltol`
-    # (roadmap §6 benchmark: ~2-3 orders of magnitude looser in practice) — a
-    # real, deliberate scope simplification, not a correctness bug (the
-    # recurrence itself is independently verified 2nd order in
-    # `test/test_integrators.jl`). Pick a visibly tighter `reltol` than you
-    # would for `FITsit5` if comparable global accuracy is required.
+    # SSV/RKC embedded error estimate (Sommeijer–Shampine–Verwer 1997, §4), the
+    # exact form used by SUNDIALS' `LSRKStep` (`arkode_lsrkstep.c`,
+    # `lsrkStep_TakeStepRKC`, constants `p8 = 0.8`, `p4 = 0.4`):
+    #
+    #   Est = 0.8·(y0 − Y_s) + 0.4·dt·(F0 + f(Y_s))
+    #
+    # On the scalar test equation `u' = λu` (`z = λ dt`) this is `Est/y0 =
+    # 0.8(1−R(z)) + 0.4 z (1+R(z))`, which is O(z³) as z→0 (it genuinely tracks
+    # the 2nd-order method's O(dt³) local truncation error), and stays *bounded*
+    # (≈0.4|z|) as z→−∞ instead of blowing up. That boundedness is the whole
+    # point: the previous difference-from-Euler indicator, `Y_s − (y0 + dt F0)`,
+    # measured how far the stable RKC step diverges from an *unstable* Euler
+    # predictor, so it exploded like the Euler stability defect (~|1+z|) for
+    # every mode with z ≲ −2 and pinned dt at the Euler stability limit — which
+    # made `rkc_choose_stages` never pick more than s = 2 stages and defeated
+    # the entire √stiffness advantage (roadmap §6 performance box).
+    #
+    # Cost: one extra RHS eval per step — `f(Y_s)` — which the original
+    # "zero-extra-eval" design skipped. That was a false economy: without a
+    # usable estimate the controller took ~10–100× more (tiny) steps. The eval
+    # is not reused as the next step's F0 (RKC is deliberately non-FSAL, roadmap
+    # §2.3), so `nf` honestly counts it.
+    integ.f!(Fj, y1, p, t + dt)
+    integ.nf += 1
     atmp = integ.atmp
-    @. atmp = (y1 - (y0 + dt * F0)) / (integ.abstol + integ.reltol * max(abs(y0), abs(y1)))
+    p8, p4 = T(0.8), T(0.4)
+    @. atmp = (p8 * (y0 - y1) + p4 * dt * (F0 + Fj)) /
+        (integ.abstol + integ.reltol * max(abs(y0), abs(y1)))
     err = norm(atmp) / sqrt(length(atmp))
 
     integ.unew, integ.ym1, integ.ym2 = y1, y2, ynext
@@ -756,10 +748,16 @@ fsal_carryover!(::FIRKCIntegrator) = nothing         # not FSAL (roadmap §2.3)
 # `steplog_entry` method above still returns `(t, dt)`).
 steplog_entry(integ::FIRKCIntegrator, dt) = (integ.t, dt, integ.s)
 
+# Matches the 3-tuple `steplog_entry` above; see `steplog_entry_type`'s
+# definition (near the tableau-path `steplog_entry`) for why this is keyed on
+# the algorithm rather than the integrator.
+steplog_entry_type(::FIRKC, ::Type{T}) where {T} = Tuple{T, T, Int}
+
 function maybe_reestimate!(integ::FIRKCIntegrator)
     n = integ.alg.reestimate_every
     (n > 0 && integ.naccept % n == 0) || return nothing
-    counted_f!, nf0 = _counting_wrapper(integ.f!)
+    probe = integ.p isa Simulation ? snapshotting_probe(integ.f!, integ.p) : integ.f!
+    counted_f!, nf0 = _counting_wrapper(probe)
     integ.lambda_max = spectral_radius_estimate(counted_f!, integ.u, integ.p, integ.t)
     integ.nf += nf0[]
     return nothing

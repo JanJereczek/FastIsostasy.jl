@@ -238,28 +238,42 @@ function channel_scaling(domain, kappa, channel_thickness, visc_ratio; show_step
     show_steps && @show extrema(visc_ratio)
     show_steps && @show extrema(channel_thickness)
 
-    C = Tint.(cosh.(channel_thickness .* kappa))
-    show_steps && @show extrema(C)
-    S = Tint.(sinh.(channel_thickness .* kappa))
-    show_steps && @show extrema(S)
+    nu = Tint.(visc_ratio)
+    # x = channel_thickness * kappa >= 0 (kappa is a wavenumber magnitude). This
+    # is the argument that used to overflow when built into cosh/sinh directly.
+    x = Tint.(channel_thickness .* kappa)
 
-    num = zeros(Tint, domain.nx, domain.ny)
-    denum = copy(num)
+    # Overflow-safe Cathles (1975) channel-flow correction. The original form
+    # built C = cosh(x), S = sinh(x) explicitly and returned a ratio of
+    # quadratics in (C, S). For a thick channel on a fine grid the argument
+    # x = channel_thickness * kappa reaches ~120 at this package's default
+    # geometry, where cosh/sinh overflow to Inf in Float32 (threshold arg
+    # ~88.7) — and to Inf in Float64 by arg ~354 — turning num/denum into NaN
+    # and silently corrupting the physics (roadmap stabilise_dt.md §3.1).
+    # Every C, S dependence enters num and denum only through cosh(2x), sinh(2x)
+    # and constants:
+    #
+    #   2*C*S = sinh(2x),  C^2 + S^2 = cosh(2x),  C^2 - S^2 = 1
+    #
+    # so multiplying num and denum by e^{-2x} (which cancels in the ratio)
+    # replaces every growing term with a bounded one in a = e^{-2x} in (0, 1]:
+    #
+    #   cosh(2x)*e^{-2x} = (1 + a^2)/2,   sinh(2x)*e^{-2x} = (1 - a^2)/2
+    #
+    # The x*a and x^2*a terms decay to 0 (exponential beats polynomial), so the
+    # expression stays finite for any x >= 0. Verified to match the original to
+    # machine precision over the non-overflowing range. Limits: -> 1 as x -> 0
+    # (no correction at the DC mode, cf. §4) and -> visc_ratio as x -> Inf.
+    a = exp.(-2 .* x)
+    cosh2 = @. (1 + a^2) / 2       # cosh(2x) * e^{-2x}
+    sinh2 = @. (1 - a^2) / 2       # sinh(2x) * e^{-2x}
 
-    @. num += 2 * visc_ratio * C * S
+    num = @. nu * sinh2 + (1 - nu^2) * x^2 * a + (nu^2 + 1) / 2 * cosh2 +
+        (1 - nu^2) / 2 * a
     show_steps && @show extrema(num)
-    @. num += (1 - visc_ratio ^ 2) * channel_thickness ^ 2 * kappa ^ 2
-    show_steps && @show extrema(num)
-    @. num += visc_ratio ^ 2 * S ^ 2 + C ^ 2
-    show_steps && @show extrema(num)
+    denum = @. (nu + 1 / nu) / 2 * sinh2 + (nu - 1 / nu) * x * a + cosh2
+    show_steps && @show extrema(denum)
 
-    @. denum += (visc_ratio + 1 / visc_ratio) * C * S
-    show_steps && @show extrema(denum)
-    @. denum += (visc_ratio - 1 / visc_ratio) * channel_thickness * kappa
-    show_steps && @show extrema(denum)
-    @. denum += S ^ 2 + C ^ 2
-    show_steps && @show extrema(denum)
-    
     return Text.(num ./ denum)
 end
 
