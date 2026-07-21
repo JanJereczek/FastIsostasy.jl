@@ -1,10 +1,10 @@
 # GPU counterpart of test_integrators.jl's "run! backends agree on cylinder
-# load" test, focused on `FIRKC` (roadmap stabilise_dt.md, Phase 3: GPU
-# validation). Everything `FIRKC` needs — the three-term Chebyshev recurrence,
+# load" test, focused on `RKCIntegrator` (roadmap stabilise_dt.md, Phase 3: GPU
+# validation). Everything `RKCIntegrator` needs — the three-term Chebyshev recurrence,
 # the spectral-radius power iteration, and the PI step-size controller's
 # `norm`-based error estimate — is written as generic broadcasts/reductions, so
-# this is the first exercise of any *adaptive* `FIAlgorithm` on `CuArray`
-# (previously only `FIEuler`'s fixed-step path had GPU coverage, via the AD
+# this is the first exercise of any *adaptive* `AbstractIntegrator` on `CuArray`
+# (previously only `EulerIntegrator`'s fixed-step path had GPU coverage, via the AD
 # validity tests in `test_ad_validity_gpu.jl`).
 
 using FastIsostasy, CUDA, Test
@@ -27,12 +27,12 @@ function build_gpu_sim(alg, arraykernel; reltol = 1f-5, dt_min = nothing)
         nout = nout, opts = opts)
 end
 
-@testset "gpu FIRKC" begin
+@testset "gpu RKCIntegrator" begin
     @testset "run! completes on GPU and matches CPU within tolerance" begin
-        # Both run at the same reltol: FIRKC uses SSV's own embedded estimate,
-        # so its `reltol` is calibrated like FIBS3's/FITsit5's — mirrors the CPU
+        # Both run at the same reltol: RKCIntegrator uses SSV's own embedded estimate,
+        # so its `reltol` is calibrated like BS3Integrator's/Tsit5Integrator's — mirrors the CPU
         # comparison in test_integrators.jl.
-        for (name, alg, reltol) in (("FIRKC", FIRKC(), 1f-5), ("FIBS3", FIBS3(), 1f-5))
+        for (name, alg, reltol) in (("RKCIntegrator", RKCIntegrator(), 1f-5), ("BS3Integrator", BS3Integrator(), 1f-5))
             sim_cpu = build_gpu_sim(alg, Array; reltol = reltol)
             run!(sim_cpu)
             sim_gpu = build_gpu_sim(alg, CuArray; reltol = reltol)
@@ -49,9 +49,9 @@ end
 
     @testset "spectral-radius probe does not corrupt sim.now.u on GPU (regression)" begin
         # GPU counterpart of the CPU regression test in test_integrators.jl:
-        # FIRKC's init-time spectral-radius estimate must leave `sim.now.u`
+        # RKCIntegrator's init-time spectral-radius estimate must leave `sim.now.u`
         # (the very array passed in as `u0`) untouched, on CuArray too.
-        sim = build_gpu_sim(FIRKC(), CuArray; reltol = 1f-5)
+        sim = build_gpu_sim(RKCIntegrator(), CuArray; reltol = 1f-5)
         FastIsostasy.init_problem!(sim)
         u_before = Array(sim.now.u)
 

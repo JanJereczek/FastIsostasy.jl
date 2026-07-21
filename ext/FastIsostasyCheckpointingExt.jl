@@ -34,9 +34,12 @@ module FastIsostasyCheckpointingExt
 # alias the `Duplicated` sim argument. It takes only sim-free `Const` pieces
 # (the frozen `(t, dt)` vector and the interval-end time).
 #
-# FIEuler only (like TangentMode): the adaptive integrator's `Vector{Matrix}`
-# stage buffers overflow Enzyme's static type analysis, and adaptive replay also
-# needs the integrator's FSAL state (roadmap §6). Guarded up front.
+# EulerIntegrator and RKCIntegrator (roadmap §7). The FSAL tableau methods (BS3Integrator/Tsit5Integrator) are
+# still excluded: adaptive replay needs their integrator FSAL state and their
+# `Vector{Matrix}` stage buffers overflow Enzyme's static type analysis. RKCIntegrator
+# sidesteps both — it is non-FSAL (a step is a pure function of `(u, t, dt, s)`)
+# and its recurrence uses O(1) named stage buffers, replayed via
+# `rkc_replay_stages!`. Guarded up front by `_require_replayable_adj`.
 
 using Enzyme: Enzyme, Const, Duplicated, Active
 # Checkpointing is a declared trigger of this extension (periodic-schedule
@@ -67,6 +70,46 @@ function _interval_forward!(sim, steps, tend)
     end
     FastIsostasy.update_diagnostics!(dudt, u, sim, tend)
     return nothing
+end
+
+# RKCIntegrator counterpart: replay the frozen `(t, dt, s)` RKC2 recurrence (roadmap §7).
+# Non-FSAL, so — like the Euler replay above — this is a pure in-place function
+# of `sim.now` with local scratch; Enzyme reverses it. `rkc_replay_stages!`
+# (src/integrators.jl) is the shared recurrence, keeping this bit-identical to
+# `record_forward!`/`replay_interval!`. No trailing `tend` sync: each step's own
+# error-estimate stage leaves `sim.now` synced at its `t+dt`, and the last step's
+# `t+dt` is the interval end (see the recurrence). The O(1) stage buffers are
+# six named locals (not a `Vector{Matrix}`), so they stay within Enzyme's static
+# type analysis.
+#
+# `plan` is a FLAT, per-stage `Vector{RKCStage}` built by `rkc_stage_plan`
+# *outside* this function and passed as a `Const`. Both properties matter for
+# compile time:
+#
+#   * flat — the differentiated region is a single loop with ONE
+#     `update_diagnostics!` call site at depth 1. The earlier
+#     loop-over-steps/loop-over-stages form put the RHS at depth 2 under an inner
+#     bound (`s`) that varies per step, which forces Enzyme into a jagged
+#     two-level tape allocation *per taped value*; see the design note above
+#     `RKCStage` in src/integrators.jl.
+#   * Const — the coefficient machinery (`rkc_coeffs`: `cosh`/`sinh`/`log`,
+#     per-degree Chebyshev tables, allocation) and the stage-time arithmetic
+#     `t + c[j-1]*dt` are state-independent, so they carry no cotangent and are
+#     hoisted out of the differentiated region entirely.
+function _interval_forward_rkc!(sim, plan)
+    y1 = copy(sim.now.u)
+    y0 = similar(y1); y2 = similar(y1); ynext = similar(y1)
+    F = similar(y1); F0 = similar(y1)
+    FastIsostasy.rkc_replay_stages!(FastIsostasy.update_diagnostics!,
+        y0, y1, y2, ynext, F, F0, sim, plan)
+    return nothing
+end
+
+# Flat per-stage plan for interval `i`, computed once before the reverse pass
+# (state-independent ⇒ `Const` into `Enzyme.autodiff`).
+function _rkc_interval_plan(sim, steps)
+    T = eltype(sim.now.u)
+    return FastIsostasy.rkc_stage_plan(T, steps, T(sim.opts.diffeq.alg.damping))
 end
 
 # --- observation cotangent seeding -------------------------------------------
@@ -111,15 +154,18 @@ end
 
 # --- the checkpointed reverse sweep ------------------------------------------
 
-_require_fieuler_adj(prob) = prob.sim.opts.diffeq.alg isa FastIsostasy.FIEuler || error(
-    "AdjointMode is fixed-step only: gradient! requires " *
-    "prob.sim.opts.diffeq.alg isa FIEuler (got $(typeof(prob.sim.opts.diffeq.alg))). " *
-    "Adaptive-step adjoints (frozen dt + integrator FSAL state) are roadmap Phase 5+.")
+_require_replayable_adj(prob) =
+    (prob.sim.opts.diffeq.alg isa FastIsostasy.EulerIntegrator ||
+     prob.sim.opts.diffeq.alg isa FastIsostasy.RKCIntegrator) || error(
+    "AdjointMode replays EulerIntegrator and RKCIntegrator only: gradient! got " *
+    "$(typeof(prob.sim.opts.diffeq.alg)). The FSAL tableau methods " *
+    "(BS3Integrator/Tsit5Integrator) need the integrator's FSAL state to replay, which is " *
+    "roadmap Phase 5+; use RKCIntegrator for a stiff, stabilised adaptive adjoint.")
 
 # Core: fill `g` with ∇_θ loss(prob, θ) via the checkpointed reverse; return the
 # primal loss (misfit + regularization) as a byproduct of the forward record.
 function _adjoint_gradient!(g, prob::AbstractInversion, θ)
-    _require_fieuler_adj(prob)
+    _require_replayable_adj(prob)
     length(g) == length(θ) || throw(DimensionMismatch(
         "gradient buffer length $(length(g)) ≠ θ length $(length(θ))"))
 
@@ -146,15 +192,24 @@ function _adjoint_gradient!(g, prob::AbstractInversion, θ)
     end
 
     # Reverse sweep over intervals — accumulates param cotangents in `dsim`.
+    # `_require_replayable_adj` above has already restricted `alg` to EulerIntegrator or
+    # RKCIntegrator; each interval's primal is the matching pure in-place replay.
     dsim = Enzyme.make_zero(sim)
+    alg = sim.opts.diffeq.alg
     n = length(prob.extract_times)
     for i in n:-1:1
         _seed_interval!(dsim, prob, preds, i)
         FastIsostasy.restore!(sim, rec.checkpoints[i])
-        Enzyme.autodiff(mode, _interval_forward!, Const,
-            Duplicated(sim, dsim),
-            Const(rec.steps[i]),
-            Const(oftype(sim.timer.t, prob.extract_times[i])))
+        if alg isa FastIsostasy.RKCIntegrator
+            Enzyme.autodiff(mode, _interval_forward_rkc!, Const,
+                Duplicated(sim, dsim),
+                Const(_rkc_interval_plan(sim, rec.steps[i])))
+        else
+            Enzyme.autodiff(mode, _interval_forward!, Const,
+                Duplicated(sim, dsim),
+                Const(rec.steps[i]),
+                Const(oftype(sim.timer.t, prob.extract_times[i])))
+        end
     end
 
     # Map accumulated ∂misfit/∂params → ∂misfit/∂θ by reversing reconstruct!.

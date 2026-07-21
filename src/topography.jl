@@ -17,7 +17,8 @@ get_maskgrounded(state, c) = get_maskgrounded(state, c, SharpTransition())
 get_maskgrounded(state, c, tr::AbstractTransition) =
     get_maskgrounded(state.H_ice, state.z_b, state.z_ss, c, tr)
 
-get_maskgrounded(H_ice, b, z_ss, c) = get_maskgrounded(H_ice, b, z_ss, c, SharpTransition())
+get_maskgrounded(H_ice, b, z_ss, c) =
+    get_maskgrounded(H_ice, b, z_ss, c, SharpTransition())
 
 function get_maskgrounded(H_ice, b, z_ss, c, tr::SharpTransition)
     return height_above_floatation(H_ice, b, z_ss, c, tr) .> 0
@@ -27,7 +28,8 @@ function get_maskgrounded(H_ice, b, z_ss, c, tr::SmoothTransition)
     return sheaviside.(height_above_floatation(H_ice, b, z_ss, c, tr), tr.eps)
 end
 
-get_maskocean(z_ss, b, maskgrounded) = get_maskocean(z_ss, b, maskgrounded, SharpTransition())
+get_maskocean(z_ss, b, maskgrounded) =
+    get_maskocean(z_ss, b, maskgrounded, SharpTransition())
 
 function get_maskocean(z_ss, b, maskgrounded, ::SharpTransition)
     return ((z_ss - b) .> 0) .& not.(maskgrounded)
@@ -37,8 +39,11 @@ function get_maskocean(z_ss, b, maskgrounded, tr::SmoothTransition)
     return sheaviside.(z_ss .- b, tr.eps) .* not.(maskgrounded)
 end
 
-function height_above_floatation(state::AbstractState, c::PhysicalConstants,
-    tr::AbstractTransition = SharpTransition())
+function height_above_floatation(
+    state::AbstractState,
+    c::PhysicalConstants,
+    tr::AbstractTransition = SharpTransition(),
+)
     return height_above_floatation(state.H_ice, state.z_b, state.z_ss, c, tr)
 end
 
@@ -56,8 +61,13 @@ function height_above_floatation(H_ice, z_b, z_ss, c, tr::SmoothTransition)
 end
 
 function update_maskocean!(sim)
-    update_maskocean!(sim.now.maskocean, sim.now.z_ss, sim.now.z_b, sim.now.maskgrounded,
-        sim.opts.transition)
+    update_maskocean!(
+        sim.now.maskocean,
+        sim.now.z_ss,
+        sim.now.z_b,
+        sim.now.maskgrounded,
+        sim.opts.transition,
+    )
     return nothing
 end
 
@@ -79,8 +89,14 @@ function update_bedrock!(sim::Simulation, u)
 end
 
 function update_Haf!(sim::Simulation)
-    update_Haf!(sim.now.H_af, sim.now.H_ice, sim.now.z_b, sim.now.z_ss, sim.c,
-        sim.opts.transition)
+    update_Haf!(
+        sim.now.H_af,
+        sim.now.H_ice,
+        sim.now.z_b,
+        sim.now.z_ss,
+        sim.c,
+        sim.opts.transition,
+    )
     return nothing
 end
 

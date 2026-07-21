@@ -7,7 +7,7 @@
 using FastIsostasy
 using Test
 
-function build_recording_prob(; n = 5, dt = 100.0, tend = 400.0, alg = FIEuler(),
+function build_recording_prob(; n = 5, dt = 100.0, tend = 400.0, alg = EulerIntegrator(),
         obstimes = [100.0, 250.0, 400.0])
     W = 3.0e6
     domain = RegionalDomain(W, n)
@@ -121,7 +121,7 @@ end
     end
 
     @testset "adaptive algorithm: steps recorded, replay deferred" begin
-        proba = build_recording_prob(alg = FIBS3())
+        proba = build_recording_prob(alg = BS3Integrator())
         preds0a = FastIsostasy.allocate_predictions(proba)
         FastIsostasy.forward_predict!(preds0a, proba)
 
@@ -140,12 +140,13 @@ end
         @test_throws ErrorException replay_interval!(u, dudt, reca, proba, 1)
     end
 
-    @testset "FIRKC: widened (t, dt, s) steplog entries record without error" begin
-        # Regression test: FIRKC's steplog_entry is a 3-tuple (t, dt, s), unlike
-        # every other FIAlgorithm's (t, dt). Before ForwardRecord sized its step
-        # buffers per-algorithm (via steplog_entry_type), pushing a FIRKC entry
-        # into a Tuple{T,T}-typed buffer threw a MethodError.
-        probr = build_recording_prob(alg = FIRKC())
+    @testset "RKCIntegrator: widened (t, dt, s) entries record and replay bit-identically" begin
+        # RKCIntegrator's steplog_entry is a 3-tuple (t, dt, s), unlike every other
+        # AbstractIntegrator's (t, dt) — ForwardRecord sizes its step buffers per
+        # algorithm via steplog_entry_type. And, being non-FSAL, RKCIntegrator *replays*
+        # (roadmap §7): a frozen (t, dt, s) step is a pure function of the state,
+        # so replay from a checkpoint must land on the next checkpoint bit for bit.
+        probr = build_recording_prob(alg = RKCIntegrator())
         preds0r = FastIsostasy.allocate_predictions(probr)
         FastIsostasy.forward_predict!(preds0r, probr)
 
@@ -161,8 +162,15 @@ end
             @test all(>=(2), ss)                        # stage count, always >= 2
             @test sum(hs) ≈ bounds[i + 1] - bounds[i]
         end
-        u, dudt = similar(probr.sim.now.u), similar(probr.sim.now.u)
-        @test_throws ErrorException replay_interval!(u, dudt, recr, probr, 1)
+
+        # Frozen replay of every interval lands on the next checkpoint, bitwise.
+        ur, dudtr = similar(probr.sim.now.u), similar(probr.sim.now.u)
+        for i in 1:3
+            replay_interval!(ur, dudtr, recr, probr, i)
+            gotr = snapshot!(StateSnapshot(probr.sim), probr.sim)
+            @test snapshots_match(gotr, recr.checkpoints[i + 1])
+            @test ur == recr.checkpoints[i + 1].now.u
+        end
     end
 
     @testset "mismatched record/problem throws" begin

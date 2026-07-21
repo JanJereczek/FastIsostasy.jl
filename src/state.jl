@@ -9,7 +9,8 @@ mutable struct ColumnAnomalies{M}
 end
 
 function ColumnAnomalies(domain)
-    zero_columnanoms = [kernelzeros(domain) for _ in eachindex(fieldnames(ColumnAnomalies))]
+    zero_columnanoms =
+        [kernelzeros(domain) for _ in eachindex(fieldnames(ColumnAnomalies))]
     return ColumnAnomalies(zero_columnanoms...)
 end
 
@@ -20,7 +21,7 @@ $(TYPEDSIGNATURES)
 
 Return a struct containing the reference state.
 """
-struct ReferenceState{T, M, B} <: AbstractState
+struct ReferenceState{T,M,B} <: AbstractState
 
     u::M                    # viscous displacement
     ue::M                   # elastic displacement
@@ -42,7 +43,7 @@ $(TYPEDSIGNATURES)
 Return a mutable struct containing the geostate which will be updated over the simulation.
 The geostate contains all the states of the [`Simulation`] to be solved.
 """
-mutable struct CurrentState{T, M, B} <: AbstractState
+mutable struct CurrentState{T,M,B} <: AbstractState
 
     u::M                        # viscous displacement
     ue::M                       # elastic displacement

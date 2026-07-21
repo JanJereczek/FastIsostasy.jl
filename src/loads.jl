@@ -34,7 +34,12 @@ function anom!(x, scale, now, ref)
 end
 
 function columnanom_mantle!(sim::Simulation)
-    anom!(sim.now.columnanoms.mantle, sim.solidearth.rho_uppermantle, sim.now.u, sim.ref.u)
+    anom!(
+        sim.now.columnanoms.mantle,
+        sim.solidearth.rho_uppermantle,
+        sim.now.u,
+        sim.ref.u,
+    )
     return nothing
 end
 
@@ -67,58 +72,94 @@ function columnanom_water!(sim::Simulation, ol::NoSealevelLoad)
 end
 
 function watercolumn!(sim::Simulation)
-    watercolumn!(sim.now.H_water, sim.now.H_ice, sim.now.maskgrounded, sim.now.z_b,
-        sim.now.z_ss, sim.c, sim.tools.prealloc.buffer_x, sim.opts.transition)
+    watercolumn!(
+        sim.now.H_water,
+        sim.now.H_ice,
+        sim.now.maskgrounded,
+        sim.now.z_b,
+        sim.now.z_ss,
+        sim.c,
+        sim.tools.prealloc.buffer_x,
+        sim.opts.transition,
+    )
     return nothing
 end
 
-function watercolumn!(H_water, H_ice, maskgrounded, z_b, z_ss, c, buffer, ::SharpTransition)
+function watercolumn!(
+    H_water,
+    H_ice,
+    maskgrounded,
+    z_b,
+    z_ss,
+    c,
+    buffer,
+    ::SharpTransition,
+)
     # water column height in absence of ice
     buffer .= max.(z_ss .- z_b, 0)
 
     # if ice thickness lesser than threshold, only impose water column
     # if ice thickness greater than threshold, impose difference (accounting for floatation)
-    H_water .= (H_ice .<= 1) .* buffer .+
+    H_water .=
+        (H_ice .<= 1) .* buffer .+
         not.(maskgrounded) .* (H_ice .> 1) .*
         (buffer .- (H_ice .* (c.rho_ice / c.rho_seawater)))
     return nothing
 end
 
-function watercolumn!(H_water, H_ice, maskgrounded, z_b, z_ss, c, buffer, tr::SmoothTransition)
+function watercolumn!(
+    H_water,
+    H_ice,
+    maskgrounded,
+    z_b,
+    z_ss,
+    c,
+    buffer,
+    tr::SmoothTransition,
+)
     e = tr.eps
     # smooth max(z_ss - z_b, 0); the ice-thickness switch at 1 m becomes a smooth,
     # partition-of-unity blend (sheaviside(1 - H) + sheaviside(H - 1) == 1).
     buffer .= srelu.(z_ss .- z_b, e)
-    H_water .= sheaviside.(1 .- H_ice, e) .* buffer .+
+    H_water .=
+        sheaviside.(1 .- H_ice, e) .* buffer .+
         not.(maskgrounded) .* sheaviside.(H_ice .- 1, e) .*
         (buffer .- (H_ice .* (c.rho_ice / c.rho_seawater)))
     return nothing
 end
 
-function watercolumn(H_ice, maskgrounded, z_b, z_ss, c, tr::AbstractTransition = SharpTransition())
+function watercolumn(
+    H_ice,
+    maskgrounded,
+    z_b,
+    z_ss,
+    c,
+    tr::AbstractTransition = SharpTransition(),
+)
     H_water, buffer = similar(H_ice), similar(H_ice)
     watercolumn!(H_water, H_ice, maskgrounded, z_b, z_ss, c, buffer, tr)
     return H_water
 end
 
-function columnanom_sediment!(sim::Simulation)
-end
+function columnanom_sediment!(sim::Simulation) end
 
 function columnanom_load!(sim::Simulation)
     canoms = sim.now.columnanoms
-    @. canoms.load .= sim.solidearth.maskactive * (canoms.ice + canoms.seawater + canoms.sediment)
+    @. canoms.load .=
+        sim.solidearth.maskactive * (canoms.ice + canoms.seawater + canoms.sediment)
     return nothing
 end
 
 function columnanom_full!(sim::Simulation)
     canoms = sim.now.columnanoms
-    @. canoms.full = canoms.load + sim.solidearth.maskactive * (canoms.litho + canoms.mantle)
+    @. canoms.full =
+        canoms.load + sim.solidearth.maskactive * (canoms.litho + canoms.mantle)
     return nothing
 end
 
 function mass_anom(sim::Simulation)
     return sim.domain.A .* (sim.now.columnanoms.full) # .-
-        # sim.c.rho_seawater .* sim.now.z_bsl .* sim.now.maskocean .* sim.ref.maskactive
+    # sim.c.rho_seawater .* sim.now.z_bsl .* sim.now.maskocean .* sim.ref.maskactive
 end
 
 function mass_anom(A, canom_full)

@@ -88,7 +88,7 @@ visc_phys    = [21.0,  -1.0e6, -1.0e6, 8.0e5,   1.0e6, 1.0e6, 8.0e5]
 The inversion repeatedly runs this forward model with different parameters. Two
 choices matter for AD:
 
-- the fixed-step [`FIEuler`](@ref) integrator (forward-mode AD requires a fixed
+- the fixed-step [`EulerIntegrator`](@ref) integrator (forward-mode AD requires a fixed
   time-step sequence), and
 - a [`SmoothTransition`](@ref) for the grounding-line / ocean masks, so the
   forward map is differentiable rather than piecewise-constant.
@@ -104,7 +104,7 @@ function build_sim()
     se = SolidEarth(domain; lithosphere = LaterallyVariableLithosphere(),
         layer_boundaries = [88.0e3], layer_viscosities = [1.0e21])
     opts = SolverOptions(; verbose = false, transition = SmoothTransition(10.0),
-        diffeq = DiffEqOptions(alg = FIEuler(), dt_min = 500.0))
+        diffeq = DiffEqOptions(alg = EulerIntegrator(), dt_min = 500.0))
     nout = NativeOutput(t = Float64[], vars = Symbol[], T = Float64)
     return Simulation(domain, bcs, RegionalSeaLevel(), se, t_span;
         opts = opts, nout = nout)

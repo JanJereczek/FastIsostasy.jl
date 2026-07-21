@@ -11,7 +11,7 @@ using Test
 # can measure the pure convergence order of a tableau.
 function fixed_step_solve(alg, f!, u0, tspan, N)
     dt = (tspan[2] - tspan[1]) / N
-    integ = init_fi(f!, u0, tspan, alg; dt0 = dt)
+    integ = init_integrator(f!, u0, tspan, alg; dt0 = dt)
     tab = integ.tableau
     for _ in 1:N
         FastIsostasy.perform_step!(integ, dt)
@@ -33,8 +33,8 @@ observed_order(errN, err2N) = log2(errN / err2N)
     u_exact(t) = exp(-t)
 
     @testset "adaptive accuracy vs analytic" begin
-        for alg in (FIBS3(), FITsit5())
-            ts, us = fi_solve(decay!, [1.0], (0.0, 5.0), alg;
+        for alg in (BS3Integrator(), Tsit5Integrator())
+            ts, us = integrate(decay!, [1.0], (0.0, 5.0), alg;
                 reltol = 1e-8, abstol = 1e-10, saveat = 0.0:1.0:5.0)
             @test length(ts) == 6
             for (t, u) in zip(ts, us)
@@ -45,7 +45,7 @@ observed_order(errN, err2N) = log2(errN / err2N)
 
     @testset "tighter tolerance -> smaller error" begin
         err(reltol) = begin
-            _, us = fi_solve(decay!, [1.0], (0.0, 5.0), FIBS3();
+            _, us = integrate(decay!, [1.0], (0.0, 5.0), BS3Integrator();
                 reltol = reltol, abstol = reltol * 1e-2)
             abs(us[end][1] - u_exact(5.0))
         end
@@ -54,7 +54,7 @@ observed_order(errN, err2N) = log2(errN / err2N)
 
     @testset "convergence order" begin
         # Use a u-dependent, non-polynomial solution to exercise all stages.
-        for (alg, nominal) in ((FIEuler(), 1), (FIBS3(), 3), (FITsit5(), 5))
+        for (alg, nominal) in ((EulerIntegrator(), 1), (BS3Integrator(), 3), (Tsit5Integrator(), 5))
             errs = Float64[]
             for N in (20, 40, 80)
                 uN = fixed_step_solve(alg, decay!, [1.0], (0.0, 5.0), N)
@@ -70,15 +70,15 @@ observed_order(errN, err2N) = log2(errN / err2N)
     end
 
     @testset "fixed-step Euler halves error when dt halves" begin
-        e1 = abs(fi_solve(decay!, [1.0], (0.0, 5.0), FIEuler(); dt0 = 0.05)[2][end][1] - u_exact(5.0))
-        e2 = abs(fi_solve(decay!, [1.0], (0.0, 5.0), FIEuler(); dt0 = 0.025)[2][end][1] - u_exact(5.0))
+        e1 = abs(integrate(decay!, [1.0], (0.0, 5.0), EulerIntegrator(); dt0 = 0.05)[2][end][1] - u_exact(5.0))
+        e2 = abs(integrate(decay!, [1.0], (0.0, 5.0), EulerIntegrator(); dt0 = 0.025)[2][end][1] - u_exact(5.0))
         @test isapprox(e1 / e2, 2.0; atol = 0.15)
     end
 
     @testset "vector system: harmonic oscillator" begin
         # u = [x, v], du = [v, -x]; x(0)=1, v(0)=0  =>  x(t)=cos t, v(t)=sin(-t).
         osc!(du, u, p, t) = (du[1] = u[2]; du[2] = -u[1]; nothing)
-        ts, us = fi_solve(osc!, [1.0, 0.0], (0.0, 2pi), FITsit5();
+        ts, us = integrate(osc!, [1.0, 0.0], (0.0, 2pi), Tsit5Integrator();
             reltol = 1e-9, abstol = 1e-11, saveat = [pi, 2pi])
         @test isapprox(us[1], [cos(pi), -sin(pi)]; atol = 1e-6)   # t = pi
         @test isapprox(us[2], [cos(2pi), -sin(2pi)]; atol = 1e-6) # t = 2pi
@@ -89,20 +89,20 @@ observed_order(errN, err2N) = log2(errN / err2N)
         rates = [-0.3 -0.7; -1.1 -1.9]
         matdecay!(du, u, p, t) = (@. du = rates * u; nothing)
         u0 = [1.0 2.0; 3.0 4.0]
-        _, us = fi_solve(matdecay!, u0, (0.0, 2.0), FITsit5();
+        _, us = integrate(matdecay!, u0, (0.0, 2.0), Tsit5Integrator();
             reltol = 1e-9, abstol = 1e-11)
         @test isapprox(us[end], u0 .* exp.(rates .* 2.0); atol = 1e-6)
     end
 
     @testset "step statistics are sane" begin
-        integ = init_fi(decay!, [1.0], (0.0, 5.0), FITsit5(); reltol = 1e-6)
+        integ = init_integrator(decay!, [1.0], (0.0, 5.0), Tsit5Integrator(); reltol = 1e-6)
         FastIsostasy.solve_to!(integ, 5.0, 10_000)
         @test integ.naccept > 0
         @test integ.nf >= integ.naccept   # at least one RHS eval per accepted step
         @test isapprox(integ.u[1], u_exact(5.0); atol = 1e-4)
     end
 
-    # End-to-end `run!` on a small cylinder load: the three FIAlgorithms should
+    # End-to-end `run!` on a small cylinder load: the three AbstractIntegrators should
     # agree on the final viscous displacement field.
     @testset "run! backends agree on cylinder load" begin
         function build_sim(alg; reltol = 1f-5, dt_min = nothing)
@@ -122,29 +122,29 @@ observed_order(errN, err2N) = log2(errN / err2N)
         end
         final_u(alg; kw...) = (s = build_sim(alg; kw...); run!(s); copy(s.now.u))
 
-        ref = final_u(FIBS3())
+        ref = final_u(BS3Integrator())
         peak = maximum(abs, ref)
         @test peak > 1                                          # non-trivial response
         # Both adaptive methods should agree tightly at the same tolerance.
-        @test maximum(abs, final_u(FITsit5()) .- ref) < 1f-3 * peak
+        @test maximum(abs, final_u(Tsit5Integrator()) .- ref) < 1f-3 * peak
         # Fixed-step Euler is cruder (first-order); allow ~0.5 % of the peak.
-        @test maximum(abs, final_u(FIEuler(); dt_min = 100f0) .- ref) < 5f-3 * peak
-        # FIRKC uses SSV's own embedded estimate, so `reltol` means the same
-        # thing as it does for FITsit5/FIBS3: it must agree just as tightly at
+        @test maximum(abs, final_u(EulerIntegrator(); dt_min = 100f0) .- ref) < 5f-3 * peak
+        # RKCIntegrator uses SSV's own embedded estimate, so `reltol` means the same
+        # thing as it does for Tsit5Integrator/BS3Integrator: it must agree just as tightly at
         # the shared default tolerance, with no special-cased reltol. (It used
         # to need reltol=1f-7 here to reach even 1 % — see the estimator note in
         # `perform_step!` for why that indicator was replaced.)
-        @test maximum(abs, final_u(FIRKC()) .- ref) < 1f-3 * peak
+        @test maximum(abs, final_u(RKCIntegrator()) .- ref) < 1f-3 * peak
     end
 end
 
-# Tests for `FIRKC` (roadmap stabilise_dt.md, Phase 2): the stabilised
+# Tests for `RKCIntegrator` (roadmap stabilise_dt.md, Phase 2): the stabilised
 # Runge-Kutta-Chebyshev stepper. Its coefficient formulas were sourced and
 # cross-checked against SUNDIALS' LSRKStep (`arkode_lsrkstep.c`) after two
 # independent from-memory reconstructions were empirically falsified — see the
 # roadmap's Phase 2 notes. These tests exist specifically to catch a
 # regression back to either of those falsified variants.
-@testset "FIRKC" begin
+@testset "RKCIntegrator" begin
     decay!(du, u, p, t) = (du .= -1.0 .* u; nothing)
     u_exact(t) = exp(-t)
 
@@ -193,7 +193,7 @@ end
     end
 
     @testset "adaptive accuracy vs analytic" begin
-        ts, us = fi_solve(decay!, [1.0], (0.0, 5.0), FIRKC();
+        ts, us = integrate(decay!, [1.0], (0.0, 5.0), RKCIntegrator();
             reltol = 1e-9, abstol = 1e-11, saveat = 0.0:1.0:5.0)
         @test length(ts) == 6
         for (t, u) in zip(ts, us)
@@ -203,7 +203,7 @@ end
 
     @testset "tighter tolerance -> smaller error" begin
         err(reltol) = begin
-            _, us = fi_solve(decay!, [1.0], (0.0, 5.0), FIRKC();
+            _, us = integrate(decay!, [1.0], (0.0, 5.0), RKCIntegrator();
                 reltol = reltol, abstol = reltol * 1e-2)
             abs(us[end][1] - u_exact(5.0))
         end
@@ -213,7 +213,7 @@ end
     @testset "fixed-step convergence order is 2" begin
         function fixed_step_solve_rkc(f!, u0, tspan, N)
             dt = (tspan[2] - tspan[1]) / N
-            integ = init_fi(f!, u0, tspan, FIRKC(); dt0 = dt)
+            integ = init_integrator(f!, u0, tspan, RKCIntegrator(); dt0 = dt)
             for _ in 1:N
                 FastIsostasy.perform_step!(integ, dt)
                 integ.t += dt
@@ -231,7 +231,7 @@ end
     end
 
     @testset "steplog widens to (t, dt, s)" begin
-        integ = init_fi(decay!, [1.0], (0.0, 5.0), FIRKC(); reltol = 1e-6)
+        integ = init_integrator(decay!, [1.0], (0.0, 5.0), RKCIntegrator(); reltol = 1e-6)
         steplog = Tuple[]
         FastIsostasy.solve_to!(integ, 5.0, 10_000, steplog)
         @test !isempty(steplog)
@@ -239,18 +239,18 @@ end
         @test all(entry[3] >= 2 for entry in steplog)   # stage count, always >= 2
     end
 
-    @testset "stiff decay: far fewer RHS evaluations than FITsit5" begin
+    @testset "stiff decay: far fewer RHS evaluations than Tsit5Integrator" begin
         # The core value proposition of RKC2 (roadmap §2.2): cost scales with
         # sqrt(stiffness) instead of stiffness. lambda chosen well beyond
-        # FITsit5's stability-limited micro-stepping regime.
+        # Tsit5Integrator's stability-limited micro-stepping regime.
         lambda = -5e4
         stiffdecay!(du, u, p, t) = (du .= lambda .* u; nothing)
         u0 = [1.0]
 
-        integ_rkc = init_fi(stiffdecay!, u0, (0.0, 1.0), FIRKC(); reltol = 1e-5, abstol = 1e-7)
+        integ_rkc = init_integrator(stiffdecay!, u0, (0.0, 1.0), RKCIntegrator(); reltol = 1e-5, abstol = 1e-7)
         FastIsostasy.solve_to!(integ_rkc, 1.0, 10_000_000)
 
-        integ_tsit = init_fi(stiffdecay!, u0, (0.0, 1.0), FITsit5(); reltol = 1e-5, abstol = 1e-7)
+        integ_tsit = init_integrator(stiffdecay!, u0, (0.0, 1.0), Tsit5Integrator(); reltol = 1e-5, abstol = 1e-7)
         FastIsostasy.solve_to!(integ_tsit, 1.0, 10_000_000)
 
         @test integ_rkc.nf * 5 < integ_tsit.nf   # at least 5x fewer RHS evals
@@ -258,12 +258,12 @@ end
     end
 
     @testset "spectral-radius probe does not corrupt sim.now.u at init (regression)" begin
-        # Regression test: FIRKC's init_fi used to run the spectral-radius power
+        # Regression test: RKCIntegrator's init_integrator used to run the spectral-radius power
         # iteration directly on `update_diagnostics!`, which writes every trial
         # state into `sim.now.u` (via `update_bedrock!`) — the very array object
         # passed in as `u0`. Without routing through `snapshotting_probe` (the
         # roadmap stabilise_dt.md §3 fix, previously wired only into
-        # `simulation_rhs_probe`/`stiffness_report`, not into FIRKC's own
+        # `simulation_rhs_probe`/`stiffness_report`, not into RKCIntegrator's own
         # estimator), `sim.now.u` — and hence the integrator's initial condition —
         # was left at the last probe trial instead of the true initial condition.
         W, n = 3.0e6, 5
@@ -274,7 +274,7 @@ end
         bcs = BoundaryConditions(domain, ice_thickness = it)
         se = SolidEarth(domain; lithosphere = LaterallyVariableLithosphere(),
             layer_boundaries = [88.0e3], layer_viscosities = [1.0e19])
-        opts = SolverOptions(verbose = false, diffeq = DiffEqOptions(alg = FIRKC()))
+        opts = SolverOptions(verbose = false, diffeq = DiffEqOptions(alg = RKCIntegrator()))
         nout = FastIsostasy.NativeOutput(t = Float64[], vars = Symbol[], T = Float64)
         sim = Simulation(domain, bcs, RegionalSeaLevel(), se, (0.0, 100.0);
             opts = opts, nout = nout)

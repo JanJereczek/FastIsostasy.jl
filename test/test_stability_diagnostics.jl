@@ -10,9 +10,9 @@ using Test
 @testset "stability diagnostics" begin
 
     @testset "real-axis stability limits" begin
-        lim_euler = stability_limit(FIEuler())
-        lim_bs3 = stability_limit(FIBS3())
-        lim_tsit5 = stability_limit(FITsit5())
+        lim_euler = stability_limit(EulerIntegrator())
+        lim_bs3 = stability_limit(BS3Integrator())
+        lim_tsit5 = stability_limit(Tsit5Integrator())
 
         # Known values (Euler: exactly 2; BS3/Tsit5: standard embedded-pair limits).
         @test isapprox(lim_euler, 2.0; atol = 1e-4)
@@ -62,7 +62,7 @@ using Test
         se = SolidEarth(domain; lithosphere = LaterallyVariableLithosphere(),
             layer_boundaries = [88.0e3, 400e3], layer_viscosities = layer_viscosities)
         opts = SolverOptions(; verbose = false,
-            diffeq = DiffEqOptions(alg = FITsit5(), dt_min = 1.0))
+            diffeq = DiffEqOptions(alg = Tsit5Integrator(), dt_min = 1.0))
         nout = FastIsostasy.NativeOutput(t = Float64[], vars = Symbol[], T = Float64)
         sim = Simulation(domain, bcs, RegionalSeaLevel(), se, (0.0, 100.0);
             opts = opts, nout = nout)

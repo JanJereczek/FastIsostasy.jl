@@ -25,9 +25,9 @@ function stability_function(z, tab::RKTableau{T}) where {T}
     s = nstages(tab)
     Y = zeros(promote_type(T, typeof(z)), s)
     Y[1] = one(z)
-    @inbounds for i in 2:s
+    @inbounds for i = 2:s
         acc = one(z)
-        for j in 1:i-1
+        for j = 1:(i-1)
             a = tab.A[i, j]
             iszero(a) && continue
             acc += z * a * Y[j]
@@ -35,7 +35,7 @@ function stability_function(z, tab::RKTableau{T}) where {T}
         Y[i] = acc
     end
     R = one(z)
-    @inbounds for i in 1:s
+    @inbounds for i = 1:s
         b = tab.b[i]
         iszero(b) && continue
         R += z * b * Y[i]
@@ -49,7 +49,7 @@ $(TYPEDSIGNATURES)
 Largest `β > 0` such that `|R(-β')| <= 1` for every `β' ∈ [0, β]`, i.e. the
 real-axis stability boundary of `tab`. Assumes stability holds continuously
 from the origin up to the first crossing — true for every tableau currently
-defined in `integrators.jl` (`FIEuler`, `FIBS3`, `FITsit5`).
+defined in `integrators.jl` (`EulerIntegrator`, `BS3Integrator`, `Tsit5Integrator`).
 """
 function real_axis_stability_limit(tab::RKTableau{T}; tol = sqrt(eps(T))) where {T}
     stable(β) = abs(stability_function(-β, tab)) <= 1 + sqrt(eps(T))
@@ -65,9 +65,11 @@ function real_axis_stability_limit(tab::RKTableau{T}; tol = sqrt(eps(T))) where 
 end
 
 const _STABILITY_LIMIT = Dict(
-    FIEuler => real_axis_stability_limit(tableau(FIEuler(), Float64)),
-    FIBS3   => real_axis_stability_limit(tableau(FIBS3(), Float64)),
-    FITsit5 => real_axis_stability_limit(tableau(FITsit5(), Float64)),
+    EulerIntegrator =>
+        real_axis_stability_limit(tableau(EulerIntegrator(), Float64)),
+    BS3Integrator => real_axis_stability_limit(tableau(BS3Integrator(), Float64)),
+    Tsit5Integrator =>
+        real_axis_stability_limit(tableau(Tsit5Integrator(), Float64)),
 )
 
 """
@@ -76,7 +78,7 @@ $(TYPEDSIGNATURES)
 Real-axis stability limit of `alg` (computed once at package load into
 `_STABILITY_LIMIT`).
 """
-stability_limit(alg::FIAlgorithm) = _STABILITY_LIMIT[typeof(alg)]
+stability_limit(alg::AbstractIntegrator) = _STABILITY_LIMIT[typeof(alg)]
 
 """
 $(TYPEDSIGNATURES)
@@ -96,8 +98,15 @@ vanishes: for RHSs that end in a mean-subtracting BC (`apply_bc!`/`OffsetBC`,
 in that operator's null space and the iteration would converge to a spurious
 zero instead of the true (generically high-wavenumber) dominant eigenvalue.
 """
-function spectral_radius_estimate(f!, u0, p, t;
-    v0 = nothing, maxiter::Int = 100, tol = 1e-2)
+function spectral_radius_estimate(
+    f!,
+    u0,
+    p,
+    t;
+    v0 = nothing,
+    maxiter::Int = 100,
+    tol = 1e-2,
+)
 
     T = eltype(u0)
     u = copy(u0)
@@ -109,7 +118,8 @@ function spectral_radius_estimate(f!, u0, p, t;
     vnorm = norm(v)
     if vnorm < sqrt(eps(T)) * max(one(T), unorm)
         alternating = T.(1 .- 2 .* isodd.(LinearIndices(size(u))))
-        v = similar(u); copyto!(v, alternating)
+        v = similar(u);
+        copyto!(v, alternating)
         vnorm = norm(v)
     end
 
@@ -118,7 +128,7 @@ function spectral_radius_estimate(f!, u0, p, t;
     h = sqrt(eps(T)) * max(one(T), unorm)
     sigma = zero(T)
 
-    for _ in 1:maxiter
+    for _ = 1:maxiter
         @. z = u + (h / vnorm) * v
         f!(Fz, z, p, t)
         @. Fz -= F0
@@ -138,8 +148,8 @@ $(TYPEDSIGNATURES)
 
 Wrap any `f!(du, u, p, t)` that mutates a [`Simulation`](@ref) `sim` beyond
 `du` into a closure safe for repeated, throwaway evaluation — the pattern
-`spectral_radius_estimate`'s power iteration needs (and `FIRKC`'s own
-spectral-radius estimator, `init_fi`/`maybe_reestimate!` in
+`spectral_radius_estimate`'s power iteration needs (and `RKCIntegrator`'s own
+spectral-radius estimator, `init_integrator`/`maybe_reestimate!` in
 `src/integrators.jl`, reuses for exactly the same reason).
 
 A `Simulation`-backed RHS like `update_diagnostics!` mutates far more than just
@@ -219,21 +229,26 @@ end
 $(TYPEDSIGNATURES)
 
 Combine [`spectral_radius_estimate`](@ref) on `sim`'s RHS with the real-axis
-stability limits of `FIEuler`/`FIBS3`/`FITsit5` to report the implied stable
+stability limits of `EulerIntegrator`/`BS3Integrator`/`Tsit5Integrator` to report the implied stable
 `dt` for each built-in stepper, plus the cross-check
 [`analytic_lambda_bound`](@ref). `t` defaults to the start of `sim`'s time
 span.
 """
 function stiffness_report(sim::Simulation; t = sim.timer.t_span[1], kwargs...)
     lambda_max = spectral_radius_estimate(
-        simulation_rhs_probe(sim), sim.now.u, nothing, t; kwargs...)
+        simulation_rhs_probe(sim),
+        sim.now.u,
+        nothing,
+        t;
+        kwargs...,
+    )
     bound = analytic_lambda_bound(sim)
     dt_stable(alg) = stability_limit(alg) / lambda_max
     return (
         lambda_max = lambda_max,
         analytic_bound = bound,
-        dt_euler = dt_stable(FIEuler()),
-        dt_bs3 = dt_stable(FIBS3()),
-        dt_tsit5 = dt_stable(FITsit5()),
+        dt_euler = dt_stable(EulerIntegrator()),
+        dt_bs3 = dt_stable(BS3Integrator()),
+        dt_tsit5 = dt_stable(Tsit5Integrator()),
     )
 end

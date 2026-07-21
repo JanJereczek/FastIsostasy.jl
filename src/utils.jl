@@ -92,26 +92,37 @@ Compute `Z = f(X,Y)` with `f` a Gaussian function parametrized by mean
 `mu` and covariance `sigma`.
 
 """
-function gauss_distr(X::M, Y::M, mu::Vector{T}, sigma::Matrix{T}) where
-    {T<:AbstractFloat, M<:Matrix{T}}
+function gauss_distr(
+    X::M,
+    Y::M,
+    mu::Vector{T},
+    sigma::Matrix{T},
+) where {T<:AbstractFloat,M<:Matrix{T}}
     k = length(mu)
     G = similar(X)
     invsigma = inv(sigma)
     invsqrtdetsigma = 1/sqrt(det(sigma))
-    @inbounds for i in axes(X,1), j in axes(X,2)
-        G[i, j] = (2*π)^(-k/2) * invsqrtdetsigma * exp( 
-            -0.5 * ([X[i,j], Y[i,j]] .- mu)' * invsigma * ([X[i,j], Y[i,j]] .- mu) )
+    @inbounds for i in axes(X, 1), j in axes(X, 2)
+        G[i, j] =
+            (2*π)^(-k/2) *
+            invsqrtdetsigma *
+            exp(
+                -0.5 *
+                ([X[i, j], Y[i, j]] .- mu)' *
+                invsigma *
+                ([X[i, j], Y[i, j]] .- mu),
+            )
     end
     return G
 end
 
 function generate_gaussian_field(
-    domain::RegionalDomain{T, M},
+    domain::RegionalDomain{T,M},
     z_background::T,
     xy_peak::Vector{T},
     z_peak::T,
     sigma::Matrix{T},
-) where {T<:AbstractFloat, M<:Matrix{T}}
+) where {T<:AbstractFloat,M<:Matrix{T}}
     G = gauss_distr(domain.X, domain.Y, xy_peak, sigma)
     G = G ./ maximum(G) .* z_peak
     return fill(z_background, domain.nx, domain.ny) + G
@@ -138,12 +149,16 @@ $(TYPEDSIGNATURES)
 Compute 1D Gauss-Legendre quadrature of `f` between `x1` and `x2`
 based on `n` support points.
 """
-function quadrature1D(f::Union{Function, Interpolations.Extrapolation},
-    n::Int, x1::T, x2::T) where {T<:AbstractFloat}
+function quadrature1D(
+    f::Union{Function,Interpolations.Extrapolation},
+    n::Int,
+    x1::T,
+    x2::T,
+) where {T<:AbstractFloat}
     x, w = get_quad_coeffs(T, n)
     m, p = get_normalized_lin_transform(x1, x2)
     sum = 0
-    @inbounds for i=1:n
+    @inbounds for i = 1:n
         sum = sum + f(normalized_lin_transform(x[i], m, p)) * w[i] / m
     end
     return sum
@@ -159,19 +174,25 @@ function quadrature2D(
     f::Function,
     x::Vector{T},
     w::Vector{T},
-    x1::T, x2::T,
-    y1::T, y2::T,
+    x1::T,
+    x2::T,
+    y1::T,
+    y2::T,
 ) where {T<:AbstractFloat}
 
     n = length(x)
     mx, px = get_normalized_lin_transform(x1, x2)
     my, py = get_normalized_lin_transform(y1, y2)
     sum = T(0)
-    @inbounds for i=1:n, j=1:n
-        sum = sum + f(
-            normalized_lin_transform(x[i], mx, px),
-            normalized_lin_transform(x[j], my, py),
-        ) * w[i] * w[j] / mx / my
+    @inbounds for i = 1:n, j = 1:n
+        sum =
+            sum +
+            f(
+                normalized_lin_transform(x[i], mx, px),
+                normalized_lin_transform(x[j], my, py),
+            ) *
+            w[i] *
+            w[j] / mx / my
     end
     return sum
 end
@@ -267,8 +288,12 @@ function mask_disc(r::AbstractMatrix{T}, R) where {T<:AbstractFloat}
     return T.(r .< R)
 end
 
-function uniform_ice_cylinder(domain::RegionalDomain, R::T, H::T;
-    center::Vector{T} = T.([0.0, 0.0])) where {T<:AbstractFloat}
+function uniform_ice_cylinder(
+    domain::RegionalDomain,
+    R::T,
+    H::T;
+    center::Vector{T} = T.([0.0, 0.0]),
+) where {T<:AbstractFloat}
     M = mask_disc(domain.X, domain.Y, R, center = center)
     return T.(M .* H)
 end
@@ -285,5 +310,5 @@ function stereo_ice_cap(
 ) where {T<:AbstractFloat}
     alpha = deg2rad(alpha_deg)
     M = domain.Theta .< alpha
-    return H .* sqrt.( M .* (cos.(domain.Theta) .- cos(alpha)) ./ (1 - cos(alpha)) )
+    return H .* sqrt.(M .* (cos.(domain.Theta) .- cos(alpha)) ./ (1 - cos(alpha)))
 end

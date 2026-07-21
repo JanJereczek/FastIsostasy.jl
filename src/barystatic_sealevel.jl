@@ -1,15 +1,17 @@
 const A_OCEAN_PD = 3.625e14     # Ocean surface (m^2) as in Goelzer (2020, before Eq. (9))
 
 """
-    ReferenceBSL(z = 0; T = Float32, itp_kwargs = (extrapolation_bc = Flat()))
+$(TYPEDSIGNATURES)
 
-A `struct` used in all subtypes of `AbstractBSL` to define a reference of barystatic
-sea level and ocean surface area. Contains:
-- `z`: the reference BSL (m), which defaults to 0 (reference year 2020).
-- `A`: the reference ocean surface area (m^2) computed based on `z`.
-- `z_vec`: a vector of BSL values (m) used for interpolation.
-- `A_vec`: a vector of ocean surface area values (m^2) used for interpolation.
-- `A_itp`: an interpolator function for ocean surface area over BSL.
+Define a reference of barystatic sea level and ocean surface area.
+Used in all subtypes of [`AbstractBSL`](@ref) to compute the BSL evolution.
+
+# Fields
+ - `z`: the reference BSL (m), which defaults to 0 (reference year 2020).
+ - `A`: the reference ocean surface area (m^2) computed based on `z`.
+ - `z_vec`: a vector of BSL values (m) used for interpolation.
+ - `A_vec`: a vector of ocean surface area values (m^2) used for interpolation.
+ - `A_itp`: an interpolator function for ocean surface area over BSL.
 
 In the constructor, `T` determines the floating point arithmetic used in all
 computations, and `itp_kwargs` allows customization of the interpolation.
@@ -24,7 +26,7 @@ Custom:
 ref = ReferenceBSL(z = 0.1)       # assume BSL = 0.1 m and compute A accordingly
 ```
 """
-struct ReferenceBSL{T<:AbstractFloat, I<:TimeInterpolation0D{T}}
+struct ReferenceBSL{T<:AbstractFloat,I<:TimeInterpolation0D{T}}
     z::T
     A::T
     z_vec::Vector{T}
@@ -46,7 +48,9 @@ Base.eltype(ref::ReferenceBSL{T}) where {T<:AbstractFloat} = T
 $(TYPEDSIGNATURES)
 
 An abstract type to determine how the barystatic sea level (BSL) is updated
-over time. Available subtypes are:
+over time.
+
+# Available subtypes
 - [`InternalBSLUpdate`](@ref)
 - [`ExternalBSLUpdate`](@ref)
 """
@@ -55,14 +59,14 @@ abstract type AbstractBSLUpdate end
 """
 $(TYPEDSIGNATURES)
 
-A struct to indicate that the BSL is updated internally by the model based on the change in ice volume.
+Update BSL internally by the model based on the change in ice volume.
 """
 struct InternalBSLUpdate <: AbstractBSLUpdate end
 
 """
 $(TYPEDSIGNATURES)
 
-A struct to indicate that the BSL is updated externally, without any internal update.
+Update the BSL is externally, without any internal update.
 """
 struct ExternalBSLUpdate <: AbstractBSLUpdate end
 
@@ -70,7 +74,8 @@ struct ExternalBSLUpdate <: AbstractBSLUpdate end
 $(TYPEDSIGNATURES)
 
 Abstract type to compute the evolution of the barystatic sea level.
-Available subtypes are:
+
+# Available subtypes
 - [`ConstantBSL`](@ref)
 - [`ConstantOceanSurfaceBSL`](@ref)
 - [`PiecewiseConstantBSL`](@ref)
@@ -120,13 +125,14 @@ A `mutable struct` containing:
 Assume that the ocean surface is constant in time and that the BSL evolves
 only according to the changes in ice volume covered by the `RegionalDomain`.
 """
-mutable struct ConstantOceanSurfaceBSL{T, R<:ReferenceBSL{T}} <: AbstractBSL{T}
+mutable struct ConstantOceanSurfaceBSL{T,R<:ReferenceBSL{T}} <: AbstractBSL{T}
     ref::R
     z::T
     A::T
 end
 
-ConstantOceanSurfaceBSL(; ref = ReferenceBSL()) = ConstantOceanSurfaceBSL(ref, ref.z, ref.A)
+ConstantOceanSurfaceBSL(; ref = ReferenceBSL()) =
+    ConstantOceanSurfaceBSL(ref, ref.z, ref.A)
 
 """
 $(TYPEDSIGNATURES)
@@ -139,14 +145,13 @@ A `mutable struct` containing:
 Assume that the ocean surface evolves in time according to a piecewise constant function
 of the BSL, which evolves in time according to the changes in ice volume covered by the `RegionalDomain`.
 """
-mutable struct PiecewiseConstantBSL{T, R<:ReferenceBSL{T}} <: AbstractBSL{T}
+mutable struct PiecewiseConstantBSL{T,R<:ReferenceBSL{T}} <: AbstractBSL{T}
     ref::R
     z::T
     A::T
 end
 
-PiecewiseConstantBSL(; ref = ReferenceBSL()) = 
-    PiecewiseConstantBSL(ref, ref.z, ref.A)
+PiecewiseConstantBSL(; ref = ReferenceBSL()) = PiecewiseConstantBSL(ref, ref.z, ref.A)
 
 
 """
@@ -162,7 +167,7 @@ A `mutable struct` that is only available if `using NLsolve` and contains:
 
 Note that, unlike [`ConstantOceanSurface`](@ref) and [`PiecewiseConstantOceanSurface`](@ref), this will only work if `using NLsolve`.
 """
-mutable struct PiecewiseLinearOceanSurfaceBSL{T, R<:ReferenceBSL{T}} <: AbstractBSL{T}
+mutable struct PiecewiseLinearOceanSurfaceBSL{T,R<:ReferenceBSL{T}} <: AbstractBSL{T}
     ref::R
     z::T
     A::T
@@ -182,7 +187,7 @@ A `mutable struct` containing:
 
 Impose an externally computed BSL, which is internally computed via a time interpolation.
 """
-mutable struct ImposedBSL{T, R<:ReferenceBSL{T}} <: AbstractBSL{T}
+mutable struct ImposedBSL{T,R<:ReferenceBSL{T}} <: AbstractBSL{T}
     ref::R
     z::T
     t_vec::Vector{T}
@@ -201,13 +206,13 @@ This imposes a mixture of BSL. For instance, if you simulate Antarctica over the
 you can impose an offline BSL contribution from the other ice sheets via `bsl1`. The
 contribution of Antarctica will be intercatively added to this via `bsl2`.
 """
-mutable struct CombinedBSL{T, B1<:ImposedBSL, B2<:AbstractBSL} <: AbstractBSL{T}
+mutable struct CombinedBSL{T,B1<:ImposedBSL,B2<:AbstractBSL} <: AbstractBSL{T}
     bsl1::B1
     bsl2::B2
 end
 
 CombinedBSL(bsl1::ImposedBSL{T}, bsl2::AbstractBSL{T}) where {T} =
-    CombinedBSL{T, typeof(bsl1), typeof(bsl2)}(bsl1, bsl2)
+    CombinedBSL{T,typeof(bsl1),typeof(bsl2)}(bsl1, bsl2)
 
 """
 $(TYPEDSIGNATURES)

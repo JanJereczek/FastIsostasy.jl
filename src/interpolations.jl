@@ -9,7 +9,7 @@ function TimeInterpolation0D(t, y; flat_bc = false)
     return TimeInterpolation0D(t, y, flat_bc)
 end
 
-mutable struct TimeInterpolation2D{T, M}
+mutable struct TimeInterpolation2D{T,M}
     t::Vector{T}
     X::Vector{M}
     flat_bc::Bool
@@ -43,12 +43,12 @@ function interpolate(t_out, itp::TimeInterpolation0D)
         return itp.y[i]
     else
         i = searchsortedfirst(itp.t, t_out) - 1
-        return itp.y[i] + (itp.y[i+1] - itp.y[i]) /
-            (itp.t[i+1] - itp.t[i]) * (t_out - itp.t[i])
+        return itp.y[i] +
+               (itp.y[i+1] - itp.y[i]) / (itp.t[i+1] - itp.t[i]) * (t_out - itp.t[i])
     end
 end
 
-function interpolate!(X_out::M, t::T, ti::TimeInterpolation2D{T, M}) where {T, M}
+function interpolate!(X_out::M, t::T, ti::TimeInterpolation2D{T,M}) where {T,M}
     if t < minimum(ti.t)
         if ti.flat_bc
             X_out .= ti.X[1]
@@ -66,8 +66,8 @@ function interpolate!(X_out::M, t::T, ti::TimeInterpolation2D{T, M}) where {T, M
         X_out .= ti.X[i]
     else
         i = searchsortedfirst(ti.t, t) - 1
-        @. X_out = ti.X[i] + (ti.X[i+1] - ti.X[i]) /
-            (ti.t[i+1] - ti.t[i]) * (t - ti.t[i])
+        @. X_out =
+            ti.X[i] + (ti.X[i+1] - ti.X[i]) / (ti.t[i+1] - ti.t[i]) * (t - ti.t[i])
     end
     return nothing
 end

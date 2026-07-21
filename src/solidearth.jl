@@ -190,7 +190,7 @@ mutable struct SolidEarth{
 end
 
 function SolidEarth(
-    domain::RegionalDomain{T, L, M};
+    domain::RegionalDomain{T,L,M};
     lithosphere = LaterallyVariableLithosphere(),
     mantle = MaxwellMantle(),
     calibration = NoCalibration(),
@@ -207,7 +207,7 @@ function SolidEarth(
     scale_elralength = T(1),                        # Following LeMeur (1996, text below Eq. 3)
     rho_uppermantle = T(DEFAULT_RHO_UPPERMANTLE),   # Mean density of topmost upper mantle (kg m^-3)
     rho_litho = T(DEFAULT_RHO_LITHO),               # Mean density of lithosphere (kg m^-3)
-) where {T<:AbstractFloat, L, M}
+) where {T<:AbstractFloat,L,M}
 
     if tau isa Real
         tau = fill(tau, domain)
@@ -225,27 +225,59 @@ function SolidEarth(
     litho_thickness = zeros(T, domain.nx, domain.ny)
     litho_thickness .= view(layer_boundaries, :, :, 1)
 
-    litho_rigidity = get_rigidity.(litho_thickness, litho_youngmodulus, litho_poissonratio)
+    litho_rigidity =
+        get_rigidity.(litho_thickness, litho_youngmodulus, litho_poissonratio)
     effective_viscosity, pseudodiff_scaling = get_effective_viscosity_and_scaling(
-        domain, layer_viscosities, layer_boundaries, maskactive, lumping)
+        domain,
+        layer_viscosities,
+        layer_boundaries,
+        maskactive,
+        lumping,
+    )
 
     apply_compressibility!(effective_viscosity, mantle_poissonratio, compressibility)
     apply_calibration!(effective_viscosity, calibration)
 
-    litho_thickness, litho_rigidity, effective_viscosity, pseudodiff_scaling, maskactive =
-        kernelpromote( [litho_thickness, litho_rigidity, effective_viscosity,
-        pseudodiff_scaling, maskactive], domain.arraykernel)
+    litho_thickness,
+    litho_rigidity,
+    effective_viscosity,
+    pseudodiff_scaling,
+    maskactive = kernelpromote(
+        [
+            litho_thickness,
+            litho_rigidity,
+            effective_viscosity,
+            pseudodiff_scaling,
+            maskactive,
+        ],
+        domain.arraykernel,
+    )
 
     scaled_pseudodiff_inv = 1 ./ (pseudodiff_scaling .* domain.pseudodiff)
 
     litho_shearmodulus = get_shearmodulus(litho_youngmodulus, litho_poissonratio)
 
     return SolidEarth(
-        lithosphere, mantle, calibration, compressibility, lumping, lithosphere_column,
-        effective_viscosity, pseudodiff_scaling, scaled_pseudodiff_inv,
-        litho_thickness, litho_rigidity, kernelcollect(maskactive, domain),
-        litho_poissonratio, mantle_poissonratio, tau, scale_elralength,
-        litho_youngmodulus, litho_shearmodulus, rho_uppermantle, rho_litho,
+        lithosphere,
+        mantle,
+        calibration,
+        compressibility,
+        lumping,
+        lithosphere_column,
+        effective_viscosity,
+        pseudodiff_scaling,
+        scaled_pseudodiff_inv,
+        litho_thickness,
+        litho_rigidity,
+        kernelcollect(maskactive, domain),
+        litho_poissonratio,
+        mantle_poissonratio,
+        tau,
+        scale_elralength,
+        litho_youngmodulus,
+        litho_shearmodulus,
+        rho_uppermantle,
+        rho_litho,
     )
 
 end

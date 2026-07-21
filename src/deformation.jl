@@ -5,16 +5,16 @@
 """
 $(TYPEDSIGNATURES)
 
-Update the time derivative of the viscous displacement `dudt` based on an [`AbstractMantle`](@ref):
-- `RigidMantle`: no deformation, `dudt` is zero.
-- `RelaxedMantle` with `LaterallyConstantLithosphere`: uses ELRA (LeMeur & Huybrechts 1996)
+Update the time derivative of the viscous displacement based on an [`AbstractMantle`](@ref):
+- [`RigidMantle`](@ref): no deformation, `dudt` is zero.
+- [`RelaxedMantle`](@ref) with [`LaterallyConstantLithosphere`](@ref): uses ELRA [le_meur_comparison_1996](@citet)
   to compute the viscous response. This also works with laterally-variable relaxation time,
-  as proposed in Van Calcar et al., in rev.
-- `RelaxedMantle` with `LaterallyVariableLithosphere`: not implemented. This corresponds to
-  what is described in Coulon et al. (2021) but is not yet implemented.
-- `MaxwellMantle` with `LaterallyConstantLithosphere` or `RigidLithosphere`: not implemented.
-  This corresponds to what is described in Bueler et al. (2007) but is not yet implemented.
-- `MaxwellMantle` with `LaterallyVariableLithosphere`: This corresponds to the approach
+  as proposed by [coulon_contrasting_2021](@citet) and by [van_calcar_approximating_2026](@citet).
+- [`RelaxedMantle`](@ref) with [`LaterallyVariableLithosphere`](@ref): not implemented. This corresponds to
+  what is described by [coulon_contrasting_2021](@citet) but is not yet implemented.
+- [`MaxwellMantle`](@ref) with [`LaterallyConstantLithosphere`](@ref) or [`RigidLithosphere`](@ref): not implemented.
+  This corresponds to what is described by [bueler_fast_2007](@citet) but is not yet implemented.
+- [`MaxwellMantle`](@ref) with [`LaterallyVariableLithosphere`](@ref): This corresponds to the approach
   of [swierczek-jereczek_fastisostasy_2024](@citet).
 """
 function update_dudt!(dudt, u, sim, t, earth::SolidEarth)
@@ -26,32 +26,56 @@ function update_dudt!(dudt, u, sim, t, mantle::RigidMantle, litho)
     return nothing
 end
 
-function update_dudt!(dudt, u, sim, t, mantle::RelaxedMantle, 
-    litho::L) where {L<:AbstractLithosphere}
-    
+function update_dudt!(
+    dudt,
+    u,
+    sim,
+    t,
+    mantle::RelaxedMantle,
+    litho::L,
+) where {L<:AbstractLithosphere}
+
     update_deformation_rhs!(sim, u)
 
-    @. sim.tools.prealloc.buffer_x = - (sim.now.columnanoms.load +
-        sim.now.columnanoms.litho) * sim.c.g * sim.domain.K ^ 2
-    
-    samesize_conv!(sim.now.u_eq, sim.tools.prealloc.buffer_x,
-        sim.tools.viscous_convo, sim.tools.conv_helpers,
-        sim.domain, sim.bcs.viscous_displacement,
-        sim.bcs.viscous_displacement.space)
+    @. sim.tools.prealloc.buffer_x =
+        - (sim.now.columnanoms.load + sim.now.columnanoms.litho) *
+        sim.c.g *
+        sim.domain.K ^ 2
+
+    samesize_conv!(
+        sim.now.u_eq,
+        sim.tools.prealloc.buffer_x,
+        sim.tools.viscous_convo,
+        sim.tools.conv_helpers,
+        sim.domain,
+        sim.bcs.viscous_displacement,
+        sim.bcs.viscous_displacement.space,
+    )
 
     @. dudt = 1 / sim.solidearth.tau * (sim.now.u_eq - sim.now.u)
     return nothing
-    
+
 end
 
-function update_dudt!(dudt, u, sim, t, mantle::RelaxedMantle,
-    litho::LaterallyVariableLithosphere)
+function update_dudt!(
+    dudt,
+    u,
+    sim,
+    t,
+    mantle::RelaxedMantle,
+    litho::LaterallyVariableLithosphere,
+)
     error("Relaxed rheology is not implemented for laterally variable lithosphere.")
 end
 
-function update_dudt!(dudt, u, sim, t, mantle::MaxwellMantle,
-    litho::L) where {L<:AbstractLithosphere}
-    # error("Viscous rheology is not implemented for laterally constant lithosphere.")
+function update_dudt!(
+    dudt,
+    u,
+    sim,
+    t,
+    mantle::MaxwellMantle,
+    litho::L,
+) where {L<:AbstractLithosphere}
 
     tools = sim.tools
     P = tools.prealloc
@@ -59,18 +83,24 @@ function update_dudt!(dudt, u, sim, t, mantle::MaxwellMantle,
 
     # helper variables
     nabla = P.buffer_xx
-    @. nabla = 2 * sim.solidearth.effective_viscosity * sim.domain.pseudodiff *
+    @. nabla =
+        2 *
+        sim.solidearth.effective_viscosity *
+        sim.domain.pseudodiff *
         sim.solidearth.pseudodiff_scaling
 
     beta = P.buffer_x
-    @. beta = sim.solidearth.rho_uppermantle * sim.c.g + sim.solidearth.litho_rigidity *
-        sim.domain.pseudodiff ^ 4
+    @. beta =
+        sim.solidearth.rho_uppermantle * sim.c.g +
+        sim.solidearth.litho_rigidity * sim.domain.pseudodiff ^ 4
 
     # Out-of-place plans (mul!) preserve their inputs, so stage each real field into
     # P.fftrhs and transform it into a distinct buffer.
     # fourier transform load -> P.fftF
-    @. P.fftrhs = - (sim.now.columnanoms.load +
-        sim.now.columnanoms.litho) * sim.c.g * sim.domain.K ^ 2
+    @. P.fftrhs =
+        - (sim.now.columnanoms.load + sim.now.columnanoms.litho) *
+        sim.c.g *
+        sim.domain.K ^ 2
     mul!(P.fftF, tools.pfft!, P.fftrhs)
 
     # fourier transform u -> P.fftU
@@ -90,8 +120,14 @@ function update_dudt!(dudt, u, sim, t, mantle::MaxwellMantle,
     return nothing
 end
 
-function update_dudt!(dudt, u, sim, t, mantle::RealMaxwellMantle,
-    litho::L) where {L<:AbstractLithosphere}
+function update_dudt!(
+    dudt,
+    u,
+    sim,
+    t,
+    mantle::RealMaxwellMantle,
+    litho::L,
+) where {L<:AbstractLithosphere}
 
     tools = sim.tools
     P = tools.prealloc
@@ -102,16 +138,20 @@ function update_dudt!(dudt, u, sim, t, mantle::RealMaxwellMantle,
     # frequency-domain coefficient arrays: borrow the first nx2 rows of real buffers.
     # @. is NOT used here because it would turn view(...) into view.(...) (broadcasted view).
     nabla = view(P.buffer_xx, 1:nx2, :)
-    nabla .= 2 .* view(sim.solidearth.effective_viscosity, 1:nx2, :) .*
-        view(domain.pseudodiff, 1:nx2, :) .* view(sim.solidearth.pseudodiff_scaling, 1:nx2, :)
+    nabla .=
+        2 .* view(sim.solidearth.effective_viscosity, 1:nx2, :) .*
+        view(domain.pseudodiff, 1:nx2, :) .*
+        view(sim.solidearth.pseudodiff_scaling, 1:nx2, :)
 
     beta = view(P.buffer_x, 1:nx2, :)
-    beta .= sim.solidearth.rho_uppermantle .* sim.c.g .+
-        view(sim.solidearth.litho_rigidity, 1:nx2, :) .* view(domain.pseudodiff, 1:nx2, :) .^ 4
+    beta .=
+        sim.solidearth.rho_uppermantle .* sim.c.g .+
+        view(sim.solidearth.litho_rigidity, 1:nx2, :) .*
+        view(domain.pseudodiff, 1:nx2, :) .^ 4
 
     # rfft of load — stage into P.rhs (real), then transform out-of-place into P.fftF
-    @. P.rhs = -(sim.now.columnanoms.load + sim.now.columnanoms.litho) *
-        sim.c.g * domain.K ^ 2
+    @. P.rhs =
+        -(sim.now.columnanoms.load + sim.now.columnanoms.litho) * sim.c.g * domain.K ^ 2
     mul!(P.fftF, tools.pfft!, P.rhs)
 
     # rfft of u
@@ -129,8 +169,14 @@ function update_dudt!(dudt, u, sim, t, mantle::RealMaxwellMantle,
     return nothing
 end
 
-function update_dudt!(dudt, u, sim, t, mantle::RealMaxwellMantle,
-    lithosphere::LaterallyVariableLithosphere)
+function update_dudt!(
+    dudt,
+    u,
+    sim,
+    t,
+    mantle::RealMaxwellMantle,
+    lithosphere::LaterallyVariableLithosphere,
+)
     domain, P = sim.domain, sim.tools.prealloc
     nx2 = domain.nx ÷ 2 + 1
     update_deformation_rhs!(sim, u)
@@ -145,8 +191,14 @@ function update_dudt!(dudt, u, sim, t, mantle::RealMaxwellMantle,
     return nothing
 end
 
-function update_dudt!(dudt, u, sim, t, mantle::MaxwellMantle,
-    lithosphere::LaterallyVariableLithosphere)
+function update_dudt!(
+    dudt,
+    u,
+    sim,
+    t,
+    mantle::MaxwellMantle,
+    lithosphere::LaterallyVariableLithosphere,
+)
     domain, P = sim.domain, sim.tools.prealloc
     update_deformation_rhs!(sim, u)
     # Stage the real-valued rhs into a complex buffer, then apply the out-of-place
@@ -170,22 +222,45 @@ function update_deformation_rhs!(sim::Simulation, u)
 
     domain, P = sim.domain, sim.tools.prealloc
     @. P.rhs = -sim.c.g * sim.now.columnanoms.full
-    update_second_derivatives!(P.buffer_xx, P.buffer_yy, P.buffer_x,
-        P.buffer_xy, u, domain)
+    update_second_derivatives!(
+        P.buffer_xx,
+        P.buffer_yy,
+        P.buffer_x,
+        P.buffer_xy,
+        u,
+        domain,
+    )
 
-    @. P.Mxx = -sim.solidearth.litho_rigidity *
+    @. P.Mxx =
+        -sim.solidearth.litho_rigidity *
         muladd(sim.solidearth.litho_poissonratio, P.buffer_yy, P.buffer_xx)
-    @. P.Myy = -sim.solidearth.litho_rigidity *
+    @. P.Myy =
+        -sim.solidearth.litho_rigidity *
         muladd(sim.solidearth.litho_poissonratio, P.buffer_xx, P.buffer_yy)
-    @. P.Mxy = -sim.solidearth.litho_rigidity *
-        (1 - sim.solidearth.litho_poissonratio) * P.buffer_xy
-    update_second_derivatives!(P.buffer_xx, P.buffer_yy, P.buffer_x, P.buffer_xy,
-        P.Mxx, P.Myy, P.Mxy, domain)
+    @. P.Mxy =
+        -sim.solidearth.litho_rigidity *
+        (1 - sim.solidearth.litho_poissonratio) *
+        P.buffer_xy
+    update_second_derivatives!(
+        P.buffer_xx,
+        P.buffer_yy,
+        P.buffer_x,
+        P.buffer_xy,
+        P.Mxx,
+        P.Myy,
+        P.Mxy,
+        domain,
+    )
     @. P.rhs += P.buffer_xx + muladd(2, P.buffer_xy, P.buffer_yy)
 
     P.buffer_x .= P.rhs
-    samesize_conv!(P.rhs, P.buffer_x, sim.tools.smooth_convo,
-        sim.tools.conv_helpers, sim.domain)
+    samesize_conv!(
+        P.rhs,
+        P.buffer_x,
+        sim.tools.smooth_convo,
+        sim.tools.conv_helpers,
+        sim.domain,
+    )
     return nothing
 end
 
@@ -193,7 +268,7 @@ end
 $(TYPEDSIGNATURES)
 
 Compute the horizontal displacement field from the vertical displacement field `u`.
-Equation used for this can be found at [https://en.wikipedia.org/wiki/Plate_theory].
+Equations can be found at [https://en.wikipedia.org/wiki/Plate_theory].
 Since we assume an isotropic material under pure bending, the in-plane displacement is 0.
 The mid-surface of the thin plate is assumed to be at `litho_thickness / 2`.
 """
@@ -204,8 +279,13 @@ function thinplate_horizontal_displacement(u, litho_thickness, domain)
     return u_x, u_y
 end
 
-function thinplate_horizontal_displacement!(u_x::M, u_y::M, u::M,
-    litho_thickness::M, domain) where {M<:AbstractMatrix}
+function thinplate_horizontal_displacement!(
+    u_x::M,
+    u_y::M,
+    u::M,
+    litho_thickness::M,
+    domain,
+) where {M<:AbstractMatrix}
     dx!(u_x, u, domain)
     dy!(u_y, u, domain)
     @. u_x *= -litho_thickness / 2
@@ -223,12 +303,21 @@ $(TYPEDSIGNATURES)
 Update the elastic response by convoluting the Green's function with the load anom.
 To use coefficients differing from [^Farrell1972], see [GIATools](@ref).
 """
-function update_elasticresponse!(sim::Simulation, lithosphere::L) where {L<:AbstractLithosphere}
+function update_elasticresponse!(
+    sim::Simulation,
+    lithosphere::L,
+) where {L<:AbstractLithosphere}
 
     @. sim.tools.prealloc.buffer_x = sim.now.columnanoms.load * sim.domain.K ^ 2
-    samesize_conv!(sim.now.ue, sim.tools.prealloc.buffer_x,
-        sim.tools.elastic_convo, sim.tools.conv_helpers, sim.domain,
-        sim.bcs.elastic_displacement, sim.bcs.elastic_displacement.space)
+    samesize_conv!(
+        sim.now.ue,
+        sim.tools.prealloc.buffer_x,
+        sim.tools.elastic_convo,
+        sim.tools.conv_helpers,
+        sim.domain,
+        sim.bcs.elastic_displacement,
+        sim.bcs.elastic_displacement.space,
+    )
     # sim.now.ue .= samesize_conv(sim.now.columnanoms.load .* sim.domain.K .^ 2,
     #     sim.tools.elastic_convo, sim.domain)
     return nothing

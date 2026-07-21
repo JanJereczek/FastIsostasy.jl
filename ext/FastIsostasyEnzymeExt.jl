@@ -272,18 +272,18 @@ end
 # Cost is one forward pass per θ component — affordable only for low-dim (encoded) θ,
 # which `TangentMode` enforces.
 #
-# `forward_predict!` only has an Enzyme-legal path for `FIEuler` (the direct-Euler
+# `forward_predict!` only has an Enzyme-legal path for `EulerIntegrator` (the direct-Euler
 # loop, roadmap §4 note (a)); adaptive algorithms fall through to the stateful
-# `FIIntegrator`, whose `Vector{Matrix}` stage buffers overflow Enzyme's static
+# `TableauIntegratorState`, whose `Vector{Matrix}` stage buffers overflow Enzyme's static
 # type analysis (`EnzymeNoTypeError`, opaque unless you already know this). Guard
 # up front with the documented restriction instead of surfacing that error.
 # =============================================================================
 
-_require_fieuler(prob) = prob.sim.opts.diffeq.alg isa FastIsostasy.FIEuler || error(
+_require_fieuler(prob) = prob.sim.opts.diffeq.alg isa FastIsostasy.EulerIntegrator || error(
     "TangentMode v1 is fixed-step only: gradient!/loss_and_gradient! require " *
-    "prob.sim.opts.diffeq.alg isa FIEuler (got " *
+    "prob.sim.opts.diffeq.alg isa EulerIntegrator (got " *
     "$(typeof(prob.sim.opts.diffeq.alg))). Adaptive algorithms build the " *
-    "FIIntegrator inside forward_predict!, which Enzyme's static type analysis " *
+    "TableauIntegratorState inside forward_predict!, which Enzyme's static type analysis " *
     "cannot handle (surfaces as a cryptic EnzymeNoTypeError instead).")
 
 function gradient!(g, prob::AbstractInversion, θ, ::TangentMode)

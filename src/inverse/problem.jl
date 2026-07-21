@@ -255,8 +255,8 @@ function allocate_predictions(prob::AbstractInversion)
 end
 
 # Fixed-step explicit-Euler advance from `t` to `target`, mathematically identical
-# to the `FIEuler` integrator path (`uₖ₊₁ = uₖ + h·f(uₖ,tₖ)`), but Enzyme-legal: it
-# avoids the `FIIntegrator`'s `Vector{Matrix}` stage buffers and deep nested type,
+# to the `EulerIntegrator` integrator path (`uₖ₊₁ = uₖ + h·f(uₖ,tₖ)`), but Enzyme-legal: it
+# avoids the `TableauIntegratorState`'s `Vector{Matrix}` stage buffers and deep nested type,
 # which exceed Enzyme's static type analysis. `update_diagnostics!` (= the RHS) syncs
 # `sim.now` each eval (`update_bedrock!`: `sim.now.u .= u`); a final eval at `target`
 # leaves `sim.now` at the save state so `extract!` reads current diagnostics.
@@ -272,15 +272,15 @@ function _advance_euler!(sim, u, dudt, t, target, dt)
 end
 
 # Run the forward model, stopping at each observation time, and fill `preds` (one
-# vector per observation). Dispatches on the algorithm: fixed-step `FIEuler` uses the
+# vector per observation). Dispatches on the algorithm: fixed-step `EulerIntegrator` uses the
 # AD-legal direct loop; adaptive algorithms use the stateful integrator (not
 # differentiable — TangentMode v1 is fixed-step only). Static dispatch keeps Enzyme
-# from analysing the integrator branch when the sim is `FIEuler`.
+# from analysing the integrator branch when the sim is `EulerIntegrator`.
 function forward_predict!(preds, prob::AbstractInversion)
     return _forward_run!(preds, prob, prob.sim.opts.diffeq.alg)
 end
 
-function _forward_run!(preds, prob::AbstractInversion, ::FIEuler)
+function _forward_run!(preds, prob::AbstractInversion, ::EulerIntegrator)
     sim = prob.sim
     dt = sim.opts.diffeq.dt_min
     reset_state!(sim)          # restart from the initial condition each evaluation

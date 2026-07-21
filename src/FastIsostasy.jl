@@ -132,14 +132,16 @@ export AbstractSeaSurface, AbstractSealevelLoad
 export NoSealevelLoad, InteractiveSealevelLoad
 export LaterallyConstantSeaSurface, LaterallyVariableSeaSurface, ImposedSeaSurface
 export AbstractVolumeContribution, GoelzerVolumeContribution, NoVolumeContribution
-export AbstractAdjustmentContribution, GoelzerAdjustmentContribution, NoAdjustmentContribution
+export AbstractAdjustmentContribution,
+    GoelzerAdjustmentContribution, NoAdjustmentContribution
 export AbstractDensityContribution, GoelzerDensityContribution, NoDensityContribution
 export update_dz_ss!
 
 # material.jl
 export AbstractCalibration, NoCalibration, SeakonCalibration, apply_calibration!
 
-export AbstractCompressibility, IncompressibleMantle, CompressibleMantle, apply_compressibility!
+export AbstractCompressibility,
+    IncompressibleMantle, CompressibleMantle, apply_compressibility!
 
 export AbstractViscosityLumping, TimeDomainViscosityLumping
 export FreqDomainViscosityLumping, MeanViscosityLumping, MeanLogViscosityLumping
@@ -153,7 +155,8 @@ export SolidEarth
 export AbstractLithosphere, AbstractMantle
 export RigidLithosphere, LaterallyConstantLithosphere, LaterallyVariableLithosphere
 export RigidMantle, RelaxedMantle, MaxwellMantle, RealMaxwellMantle
-export AbstractLithosphereColumn, IncompressibleLithosphereColumn, CompressibleLithosphereColumn
+export AbstractLithosphereColumn,
+    IncompressibleLithosphereColumn, CompressibleLithosphereColumn
 
 # deformation.jl
 export update_dudt!, update_deformation_rhs!, thinplate_horizontal_displacement
@@ -175,7 +178,8 @@ export DiffEqOptions, SolverOptions, Simulation, run!, init_integrator
 export update_diagnostics!, step!
 
 # integrators.jl
-export FIAlgorithm, FIEuler, FIBS3, FITsit5, FIRKC, fi_solve, init_fi
+export AbstractIntegrator,
+    EulerIntegrator, BS3Integrator, Tsit5Integrator, RKCIntegrator, integrate            # `init_integrator` exported above (simulation.jl group)
 
 # stability.jl
 export stability_function, real_axis_stability_limit, stability_limit
@@ -189,18 +193,33 @@ export InversionConfig, InversionData, InversionProblem, ParameterReduction
 
 # inverse/ (new inversion API)
 export AbstractDiffMode, TangentMode, AdjointMode
-export AbstractObservable, VerticalUpliftObservable, VerticalUpliftRateObservable,
-    RelativeSeaLevelObservable, Observation
+export AbstractObservable,
+    VerticalUpliftObservable,
+    VerticalUpliftRateObservable,
+    RelativeSeaLevelObservable,
+    Observation
 export SimulatedObservable, attach_simobs!
-export AbstractEncoding, Test1Encoding, Test2Encoding,
-    EOFEncoding, AutoEncoding, VariationalAutoEncoding, nparams
+export AbstractEncoding,
+    Test1Encoding,
+    Test2Encoding,
+    EOFEncoding,
+    AutoEncoding,
+    VariationalAutoEncoding,
+    nparams
 # note: `reconstruct!` is already exported by inversion.jl (shared generic)
-export AbstractRegularization, TikhonovReg, L2Reg, SurfaceSmoothnessReg,
-    DecodedBounds, BoundedQuantity, Log10Viscosity, UpperMantleDensity, LithoDensity
+export AbstractRegularization,
+    TikhonovReg,
+    L2Reg,
+    SurfaceSmoothnessReg,
+    DecodedBounds,
+    BoundedQuantity,
+    Log10Viscosity,
+    UpperMantleDensity,
+    LithoDensity
 export AbstractRegTarget, ThetaTarget, FieldTarget, SurfaceTarget
 export AbstractRegOrder, Order0, Order1
-export AbstractInversion, IceLoadInversion, ParameterInversion, loss, gradient!,
-    loss_and_gradient!, solve!
+export AbstractInversion, IceLoadInversion, ParameterInversion, loss
+export gradient!, loss_and_gradient!, solve!
 export AbstractLoss, DefaultLoss, misfit
 export ForwardRecord, record_forward!, replay_interval!
 

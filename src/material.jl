@@ -17,7 +17,8 @@ seismic velocities.
 """
 get_shearmodulus(youngmodulus, poissonratio) = youngmodulus / (2 * (1 + poissonratio))
 get_shearmodulus(ρ, Vsv, Vsh) = ρ .* (Vsv + Vsh) ./ 2
-get_shearmodulus(m::ReferenceSolidEarthModel) = get_shearmodulus(m.density, m.Vsv, m.Vsh)
+get_shearmodulus(m::ReferenceSolidEarthModel) =
+    get_shearmodulus(m.density, m.Vsv, m.Vsh)
 
 ######################################################################################
 # Effect of mantle compressibility on effective viscosity
@@ -46,7 +47,8 @@ apply_compressibility!(eta, nu, compressibility::IncompressibleMantle) = eta
 function apply_compressibility!(eta, nu, compressibility::CompressibleMantle)
     incompressible_poissonratio = 0.5f0
     mantle_poissonratio = nu
-    compressibility_scaling = (1 + incompressible_poissonratio) / (1 + mantle_poissonratio)
+    compressibility_scaling =
+        (1 + incompressible_poissonratio) / (1 + mantle_poissonratio)
     eta .*= compressibility_scaling
     return nothing
 end
@@ -69,7 +71,7 @@ struct NoCalibration end
 $(TYPEDSIGNATURES)
 """
 @kwdef struct SeakonCalibration{T}
-    ref_viscosity::T = 1f21
+    ref_viscosity::T = 1.0f21
 end
 
 
@@ -99,7 +101,7 @@ abstract type AbstractViscosityLumping end
 $(TYPEDSIGNATURES)
 """
 @kwdef struct TimeDomainViscosityLumping
-    characteristic_loadlength::Float32 = 2f6
+    characteristic_loadlength::Float32 = 2.0f6
 end
 
 """
@@ -123,8 +125,13 @@ $(TYPEDSIGNATURES)
 Compute equivalent viscosity for multilayer model by recursively applying
 the formula for a halfspace and a channel from Lingle and Clark (1975).
 """
-function get_effective_viscosity_and_scaling(domain, layer_viscosities, layer_boundaries,
-    maskactive, lumping::TimeDomainViscosityLumping)
+function get_effective_viscosity_and_scaling(
+    domain,
+    layer_viscosities,
+    layer_boundaries,
+    maskactive,
+    lumping::TimeDomainViscosityLumping,
+)
 
     characteristic_loadlength = lumping.characteristic_loadlength
     T = eltype(domain.dx)
@@ -134,25 +141,35 @@ function get_effective_viscosity_and_scaling(domain, layer_viscosities, layer_bo
     R = fill(1, domain)
 
     if size(layer_viscosities, 3) > 1
-        channel_viscosity = layer_viscosities[:, :, end - 1]
-        channel_thickness = layer_boundaries[:, :, end] - layer_boundaries[:, :, end - 1]
+        channel_viscosity = layer_viscosities[:, :, end-1]
+        channel_thickness = layer_boundaries[:, :, end] - layer_boundaries[:, :, end-1]
         viscosity_ratio = channel_viscosity ./ effective_viscosity
-        
-        @inbounds for l in axes(layer_viscosities, 3)[1:end-1]
-            channel_viscosity .= layer_viscosities[:, :, end - l]
-            channel_thickness .= layer_boundaries[:, :, end - l + 1] -
-                layer_boundaries[:, :, end - l]
+
+        @inbounds for l in axes(layer_viscosities, 3)[1:(end-1)]
+            channel_viscosity .= layer_viscosities[:, :, end-l]
+            channel_thickness .=
+                layer_boundaries[:, :, end-l+1] - layer_boundaries[:, :, end-l]
             viscosity_ratio = channel_viscosity ./ effective_viscosity
-            effective_viscosity .*= channel_scaling_timedomain(domain, viscosity_ratio,
-                channel_thickness, characteristic_loadlength)
+            effective_viscosity .*= channel_scaling_timedomain(
+                domain,
+                viscosity_ratio,
+                channel_thickness,
+                characteristic_loadlength,
+            )
         end
     end
-    
+
     return T.(effective_viscosity), T.(R)
 end
 
-function get_effective_viscosity_and_scaling(domain, layer_viscosities, layer_boundaries,
-    maskactive, lumping::FreqDomainViscosityLumping; show_steps = false)
+function get_effective_viscosity_and_scaling(
+    domain,
+    layer_viscosities,
+    layer_boundaries,
+    maskactive,
+    lumping::FreqDomainViscosityLumping;
+    show_steps = false,
+)
 
     T = eltype(domain.dx)
     R = fill(1, domain)
@@ -161,15 +178,22 @@ function get_effective_viscosity_and_scaling(domain, layer_viscosities, layer_bo
     if size(layer_viscosities, 3) > 1
         channel_thickness = similar(effective_viscosity)
         viscosity_ratio = similar(effective_viscosity)
-        
-        @inbounds for l in axes(layer_viscosities, 3)[1:end-1]
-            channel_thickness .= layer_boundaries[:, :, end - l + 1] -
-                layer_boundaries[:, :, end - l]
-            viscosity_ratio .= layer_viscosities[:, :, end - l] ./ effective_viscosity
-            R .*= channel_scaling_freqdomain_2D(domain, viscosity_ratio, channel_thickness, maskactive)
+
+        @inbounds for l in axes(layer_viscosities, 3)[1:(end-1)]
+            channel_thickness .=
+                layer_boundaries[:, :, end-l+1] - layer_boundaries[:, :, end-l]
+            viscosity_ratio .= layer_viscosities[:, :, end-l] ./ effective_viscosity
+            R .*= channel_scaling_freqdomain_2D(
+                domain,
+                viscosity_ratio,
+                channel_thickness,
+                maskactive,
+            )
             show_steps && @show extrema(R)
             if maximum(R) == typemax(eltype(R))
-                error("The scaling factor R is too large. Try to introduce intermediate layers if you do not want to change the floating point precision.")
+                error(
+                    "The scaling factor R is too large. Try to introduce intermediate layers if you do not want to change the floating point precision.",
+                )
             end
         end
 
@@ -178,26 +202,44 @@ function get_effective_viscosity_and_scaling(domain, layer_viscosities, layer_bo
     return T.(effective_viscosity), T.(R)
 end
 
-function get_effective_viscosity_and_scaling(domain, layer_viscosities, layer_boundaries,
-    maskactive, lumping::MeanViscosityLumping)
+function get_effective_viscosity_and_scaling(
+    domain,
+    layer_viscosities,
+    layer_boundaries,
+    maskactive,
+    lumping::MeanViscosityLumping,
+)
     T = eltype(domain.dx)
     R = fill(1, domain)
     T_lithosphere = layer_boundaries[:, :, 1]
     T_uppermantle = layer_boundaries[:, :, end] .- T_lithosphere
-    effective_viscosity = mean_viscosity(T_lithosphere, T_uppermantle,
-        layer_viscosities, layer_boundaries)
+    effective_viscosity = mean_viscosity(
+        T_lithosphere,
+        T_uppermantle,
+        layer_viscosities,
+        layer_boundaries,
+    )
 
     return T.(effective_viscosity), T.(R)
 end
 
-function get_effective_viscosity_and_scaling(domain, layer_viscosities, layer_boundaries,
-    maskactive, lumping::MeanLogViscosityLumping)
+function get_effective_viscosity_and_scaling(
+    domain,
+    layer_viscosities,
+    layer_boundaries,
+    maskactive,
+    lumping::MeanLogViscosityLumping,
+)
     T = eltype(domain.dx)
     R = fill(1, domain)
     T_lithosphere = layer_boundaries[:, :, 1]
     T_uppermantle = layer_boundaries[:, :, end] .- T_lithosphere
-    effective_viscosity = mean_viscosity(T_lithosphere, T_uppermantle,
-        log10.(layer_viscosities), layer_boundaries)
+    effective_viscosity = mean_viscosity(
+        T_lithosphere,
+        T_uppermantle,
+        log10.(layer_viscosities),
+        layer_boundaries,
+    )
     effective_viscosity = 10 .^ effective_viscosity
     return T.(effective_viscosity), T.(R)
 end
@@ -231,7 +273,13 @@ function channel_scaling_freqdomain_0D(
     return channel_scaling(domain, kappa, channel_thickness, visc_ratio)
 end
 
-function channel_scaling(domain, kappa, channel_thickness, visc_ratio; show_steps = false)
+function channel_scaling(
+    domain,
+    kappa,
+    channel_thickness,
+    visc_ratio;
+    show_steps = false,
+)
     Text = eltype(domain)
     Tint = Float64
 
@@ -268,8 +316,10 @@ function channel_scaling(domain, kappa, channel_thickness, visc_ratio; show_step
     cosh2 = @. (1 + a^2) / 2       # cosh(2x) * e^{-2x}
     sinh2 = @. (1 - a^2) / 2       # sinh(2x) * e^{-2x}
 
-    num = @. nu * sinh2 + (1 - nu^2) * x^2 * a + (nu^2 + 1) / 2 * cosh2 +
-        (1 - nu^2) / 2 * a
+    num = @. nu * sinh2 +
+       (1 - nu^2) * x^2 * a +
+       (nu^2 + 1) / 2 * cosh2 +
+       (1 - nu^2) / 2 * a
     show_steps && @show extrema(num)
     denum = @. (nu + 1 / nu) / 2 * sinh2 + (nu - 1 / nu) * x * a + cosh2
     show_steps && @show extrema(denum)
@@ -296,7 +346,12 @@ end
 function mean_viscosity(T_lithosphere, T_uppermantle, eta, depth)
     eta_mean = similar(T_lithosphere)
     for I in CartesianIndices(eta_mean)
-        eta_mean[I] = mean(eta[I, T_uppermantle[I] + T_lithosphere[I] .>= depth[I, :] .>= T_lithosphere[I]])
+        eta_mean[I] = mean(
+            eta[
+                I,
+                T_uppermantle[I]+T_lithosphere[I] .>= depth[I, :] .>= T_lithosphere[I],
+            ],
+        )
     end
     return eta_mean
 end
@@ -318,9 +373,9 @@ function build_greenintegrand(
 ) where {T<:AbstractFloat}
 
     greenintegrand_interp = linear_interpolation(distance, greenintegrand_coeffs)
-    compute_greenintegrand_entry_r(r::T) = get_loadgreen(
-        r, distance, greenintegrand_coeffs, greenintegrand_interp)
-    greenintegrand_function(x::T, y::T) = compute_greenintegrand_entry_r( get_r(x, y) )
+    compute_greenintegrand_entry_r(r::T) =
+        get_loadgreen(r, distance, greenintegrand_coeffs, greenintegrand_interp)
+    greenintegrand_function(x::T, y::T) = compute_greenintegrand_entry_r(get_r(x, y))
     return greenintegrand_function
 end
 
@@ -339,11 +394,11 @@ function get_loadgreen(r, rm, greenintegrand_coeffs, interp_greenintegrand_)
     T = eltype(greenintegrand_coeffs)
 
     if r < 0.01
-        return greenintegrand_coeffs[1] / ( rm[2] * T(1e12) )
+        return greenintegrand_coeffs[1] / (rm[2] * T(1e12))
     elseif r > rm[end]
         return T(0.0)
     else
-        return interp_greenintegrand_(r) / ( r * T(1e12) )
+        return interp_greenintegrand_(r) / (r * T(1e12))
     end
 end
 
@@ -392,7 +447,7 @@ function green_viscous(domain, rho, D)
     L = get_flexural_lengthscale(D, rho, 9.81)
     R = max.(domain.R, 1)
     return map(r -> -(L^2 / (2 * pi * D) * besselkei(r / L)), R) .*
-        (domain.dx * domain.dy)
+           (domain.dx * domain.dy)
 end
 
 """
@@ -444,9 +499,14 @@ function maxwelltime_scaling(layer_viscosities, layer_shearmoduli)
     return layer_shearmoduli[end] ./ layer_shearmoduli .* layer_viscosities
 end
 
-function maxwelltime_scaling!(layer_viscosities, layer_boundaries, m::ReferenceSolidEarthModel)
+function maxwelltime_scaling!(
+    layer_viscosities,
+    layer_boundaries,
+    m::ReferenceSolidEarthModel,
+)
     mu = get_shearmodulus(m)
-    layer_meandepths = (layer_boundaries[:, :, 1:end-1] + layer_boundaries[:, :, 2:end]) ./ 2
+    layer_meandepths =
+        (layer_boundaries[:, :, 1:(end-1)] + layer_boundaries[:, :, 2:end]) ./ 2
     layer_meandepths = cat(layer_meandepths, layer_boundaries[:, :, end], dims = 3)
     mu_itp = linear_interpolation(m.depth, mu)
     layer_meanshearmoduli = layer_viscosities ./ 1e21 .* mu_itp.(layer_meandepths)

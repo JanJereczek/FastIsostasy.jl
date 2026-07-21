@@ -27,22 +27,23 @@ end
 $(TYPEDSIGNATURES)
 
 """
-crop(x::V, c::PaddedOutputCrop) where {V<:AbstractVector} = x[c.pad+1:end-c.pad]
-crop(X::M, c::PaddedOutputCrop) where {M<:AbstractMatrix}= X[c.pad+1:end-c.pad, c.pad+1:end-c.pad]
+crop(x::V, c::PaddedOutputCrop) where {V<:AbstractVector} = x[(c.pad+1):(end-c.pad)]
+crop(X::M, c::PaddedOutputCrop) where {M<:AbstractMatrix} =
+    X[(c.pad+1):(end-c.pad), (c.pad+1):(end-c.pad)]
 
 function crop(x::V, c::AsymetricOutputCrop) where {V<:AbstractVector}
-    return x[c.pad_x1+1:end-c.pad_x2]
+    return x[(c.pad_x1+1):(end-c.pad_x2)]
 end
 
 function crop(X::M, c::AsymetricOutputCrop) where {M<:AbstractMatrix}
-    return X[c.pad_x1+1:end-c.pad_x2, c.pad_y1+1:end-c.pad_y2]
+    return X[(c.pad_x1+1):(end-c.pad_x2), (c.pad_y1+1):(end-c.pad_y2)]
 end
 
 ################################################################################
 # NetCDF output
 ################################################################################
 
-io_dict = Dict{Symbol, Dict{String, Any}}()
+io_dict = Dict{Symbol,Dict{String,Any}}()
 io_dict[:u] = Dict(
     "shortname" => "u",
     "longname" => "Viscous displacement",
@@ -76,7 +77,7 @@ io_dict[:dudt] = Dict(
     "longname" => "Viscous displacement rate",
     "units" => "mm/yr",
     "dims" => "x y t",
-    "map" => x -> 1f3 .* x,     # Convert from m/yr to mm/yr
+    "map" => x -> 1.0f3 .* x,     # Convert from m/yr to mm/yr
 )
 io_dict[:u_eq] = Dict(
     "shortname" => "u_eq",
@@ -167,7 +168,7 @@ io_dict[:litho_thickness] = Dict(
     "longname" => "Lithosphere thickness",
     "units" => "km",
     "dims" => "x y",
-    "map" => x -> 1f-3 .* x,        # Convert from m to km
+    "map" => x -> 1.0f-3 .* x,        # Convert from m to km
 )
 io_dict[:pseudodiff_scaling] = Dict(
     "shortname" => "R",
@@ -220,14 +221,17 @@ mutable struct NetcdfOutput{
     k::Int
 end
 
-function NetcdfOutput(domain::RegionalDomain{T, L, M}, t, filename;
+function NetcdfOutput(
+    domain::RegionalDomain{T,L,M},
+    t,
+    filename;
     vars3D = [:u, :ue, :z_b, :dz_ss],
     vars1D = [:z_bsl],
     params2D = [:effective_viscosity],
     Tout = Float32,
     output_crop = PaddedOutputCrop(0),
     solidearth = nothing,
-) where {T<:AbstractFloat, L, M}
+) where {T<:AbstractFloat,L,M}
 
     isfile(filename) && rm(filename)
 
@@ -243,28 +247,32 @@ function NetcdfOutput(domain::RegionalDomain{T, L, M}, t, filename;
     vars = NcVar[]
     for i in eachindex(vars3D)
         j = vars3D[i]
-        varatts = Dict(
-            "longname" => io_dict[j]["longname"],
-            "units" => io_dict[j]["units"],
+        varatts =
+            Dict("longname" => io_dict[j]["longname"], "units" => io_dict[j]["units"])
+        push!(
+            vars,
+            NcVar(
+                io_dict[j]["shortname"],
+                [xdim, ydim, tdim];
+                atts = varatts,
+                t = Tout,
+            ),
         )
-        push!(vars,
-            NcVar(io_dict[j]["shortname"], [xdim, ydim, tdim]; atts = varatts, t = Tout))
     end
     for i in eachindex(vars1D)
         j = vars1D[i]
-        varatts = Dict(
-            "longname" => io_dict[j]["longname"],
-            "units" => io_dict[j]["units"],
-        )
+        varatts =
+            Dict("longname" => io_dict[j]["longname"], "units" => io_dict[j]["units"])
         push!(vars, NcVar(io_dict[j]["shortname"], [tdim]; atts = varatts, t = Tout))
     end
     for i in eachindex(params2D)
         j = params2D[i]
-        varatts = Dict(
-            "longname" => io_dict[j]["longname"],
-            "units" => io_dict[j]["units"],
+        varatts =
+            Dict("longname" => io_dict[j]["longname"], "units" => io_dict[j]["units"])
+        push!(
+            vars,
+            NcVar(io_dict[j]["shortname"], [xdim, ydim]; atts = varatts, t = Tout),
         )
-        push!(vars, NcVar(io_dict[j]["shortname"], [xdim, ydim]; atts = varatts, t = Tout))
     end
 
     if occursin(".nc", filename)
@@ -278,7 +286,11 @@ function NetcdfOutput(domain::RegionalDomain{T, L, M}, t, filename;
                 j = params2D[i]
                 crop_promote!(buffer, solidearth, j, Tout, M, output_crop)
                 NetCDF.open(filename, mode = NC_WRITE) do nc
-                    NetCDF.putvar(nc, io_dict[j]["shortname"], io_dict[j]["map"].(buffer))
+                    NetCDF.putvar(
+                        nc,
+                        io_dict[j]["shortname"],
+                        io_dict[j]["map"].(buffer),
+                    )
                 end
             end
         end
@@ -287,8 +299,17 @@ function NetcdfOutput(domain::RegionalDomain{T, L, M}, t, filename;
     else
         @warn "NetCDF filename does not end with '.nc' and is therefore ignored."
     end
-    
-    return NetcdfOutput(Tout.(t), filename, buffer, vars3D, vars1D, params2D, output_crop, 1)
+
+    return NetcdfOutput(
+        Tout.(t),
+        filename,
+        buffer,
+        vars3D,
+        vars1D,
+        params2D,
+        output_crop,
+        1,
+    )
 end
 
 function crop_promote!(out, state, var, Tout, M, oc)
@@ -299,14 +320,22 @@ function crop_promote!(out, state, var, Tout, M, oc)
     end
 end
 
-function write_nc!(ncout::NetcdfOutput{Tout}, state::CurrentState{T, M}, k::Int) where {
-    T<:AbstractFloat, M, Tout<:AbstractFloat}
+function write_nc!(
+    ncout::NetcdfOutput{Tout},
+    state::CurrentState{T,M},
+    k::Int,
+) where {T<:AbstractFloat,M,Tout<:AbstractFloat}
     for i in eachindex(ncout.vars3D)
         j = ncout.vars3D[i]
         crop_promote!(ncout.buffer, state, ncout.vars3D[i], Tout, M, ncout.oc)
         NetCDF.open(ncout.filename, mode = NC_WRITE) do nc
-            NetCDF.putvar(nc, io_dict[j]["shortname"], ncout.buffer,
-                start = [1, 1, k], count = [-1, -1, 1])
+            NetCDF.putvar(
+                nc,
+                io_dict[j]["shortname"],
+                ncout.buffer,
+                start = [1, 1, k],
+                count = [-1, -1, 1],
+            )
         end
     end
     for i in eachindex(ncout.vars1D)
@@ -336,13 +365,13 @@ nout = NativeOutput(vars = [:u, :ue, :b, :dz_ss, :H_ice, :H_water, :u_x, :u_y],
 mutable struct NativeOutput{T<:AbstractFloat}
     t::Vector{T}
     vars::Vector{Symbol}
-    vals::Dict{Symbol, Vector{Matrix{T}}}
+    vals::Dict{Symbol,Vector{Matrix{T}}}
     computation_time::T
     k::Int
 end
 
 function NativeOutput(; t = Float32[], vars = Symbol[], T = Float32)
-    vals = Dict{Symbol, Vector{Matrix{T}}}(var => Matrix{T}[] for var in vars)
+    vals = Dict{Symbol,Vector{Matrix{T}}}(var => Matrix{T}[] for var in vars)
     return NativeOutput(t, vars, vals, T(0), 1)
 end
 

@@ -17,8 +17,15 @@
 # it reads the `ux` the fused kernel just wrote.
 function update_second_derivatives!(uxx, uyy, ux, uxy, u, domain)
     backend = get_backend(u)
-    dxx_dyy_dx_kernel!(backend)(uxx, uyy, ux, u, domain.Dx, domain.Dy;
-        ndrange = (domain.nx, domain.ny))
+    dxx_dyy_dx_kernel!(backend)(
+        uxx,
+        uyy,
+        ux,
+        u,
+        domain.Dx,
+        domain.Dy;
+        ndrange = (domain.nx, domain.ny),
+    )
     synchronize(backend)
     dy_kernel!(backend)(uxy, ux, domain.Dy; ndrange = (domain.nx, domain.ny))
     synchronize(backend)
@@ -57,7 +64,7 @@ end
 function dxx!(du::Matrix, u::Matrix, domain)   # CPU
     nx = domain.nx
     @inbounds for j in axes(du, 2)
-        for i in 2:nx-1
+        for i = 2:(nx-1)
             du[i, j] = (u[i+1, j] - 2*u[i, j] + u[i-1, j]) / (domain.Dx[i, j] ^ 2)
         end
         du[1, j] = (u[3, j] - 2*u[2, j] + u[1, j]) / (domain.Dx[1, j] ^ 2)
@@ -81,7 +88,7 @@ end
 
 function dyy!(du::Matrix, u::Matrix, domain)   # CPU
     ny = domain.ny
-    @inbounds for j in 2:ny-1
+    @inbounds for j = 2:(ny-1)
         for i in axes(du, 1)
             du[i, j] = (u[i, j+1] - 2*u[i, j] + u[i, j-1]) / (domain.Dy[i, j] ^ 2)
         end
@@ -116,7 +123,7 @@ end
 function dx!(du::Matrix, u::Matrix, domain)   # CPU
     nx = domain.nx
     @inbounds for j in axes(du, 2)
-        for i in 2:nx-1
+        for i = 2:(nx-1)
             du[i, j] = (u[i+1, j] - u[i-1, j]) / (2 * domain.Dx[i, j])
         end
         du[1, j] = (u[2, j] - u[1, j]) / domain.Dx[1, j]
@@ -134,7 +141,7 @@ end
 
 function dy!(du::Matrix, u::Matrix, domain)   # CPU
     ny = domain.ny
-    @inbounds for j in 2:ny-1
+    @inbounds for j = 2:(ny-1)
         for i in axes(du, 1)
             du[i, j] = (u[i, j+1] - u[i, j-1]) / (2 * domain.Dy[i, j])
         end
@@ -154,8 +161,8 @@ $(TYPEDSIGNATURES)
 
 Compute the matrices representing the differential operators in the fourier space.
 """
-get_differential_fourier(domain) = get_differential_fourier(domain.Wx, domain.Wy, domain.nx,
-    domain.ny)
+get_differential_fourier(domain) =
+    get_differential_fourier(domain.Wx, domain.Wy, domain.nx, domain.ny)
 
 function get_differential_fourier(Wx::T, Wy::T, nx::Int, ny::Int) where {T<:Real}
     mu_x = π / Wx
@@ -172,7 +179,7 @@ end
 function fftint(N::Int)
     N2 = N ÷ 2
     if iseven(N)
-        return vcat(0:N2, N2-1:-1:1)
+        return vcat(0:N2, (N2-1):-1:1)
     else
         return vcat(0:N2, N2:-1:1)
     end

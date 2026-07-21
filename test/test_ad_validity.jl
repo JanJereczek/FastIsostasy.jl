@@ -1,5 +1,5 @@
 # Phase-2 AD validity (the go/no-go): forward-mode Enzyme gradient of the full
-# inversion `loss` — reconstruct! → fixed-step FIEuler run → data misfit — through
+# inversion `loss` — reconstruct! → fixed-step EulerIntegrator run → data misfit — through
 # the explicit lat-variable Maxwell path, validated against central finite
 # differences. Also exercises `gradient!(::TangentMode)` end to end.
 
@@ -16,7 +16,7 @@ function build_ad_prob(; n = 5, dt = 100.0, tend = 400.0)
     se = SolidEarth(domain; lithosphere = LaterallyVariableLithosphere(),
         layer_boundaries = [88.0e3], layer_viscosities = [1.0e21])
     opts = SolverOptions(; verbose = false, transition = SmoothTransition(10.0),
-        diffeq = DiffEqOptions(alg = FIEuler(), dt_min = dt))
+        diffeq = DiffEqOptions(alg = EulerIntegrator(), dt_min = dt))
     nout = FastIsostasy.NativeOutput(t = Float64[], vars = Symbol[], T = Float64)
     sim = Simulation(domain, bcs, RegionalSeaLevel(), se, (0.0, tend);
         opts = opts, nout = nout)

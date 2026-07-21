@@ -2,6 +2,10 @@
 $(TYPEDSIGNATURES)
 
 Abstract type for domain representation in the model.
+
+# Available subtypes:
+- [`RegionalDomain`](@ref)
+- [`GlobalDomain`](@ref): Not implemented yet, but hopefully in v3.0!
 """
 abstract type AbstractDomain end
 
@@ -15,24 +19,28 @@ Version 3.0 will allow for global domains.
 struct GlobalDomain <: AbstractDomain end
 
 """
-    RegionalDomain
-    RegionalDomain(W, n)
-    RegionalDomain(Wx, Wy, nx, ny)
+$(TYPEDSIGNATURES)
 
-Return a struct containing all information related to geometry of the domain
-and potentially used parallelism. To initialize one with `2*W` and `2^n` grid cells:
+Define a regional domain, including its geometry and the architecture it should be running on.
 
+# Initialization
+
+For a square domain with half-width `W` and `2^n` grid points in each dimension:
 ```julia
 domain = RegionalDomain(W, n)
 ```
 
-If a rectangular domain is needed, run:
-
+For a rectangular domain with half-widths `Wx` and `Wy` and `nx` and `ny` grid points in each dimension:
 ```julia
 domain = RegionalDomain(Wx, Wy, nx, ny)
 ```
+
+For a rectangular domain with spanning vectors `x` and `y`:
+```julia
+domain = RegionalDomain(x, y)           # rectangular domain: spanning vectors x, y
+```
 """
-struct RegionalDomain{T, L, M, K} <: AbstractDomain
+struct RegionalDomain{T,L,M,K} <: AbstractDomain
 
     Wx::T                       # Domain half-width in x (m)
     Wy::T                       # Domain half-width in y (m)
@@ -77,7 +85,13 @@ function RegionalDomain(W::T, n::Int; kwargs...) where {T<:AbstractFloat}
     return RegionalDomain(Wx, Wy, nx, ny; kwargs...)
 end
 
-function RegionalDomain(Wx::T, Wy::T, nx::Int, ny::Int; kwargs...) where {T<:AbstractFloat}
+function RegionalDomain(
+    Wx::T,
+    Wy::T,
+    nx::Int,
+    ny::Int;
+    kwargs...,
+) where {T<:AbstractFloat}
     mx, my = nx ÷ 2, ny ÷ 2
     dx = 2*Wx / nx
     dy = 2*Wy / ny
@@ -85,7 +99,6 @@ function RegionalDomain(Wx::T, Wy::T, nx::Int, ny::Int; kwargs...) where {T<:Abs
     y = collect(range(-Wy+dy, stop = Wy, length = ny))
     return RegionalDomain(x, y, dx, dy, Wx, Wy, nx, ny, mx, my; kwargs...)
 end
-
 
 function RegionalDomain(x::Vector{T}, y::Vector{T}; kwargs...) where {T<:AbstractFloat}
     nx = length(x)
@@ -133,9 +146,11 @@ function RegionalDomain(
     zeros = fill(T(0), nx, ny)
     R = get_r.(X, Y)
 
-    lonlat2target = Proj.Transformation(proj_lonlat,
+    lonlat2target = Proj.Transformation(
+        proj_lonlat,
         "$proj_target +lat_0=$lat_0 +lat_ts=$lat_ref +lon_0=$lon_0 +lon_ts=$lon_ref",
-        always_xy=true)
+        always_xy = true,
+    )
     target2lonlat = Proj.inv(lonlat2target)
     coords = target2lonlat.(X, Y)
     Lon = T.(map(x -> x[1], coords))
@@ -167,8 +182,8 @@ function RegionalDomain(
     # 2007's corner normalisation — the constant is then supplied by the BC,
     # not the dynamics; it only differs from this under NoBC.) See
     # roadmaps/stabilise_dt.md §1/§4.
-    pseudodiff[1, 1] = mean([pseudodiff[1,2], pseudodiff[2,1]])
-    
+    pseudodiff[1, 1] = mean([pseudodiff[1, 2], pseudodiff[2, 1]])
+
     use_cuda = arraykernel !== Array
     zeros, K, pseudodiff = kernelpromote([zeros, K, pseudodiff], arraykernel)
 
@@ -177,10 +192,38 @@ function RegionalDomain(
     convo_offset = (ny - nx) ÷ 2
     convo_offset = 0
 
-    return RegionalDomain(Wx, Wy, nx, ny, mx, my, dx, dy, x, y, X, Y,
-        i1, i2, j1, j2, convo_offset,
-        R, Theta, Lat, Lon, K, K .* dx, K .* dy, (dx * dy) .* K .^ 2, correct_distortion,
-        zeros, pseudodiff, use_cuda, arraykernel)
+    return RegionalDomain(
+        Wx,
+        Wy,
+        nx,
+        ny,
+        mx,
+        my,
+        dx,
+        dy,
+        x,
+        y,
+        X,
+        Y,
+        i1,
+        i2,
+        j1,
+        j2,
+        convo_offset,
+        R,
+        Theta,
+        Lat,
+        Lon,
+        K,
+        K .* dx,
+        K .* dy,
+        (dx * dy) .* K .^ 2,
+        correct_distortion,
+        zeros,
+        pseudodiff,
+        use_cuda,
+        arraykernel,
+    )
 end
 
 Base.eltype(domain::RegionalDomain) = eltype(domain.x)

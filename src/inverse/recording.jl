@@ -17,11 +17,12 @@
 # nothing after the last observation time affects the loss, so nothing after it
 # is recorded.
 #
-# Replay is currently `FIEuler`-only, mirroring `_forward_run!`'s direct-Euler
-# loop. Adaptive algorithms record fine (via the integrator's `steplog`), but
-# replaying them needs the integrator's FSAL state — `integ.u` differs bitwise
-# from the projected `sim.now.u` after an accepted step — which is deferred to
-# the adaptive-adjoint work (roadmap Phase 5+).
+# Replay supports `EulerIntegrator` (mirroring `_forward_run!`'s direct-Euler loop) and
+# `RKCIntegrator` (frozen `(t, dt, s)` RKC2 recurrence, roadmap §7 — non-FSAL, so a step
+# is a pure function of `(u, t, dt, s)` with no integrator state to carry). The
+# FSAL tableau methods (`BS3Integrator`/`Tsit5Integrator`) still record fine but cannot replay:
+# `integ.u` differs bitwise from the projected `sim.now.u` after an accepted
+# step, deferred to the adaptive-adjoint work (roadmap Phase 5+).
 # =============================================================================
 
 """
@@ -32,7 +33,7 @@ save/observation-interval boundary (`length(prob.extract_times) + 1`, including
 the state at the end of the run) and one accepted-steplog-entry vector per
 interval. The entry type `E` follows `prob.sim.opts.diffeq.alg` via
 `steplog_entry_type` (`Tuple{T,T}` for the tableau algorithms, widened to
-`Tuple{T,T,Int}` for `FIRKC` — see `steplog_entry`/`steplog_entry_type` in
+`Tuple{T,T,Int}` for `RKCIntegrator` — see `steplog_entry`/`steplog_entry_type` in
 `src/integrators.jl`), so `push!`ing whatever `steplog_entry` a given
 algorithm's integrator produces always matches the buffer's element type.
 Reusable across recordings — step vectors are emptied, snapshots overwritten.
@@ -70,12 +71,12 @@ function record_forward!(preds, rec::ForwardRecord, prob::AbstractInversion)
     return _record_run!(preds, rec, prob, prob.sim.opts.diffeq.alg)
 end
 
-# Fixed-step explicit Euler: the recorded twin of `_forward_run!(_, _, ::FIEuler)`
+# Fixed-step explicit Euler: the recorded twin of `_forward_run!(_, _, ::EulerIntegrator)`
 # (problem.jl). The loop scalars are held in the record's step type `T` so the
 # logged `(t, h)` are exactly the values passed to the RHS — a frozen replay then
 # reproduces every evaluation bitwise.
 function _record_run!(preds, rec::ForwardRecord{T}, prob::AbstractInversion,
-        ::FIEuler) where {T}
+        ::EulerIntegrator) where {T}
     sim = prob.sim
     dt = T(sim.opts.diffeq.dt_min)
     reset_state!(sim)
@@ -136,7 +137,7 @@ function replay_interval!(u, dudt, rec::ForwardRecord, prob::AbstractInversion, 
 end
 
 function _replay_interval!(u, dudt, rec::ForwardRecord{T}, prob::AbstractInversion,
-        i, ::FIEuler) where {T}
+        i, ::EulerIntegrator) where {T}
     sim = prob.sim
     restore!(sim, rec.checkpoints[i])
     copyto!(u, sim.now.u)
@@ -148,9 +149,38 @@ function _replay_interval!(u, dudt, rec::ForwardRecord{T}, prob::AbstractInversi
     return u
 end
 
+# RKCIntegrator: frozen `(t, dt, s)` replay of the RKC2 recurrence (roadmap §7). Unlike
+# the FSAL tableau methods, an RKC step is a pure function of `(u, t, dt, s)`
+# (`fsal_carryover!(::RKCIntegratorState) = nothing`, and the error-estimate eval is
+# not carried into the next step's `F0`), so replay needs only the recorded
+# `(t, dt, s)` — no integrator/FSAL state. The recurrence needs four extra
+# grid-sized scratch buffers beyond the caller's `u`/`dudt`; they are allocated
+# here (this primitive is not the differentiated hot path — the checkpointing
+# extension allocates its own locals for `Enzyme.autodiff`).
+# `rkc_stage_plan`/`rkc_replay_stages!` (`src/integrators.jl`) are the shared
+# recurrence, keeping this bit-identical to both `record_forward!` and the
+# extension's replay.
+function _replay_interval!(u, dudt, rec::ForwardRecord{T}, prob::AbstractInversion,
+        i, alg::RKCIntegrator) where {T}
+    sim = prob.sim
+    y0, y2, ynext, F0 = similar(u), similar(u), similar(u), similar(u)
+    restore!(sim, rec.checkpoints[i])
+    copyto!(u, sim.now.u)
+    # `u` is the running state (`y1`) and `dudt` the per-stage RHS buffer (`F`).
+    plan = rkc_stage_plan(T, rec.steps[i], T(alg.damping))
+    rkc_replay_stages!(update_diagnostics!, y0, u, y2, ynext, dudt, F0, sim, plan)
+    # No interval-end sync eval (unlike EulerIntegrator): each step's trailing
+    # error-estimate stage in the plan already leaves `sim.now`
+    # synced at (Y_s, t+dt), and the last step's t+dt is exactly this
+    # interval's end time — mirroring `record_forward!`, whose last RHS eval is
+    # likewise that step's error-estimate eval.
+    return u
+end
+
 function _replay_interval!(u, dudt, rec::ForwardRecord, prob::AbstractInversion, i, alg)
-    error("replay_interval! currently supports FIEuler only: replaying an " *
-          "adaptive $(typeof(alg)) interval needs the integrator's FSAL state " *
-          "(`integ.u` differs bitwise from the projected `sim.now.u`), which is " *
-          "deferred to the adaptive-adjoint work (roadmap Phase 5+).")
+    error("replay_interval! supports EulerIntegrator and RKCIntegrator only: replaying an " *
+          "adaptive FSAL $(typeof(alg)) interval needs the integrator's FSAL " *
+          "state (`integ.u` differs bitwise from the projected `sim.now.u`), " *
+          "which is deferred to the adaptive-adjoint work (roadmap Phase 5+). " *
+          "RKCIntegrator avoids this by being non-FSAL — use it for stiff adjoint runs.")
 end

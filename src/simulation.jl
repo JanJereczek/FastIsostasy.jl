@@ -4,29 +4,37 @@
 """
 $(TYPEDSIGNATURES)
 
-Contains:
-- `alg`: the [`FIAlgorithm`](@ref) used to integrate the ODE forward in time,
-  one of `FIBS3()` (adaptive, default), `FITsit5()` (adaptive) or `FIEuler()`
-  (fixed step, requires `dt_min`).
-- `reltol`: the relative error tolerance of the adaptive controller.
-- `abstol`: the absolute error tolerance of the adaptive controller.
-- `dt_min`: fixed step size for `FIEuler`, and a lower bound on the adaptive
-  step size otherwise.
-- `dt0`: initial step size for the adaptive backend (`nothing` picks a
-  conservative default).
+Control the options of `integrator<:AbstractIntegrator`.
+
+# Fields
+ - `alg`: the [`AbstractIntegrator`](@ref) used to integrate the ODE forward in time,
+   one of `BS3Integrator()` (adaptive, default), `Tsit5Integrator()` (adaptive) or `EulerIntegrator()`
+   (fixed step, requires `dt_min`).
+ - `reltol`: the relative error tolerance of the adaptive controller.
+ - `abstol`: the absolute error tolerance of the adaptive controller.
+ - `dt_min`: fixed step size for `EulerIntegrator`, and a lower bound on the adaptive
+   step size otherwise.
+ - `dt0`: initial step size for the adaptive backend (`nothing` picks a
+   conservative default).
 """
 @kwdef struct DiffEqOptions{S}
-    alg::S = FIBS3()
-    reltol::AbstractFloat = 1f-5
-    abstol::AbstractFloat = 1f-6
-    dt_min::Union{Real, Nothing} = nothing
-    dt0::Union{Real, Nothing} = nothing
+    alg::S = BS3Integrator()
+    reltol::AbstractFloat = 1.0f-5
+    abstol::AbstractFloat = 1.0f-6
+    dt_min::Union{Real,Nothing} = nothing
+    dt0::Union{Real,Nothing} = nothing
 end
 
 """
 $(TYPEDSIGNATURES)
 
-Return a struct containing the options relative to solving a [`Simulation`](@ref).
+Control options relative to solving a [`Simulation`](@ref).
+
+# Fields
+ - `diffeq`: the [`DiffEqOptions`](@ref) controlling the ODE solver.
+ - `dt_sparse_diagnostics`: the time interval between updates of the diagnostics variables (elastic displacement, sea-surface elevation, etc.).
+ - `verbose`: whether to print information about the simulation progress.
+ - `transition`: the [`AbstractTransition`](@ref) used to smooth the transition between grounded and floating ice, and between ocean and land.
 """
 @kwdef struct SolverOptions{TR<:AbstractTransition}
     diffeq::DiffEqOptions = DiffEqOptions()
@@ -35,22 +43,28 @@ Return a struct containing the options relative to solving a [`Simulation`](@ref
     transition::TR = SharpTransition()
 end
 
+"""
+$(TYPEDSIGNATURES)
+
+Control the timing of the simulation and store the time evolution of the computation time.
+
+# Fields
+ - `t`: the current simulation time.
+ - `t_span`: the time span of the simulation.
+ - `t_vec`: the vector of times at which the computation time was recorded.
+ - `t_computation_0`: the time at which the computation started.
+ - `t_computation`: the vector of computation times corresponding to `t_vec`.
+"""
 mutable struct Timer{T}
     t::T
-    t_span::Tuple{T, T}
+    t_span::Tuple{T,T}
     t_vec::Vector{T}
     t_computation_0::T
     t_computation::Vector{T}
 end
 
 function Timer(t_span; T = Float32)
-    return Timer(
-        T(t_span[1]),
-        T.(t_span),
-        T[],
-        T(0),
-        T[],
-    )
+    return Timer(T(t_span[1]), T.(t_span), T[], T(0), T[])
 end
 
 function t_computation!(tt::Timer)
@@ -69,20 +83,22 @@ end
 """
 $(TYPEDSIGNATURES)
 
-    Simulation(domain, c, solidearth, t_out)
-    Simulation(domain, c, solidearth, t_out, Hice)
-    Simulation(domain, c, solidearth, t_out, t_Hice, Hice)
+A superstruct needed for the forward integration of the model.
 
-Return a struct containing all the other structs needed for the forward integration of the
-model over `domain::RegionalDomain` with parameters `c::PhysicalConstants` and
-`solidearth::SolidEarth`. The outputs are stored at `t_out::Vector{<:AbstractFloat}`.
-To perform the whole simulation, `run!(sim::Simulation)` and to perform a single step:
-
-```julia
-t_span = (t_start, t_end)
-integrator = init_integrator(sim)
-step!(integrator, t_span)
-```
+# Fields
+ - `domain`: the [`AbstractDomain`](@ref) defining the spatial discretization.
+ - `c`: the [`PhysicalConstants`](@ref) defining the physical constants of the model.
+ - `bcs`: the [`BoundaryConditions`](@ref) defining the boundary conditions of the model.
+ - `sealevel`: the [`RegionalSeaLevel`](@ref) defining the sea level evolution.
+ - `solidearth`: the [`SolidEarth`](@ref) defining the solid earth properties.
+ - `opts`: the [`SolverOptions`](@ref) controlling the solver options.
+ - `tools`: the [`GIATools`](@ref) providing tools for GIA computations.
+ - `ref`: the [`ReferenceState`](@ref) defining the reference state of the model.
+ - `now`: the [`CurrentState`](@ref) defining the current state of the model.
+ - `ncout`: the [`NetcdfOutput`](@ref) controlling the NetCDF output.
+ - `nout`: the [`NativeOutput`](@ref) controlling the native output.
+ - `timer`: the [`Timer`](@ref) controlling and recording timing information.
+ - `simobs`: a vector of [`SimulatedObservable`](@ref) defining simulated observables to be computed during integration.
 """
 struct Simulation{
     CD,     # <:AbstractDomain
@@ -125,7 +141,7 @@ function Simulation(
     u_ref = zeros(domain),
     ue_ref = zeros(domain),
     dz_ss_ref = zeros(domain),
-    z_b_ref = fill(1f6, domain),
+    z_b_ref = fill(1.0f6, domain),
     ncout = NetcdfOutput(domain, T[], ""),
     nout = NativeOutput(t = T[]),
     c = PhysicalConstants{T}(),
@@ -135,8 +151,10 @@ function Simulation(
     if (sealevel.load isa NoSealevelLoad)
         nothing
     elseif (sum(solidearth.maskactive) > 0.6 * domain.nx * domain.ny)
-        error("Mask defining regions of active load must not cover more than 60%"*
-            " of the cells when using an interactive sea level.")
+        error(
+            "Mask defining regions of active load must not cover more than 60%" *
+            " of the cells when using an interactive sea level.",
+        )
     end
 
     tools = GIATools(domain, c, solidearth)
@@ -146,8 +164,10 @@ function Simulation(
     H_ice_ref = kernelzeros(domain)
     apply_bc!(H_ice_ref, timer.t, bcs.ice_thickness)
 
-    u_ref, ue_ref, dz_ss_ref, z_b_ref, H_ice_ref = kernelpromote([u_ref, ue_ref,
-        dz_ss_ref, z_b_ref, H_ice_ref], domain.arraykernel)
+    u_ref, ue_ref, dz_ss_ref, z_b_ref, H_ice_ref = kernelpromote(
+        [u_ref, ue_ref, dz_ss_ref, z_b_ref, H_ice_ref],
+        domain.arraykernel,
+    )
     z_ss_ref = sealevel.bsl.ref.z .+ dz_ss_ref
 
     tr = opts.transition
@@ -161,12 +181,37 @@ function Simulation(
 
     H_af_ref = height_above_floatation(H_ice_ref, z_b_ref, z_ss_ref, c, tr)
     H_water_ref = watercolumn(H_ice_ref, maskgrounded, z_b_ref, z_ss_ref, c, tr)
-    ref = ReferenceState(u_ref, ue_ref, H_ice_ref, H_af_ref, H_water_ref, z_b_ref, z_ss_ref,
-        T(0), T(0), T(0), maskgrounded, maskocean)
+    ref = ReferenceState(
+        u_ref,
+        ue_ref,
+        H_ice_ref,
+        H_af_ref,
+        H_water_ref,
+        z_b_ref,
+        z_ss_ref,
+        T(0),
+        T(0),
+        T(0),
+        maskgrounded,
+        maskocean,
+    )
     now = CurrentState(domain, ref, sealevel.bsl.z)
 
-    return Simulation(domain, c, bcs, sealevel, solidearth, opts, tools, ref, now,
-        ncout, deepcopy(nout), timer, simobs)
+    return Simulation(
+        domain,
+        c,
+        bcs,
+        sealevel,
+        solidearth,
+        opts,
+        tools,
+        ref,
+        now,
+        ncout,
+        deepcopy(nout),
+        timer,
+        simobs,
+    )
 end
 
 function Base.show(io::IO, ::MIME"text/plain", sim::Simulation)
@@ -202,17 +247,27 @@ end
 # Output writing
 #####################################################
 
-# `integrator` is an `FIIntegrator` (see integrators.jl); only its `.p`
-# (the `Simulation`) and `.t` fields are used here.
+"""
+$(TYPEDSIGNATURES)
+
+A function to be called by the integrator at each time step to write the output to NetCDF files.
+"""
 function nc_affect!(integrator)
     sim = integrator.p
 
     if occursin(".nc", sim.ncout.filename)
-        sim.opts.verbose && println("Saving nc output at index $(sim.ncout.k), sim year $(integrator.t)...")
+        sim.opts.verbose && println(
+            "Saving nc output at index $(sim.ncout.k), sim year $(integrator.t)...",
+        )
 
         if (:u_x in sim.ncout.vars3D) || (:u_y in sim.ncout.vars3D)
-            thinplate_horizontal_displacement!(sim.now.u_x, sim.now.u_y,
-                sim.now.u + sim.now.ue, sim.solidearth.litho_thickness, sim.domain)
+            thinplate_horizontal_displacement!(
+                sim.now.u_x,
+                sim.now.u_y,
+                sim.now.u + sim.now.ue,
+                sim.solidearth.litho_thickness,
+                sim.domain,
+            )
         end
 
         write_nc!(sim)
@@ -220,13 +275,24 @@ function nc_affect!(integrator)
     end
 end
 
+"""
+$(TYPEDSIGNATURES)
+
+A function to be called by the integrator at each time step to write the output to native files.
+"""
 function nout_affect!(integrator)
     sim = integrator.p
-    sim.opts.verbose && println("Saving native output at simulation year $(integrator.t)...")
+    sim.opts.verbose &&
+        println("Saving native output at simulation year $(integrator.t)...")
 
     if (:u_x in sim.nout.vars) || (:u_y in sim.nout.vars)
-        thinplate_horizontal_displacement!(sim.now.u_x, sim.now.u_y,
-            sim.now.u + sim.now.ue, sim.solidearth.litho_thickness, sim.domain)
+        thinplate_horizontal_displacement!(
+            sim.now.u_x,
+            sim.now.u_y,
+            sim.now.u + sim.now.ue,
+            sim.solidearth.litho_thickness,
+            sim.domain,
+        )
     end
 
     write_out!(sim.nout, sim.now)
@@ -236,33 +302,12 @@ end
 #####################################################
 # Forward integration
 #####################################################
-#
-# `run!`, `init_integrator` and `step!` are defined in integrators.jl, on top
-# of the built-in explicit RK stepper (no external ODE dependency).
 
-# In the best case, we would like something like:
-# restart!(sim, t_span)                # restarts the simulation over t_span
-# restart!(sim, t_span, refine = 2)    # same but refines the mesh by a factor of 2
+"""
+$(TYPEDSIGNATURES)
 
-# function run!(sim::Simulation, t_span)
-#     if maximum(t_span) > maximum(sim.bcs.ice_thickness.t) ||
-#         sim.bcs.ice_thickness.flat_bc == false
-        
-#         error("t_span must be larger than the maximum time of the ice thickness BC")
-#     end
-#     sim.t_span = t_span
-#     run!(sim)
-#     return nothing
-# end
-
-# function run!(sim::Simulation, t_span; refine_factor = 2)
-#     domain = RegionalDomain(sim.domain.Wx, sim.domain.Wy,
-#         refine_factor * sim.domain.nx, refine_factor * sim.domain.ny)
-    
-# end
-
-
-
+Initialize the simulation problem by computing the diagnostics variables.
+"""
 function init_problem!(sim::Simulation)
     update_V_af!(sim, sim.sealevel.volume_contribution)
     update_V_den!(sim, sim.sealevel.density_contribution)
@@ -299,12 +344,14 @@ function update_diagnostics!(dudt, u, sim::Simulation, t)
 
     # apply_bc!(sim.now.H_sed, t, sim.bcs.)
     # columnanom_sediment!(sim)
-    
+
     # As integration requires smaller time steps than what we typically want
     # for the elastic displacement and the sea-surface elevation,
     # we only update them every sim.opts.dt_sparse_diagnostics
-    update_diagnostics = (((t - sim.timer.t_span[1]) / sim.opts.dt_sparse_diagnostics) >=
-        sim.now.count_sparse_updates)   # +1
+    update_diagnostics = (
+        ((t - sim.timer.t_span[1]) / sim.opts.dt_sparse_diagnostics) >=
+        sim.now.count_sparse_updates
+    )   # +1
 
     # if elastic update placed after dz_ss, worse match with (Spada et al. 2011)
     if update_diagnostics
