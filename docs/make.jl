@@ -33,8 +33,8 @@ Literate.markdown("src/examples/transient_creep.jl", "src/examples"; credit = fa
 
 Literate.markdown("src/examples/coupling.jl", "src/examples"; credit = false)
 
-Literate.markdown("src/examples/inverse_ice_history.jl", "src/examples"; credit = false)
 Literate.markdown("src/examples/inverse_calibration.jl", "src/examples"; credit = false)
+Literate.markdown("src/examples/inverse_ice_history.jl", "src/examples"; credit = false)
 Literate.markdown("src/examples/inverse_fullfield.jl", "src/examples"; credit = false)
 
 Literate.markdown("src/examples/benchmark_realfft.jl", "src/examples"; credit = false)
@@ -54,8 +54,8 @@ alternative_models = [
 ]
 
 inverse_problems = [
-    "examples/inverse_ice_history.md",
     "examples/inverse_calibration.md",
+    "examples/inverse_ice_history.md",
     "examples/inverse_fullfield.md",
 ]
 
