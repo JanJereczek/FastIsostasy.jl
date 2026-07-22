@@ -34,11 +34,6 @@ sealevel = RegionalSeaLevel()
 nout = NativeOutput(vars = [:u],
     t = [100, 500, 1500, 5000, 10_000, 50_000f0])
 
-#=
-One solid Earth, shared by both runs: the backend is not a property of the Earth
-model.
-=#
-
 solidearth = SolidEarth(
     domain,
     mantle = ViscousMantle(),
@@ -51,7 +46,10 @@ solidearth = SolidEarth(
 Run the simulation with the default complex-FFT backend.
 =#
 
-opts_complex = SolverOptions(fft = ComplexFFTBackend())
+opts_complex = SolverOptions(
+    integ = RKCIntegrator(),
+    fft = ComplexFFTBackend(),
+)
 sim_complex = Simulation(domain, bcs, sealevel, solidearth, (0, 50f3);
     nout = nout, opts = opts_complex)
 run!(sim_complex)
@@ -60,7 +58,10 @@ run!(sim_complex)
 Run the same simulation with the real-FFT backend. Only `opts` changes.
 =#
 
-opts_real = SolverOptions(fft = RealFFTBackend())
+opts_real = SolverOptions(
+    integ = RKCIntegrator(),
+    fft = RealFFTBackend(),
+)
 sim_real = Simulation(domain, bcs, sealevel, solidearth, (0, 50f3);
     nout = nout, opts = opts_real)
 run!(sim_real)
@@ -76,17 +77,6 @@ max_diff = maximum(maximum(abs, u_c .- u_r)
     for (u_c, u_r) in zip(sim_complex.nout.vals[:u], sim_real.nout.vals[:u]))
 println("Max |u_complex - u_real| across all snapshots: $max_diff m")
 
-fig_check = Figure()
-ax = Axis(fig_check[1, 1],
-    xlabel = "x (m)", ylabel = "Viscous displacement (m)",
-    title = "Final snapshot — transect at j = ny÷2")
-j = domain.ny ÷ 2
-lines!(ax, domain.x, sim_complex.nout.vals[:u][end][:, j], label = "ComplexFFTBackend")
-lines!(ax, domain.x, sim_real.nout.vals[:u][end][:, j],    label = "RealFFTBackend",
-    linestyle = :dash)
-axislegend(ax)
-fig_check
-
 #=
 ## Timing comparison
 
@@ -100,12 +90,3 @@ t_comp_real    = sim_real.timer.t_computation
 println("Total computation time — ComplexFFTBackend: $(round(t_comp_complex[end]; digits=3)) s")
 println("Total computation time — RealFFTBackend:    $(round(t_comp_real[end];    digits=3)) s")
 println("Speed-up: $(round(t_comp_complex[end] / t_comp_real[end]; digits=2))×")
-
-fig_timing, ax_t, _ = lines(t_comp_complex, sim_complex.timer.t_vec,
-    label = "ComplexFFTBackend")
-lines!(ax_t, t_comp_real, sim_real.timer.t_vec,
-    label = "RealFFTBackend", linestyle = :dash)
-ax_t.xlabel = "Computation time (s)"
-ax_t.ylabel = "Simulation years"
-axislegend(ax_t, position = :lt)
-fig_timing
