@@ -69,6 +69,7 @@ advanced_topics = [
 
 ref_pages = [
     "API_public.md",
+    "API_public_ext.md",
     "API_private.md",
     "fortran.md",
     "publications.md",
@@ -85,7 +86,7 @@ PAGES = [
     ],
     "Inverse problems" => inverse_problems,
     "Advanced Topics" => advanced_topics,
-    "References" => ref_pages,
+    "API & References" => ref_pages,
 ]
 
 include("style.jl")
