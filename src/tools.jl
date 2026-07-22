@@ -1,4 +1,46 @@
 #########################################################
+# FFT backend
+#########################################################
+
+"""
+$(TYPEDSIGNATURES)
+
+Which FFT plans the spectral solver builds. This is a *numerical* choice and is
+deliberately orthogonal to the rheology: it selects how a transform is computed,
+never what is being modelled. Set it through the `fft` field of
+[`SolverOptions`](@ref).
+
+Available subtypes:
+- [`ComplexFFTBackend`](@ref)
+- [`RealFFTBackend`](@ref)
+"""
+abstract type AbstractFFTBackend end
+
+"""
+$(TYPEDSIGNATURES)
+
+Complex-to-complex plans (`plan_fft` / `plan_ifft`) over the full `(nx, ny)`
+spectrum. The default, and the backend to use for production runs.
+"""
+struct ComplexFFTBackend <: AbstractFFTBackend end
+
+"""
+$(TYPEDSIGNATURES)
+
+Real-to-complex plans (`plan_rfft` / `plan_irfft`). The frequency-domain arrays
+are `(nx÷2+1, ny)` rather than `(nx, ny)`, roughly halving the memory and
+arithmetic cost of the spectral step.
+
+!!! warning "Experimental"
+    In laterally-variable lithosphere setups the half-spectrum views introduce
+    extra complexity that can produce larger numerical errors than
+    [`ComplexFFTBackend`](@ref), and the expected performance gain may not
+    materialise on all hardware. A runtime warning is emitted when this backend
+    is selected.
+"""
+struct RealFFTBackend <: AbstractFFTBackend end
+
+#########################################################
 # Prealloc
 #########################################################
 mutable struct PreAllocated{M,C}
@@ -13,6 +55,10 @@ mutable struct PreAllocated{M,C}
     fftrhs::C
     fftF::C
     fftU::C
+    # Fourth spectral buffer, needed only by the coupled (N+1)-field solve of
+    # `TransientCreepMantle` (roadmap burgers.md §3). Sized `(0, 0)` for every
+    # steady-creep rheology, so it costs nothing unless a Kelvin branch exists.
+    fftK::C
 end
 
 #########################################################
@@ -52,6 +98,7 @@ function GIATools(
     solidearth;
     quad_precision::Int = 4,
     rhs_smooth_radius = nothing,
+    fft::AbstractFFTBackend = ComplexFFTBackend(),
 )
 
     T = eltype(domain.R)
@@ -101,16 +148,19 @@ function GIATools(
             ConvolutionPlan(domain.arraykernel(smoothing_kernel), conv_helpers)
     end
 
-    # FFT plans depending on CPU vs. GPU usage and mantle type
-    pfft!, pifft! = choose_fft_plans(domain.K, solidearth.mantle)
+    # FFT plans depending on CPU vs. GPU usage and the selected backend
+    pfft!, pifft! = choose_fft_plans(domain.K, fft)
 
-    n_cplx_matrices = 3
+    n_cplx_matrices = 4
     realmatrices = [
         kernelzeros(domain) for
         _ in eachindex(fieldnames(PreAllocated))[1:(end-n_cplx_matrices)]
     ]
-    cplxmatrices = _make_cplx_matrices(domain, solidearth.mantle, n_cplx_matrices)
-    prealloc = PreAllocated(realmatrices..., cplxmatrices...)
+    cplxmatrices = _make_cplx_matrices(domain, fft, n_cplx_matrices - 1)
+    fftK = nbranches(solidearth.mantle) > 0 ?
+        _make_cplx_matrices(domain, fft, 1)[1] :
+        similar(first(cplxmatrices), 0, 0)
+    prealloc = PreAllocated(realmatrices..., cplxmatrices..., fftK)
     return GIATools(
         conv_helpers,
         viscous_convo,
@@ -135,26 +185,26 @@ function choose_fft_plans(X)
     normalize_plan(plan_ifft(complex.(X); flags = MEASURE))
 end
 
-function choose_fft_plans(X, mantle)
-    if mantle isa RealMaxwellMantle && X isa AbstractMatrix
-        @warn "RealMaxwellMantle is experimental: it may yield larger numerical errors " *
-              "than MaxwellMantle for laterally-variable lithosphere setups, and the " *
-              "expected performance gain may not materialise on all hardware. " *
-              "Prefer MaxwellMantle for production runs."
-        rfft_buf = similar(X, Complex{eltype(X)}, size(X, 1) ÷ 2 + 1, size(X, 2))
-        return plan_rfft(copy(X); flags = MEASURE),
-        normalize_plan(plan_irfft(rfft_buf, size(X, 1); flags = MEASURE))
-    else
-        return choose_fft_plans(X)
-    end
+choose_fft_plans(X, ::ComplexFFTBackend) = choose_fft_plans(X)
+
+# Half-spectrum plans. Falls back to the complex ones for non-matrix `X`, which
+# has no `nx÷2+1` layout to exploit.
+function choose_fft_plans(X, ::RealFFTBackend)
+    X isa AbstractMatrix || return choose_fft_plans(X)
+    @warn "RealFFTBackend is experimental: it may yield larger numerical errors " *
+          "than ComplexFFTBackend for laterally-variable lithosphere setups, and " *
+          "the expected performance gain may not materialise on all hardware. " *
+          "Prefer ComplexFFTBackend for production runs."
+    rfft_buf = similar(X, Complex{eltype(X)}, size(X, 1) ÷ 2 + 1, size(X, 2))
+    return plan_rfft(copy(X); flags = MEASURE),
+    normalize_plan(plan_irfft(rfft_buf, size(X, 1); flags = MEASURE))
 end
 
-function _make_cplx_matrices(domain, mantle, n)
-    if mantle isa RealMaxwellMantle
-        T = eltype(domain.R)
-        nx2 = domain.nx ÷ 2 + 1
-        return [domain.arraykernel(zeros(Complex{T}, nx2, domain.ny)) for _ = 1:n]
-    else
-        return [complex.(kernelzeros(domain)) for _ = 1:n]
-    end
+_make_cplx_matrices(domain, ::ComplexFFTBackend, n) =
+    [complex.(kernelzeros(domain)) for _ = 1:n]
+
+function _make_cplx_matrices(domain, ::RealFFTBackend, n)
+    T = eltype(domain.R)
+    nx2 = domain.nx ÷ 2 + 1
+    return [domain.arraykernel(zeros(Complex{T}, nx2, domain.ny)) for _ = 1:n]
 end
