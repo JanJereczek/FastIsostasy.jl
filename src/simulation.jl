@@ -13,7 +13,7 @@ Control options relative to solving a [`Simulation`](@ref).
    [`EulerIntegrator`](@ref) (fixed step). Each integrator carries its own
    settings — tolerances, step-size bounds — as fields of its own struct.
  - `dt_sparse_diagnostics`: the time interval between updates of the diagnostics variables (elastic displacement, sea-surface elevation, etc.).
- - `verbose`: whether to report the simulation progress. When `true`, [`run!`](@ref)
+ - `show_progress`: whether to report the simulation progress. When `true`, [`run!`](@ref)
    displays a live progress bar ([`ForwardProgress`](@ref)).
  - `dt_walltime`: minimum wall time in seconds between two refreshes of that
    progress bar. Refreshing reduces over the whole grid, so this bounds the
@@ -34,7 +34,7 @@ compile time instead of paying to compile every arm of it.
 }
     integ::I = BS3Integrator()
     dt_sparse_diagnostics::Float64 = 10.0
-    verbose::Bool = true
+    show_progress::Bool = true
     dt_walltime::Float64 = 0.5
     fft::F = ComplexFFTBackend()
     transition::TR = SharpTransition()
@@ -329,7 +329,7 @@ function run!(sim::Simulation)
     init_problem!(sim)
     sim.timer.t_computation_0 = time()
     integ = build_integrator(sim)
-    progress = sim.opts.verbose ? ForwardProgress(sim) : nothing
+    progress = sim.opts.show_progress ? ForwardProgress(sim) : nothing
     advance_with_output!(integ, sim, sim.timer.t_span[2], STEPPER_MAXITERS, progress)
     finish_progress!(progress, integ)
     isempty(sim.timer.t_computation) ||

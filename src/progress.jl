@@ -138,5 +138,5 @@ finish_progress!(::Nothing, integ) = nothing
 # while a bar is running: the bar redraws in place, so interleaved `println`s
 # would leave a trail of half-finished bars, and the simulation time they report
 # is already on the bar.
-verbose_log(sim, ::Nothing) = sim.opts.verbose
+verbose_log(sim, ::Nothing) = sim.opts.show_progress
 verbose_log(sim, ::ForwardProgress) = false
