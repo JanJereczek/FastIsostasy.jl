@@ -43,7 +43,7 @@ struct RealFFTBackend <: AbstractFFTBackend end
 #########################################################
 # Prealloc
 #########################################################
-mutable struct PreAllocated{M,C}
+mutable struct PreAllocated{M,C,C3}
     rhs::M
     buffer_xx::M
     buffer_yy::M
@@ -55,10 +55,13 @@ mutable struct PreAllocated{M,C}
     fftrhs::C
     fftF::C
     fftU::C
-    # Fourth spectral buffer, needed only by the coupled (N+1)-field solve of
-    # `TransientCreepMantle` (roadmap burgers.md §3). Sized `(0, 0)` for every
-    # steady-creep rheology, so it costs nothing unless a Kelvin branch exists.
-    fftK::C
+    # Per-branch spectral buffer for the coupled (N+1)-field solve of
+    # `TransientCreepMantle` (roadmap burgers.md §3/§4): one (nx, ny) complex
+    # plane per Kelvin branch, stacked along dim 3 — mirrors `u_K`'s 3D-array
+    # design in `src/state.jl` for the same GPU/AD reasons. Sized `(nx, ny, 0)`
+    # for every steady-creep rheology, so it costs nothing unless a Kelvin branch
+    # exists.
+    fftK::C3
 end
 
 #########################################################
@@ -157,9 +160,7 @@ function GIATools(
         _ in eachindex(fieldnames(PreAllocated))[1:(end-n_cplx_matrices)]
     ]
     cplxmatrices = _make_cplx_matrices(domain, fft, n_cplx_matrices - 1)
-    fftK = nbranches(solidearth.mantle) > 0 ?
-        _make_cplx_matrices(domain, fft, 1)[1] :
-        similar(first(cplxmatrices), 0, 0)
+    fftK = _make_cplx_branch_array(domain, fft, nbranches(solidearth.mantle))
     prealloc = PreAllocated(realmatrices..., cplxmatrices..., fftK)
     return GIATools(
         conv_helpers,
@@ -207,4 +208,16 @@ function _make_cplx_matrices(domain, ::RealFFTBackend, n)
     T = eltype(domain.R)
     nx2 = domain.nx ÷ 2 + 1
     return [domain.arraykernel(zeros(Complex{T}, nx2, domain.ny)) for _ = 1:n]
+end
+
+# One (nx, ny) complex plane per Kelvin branch, stacked along dim 3 — the
+# `PreAllocated.fftK` buffer. `N = 0` for every steady-creep rheology, giving a
+# zero-cost `(nx, ny, 0)` array, exactly like `u_K` in `src/state.jl`.
+_make_cplx_branch_array(domain, ::ComplexFFTBackend, N) =
+    domain.arraykernel(zeros(Complex{eltype(domain.R)}, domain.nx, domain.ny, N))
+
+function _make_cplx_branch_array(domain, ::RealFFTBackend, N)
+    T = eltype(domain.R)
+    nx2 = domain.nx ÷ 2 + 1
+    return domain.arraykernel(zeros(Complex{T}, nx2, domain.ny, N))
 end

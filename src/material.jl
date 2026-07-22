@@ -512,3 +512,118 @@ function maxwelltime_scaling!(
     layer_meanshearmoduli = layer_viscosities ./ 1e21 .* mu_itp.(layer_meandepths)
     layer_viscosities .*= layer_meanshearmoduli[:, :, end] ./ layer_meanshearmoduli
 end
+
+######################################################################################
+# Extended Burgers: Prony-series fit to the Faul-Jackson absorption band
+######################################################################################
+
+"""
+$(TYPEDSIGNATURES)
+
+Faul-Jackson power-law absorption-band density underlying the extended Burgers
+model (EBM) of Ivins & Caron (2021, §2): a probability density (`∫[τ_L,τ_H] = 1`)
+of retardation times over `[tau_L, tau_H]` with exponent `alpha`.
+"""
+absorption_band_density(τ, alpha, tau_L, tau_H) =
+    alpha * τ^(alpha - one(alpha)) / (tau_H^alpha - tau_L^alpha)
+
+"""
+$(TYPEDSIGNATURES)
+
+Fit an `nbranches`-branch Prony series `(Δⱼ, τⱼ)` to the continuous Faul-Jackson
+absorption-band spectrum underlying the extended Burgers model (EBM) of
+Ivins & Caron (2021), so that the transient term of their creep function
+
+    relaxation_strength * ∫[tau_L, tau_H] F(τ) (1 − exp(−t/τ)) dτ
+
+(`F` the density returned by [`absorption_band_density`](@ref)) is approximated
+by the `nbranches`-branch Kelvin sum `Σⱼ Δⱼ (1 − exp(−t/τⱼ))` used by
+[`TransientCreepMantle`](@ref).
+
+`nbranches` log-spaced bins partition `[tau_L, tau_H]`. Each `Δⱼ` is the *exact*
+probability mass of its bin (so `sum(Δⱼ) == relaxation_strength` to machine
+precision for any `nbranches`, since the bins exactly partition the band) and
+`τⱼ` is the `F`-weighted mean retardation time within it — both closed-form
+(the density is a power law, so its CDF and first moment are elementary), no
+optimizer needed.
+
+Returns `(Δⱼ, τⱼ, fit_error)`, where `fit_error` is the maximum relative
+difference (against `relaxation_strength`) between the continuous and
+`nbranches`-branch transient term, sampled log-spaced over `t ∈ [tau_L, tau_H]`
+(`ntest` points; the continuous term is evaluated by Gauss-Legendre quadrature
+via [`quadrature1D`](@ref) with `nquad` points). Use `fit_error` to pick
+`nbranches`: I&C 2021 report that `N ≈ 3-5` typically fits their spectrum to a
+few percent (roadmaps/burgers.md §6).
+
+# Example
+```jldoctest
+julia> Δ, τ, err = fit_prony_series(relaxation_strength = 1.2, alpha = 0.5,
+           tau_L = 1.0, tau_H = 100.0, nbranches = 4);
+
+julia> sum(Δ)
+1.2
+
+julia> round.(τ, sigdigits = 3)
+(1.98, 6.26, 19.8, 62.6)
+
+julia> round(err, sigdigits = 2)
+0.014
+```
+"""
+function fit_prony_series(;
+    relaxation_strength::Real,
+    alpha::Real,
+    tau_L::Real,
+    tau_H::Real,
+    nbranches::Integer,
+    ntest::Integer = 50,
+    nquad::Integer = 200,
+)
+    T = float(promote_type(typeof(relaxation_strength), typeof(alpha),
+        typeof(tau_L), typeof(tau_H)))
+    Δ, α, τ_L, τ_H = T(relaxation_strength), T(alpha), T(tau_L), T(tau_H)
+
+    α > 0 || throw(ArgumentError("alpha must be > 0 (got $α)."))
+    τ_H > τ_L > 0 || throw(ArgumentError(
+        "need tau_H > tau_L > 0 (got tau_L = $τ_L, tau_H = $τ_H)."))
+    Δ > 0 || throw(ArgumentError("relaxation_strength must be > 0 (got $Δ)."))
+    nbranches >= 1 || throw(ArgumentError("nbranches must be >= 1 (got $nbranches)."))
+    N = Int(nbranches)
+
+    edges = ntuple(i -> τ_L * (τ_H / τ_L)^((i - 1) / N), N + 1)
+    band = τ_H^α - τ_L^α
+    Δj = ntuple(N) do j
+        a, b = edges[j], edges[j+1]
+        Δ * (b^α - a^α) / band
+    end
+    τj = ntuple(N) do j
+        a, b = edges[j], edges[j+1]
+        (α / (α + one(α))) * (b^(α + one(α)) - a^(α + one(α))) / (b^α - a^α)
+    end
+
+    fit_error = prony_fit_error(Δ, α, τ_L, τ_H, Δj, τj; ntest, nquad)
+    return Δj, τj, fit_error
+end
+
+"""
+$(TYPEDSIGNATURES)
+
+Maximum relative error (against `Δ`) of the `Δj, τj` Kelvin-branch sum against
+the continuous Faul-Jackson transient term it approximates, sampled log-spaced
+over `t ∈ [tau_L, tau_H]`. Used by [`fit_prony_series`](@ref) to report
+`fit_error` and by the `nbranches`-vs-error study in `test/test_prony_fit.jl`.
+"""
+function prony_fit_error(Δ, α, tau_L, tau_H, Δj, τj; ntest::Integer = 50,
+        nquad::Integer = 200)
+    T = typeof(Δ)
+    worst = zero(T)
+    for i in 0:(ntest-1)
+        t = tau_L * (tau_H / tau_L)^(i / (ntest - 1))
+        continuous = Δ * quadrature1D(
+            τ -> absorption_band_density(τ, α, tau_L, tau_H) * (1 - exp(-t / τ)),
+            Int(nquad), tau_L, tau_H)
+        discrete = sum(Δj[j] * (1 - exp(-t / τj[j])) for j in eachindex(Δj))
+        worst = max(worst, abs(discrete - continuous) / Δ)
+    end
+    return worst
+end

@@ -156,12 +156,14 @@ export get_effective_viscosity_and_scaling, green_viscous
 
 export get_relaxation_time, get_relaxation_time_weaker, get_relaxation_time_stronger
 export get_rigidity, get_shearmodulus, get_elastic_green, get_flexural_lengthscale
+export absorption_band_density, fit_prony_series
 
 # solidearth.jl
 export SolidEarth
 export AbstractLithosphere, AbstractMantle
 export RigidLithosphere, LaterallyConstantLithosphere, LaterallyVariableLithosphere
 export RigidMantle, RelaxedMantle, ViscousMantle, TransientCreepMantle
+export BurgersMantle, ExtendedBurgersMantle
 export AbstractLithosphereColumn,
     IncompressibleLithosphereColumn, CompressibleLithosphereColumn
 

@@ -53,7 +53,7 @@ Available subtypes are:
 - [`RigidMantle`](@ref)
 - [`RelaxedMantle`](@ref)
 - [`ViscousMantle`](@ref)
-- [`TransientCreepMantle`](@ref) (not implemented yet)
+- [`TransientCreepMantle`](@ref)
 """
 abstract type AbstractMantle end
 
@@ -168,6 +168,38 @@ end
 
 _branch_tuple(x::Real) = (x,)
 _branch_tuple(x) = Tuple(x)
+
+"""
+$(TYPEDSIGNATURES)
+
+Classic Burgers body: the `N = 1` member of [`TransientCreepMantle`](@ref), a
+Maxwell dashpot in series with a single Kelvin-Voigt element. Thin naming
+convenience over `TransientCreepMantle(; shearmodulus, relaxation_strength,
+kelvin_time)` for when `(Δ, τ)` are already known (e.g. from a published fit),
+as opposed to [`ExtendedBurgersMantle`](@ref), which fits them from a
+continuous relaxation-time spectrum.
+"""
+BurgersMantle(; shearmodulus, relaxation_strength, kelvin_time) =
+    TransientCreepMantle(; shearmodulus, relaxation_strength, kelvin_time)
+
+"""
+$(TYPEDSIGNATURES)
+
+Extended Burgers mantle: a [`TransientCreepMantle`](@ref) with `nbranches`
+Kelvin branches fit, via [`fit_prony_series`](@ref), to the continuous
+Faul-Jackson absorption-band spectrum of the extended Burgers model (EBM) of
+Ivins & Caron (2021). See [`fit_prony_series`](@ref) for the fitting procedure
+and its `fit_error`; this constructor discards `fit_error` — call
+`fit_prony_series` directly first to check it before committing to
+`nbranches`.
+"""
+function ExtendedBurgersMantle(; shearmodulus, relaxation_strength, alpha,
+        tau_L, tau_H, nbranches)
+    Δ, τ, _ = fit_prony_series(; relaxation_strength, alpha, tau_L, tau_H,
+        nbranches)
+    return TransientCreepMantle(; shearmodulus, relaxation_strength = Δ,
+        kelvin_time = τ)
+end
 
 """
 $(TYPEDSIGNATURES)

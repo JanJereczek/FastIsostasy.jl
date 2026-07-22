@@ -88,13 +88,29 @@ end
 #
 # Explicit stepping is not an option: retardation times τⱼ can be decades while
 # the Maxwell time is millennia, so the system is stiff. Crank–Nicolson on the
-# coupled (N+1)-field system is A-stable and, for N = 1, inverts in closed form:
+# coupled (N+1)-field system is A-stable. Writing dᵢ, eᵢ for the per-branch pair
+# (A, 0) at i = 0 (Maxwell) and (Bⱼ, Cⱼ) at i = j (Kelvin branch j), every row has
+# the same shape dᵢ duᵢ/dt = F − β·Σₖuₖ − eᵢ uᵢ: branch i couples to every other
+# branch *only* through their common sum Σₖuₖ, never directly to a specific other
+# branch. That is a rank-1 (not dense, not merely arrowhead) coupling in
+# (u_M, u_K[1], …, u_K[N]), and CN turns it into
 #
-#     [ A+aβ      aβ       ] [u_M ]   [ r₁ ]                    a  = dt/2
-#     [ aβ        B+aβ+aC  ] [u_K ] = [ r₂ ]
+#     gᵢ uᵢⁿ⁺¹ + aβ Sⁿ⁺¹ = rᵢ,   gᵢ = dᵢ + a eᵢ,   S = Σₖ uₖ,   a = dt/2
+#     rᵢ = (dᵢ − a eᵢ) uᵢⁿ − aβ Sⁿ + dt F           (F frozen over the half-step)
 #
-#     r₁ = (A − aβ) u_M⁰ − aβ u_K⁰ + dt F
-#     r₂ = −aβ u_M⁰ + (B − aβ − aC) u_K⁰ + dt F
+# Summing the first line over i and solving for Sⁿ⁺¹ (Sherman–Morrison for a
+# diagonal-plus-rank-1 system) gives an O(N) closed form, no per-mode matrix
+# factorisation:
+#
+#     Sⁿ⁺¹ = [ Σᵢ rᵢ/gᵢ ] / [ 1 + aβ Σᵢ 1/gᵢ ],   uᵢⁿ⁺¹ = (rᵢ − aβ Sⁿ⁺¹) / gᵢ
+#
+# For i = 0, (d₀ − a e₀)/g₀ = A/A = 1 exactly, so the Maxwell branch's own r₀/g₀
+# term is just u_Mⁿ — and u_Mⁿ = Sⁿ − Σⱼ u_K[j]ⁿ (linearity), so the Maxwell branch
+# never has to be materialised: only Sⁿ (= FFT of the state array `u`, which
+# already *is* u_M + Σⱼ u_K[j]) and the Kelvin branches' own state are needed. See
+# `update_dudt!(..., ::TransientCreepMantle{MT,N}, ...)` below for the expansion;
+# setting N = 1 there reproduces the closed-form 2×2 solve this comment used to
+# describe line for line.
 # =============================================================================
 
 function update_dudt!(
@@ -102,10 +118,10 @@ function update_dudt!(
     u,
     sim,
     t,
-    mantle::TransientCreepMantle{MT,1},
+    mantle::TransientCreepMantle{MT,N},
     litho::Union{LaterallyConstantLithosphere,RigidLithosphere},
     fft::ComplexFFTBackend,
-) where {MT}
+) where {MT,N}
 
     tools = sim.tools
     P = tools.prealloc
@@ -123,75 +139,117 @@ function update_dudt!(
         sim.now.u_K .= sim.now.u_K_next
         sim.now.t_K = t
     end
-    u_K = view(sim.now.u_K, :, :, 1)
 
-    # Spectral coefficient fields. `kk` mirrors the `ViscousMantle` path exactly,
-    # so the two schemes agree term by term in the Δ → 0 limit.
+    # Spectral coefficient fields shared by every branch (A = d₀, β as usual).
     A = P.buffer_xx
     @. A = 2 * se.effective_viscosity * domain.pseudodiff * se.pseudodiff_scaling
 
     beta = P.buffer_x
     @. beta = se.rho_uppermantle * sim.c.g + se.litho_rigidity * domain.pseudodiff ^ 4
 
-    # μ₂ = μ₁/Δ and η₂ = τ μ₂, hence C = 2 μ₂ k and B = τ C.
-    mu2 = mantle.shearmodulus / mantle.relaxation_strength[1]
-    tau_s = mantle.kelvin_time[1] * sim.c.seconds_per_year
-    C = P.buffer_yy
-    @. C = 2 * mu2 * domain.pseudodiff * se.pseudodiff_scaling
+    # --- to the spectrum: forward-transform every branch's current state --------
+    # `fftrhs` is the real->complex staging buffer throughout, exactly as in the
+    # N = 1 method it generalises.
+    for j in 1:N
+        u_Kj = view(sim.now.u_K, :, :, j)
+        @. P.fftrhs = u_Kj
+        mul!(view(P.fftK, :, :, j), tools.pfft!, P.fftrhs)
+    end
 
-    # --- to the spectrum: F̂ -> fftF, û_M -> fftU, û_K -> fftK ------------------
     @. P.fftrhs =
         - (sim.now.columnanoms.load + sim.now.columnanoms.litho) *
         sim.c.g *
         domain.K ^ 2
     mul!(P.fftF, tools.pfft!, P.fftrhs)
 
-    @. P.fftrhs = u - u_K                      # u_M = u − Σⱼ u_K[j]
-    mul!(P.fftU, tools.pfft!, P.fftrhs)
+    @. P.fftrhs = u
+    mul!(P.fftU, tools.pfft!, P.fftrhs)        # Sⁿ = FFT(u_M + Σⱼ u_K[j])ⁿ
 
-    @. P.fftrhs = u_K
-    mul!(P.fftK, tools.pfft!, P.fftrhs)
+    # `common = dt F − aβ Sⁿ` is shared by every branch's rᵢ (see comment above).
+    @. P.fftrhs = dt * P.fftF - a * beta * P.fftU
 
-    # --- closed-form 2x2 solve, elementwise over the spectrum -------------------
-    # `fftrhs` is free again now that every field has been transformed, so it
-    # takes r₁; r₂ overwrites û_K in place (each entry depends only on itself).
-    @. P.fftrhs = (A - a * beta) * P.fftU - a * beta * P.fftK + dt * P.fftF
-    @. P.fftK =
-        -a * beta * P.fftU + (tau_s * C - a * beta - a * C) * P.fftK + dt * P.fftF
+    # --- Σᵢ rᵢ/gᵢ and Σᵢ 1/gᵢ, elementwise over the spectrum --------------------
+    # i = 0 (Maxwell) contributes u_Mⁿ = Sⁿ − Σⱼ u_K[j]ⁿ to the first sum and 1/A
+    # to the second; both are folded in once, after the loop, instead of inside it
+    # (u_Mⁿ is never materialised on its own — see the derivation above). Per
+    # branch j, (dⱼ − a eⱼ)/gⱼ = (τⱼ − a)/(τⱼ + a): μ₂ⱼ cancels between numerator
+    # and denominator (dⱼ = τⱼCⱼ, eⱼ = Cⱼ), so the −Σⱼ u_K[j]ⁿ · (dⱼ−aeⱼ)/gⱼ term
+    # collapses to a *scalar*-weighted sum; only 1/gⱼ needs the spectral field Cⱼ.
+    @. P.buffer_xy = 1 / A                     # Σᵢ 1/gᵢ, i = 0 term
+    P.fftF .= 0                                 # Σᵢ rᵢ/gᵢ accumulator (F̂ baked into `common` already)
+    for j in 1:N
+        tau_j = mantle.kelvin_time[j] * sim.c.seconds_per_year
+        mu2_j = mantle.shearmodulus / mantle.relaxation_strength[j]
+        fftKj = view(P.fftK, :, :, j)
+        @. P.buffer_yy =                       # gⱼ = Cⱼ (τⱼ + a)
+            2 * mu2_j * domain.pseudodiff * se.pseudodiff_scaling * (tau_j + a)
+        @. P.buffer_xy += 1 / P.buffer_yy
+        @. P.fftF -= (2 * a / (tau_j + a)) * fftKj
+    end
+    @. P.fftF += P.fftU + P.fftrhs * P.buffer_xy
+    @. P.fftF = P.fftF / (1 + a * beta * P.buffer_xy)   # Sⁿ⁺¹ = total viscous displacement
 
-    # u_M -> fftU, u_K -> fftK (both in place; det > 0 since A, β, B, C > 0)
-    @. P.fftU =
-        ((tau_s * C + a * beta + a * C) * P.fftrhs - a * beta * P.fftK) /
-        ((A + a * beta) * (tau_s * C + a * beta + a * C) - (a * beta) ^ 2)
-    @. P.fftK =
-        ((A + a * beta) * P.fftK - a * beta * P.fftrhs) /
-        ((A + a * beta) * (tau_s * C + a * beta + a * C) - (a * beta) ^ 2)
+    # --- finalise each Kelvin branch: uⱼⁿ⁺¹ = ratioⱼ uⱼⁿ + (common − aβ Sⁿ⁺¹)/gⱼ -
+    # (each entry depends only on itself, so the in-place update is safe, exactly
+    # like the N = 1 method's self-referential `P.fftK` update.)
+    for j in 1:N
+        tau_j = mantle.kelvin_time[j] * sim.c.seconds_per_year
+        mu2_j = mantle.shearmodulus / mantle.relaxation_strength[j]
+        fftKj = view(P.fftK, :, :, j)
+        @. P.buffer_yy =
+            2 * mu2_j * domain.pseudodiff * se.pseudodiff_scaling * (tau_j + a)
+        ratio_j = (tau_j - a) / (tau_j + a)
+        @. fftKj = ratio_j * fftKj + (P.fftrhs - a * beta * P.fftF) / P.buffer_yy
+    end
 
-    # --- back to real space ----------------------------------------------------
-    @. P.fftrhs = P.fftU + P.fftK              # total viscous displacement
-    mul!(P.fftF, tools.pifft!, P.fftrhs)
-    P.rhs .= real.(P.fftF)
+    # --- back to real space ------------------------------------------------------
+    mul!(P.fftU, tools.pifft!, P.fftF)
+    P.rhs .= real.(P.fftU)
     apply_bc!(P.rhs, sim.bcs.viscous_displacement)
     # As a rate, so the stepper reproduces u^{n+1} exactly — see the ViscousMantle
     # method for why this must not write `u` directly.
     @. dudt = (P.rhs - u) / dt * sim.c.seconds_per_year
 
-    mul!(P.fftF, tools.pifft!, P.fftK)
-    P.rhs .= real.(P.fftF)
-    # The same (linear) BC on the branch keeps `u = u_M + Σⱼ u_K[j]` exact.
-    apply_bc!(P.rhs, sim.bcs.viscous_displacement)
-    view(sim.now.u_K_next, :, :, 1) .= P.rhs
+    for j in 1:N
+        fftKj = view(P.fftK, :, :, j)
+        mul!(P.fftU, tools.pifft!, fftKj)
+        P.rhs .= real.(P.fftU)
+        # The same (linear) BC on every branch keeps u = u_M + Σⱼ u_K[j] exact.
+        apply_bc!(P.rhs, sim.bcs.viscous_displacement)
+        view(sim.now.u_K_next, :, :, j) .= P.rhs
+    end
 
     return nothing
 end
 
 # --- guard rails: combinations the semi-implicit solve does not cover yet -----
+#
+# These must stay *disjoint* from the real method above and from each other on at
+# least one argument (here: `litho`, or `fft`), not merely dominated by it. A
+# generic `(mantle::TransientCreepMantle, litho, fft)` catch-all used to work when
+# the real method pinned N to the literal `1` (`TransientCreepMantle{MT,1}`),
+# which made it a strict subtype of the catch-all's unconstrained
+# `TransientCreepMantle` on that argument. Once N became free (`{MT,N} where
+# {MT,N}`) it is *equal* to the catch-all's constraint on `mantle`, not a strict
+# subtype, and Julia's method-specificity check does not resolve that tie just
+# because the other arguments (`litho`, `fft`) are strictly narrower — it reports
+# the pair as ambiguous instead of picking the narrower one. Splitting the
+# catch-all into the two litho/fft combinations it actually needs to cover keeps
+# every pair of methods below disjoint on at least one argument, so no tie is
+# ever reached regardless of how `mantle` is constrained.
 
-update_dudt!(dudt, u, sim, t, mantle::TransientCreepMantle, litho, fft) = error(
-    "TransientCreepMantle is implemented for N = 1 Kelvin branch on the " *
-    "semi-implicit path only: LaterallyConstantLithosphere or RigidLithosphere " *
-    "with ComplexFFTBackend. Got N = $(nbranches(mantle)), $(typeof(litho)), " *
-    "$(typeof(fft)). See roadmaps/burgers.md §4 for the generalisations.",
+update_dudt!(
+    dudt,
+    u,
+    sim,
+    t,
+    mantle::TransientCreepMantle,
+    litho::Union{LaterallyConstantLithosphere,RigidLithosphere},
+    fft::RealFFTBackend,
+) = error(
+    "TransientCreepMantle does not yet support RealFFTBackend (roadmap " *
+    "burgers.md §4: 'implement against ComplexFFTBackend first'). Use " *
+    "SolverOptions(fft = ComplexFFTBackend()).",
 )
 
 update_dudt!(
