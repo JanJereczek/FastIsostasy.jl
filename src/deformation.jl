@@ -5,7 +5,10 @@
 """
 $(TYPEDSIGNATURES)
 
-Update the time derivative of the viscous displacement based on an [`AbstractMantle`](@ref):
+Update the time derivative of the viscous displacement based on a dispatch is along
+three mainly orthogonal axes: the mantle rheology, the lithosphere, and the FFT backend.
+
+Main supported combinations are:
 - [`RigidMantle`](@ref): no deformation, `dudt` is zero.
 - [`RelaxedMantle`](@ref) with [`LaterallyConstantLithosphere`](@ref): uses ELRA [le_meur_comparison_1996](@citet)
   to compute the viscous response. This also works with laterally-variable relaxation time,
@@ -17,9 +20,6 @@ Update the time derivative of the viscous displacement based on an [`AbstractMan
 - [`ViscousMantle`](@ref) with [`LaterallyVariableLithosphere`](@ref): This corresponds to the approach
   of [swierczek-jereczek_fastisostasy_2024](@citet).
 """
-# Dispatch is on three orthogonal axes: the mantle rheology, the lithosphere, and
-# the FFT backend. That choice used to masquerade as a rheology (`RealMaxwellMantle`),
-# which made "what is modelled" and "how the transform is computed" the same choice.
 function update_dudt!(dudt, u, sim, t, earth::SolidEarth)
     update_dudt!(dudt, u, sim, t, earth.mantle, earth.lithosphere, sim.opts.fft)
 end
