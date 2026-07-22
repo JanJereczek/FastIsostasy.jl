@@ -27,6 +27,7 @@ include("test_simulated_observable.jl")
 include("test_snapshot.jl")
 include("test_progress.jl")
 include("test_transient_creep.jl")
+include("test_prony_fit.jl")
 include("test_forward_recording.jl")
 include("test_inversion_api.jl")
 

@@ -11,6 +11,7 @@ include("test_derivatives.jl")
 end
 
 include("test_integrators_gpu.jl")
+include("test_transient_creep_gpu.jl")
 
 # Enzyme through KernelAbstractions kernels on CUDA. Requires the CUDA AD rules in
 # `ext/FastIsostasyEnzymeCUDAExt.jl`, which load once `Enzyme` and `CUDA` are both
