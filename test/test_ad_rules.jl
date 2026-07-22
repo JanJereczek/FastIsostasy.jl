@@ -22,7 +22,7 @@ function _loss_cfft(x, n, pfft, pifft)
     return sum(abs2, real.(Z))
 end
 
-# Real vector → rfft → irfft → scalar (ConvolutionPlan / RealMaxwellMantle pattern).
+# Real vector → rfft → irfft → scalar (ConvolutionPlan / RealFFTBackend pattern).
 function _loss_rfft(x, n, prfft, pirfft)
     X = reshape(x, n, n)
     Y = zeros(ComplexF64, n ÷ 2 + 1, n); mul!(Y, prfft, X)

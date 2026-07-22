@@ -19,7 +19,7 @@ function build_adj_prob(; n = 5, dt = 100.0, tend = 400.0, obstimes = [200.0, 40
     se = SolidEarth(domain; lithosphere = LaterallyVariableLithosphere(),
         layer_boundaries = [88.0e3], layer_viscosities = [1.0e21])
     opts = SolverOptions(; verbose = false, transition = SmoothTransition(10.0),
-        diffeq = DiffEqOptions(alg = EulerIntegrator(), dt_min = dt))
+        integ = EulerIntegrator(dt = dt))
     nout = FastIsostasy.NativeOutput(t = Float64[], vars = Symbol[], T = Float64)
     sim = Simulation(domain, bcs, RegionalSeaLevel(), se, (0.0, tend);
         opts = opts, nout = nout)

@@ -7,8 +7,8 @@
 using FastIsostasy
 using Test
 
-function build_recording_prob(; n = 5, dt = 100.0, tend = 400.0, alg = EulerIntegrator(),
-        obstimes = [100.0, 250.0, 400.0])
+function build_recording_prob(; n = 5, dt = 100.0, tend = 400.0,
+        alg = EulerIntegrator(dt = dt), obstimes = [100.0, 250.0, 400.0])
     W = 3.0e6
     domain = RegionalDomain(W, n)
     H0 = zeros(domain); H1 = 1.0e3 .* (domain.R .< 1.0e6)
@@ -16,8 +16,7 @@ function build_recording_prob(; n = 5, dt = 100.0, tend = 400.0, alg = EulerInte
     bcs = BoundaryConditions(domain, ice_thickness = it)
     se = SolidEarth(domain; lithosphere = LaterallyVariableLithosphere(),
         layer_boundaries = [88.0e3], layer_viscosities = [1.0e21])
-    opts = SolverOptions(; verbose = false,
-        diffeq = DiffEqOptions(alg = alg, dt_min = dt))
+    opts = SolverOptions(; verbose = false, integ = alg)
     nout = FastIsostasy.NativeOutput(t = Float64[], vars = Symbol[], T = Float64)
     sim = Simulation(domain, bcs, RegionalSeaLevel(), se, (0.0, tend);
         opts = opts, nout = nout)
@@ -121,7 +120,7 @@ end
     end
 
     @testset "adaptive algorithm: steps recorded, replay deferred" begin
-        proba = build_recording_prob(alg = BS3Integrator())
+        proba = build_recording_prob(alg = BS3Integrator{Float64}(dt_min = 100.0))
         preds0a = FastIsostasy.allocate_predictions(proba)
         FastIsostasy.forward_predict!(preds0a, proba)
 
@@ -146,7 +145,7 @@ end
         # algorithm via steplog_entry_type. And, being non-FSAL, RKCIntegrator *replays*
         # (roadmap §7): a frozen (t, dt, s) step is a pure function of the state,
         # so replay from a checkpoint must land on the next checkpoint bit for bit.
-        probr = build_recording_prob(alg = RKCIntegrator())
+        probr = build_recording_prob(alg = RKCIntegrator{Float64}(dt_min = 100.0))
         preds0r = FastIsostasy.allocate_predictions(probr)
         FastIsostasy.forward_predict!(preds0r, probr)
 

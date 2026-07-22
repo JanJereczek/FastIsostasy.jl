@@ -11,7 +11,7 @@ using FastIsostasy, CUDA, Test
 
 CUDA.allowscalar(false)
 
-function build_gpu_sim(alg, arraykernel; reltol = 1f-5, dt_min = nothing)
+function build_gpu_sim(alg, arraykernel)
     W, n = 3f6, 5
     domain = RegionalDomain(W, n; arraykernel = arraykernel)
     H0 = zeros(domain)
@@ -21,8 +21,7 @@ function build_gpu_sim(alg, arraykernel; reltol = 1f-5, dt_min = nothing)
     se = SolidEarth(domain, layer_boundaries = [88f3],
         layer_viscosities = [1f21], rho_litho = 0f0)
     nout = NativeOutput(vars = [:u], t = [1000f0, 5000f0, 10_000f0])
-    opts = SolverOptions(verbose = false,
-        diffeq = DiffEqOptions(alg = alg, reltol = reltol, dt_min = dt_min))
+    opts = SolverOptions(verbose = false, integ = alg)
     return Simulation(domain, bcs, RegionalSeaLevel(), se, (0f0, 10f3);
         nout = nout, opts = opts)
 end
@@ -32,10 +31,11 @@ end
         # Both run at the same reltol: RKCIntegrator uses SSV's own embedded estimate,
         # so its `reltol` is calibrated like BS3Integrator's/Tsit5Integrator's — mirrors the CPU
         # comparison in test_integrators.jl.
-        for (name, alg, reltol) in (("RKCIntegrator", RKCIntegrator(), 1f-5), ("BS3Integrator", BS3Integrator(), 1f-5))
-            sim_cpu = build_gpu_sim(alg, Array; reltol = reltol)
+        for (name, alg) in (("RKCIntegrator", RKCIntegrator(reltol = 1f-5)),
+                ("BS3Integrator", BS3Integrator(reltol = 1f-5)))
+            sim_cpu = build_gpu_sim(alg, Array)
             run!(sim_cpu)
-            sim_gpu = build_gpu_sim(alg, CuArray; reltol = reltol)
+            sim_gpu = build_gpu_sim(alg, CuArray)
             run!(sim_gpu)
 
             u_cpu = sim_cpu.now.u
@@ -51,7 +51,7 @@ end
         # GPU counterpart of the CPU regression test in test_integrators.jl:
         # RKCIntegrator's init-time spectral-radius estimate must leave `sim.now.u`
         # (the very array passed in as `u0`) untouched, on CuArray too.
-        sim = build_gpu_sim(RKCIntegrator(), CuArray; reltol = 1f-5)
+        sim = build_gpu_sim(RKCIntegrator(reltol = 1f-5), CuArray)
         FastIsostasy.init_problem!(sim)
         u_before = Array(sim.now.u)
 
