@@ -165,6 +165,22 @@ It contains:
     adjustment_contribution::AC = NoAdjustmentContribution()
 end
 
+function Base.show(io::IO, ::MIME"text/plain", sl::RegionalSeaLevel)
+    descriptors = [
+        "Sea surface" => typeof(sl.surface),
+        "Sea-level load" => typeof(sl.load),
+        "Barystatic sea level" => typeof(sl.bsl),
+        "BSL update" => typeof(sl.update_bsl),
+        "Volume contribution" => typeof(sl.volume_contribution),
+        "Density contribution" => typeof(sl.density_contribution),
+        "Adjustment contribution" => typeof(sl.adjustment_contribution),
+    ]
+    padlen = maximum(length(d[1]) for d in descriptors) + 2
+    for (desc, val) in descriptors
+        println(io, rpad(" $(desc): ", padlen), val)
+    end
+end
+
 """
 $(TYPEDSIGNATURES)
 

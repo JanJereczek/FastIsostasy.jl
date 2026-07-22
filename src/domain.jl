@@ -227,3 +227,18 @@ function RegionalDomain(
 end
 
 Base.eltype(domain::RegionalDomain) = eltype(domain.x)
+
+function Base.show(io::IO, ::MIME"text/plain", domain::RegionalDomain)
+    descriptors = [
+        "nx, ny" => [domain.nx, domain.ny],
+        "dx, dy" => [domain.dx, domain.dy],
+        "Wx, Wy" => [domain.Wx, domain.Wy],
+        "eltype" => eltype(domain),
+        "array backend" => domain.arraykernel,
+        "correct_distortion" => domain.correct_distortion,
+    ]
+    padlen = maximum(length(d[1]) for d in descriptors) + 2
+    for (desc, val) in descriptors
+        println(io, rpad(" $(desc): ", padlen), val)
+    end
+end
