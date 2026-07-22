@@ -5,21 +5,24 @@ import FastIsostasy
 
 CUDA.allowscalar(false)
 
-# Local method (looked up by `FastIsostasy.cudainfo` via `Base.get_extension`).
-# Defining it here rather than overwriting `FastIsostasy.cudainfo()` avoids the
+# Local method (looked up by `FastIsostasy.deviceinfo` via `Base.get_extension`).
+# Defining it here rather than overwriting `FastIsostasy.deviceinfo()` avoids the
 # "method overwriting during precompilation" error.
-cudainfo() = CUDA.versioninfo()
+deviceinfo() = CUDA.versioninfo()
 
-# CUDA FFT plans — overrides the CPU default in tools.jl. Out-of-place (applied
-# via `mul!`) to preserve inputs, matching the CPU path. The inverse plan is wrapped
-# by `normalize_plan` so its normalization is Enzyme-inactive (see convolutions.jl).
-FastIsostasy.choose_fft_plans(X::CuArray) = (
-    CUDA.CUFFT.plan_fft(complex.(X)),
-    FastIsostasy.normalize_plan(CUDA.CUFFT.plan_ifft(complex.(X)))
-)
-
-# The spatial-derivative and thin-plate kernels are backend-generic (launched via
-# `get_backend` in derivatives.jl / deformation.jl), so no CUDA-specific
-# overrides are needed for them anymore.
+# That is the whole extension. Nothing else here is CUDA-specific:
+#
+#  • Arrays are allocated through `KernelAbstractions.allocate` off the domain's
+#    `backend` (`kernelzeros`/`kernelpromote` in src/utils.jl), so no `CuArray`
+#    constructor is ever named.
+#  • The spatial-derivative and thin-plate kernels are backend-generic, launched
+#    via `get_backend` (derivatives.jl / deformation.jl).
+#  • FFT plans no longer need a CUDA method: `plan_fft`/`plan_ifft` are
+#    `AbstractFFTs` generics that CUDA.jl already claims for `CuArray`, and the one
+#    non-portable piece — FFTW's `flags = MEASURE` — is now selected off the
+#    backend in `_planner_flags` (src/tools.jl).
+#
+# See `ext/FastIsostasyAMDGPUExt.jl`, which is the same file with the vendor
+# swapped, for the check that this really is all a backend costs.
 
 end
