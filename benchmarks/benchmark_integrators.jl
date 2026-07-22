@@ -1,5 +1,5 @@
 # =============================================================================
-# Benchmark of the built-in FIAlgorithm time-stepping backend on the analytic
+# Benchmark of the built-in AbstractIntegrator time-stepping backend on the analytic
 # cylinder problem (same setup as docs/src/examples/benchmark_analytic.jl).
 #
 # Records, per algorithm: wall-clock time of `run!` (best of a few reps,
@@ -23,7 +23,7 @@ const W, n = 3f6, 7                      # 2W-wide square domain, 2^n points/sid
 const TSPAN = (0f0, 50f3)
 const SAVE_T = [100, 500, 1500, 5000, 10_000, 50_000f0]
 
-function build_sim(alg; reltol = 1f-5, dt_min = nothing)
+function build_sim(alg)
     domain = RegionalDomain(W, n)
 
     H_ice_0 = zeros(domain)
@@ -36,22 +36,21 @@ function build_sim(alg; reltol = 1f-5, dt_min = nothing)
     sealevel = RegionalSeaLevel()
     nout = NativeOutput(vars = [:u], t = SAVE_T)
 
-    opts = SolverOptions(verbose = false,
-        diffeq = DiffEqOptions(alg = alg, reltol = reltol, dt_min = dt_min))
+    opts = SolverOptions(verbose = false, integ = alg)
     return Simulation(domain, bcs, sealevel, solidearth, TSPAN; nout = nout, opts = opts)
 end
 
 nrhs(sim) = length(sim.timer.t_computation)   # ~ number of RHS evaluations
 
-function measure(alg; reltol = 1f-5, dt_min = nothing, nrep = 3)
-    run!(build_sim(alg; reltol = reltol, dt_min = dt_min))   # warm-up (compile)
+function measure(alg; nrep = 3)
+    run!(build_sim(alg))   # warm-up (compile)
 
     best_time = Inf
     allocs = 0
     rhs = 0
     peak = 0.0f0
     for _ in 1:nrep
-        sim = build_sim(alg; reltol = reltol, dt_min = dt_min)
+        sim = build_sim(alg)
         stats = @timed run!(sim)
         if stats.time < best_time
             best_time = stats.time
@@ -65,9 +64,9 @@ end
 
 const RELTOL = 1f-5
 algs = [
-    ("FIBS3",   FIBS3(),   nothing),
-    ("FITsit5", FITsit5(), nothing),
-    ("FIEuler", FIEuler(), 100f0),
+    ("BS3Integrator",   BS3Integrator(reltol = RELTOL)),
+    ("Tsit5Integrator", Tsit5Integrator(reltol = RELTOL)),
+    ("EulerIntegrator", EulerIntegrator(dt = 100f0)),
 ]
 
 println("FastIsostasy built-in stepper benchmark")
@@ -75,8 +74,8 @@ println("FastIsostasy built-in stepper benchmark")
 @printf("%-9s %10s %12s %11s %14s\n", "alg", "time [s]", "alloc [MiB]", "RHS evals", "peak |u| [m]")
 println("-"^60)
 
-for (name, alg, dtm) in algs
-    r = measure(alg; reltol = RELTOL, dt_min = dtm)
+for (name, alg) in algs
+    r = measure(alg)
     @printf("%-9s %10.4f %12.2f %11d %14.4f\n",
         name, r.time, r.bytes / 2^20, r.rhs, r.peak)
 end
