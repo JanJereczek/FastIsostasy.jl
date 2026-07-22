@@ -34,12 +34,14 @@ module FastIsostasyCheckpointingExt
 # alias the `Duplicated` sim argument. It takes only sim-free `Const` pieces
 # (the frozen `(t, dt)` vector and the interval-end time).
 #
-# EulerIntegrator and RKCIntegrator (roadmap §7). The FSAL tableau methods (BS3Integrator/Tsit5Integrator) are
-# still excluded: adaptive replay needs their integrator FSAL state and their
-# `Vector{Matrix}` stage buffers overflow Enzyme's static type analysis. RKCIntegrator
-# sidesteps both — it is non-FSAL (a step is a pure function of `(u, t, dt, s)`)
-# and its recurrence uses O(1) named stage buffers, replayed via
-# `rkc_replay_stages!`. Guarded up front by `_require_replayable_adj`.
+# EulerIntegrator only. The FSAL tableau methods (BS3Integrator/Tsit5Integrator)
+# are excluded structurally: adaptive replay needs their integrator FSAL state and
+# their `Vector{Matrix}` stage buffers overflow Enzyme's static type analysis.
+# RKCIntegrator sidesteps both — it is non-FSAL (a step is a pure function of
+# `(u, t, dt, s)`) and its recurrence uses O(1) named stage buffers, replayed via
+# `rkc_replay_stages!` — but its reverse transform is currently switched OFF for
+# compile-time reasons; see `_reverse_interval!` below. Guarded up front by
+# `_require_replayable_adj`.
 
 using Enzyme: Enzyme, Const, Duplicated, Active
 # Checkpointing is a declared trigger of this extension (periodic-schedule
@@ -49,17 +51,27 @@ using Enzyme: Enzyme, Const, Duplicated, Active
 # Swapping the dense in-memory record for a Checkpointing.Periodic/Revolve
 # schedule over many intervals is the on-disk / large-nstep follow-up.
 using Checkpointing: Checkpointing
+# Extension modules do not inherit the parent's `using`s, so the `$(TYPEDSIGNATURES)`
+# interpolations in the docstrings below need their own import. Without it the
+# extension fails to *precompile*, and the only symptom is `gradient!` falling back
+# to its "reverse mode requires FastIsostasyCheckpointingExt" stub — i.e. a missing
+# docstring import masquerades as a missing dependency.
+using DocStringExtensions
 
 import FastIsostasy: gradient!, loss_and_gradient!, AbstractInversion, AdjointMode
 import FastIsostasy
 
 # --- per-interval primal (reversed by Enzyme) --------------------------------
 
-# Pure in-place replay of interval `i`'s frozen `(t, dt)` steps, ending with a
-# diagnostics eval at `tend` (mirrors `record_forward!`/`replay_interval!` so the
-# primal is bit-identical). Local `u`/`dudt`; mutates `sim.now.*` in place.
-# `steps` and `tend` are sim-free `Const`s — passing `prob` here would alias the
-# `Duplicated` sim.
+"""
+$(TYPEDSIGNATURES)
+
+Pure in-place replay of an interval's frozen `(t, dt)` steps, ending with a
+diagnostics evaluation at `tend`. This mirrors `record_forward!`/`replay_interval!`
+so the primal is bit-identical. Uses local `u`/`dudt` and mutates `sim.now.*`
+in-place. `steps` and `tend` are expected to be sim-free `Const`s — passing
+`prob` here would alias the `Duplicated` sim.
+"""
 function _interval_forward!(sim, steps, tend)
     u = copy(sim.now.u)
     dudt = similar(u)
@@ -73,6 +85,12 @@ function _interval_forward!(sim, steps, tend)
 end
 
 # RKCIntegrator counterpart: replay the frozen `(t, dt, s)` RKC2 recurrence (roadmap §7).
+#
+# NOT CURRENTLY DIFFERENTIATED — kept, unreferenced by any `Enzyme.autodiff`, so
+# the RKC adjoint can be switched back on in one line once its transform is
+# affordable (see `_reverse_interval!`). A function Enzyme is never asked to
+# transform costs nothing to keep.
+#
 # Non-FSAL, so — like the Euler replay above — this is a pure in-place function
 # of `sim.now` with local scratch; Enzyme reverses it. `rkc_replay_stages!`
 # (src/integrators.jl) is the shared recurrence, keeping this bit-identical to
@@ -109,14 +127,18 @@ end
 # (state-independent ⇒ `Const` into `Enzyme.autodiff`).
 function _rkc_interval_plan(sim, steps)
     T = eltype(sim.now.u)
-    return FastIsostasy.rkc_stage_plan(T, steps, T(sim.opts.diffeq.alg.damping))
+    return FastIsostasy.rkc_stage_plan(T, steps, T(sim.opts.integ.damping))
 end
 
 # --- observation cotangent seeding -------------------------------------------
 
-# Add the adjoint of one observed field entry (`g = ∂misfit/∂field[idx]`) to the
-# sim shadow, resolving `observable_field`'s composition back to the *stored*
-# `sim.now` arrays it is built from. Linear `idx` matches `gather!`'s indexing.
+"""
+$(TYPEDSIGNATURES)
+
+Add the adjoint of one observed field entry (`g = ∂misfit/∂field[idx]`) to the
+sim shadow, resolving `observable_field`'s composition back to the *stored*
+`sim.now` arrays it is built from. Linear `idx` matches `gather!`'s indexing.
+"""
 @inline function _seed_field!(dsim, ::FastIsostasy.VerticalUpliftObservable, idx, g)
     dsim.now.u[idx] += g            # field = u + ue
     dsim.now.ue[idx] += g
@@ -154,13 +176,66 @@ end
 
 # --- the checkpointed reverse sweep ------------------------------------------
 
+# --- per-interval reverse, dispatched on the integrator -----------------------
+#
+# One method per integrator, DISPATCHED rather than branched. This is load-
+# bearing for compile time, not a style choice.
+#
+# `Enzyme.autodiff` expands a generated function, so Enzyme's LLVM-level reverse
+# transform runs for every `autodiff` call site Julia can reach when
+# `_adjoint_gradient!` is compiled — including the arms of an `if` that is never
+# taken at runtime. Writing this as one function with `if alg isa RKCIntegrator`
+# therefore paid for the Euler *and* the RKC transform on every single
+# `gradient!(::AdjointMode)`, each a multi-minute LLVM job, no matter which
+# integrator the simulation actually used. (It went unnoticed because
+# `SolverOptions` used to hold its integrator behind an abstract field, so the
+# predicate could not even be const-folded away.) Dispatch leaves Julia exactly
+# one method to compile.
+#
+# Consequence for anyone extending this: a new integrator's reverse is added by
+# adding a method here, never by adding a branch to an existing one.
+
+function _reverse_interval!(mode, sim, dsim, ::FastIsostasy.EulerIntegrator, steps, tend)
+    Enzyme.autodiff(
+        mode, _interval_forward!, Const,
+        Duplicated(sim, dsim),
+        Const(steps),
+        Const(oftype(sim.timer.t, tend)))
+    return nothing
+end
+
+# RKC: the replay primal (`_interval_forward_rkc!`) is written and bitwise-
+# verified, but differentiating it is switched off — its reverse transform costs
+# as much as Euler's and doubled every adjoint compile while unvalidated
+# (roadmap ad_inversion.md). To re-enable, restore the `Enzyme.autodiff` call on
+# `_interval_forward_rkc!` with `Const(_rkc_interval_plan(sim, steps))` here.
+_reverse_interval!(_, _, _, ::FastIsostasy.RKCIntegrator, _, _) =
+    error(
+    "AdjointMode does not currently differentiate RKCIntegrator: its reverse " *
+    "transform is deliberately not compiled (it doubled every adjoint compile " *
+    "while unvalidated). The frozen replay itself is implemented and verified — " *
+    "see `_interval_forward_rkc!` in FastIsostasyCheckpointingExt to switch it " *
+    "back on. Use `EulerIntegrator(dt = ...)` for a reverse-mode gradient.")
+
+_reverse_interval!(_, _, _, alg::FastIsostasy.AbstractIntegrator, _, _) =
+    error(_unsupported_adj_msg(alg))
+
+# Which integrators have a reverse wired up. Keep in sync with the
+# `_reverse_interval!` methods above; used for the up-front guard so an
+# unsupported setup fails before paying for a forward record.
+_adj_replayable(::FastIsostasy.AbstractIntegrator) = false
+_adj_replayable(::FastIsostasy.EulerIntegrator) = true
+
+_unsupported_adj_msg(alg) =
+    "AdjointMode replays EulerIntegrator only: gradient! got $(typeof(alg)). " *
+    "The FSAL tableau methods (BS3Integrator/Tsit5Integrator) need the " *
+    "integrator's FSAL state to replay, and their `Vector{Matrix}` stage " *
+    "buffers overflow Enzyme's static type analysis. Use " *
+    "`EulerIntegrator(dt = ...)`."
+
 _require_replayable_adj(prob) =
-    (prob.sim.opts.diffeq.alg isa FastIsostasy.EulerIntegrator ||
-     prob.sim.opts.diffeq.alg isa FastIsostasy.RKCIntegrator) || error(
-    "AdjointMode replays EulerIntegrator and RKCIntegrator only: gradient! got " *
-    "$(typeof(prob.sim.opts.diffeq.alg)). The FSAL tableau methods " *
-    "(BS3Integrator/Tsit5Integrator) need the integrator's FSAL state to replay, which is " *
-    "roadmap Phase 5+; use RKCIntegrator for a stiff, stabilised adaptive adjoint.")
+    _adj_replayable(prob.sim.opts.integ) ||
+    error(_unsupported_adj_msg(prob.sim.opts.integ))
 
 # Core: fill `g` with ∇_θ loss(prob, θ) via the checkpointed reverse; return the
 # primal loss (misfit + regularization) as a byproduct of the forward record.
@@ -192,24 +267,15 @@ function _adjoint_gradient!(g, prob::AbstractInversion, θ)
     end
 
     # Reverse sweep over intervals — accumulates param cotangents in `dsim`.
-    # `_require_replayable_adj` above has already restricted `alg` to EulerIntegrator or
-    # RKCIntegrator; each interval's primal is the matching pure in-place replay.
+    # `_reverse_interval!` dispatches to the integrator's own frozen replay;
+    # `_require_replayable_adj` above has already rejected the ones without one.
     dsim = Enzyme.make_zero(sim)
-    alg = sim.opts.diffeq.alg
+    alg = sim.opts.integ
     n = length(prob.extract_times)
     for i in n:-1:1
         _seed_interval!(dsim, prob, preds, i)
         FastIsostasy.restore!(sim, rec.checkpoints[i])
-        if alg isa FastIsostasy.RKCIntegrator
-            Enzyme.autodiff(mode, _interval_forward_rkc!, Const,
-                Duplicated(sim, dsim),
-                Const(_rkc_interval_plan(sim, rec.steps[i])))
-        else
-            Enzyme.autodiff(mode, _interval_forward!, Const,
-                Duplicated(sim, dsim),
-                Const(rec.steps[i]),
-                Const(oftype(sim.timer.t, prob.extract_times[i])))
-        end
+        _reverse_interval!(mode, sim, dsim, alg, rec.steps[i], prob.extract_times[i])
     end
 
     # Map accumulated ∂misfit/∂params → ∂misfit/∂θ by reversing reconstruct!.
@@ -259,5 +325,12 @@ end
 # are a warm dev session, or `TangentMode` (167 s compile) for low-dim encoded θ;
 # reverse's 665 s only pays off at full-field scale. Revisit if Enzyme gains
 # pkgimage caching of its generated adjoints.
+#
+# Re-measured 2026-07-21 on the `test_adjoint_validity` setup, cold session:
+# `gradient!` 714.5 s cold / ~0 s warm, i.e. the whole cost is the one-off
+# transform and none of it is the reverse sweep itself (the primal `loss` compiles
+# in 0.1 s). Peak RSS 2.2 GiB. That is back in line with the 665 s above, i.e. the
+# single-`autodiff`-call-site cost — see the dispatch note on `_reverse_interval!`
+# for why an `alg isa …` branch used to pay it twice per gradient.
 
 end # module
