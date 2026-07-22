@@ -59,7 +59,7 @@ EnzymeRules.inactive_type(::Type{<:FastIsostasy.NormalizedPlan}) = true
 # the tangent is the same transform applied to the input tangent, `dY = P·dX`.
 # Restricting `plan::Const{<:AbstractFFTs.Plan}` keeps this from hijacking the
 # generic matrix `mul!`. Covers complex `plan_fft`/`plan_ifft` (explicit
-# MaxwellMantle path) and `rfft`/`irfft` (ConvolutionPlan, RealMaxwellMantle);
+# ComplexFFTBackend path) and `rfft`/`irfft` (ConvolutionPlan, RealFFTBackend);
 # the transform is linear in every case, so one rule serves all.
 # =============================================================================
 
@@ -279,10 +279,10 @@ end
 # up front with the documented restriction instead of surfacing that error.
 # =============================================================================
 
-_require_fieuler(prob) = prob.sim.opts.diffeq.alg isa FastIsostasy.EulerIntegrator || error(
+_require_fieuler(prob) = prob.sim.opts.integ isa FastIsostasy.EulerIntegrator || error(
     "TangentMode v1 is fixed-step only: gradient!/loss_and_gradient! require " *
-    "prob.sim.opts.diffeq.alg isa EulerIntegrator (got " *
-    "$(typeof(prob.sim.opts.diffeq.alg))). Adaptive algorithms build the " *
+    "prob.sim.opts.integ isa EulerIntegrator (got " *
+    "$(typeof(prob.sim.opts.integ))). Adaptive algorithms build the " *
     "TableauIntegratorState inside forward_predict!, which Enzyme's static type analysis " *
     "cannot handle (surfaces as a cryptic EnzymeNoTypeError instead).")
 
