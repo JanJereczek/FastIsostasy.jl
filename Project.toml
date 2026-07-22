@@ -5,60 +5,66 @@ authors = ["Jan Swierczek-Jereczek"]
 
 [deps]
 AbstractFFTs = "621f4979-c628-5d54-868e-fcf4e3e8185c"
-CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
-Crayons = "a8cc5b0e-0ffa-5ad4-8c14-923d3ee1735f"
 DelimitedFiles = "8bb1440f-4735-579b-a4ab-409b98df4dab"
 DocStringExtensions = "ffbed154-4ef7-542d-bbb7-c09d3a79fcae"
 Downloads = "f43a241f-c20a-4ad4-852c-f6b1247861c6"
 FFTW = "7a1cc6ca-52ef-59f5-83cd-3a7055c09341"
 FastGaussQuadrature = "442a2c76-b920-505d-bb47-c5924d526838"
-FiniteDifferences = "26cc04aa-876d-5657-8c51-4c34ba976000"
 Interpolations = "a98d9a8b-a2ab-59e6-89dd-64a1c18fca59"
 KernelAbstractions = "63c18a36-062a-441e-b654-da1e3ab1ce7c"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 NetCDF = "30363a11-5582-574a-97bb-aa9a979735b9"
-OrdinaryDiffEqLowOrderRK = "1344f307-1e59-4825-a18e-ace9aa3fa4c6"
-OrdinaryDiffEqTsit5 = "b1df2697-797e-41e3-8120-5422d3b24e4a"
-ParallelStencil = "94395366-693c-11ea-3b26-d9b7aac5d958"
-ProgressLogging = "33c8b6b6-d38a-422a-b730-caa89a2f386c"
+ProgressMeter = "92933f4c-e287-5a05-a399-4b506db050ca"
 Proj = "c94c279d-25a6-4763-9509-64d165bea63e"
 Reexport = "189a3867-3050-52da-a836-e630ba90ab69"
 SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
 Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 
 [weakdeps]
+AMDGPU = "21141c5a-9bdb-4563-92ae-f87d6854732e"
+CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
+Checkpointing = "eb46d486-4f9c-4c3d-b445-a617f2a2f1ca"
 Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
 EnsembleKalmanProcesses = "aa8a2aa5-91d8-4396-bcef-d4f2ec43552d"
-LinearSolve = "7ed4a6bd-45f5-4d41-b270-4a48e9bafcae"
+Enzyme = "7da242da-08ed-463a-9acd-ee780be4f1d9"
 Makie = "ee78f7c6-11fb-53f2-987a-cfe4a2b5a57a"
 NLsolve = "2774e3e8-f4cf-5e23-947b-6d7e65073b56"
+Optim = "429524aa-4258-5aef-a3af-852621145aeb"
 
 [extensions]
+FastIsostasyAMDGPUExt = ["AMDGPU"]
+FastIsostasyCUDAExt = ["CUDA"]
+FastIsostasyCheckpointingExt = ["Checkpointing", "Enzyme"]
 FastIsostasyEnsembleKalmanProcessesExt = ["EnsembleKalmanProcesses", "Distributions"]
+FastIsostasyEnzymeCUDAExt = ["Enzyme", "CUDA"]
+FastIsostasyEnzymeExt = ["Enzyme"]
 FastIsostasyMakieExt = ["Makie"]
 FastIsostasyNLsolveExt = ["NLsolve"]
+FastIsostasyOptimExt = ["Optim"]
 
 [compat]
 AbstractFFTs = "1.5"
-CUDA = "5"
-Crayons = "4.1.1"
+AMDGPU = "1"
+CUDA = "5, 6"
+Checkpointing = "0.9, 1"
 DelimitedFiles = "1.9"
 Distributions = "0.25"
 DocStringExtensions = "0.9.5"
 Downloads = "1.6"
 EnsembleKalmanProcesses = "2.0"
+Enzyme = "0.13, 0.14"
 FFTW = "1.8"
 FastGaussQuadrature = "1.0"
-FiniteDifferences = "0.12.32"
-Interpolations = "0.14, 0.15"
+Interpolations = "0.14, 0.15, 0.16"
 KernelAbstractions = "0.9.41"
+LinearAlgebra = "1.9"
+Makie = "0.21, 0.22, 0.23, 0.24"
+NLsolve = "4.5"
 NetCDF = "0.11, 0.12"
-OrdinaryDiffEqLowOrderRK = "1.2.0"
-OrdinaryDiffEqTsit5 = "1.1"
-ParallelStencil = "0.13"
-ProgressLogging = "0.1.5"
+Optim = "1"
+ProgressMeter = "1.11.0"
 Proj = "1.7"
 Reexport = "1"
 SpecialFunctions = "2.4"
 Statistics = "1.9"
-julia = "1.9"
+julia = "1.10"

@@ -83,7 +83,7 @@ end
 function get_layer_boundaries(n_x, n_y, litho_thickness, layering::UniformLayering, T)
 
     layer_boundaries = zeros(T, n_x, n_y, layering.n_layers)
-    for l in 1:layering.n_layers
+    for l = 1:layering.n_layers
         layer_boundaries[:, :, l] .= layering.boundaries[l]
     end
     return layer_boundaries
@@ -93,8 +93,9 @@ function get_layer_boundaries(n_x, n_y, litho_thickness, layering::ParallelLayer
 
     layer_boundaries = zeros(T, n_x, n_y, layering.n_layers)
     view(layer_boundaries, :, :, 1) .= litho_thickness .+ layering.tol
-    for l in 2:layering.n_layers
-        view(layer_boundaries, :, :, l) .= layer_boundaries[:, :, l-1] .+ layering.thickness[l]
+    for l = 2:layering.n_layers
+        view(layer_boundaries, :, :, l) .=
+            layer_boundaries[:, :, l-1] .+ layering.thickness[l]
     end
     return layer_boundaries
 end
@@ -103,7 +104,7 @@ function get_layer_boundaries(n_x, n_y, litho_thickness, layering::EqualizedLaye
 
     layer_boundaries = zeros(T, n_x, n_y, layering.n_layers)
     view(layer_boundaries, :, :, 1) .= litho_thickness .+ layering.tol
-    for l in 2:layering.n_layers
+    for l = 2:layering.n_layers
         view(layer_boundaries, :, :, l) .= layering.boundaries[l]
     end
     return layer_boundaries
@@ -113,8 +114,11 @@ function get_layer_boundaries(n_x, n_y, litho_thickness, layering::FoldedLayerin
 
     layer_boundaries = zeros(T, n_x, n_y, layering.n_layers)
     for I in CartesianIndices(litho_thickness)
-        view(layer_boundaries, I, :) .= range(litho_thickness[I] + layering.tol,
-            stop=layering.max_depth, length=layering.n_layers)
+        view(layer_boundaries, I, :) .= range(
+            litho_thickness[I] + layering.tol,
+            stop = layering.max_depth,
+            length = layering.n_layers,
+        )
     end
     return layer_boundaries
 end
@@ -132,14 +136,20 @@ layer_boundaries = get_layer_boundaries(n_x, n_y, litho_thickness, layering)
 layer_viscosities = 10 .^ interpolate2layers(z, log10.(eta3D), layer_boundaries)
 ```
 """
-function interpolate2layers(z::Vector{T}, X::Array{T, 3}, lb::Array{T, 3};
-    extrapolation_bc = Throw(), n_itp::Int = 4) where {T<:AbstractFloat}
+function interpolate2layers(
+    z::Vector{T},
+    X::Array{T,3},
+    lb::Array{T,3};
+    extrapolation_bc = Throw(),
+    n_itp::Int = 4,
+) where {T<:AbstractFloat}
 
     n_x, n_y, n_l = size(lb)
     Xout = zeros(T, n_x, n_y, n_l)
-    itp = linear_interpolation((1:n_x, 1:n_y, z), X, extrapolation_bc = extrapolation_bc)
+    itp =
+        linear_interpolation((1:n_x, 1:n_y, z), X, extrapolation_bc = extrapolation_bc)
 
-    for i in 1:n_x, j in 1:n_y
+    for i = 1:n_x, j = 1:n_y
         view(Xout, i, j, :) .= itp.(i, j, lb[i, j, :])
     end
 

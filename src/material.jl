@@ -17,7 +17,8 @@ seismic velocities.
 """
 get_shearmodulus(youngmodulus, poissonratio) = youngmodulus / (2 * (1 + poissonratio))
 get_shearmodulus(ρ, Vsv, Vsh) = ρ .* (Vsv + Vsh) ./ 2
-# get_shearmodulus(m::ReferenceSolidEarthModel) = get_shearmodulus(m.density, m.Vsv, m.Vsh)
+get_shearmodulus(m::ReferenceSolidEarthModel) =
+    get_shearmodulus(m.density, m.Vsv, m.Vsh)
 
 ######################################################################################
 # Effect of mantle compressibility on effective viscosity
@@ -46,7 +47,8 @@ apply_compressibility!(eta, nu, compressibility::IncompressibleMantle) = eta
 function apply_compressibility!(eta, nu, compressibility::CompressibleMantle)
     incompressible_poissonratio = 0.5f0
     mantle_poissonratio = nu
-    compressibility_scaling = (1 + incompressible_poissonratio) / (1 + mantle_poissonratio)
+    compressibility_scaling =
+        (1 + incompressible_poissonratio) / (1 + mantle_poissonratio)
     eta .*= compressibility_scaling
     return nothing
 end
@@ -69,7 +71,7 @@ struct NoCalibration end
 $(TYPEDSIGNATURES)
 """
 @kwdef struct SeakonCalibration{T}
-    ref_viscosity::T = 1f21
+    ref_viscosity::T = 1.0f21
 end
 
 
@@ -99,7 +101,7 @@ abstract type AbstractViscosityLumping end
 $(TYPEDSIGNATURES)
 """
 @kwdef struct TimeDomainViscosityLumping
-    characteristic_loadlength::Float32 = 2f6
+    characteristic_loadlength::Float32 = 2.0f6
 end
 
 """
@@ -123,8 +125,13 @@ $(TYPEDSIGNATURES)
 Compute equivalent viscosity for multilayer model by recursively applying
 the formula for a halfspace and a channel from Lingle and Clark (1975).
 """
-function get_effective_viscosity_and_scaling(domain, layer_viscosities, layer_boundaries,
-    maskactive, lumping::TimeDomainViscosityLumping)
+function get_effective_viscosity_and_scaling(
+    domain,
+    layer_viscosities,
+    layer_boundaries,
+    maskactive,
+    lumping::TimeDomainViscosityLumping,
+)
 
     characteristic_loadlength = lumping.characteristic_loadlength
     T = eltype(domain.dx)
@@ -134,25 +141,35 @@ function get_effective_viscosity_and_scaling(domain, layer_viscosities, layer_bo
     R = fill(1, domain)
 
     if size(layer_viscosities, 3) > 1
-        channel_viscosity = layer_viscosities[:, :, end - 1]
-        channel_thickness = layer_boundaries[:, :, end] - layer_boundaries[:, :, end - 1]
+        channel_viscosity = layer_viscosities[:, :, end-1]
+        channel_thickness = layer_boundaries[:, :, end] - layer_boundaries[:, :, end-1]
         viscosity_ratio = channel_viscosity ./ effective_viscosity
-        
-        @inbounds for l in axes(layer_viscosities, 3)[1:end-1]
-            channel_viscosity .= layer_viscosities[:, :, end - l]
-            channel_thickness .= layer_boundaries[:, :, end - l + 1] -
-                layer_boundaries[:, :, end - l]
+
+        @inbounds for l in axes(layer_viscosities, 3)[1:(end-1)]
+            channel_viscosity .= layer_viscosities[:, :, end-l]
+            channel_thickness .=
+                layer_boundaries[:, :, end-l+1] - layer_boundaries[:, :, end-l]
             viscosity_ratio = channel_viscosity ./ effective_viscosity
-            effective_viscosity .*= channel_scaling_timedomain(domain, viscosity_ratio,
-                channel_thickness, characteristic_loadlength)
+            effective_viscosity .*= channel_scaling_timedomain(
+                domain,
+                viscosity_ratio,
+                channel_thickness,
+                characteristic_loadlength,
+            )
         end
     end
-    
+
     return T.(effective_viscosity), T.(R)
 end
 
-function get_effective_viscosity_and_scaling(domain, layer_viscosities, layer_boundaries,
-    maskactive, lumping::FreqDomainViscosityLumping; show_steps = false)
+function get_effective_viscosity_and_scaling(
+    domain,
+    layer_viscosities,
+    layer_boundaries,
+    maskactive,
+    lumping::FreqDomainViscosityLumping;
+    show_steps = false,
+)
 
     T = eltype(domain.dx)
     R = fill(1, domain)
@@ -161,15 +178,22 @@ function get_effective_viscosity_and_scaling(domain, layer_viscosities, layer_bo
     if size(layer_viscosities, 3) > 1
         channel_thickness = similar(effective_viscosity)
         viscosity_ratio = similar(effective_viscosity)
-        
-        @inbounds for l in axes(layer_viscosities, 3)[1:end-1]
-            channel_thickness .= layer_boundaries[:, :, end - l + 1] -
-                layer_boundaries[:, :, end - l]
-            viscosity_ratio .= layer_viscosities[:, :, end - l] ./ effective_viscosity
-            R .*= channel_scaling_freqdomain_2D(domain, viscosity_ratio, channel_thickness, maskactive)
+
+        @inbounds for l in axes(layer_viscosities, 3)[1:(end-1)]
+            channel_thickness .=
+                layer_boundaries[:, :, end-l+1] - layer_boundaries[:, :, end-l]
+            viscosity_ratio .= layer_viscosities[:, :, end-l] ./ effective_viscosity
+            R .*= channel_scaling_freqdomain_2D(
+                domain,
+                viscosity_ratio,
+                channel_thickness,
+                maskactive,
+            )
             show_steps && @show extrema(R)
             if maximum(R) == typemax(eltype(R))
-                error("The scaling factor R is too large. Try to introduce intermediate layers if you do not want to change the floating point precision.")
+                error(
+                    "The scaling factor R is too large. Try to introduce intermediate layers if you do not want to change the floating point precision.",
+                )
             end
         end
 
@@ -178,26 +202,44 @@ function get_effective_viscosity_and_scaling(domain, layer_viscosities, layer_bo
     return T.(effective_viscosity), T.(R)
 end
 
-function get_effective_viscosity_and_scaling(domain, layer_viscosities, layer_boundaries,
-    maskactive, lumping::MeanViscosityLumping)
+function get_effective_viscosity_and_scaling(
+    domain,
+    layer_viscosities,
+    layer_boundaries,
+    maskactive,
+    lumping::MeanViscosityLumping,
+)
     T = eltype(domain.dx)
     R = fill(1, domain)
     T_lithosphere = layer_boundaries[:, :, 1]
     T_uppermantle = layer_boundaries[:, :, end] .- T_lithosphere
-    effective_viscosity = mean_viscosity(T_lithosphere, T_uppermantle,
-        layer_viscosities, layer_boundaries)
+    effective_viscosity = mean_viscosity(
+        T_lithosphere,
+        T_uppermantle,
+        layer_viscosities,
+        layer_boundaries,
+    )
 
     return T.(effective_viscosity), T.(R)
 end
 
-function get_effective_viscosity_and_scaling(domain, layer_viscosities, layer_boundaries,
-    maskactive, lumping::MeanLogViscosityLumping)
+function get_effective_viscosity_and_scaling(
+    domain,
+    layer_viscosities,
+    layer_boundaries,
+    maskactive,
+    lumping::MeanLogViscosityLumping,
+)
     T = eltype(domain.dx)
     R = fill(1, domain)
     T_lithosphere = layer_boundaries[:, :, 1]
     T_uppermantle = layer_boundaries[:, :, end] .- T_lithosphere
-    effective_viscosity = mean_viscosity(T_lithosphere, T_uppermantle,
-        log10.(layer_viscosities), layer_boundaries)
+    effective_viscosity = mean_viscosity(
+        T_lithosphere,
+        T_uppermantle,
+        log10.(layer_viscosities),
+        layer_boundaries,
+    )
     effective_viscosity = 10 .^ effective_viscosity
     return T.(effective_viscosity), T.(R)
 end
@@ -206,11 +248,13 @@ end
 $(TYPEDSIGNATURES)
 """
 function channel_scaling_timedomain(
-    domain::RegionalDomain{T, M},
-    visc_ratio::Matrix{T},
-    channel_thickness::Matrix{T},
-    characteristic_loadlength::T,
-) where {T<:AbstractFloat, M<:KernelMatrix{T}}
+    domain::RegionalDomain,
+    visc_ratio,             # <: AbstractMatrix{T}
+    channel_thickness,      # <: AbstractMatrix{T}
+    characteristic_loadlength,
+)
+
+    T = eltype(domain)
 
     # kappa is the wavenumber of the harmonic load. (see Cathles 1975, solidearth.43)
     # for the default value, we assume this is related to the size of the domain!
@@ -219,54 +263,76 @@ function channel_scaling_timedomain(
 end
 
 function channel_scaling_freqdomain_0D(
-    domain::RegionalDomain{T, M},
-    visc_ratio::T,
-    channel_thickness::T,
-) where {T<:AbstractFloat, M<:KernelMatrix{T}}
+    domain::RegionalDomain,
+    visc_ratio,
+    channel_thickness,
+)
 
     # kappa is here the pseudodiff operator in Fourier space (Bueler et al., 2007)
     kappa = Array(domain.pseudodiff)
     return channel_scaling(domain, kappa, channel_thickness, visc_ratio)
 end
 
-function channel_scaling(domain, kappa, channel_thickness, visc_ratio; show_steps = false)
+function channel_scaling(
+    domain,
+    kappa,
+    channel_thickness,
+    visc_ratio;
+    show_steps = false,
+)
     Text = eltype(domain)
     Tint = Float64
 
     show_steps && @show extrema(visc_ratio)
     show_steps && @show extrema(channel_thickness)
 
-    C = Tint.(cosh.(channel_thickness .* kappa))
-    show_steps && @show extrema(C)
-    S = Tint.(sinh.(channel_thickness .* kappa))
-    show_steps && @show extrema(S)
+    nu = Tint.(visc_ratio)
+    # x = channel_thickness * kappa >= 0 (kappa is a wavenumber magnitude). This
+    # is the argument that used to overflow when built into cosh/sinh directly.
+    x = Tint.(channel_thickness .* kappa)
 
-    num = zeros(Tint, domain.nx, domain.ny)
-    denum = copy(num)
+    # Overflow-safe Cathles (1975) channel-flow correction. The original form
+    # built C = cosh(x), S = sinh(x) explicitly and returned a ratio of
+    # quadratics in (C, S). For a thick channel on a fine grid the argument
+    # x = channel_thickness * kappa reaches ~120 at this package's default
+    # geometry, where cosh/sinh overflow to Inf in Float32 (threshold arg
+    # ~88.7) — and to Inf in Float64 by arg ~354 — turning num/denum into NaN
+    # and silently corrupting the physics (roadmap stabilise_dt.md §3.1).
+    # Every C, S dependence enters num and denum only through cosh(2x), sinh(2x)
+    # and constants:
+    #
+    #   2*C*S = sinh(2x),  C^2 + S^2 = cosh(2x),  C^2 - S^2 = 1
+    #
+    # so multiplying num and denum by e^{-2x} (which cancels in the ratio)
+    # replaces every growing term with a bounded one in a = e^{-2x} in (0, 1]:
+    #
+    #   cosh(2x)*e^{-2x} = (1 + a^2)/2,   sinh(2x)*e^{-2x} = (1 - a^2)/2
+    #
+    # The x*a and x^2*a terms decay to 0 (exponential beats polynomial), so the
+    # expression stays finite for any x >= 0. Verified to match the original to
+    # machine precision over the non-overflowing range. Limits: -> 1 as x -> 0
+    # (no correction at the DC mode, cf. §4) and -> visc_ratio as x -> Inf.
+    a = exp.(-2 .* x)
+    cosh2 = @. (1 + a^2) / 2       # cosh(2x) * e^{-2x}
+    sinh2 = @. (1 - a^2) / 2       # sinh(2x) * e^{-2x}
 
-    @. num += 2 * visc_ratio * C * S
+    num = @. nu * sinh2 +
+       (1 - nu^2) * x^2 * a +
+       (nu^2 + 1) / 2 * cosh2 +
+       (1 - nu^2) / 2 * a
     show_steps && @show extrema(num)
-    @. num += (1 - visc_ratio ^ 2) * channel_thickness ^ 2 * kappa ^ 2
-    show_steps && @show extrema(num)
-    @. num += visc_ratio ^ 2 * S ^ 2 + C ^ 2
-    show_steps && @show extrema(num)
+    denum = @. (nu + 1 / nu) / 2 * sinh2 + (nu - 1 / nu) * x * a + cosh2
+    show_steps && @show extrema(denum)
 
-    @. denum += (visc_ratio + 1 / visc_ratio) * C * S
-    show_steps && @show extrema(denum)
-    @. denum += (visc_ratio - 1 / visc_ratio) * channel_thickness * kappa
-    show_steps && @show extrema(denum)
-    @. denum += S ^ 2 + C ^ 2
-    show_steps && @show extrema(denum)
-    
     return Text.(num ./ denum)
 end
 
 function channel_scaling_freqdomain_2D(
-    domain::RegionalDomain{T, M},
-    visc_ratio::Matrix{T},
-    channel_thickness::Matrix{T},
+    domain::RegionalDomain,
+    visc_ratio,
+    channel_thickness,
     maskactive,
-) where {T<:AbstractFloat, M<:KernelMatrix{T}}
+)
 
     # actually only compute mean over maskactive
     R = channel_scaling_freqdomain_0D(
@@ -280,7 +346,12 @@ end
 function mean_viscosity(T_lithosphere, T_uppermantle, eta, depth)
     eta_mean = similar(T_lithosphere)
     for I in CartesianIndices(eta_mean)
-        eta_mean[I] = mean(eta[I, T_uppermantle[I] + T_lithosphere[I] .>= depth[I, :] .>= T_lithosphere[I]])
+        eta_mean[I] = mean(
+            eta[
+                I,
+                T_uppermantle[I]+T_lithosphere[I] .>= depth[I, :] .>= T_lithosphere[I],
+            ],
+        )
     end
     return eta_mean
 end
@@ -302,9 +373,9 @@ function build_greenintegrand(
 ) where {T<:AbstractFloat}
 
     greenintegrand_interp = linear_interpolation(distance, greenintegrand_coeffs)
-    compute_greenintegrand_entry_r(r::T) = get_loadgreen(
-        r, distance, greenintegrand_coeffs, greenintegrand_interp)
-    greenintegrand_function(x::T, y::T) = compute_greenintegrand_entry_r( get_r(x, y) )
+    compute_greenintegrand_entry_r(r::T) =
+        get_loadgreen(r, distance, greenintegrand_coeffs, greenintegrand_interp)
+    greenintegrand_function(x::T, y::T) = compute_greenintegrand_entry_r(get_r(x, y))
     return greenintegrand_function
 end
 
@@ -315,19 +386,19 @@ Compute the integrands of the Green's function resulting from a load at a given
 `distance` and based on provided `greenintegrand_coeffs`.
 Reference: Deformation of the Earth by surface Loads, Farell 1972, table A3.
 """
-function get_loadgreen(
-    r::T,
-    rm::Vector{T},
-    greenintegrand_coeffs::Vector{T},
-    interp_greenintegrand_::Interpolations.Extrapolation,
-) where {T<:AbstractFloat}
+function get_loadgreen(r, rm, greenintegrand_coeffs, interp_greenintegrand_)
+
+    # `1e12` rescales Farell's tabulated coefficients; it is a unit conversion, not a
+    # differentiable quantity, so it is cast to the *data* eltype rather than to the
+    # eltype of `r` (which may be an AD-active number).
+    T = eltype(greenintegrand_coeffs)
 
     if r < 0.01
-        return greenintegrand_coeffs[1] / ( rm[2] * T(1e12) )
+        return greenintegrand_coeffs[1] / (rm[2] * T(1e12))
     elseif r > rm[end]
         return T(0.0)
     else
-        return interp_greenintegrand_(r) / ( r * T(1e12) )
+        return interp_greenintegrand_(r) / (r * T(1e12))
     end
 end
 
@@ -376,7 +447,7 @@ function green_viscous(domain, rho, D)
     L = get_flexural_lengthscale(D, rho, 9.81)
     R = max.(domain.R, 1)
     return map(r -> -(L^2 / (2 * pi * D) * besselkei(r / L)), R) .*
-        (domain.dx * domain.dy)
+           (domain.dx * domain.dy)
 end
 
 """
@@ -428,11 +499,131 @@ function maxwelltime_scaling(layer_viscosities, layer_shearmoduli)
     return layer_shearmoduli[end] ./ layer_shearmoduli .* layer_viscosities
 end
 
-function maxwelltime_scaling!(layer_viscosities, layer_boundaries, m::ReferenceSolidEarthModel)
+function maxwelltime_scaling!(
+    layer_viscosities,
+    layer_boundaries,
+    m::ReferenceSolidEarthModel,
+)
     mu = get_shearmodulus(m)
-    layer_meandepths = (layer_boundaries[:, :, 1:end-1] + layer_boundaries[:, :, 2:end]) ./ 2
+    layer_meandepths =
+        (layer_boundaries[:, :, 1:(end-1)] + layer_boundaries[:, :, 2:end]) ./ 2
     layer_meandepths = cat(layer_meandepths, layer_boundaries[:, :, end], dims = 3)
     mu_itp = linear_interpolation(m.depth, mu)
     layer_meanshearmoduli = layer_viscosities ./ 1e21 .* mu_itp.(layer_meandepths)
     layer_viscosities .*= layer_meanshearmoduli[:, :, end] ./ layer_meanshearmoduli
+end
+
+######################################################################################
+# Extended Burgers: Prony-series fit to the Faul-Jackson absorption band
+######################################################################################
+
+"""
+$(TYPEDSIGNATURES)
+
+Faul-Jackson power-law absorption-band density underlying the extended Burgers
+model (EBM) of Ivins & Caron (2021, §2): a probability density (`∫[τ_L,τ_H] = 1`)
+of retardation times over `[tau_L, tau_H]` with exponent `alpha`.
+"""
+absorption_band_density(τ, alpha, tau_L, tau_H) =
+    alpha * τ^(alpha - one(alpha)) / (tau_H^alpha - tau_L^alpha)
+
+"""
+$(TYPEDSIGNATURES)
+
+Fit an `nbranches`-branch Prony series `(Δⱼ, τⱼ)` to the continuous Faul-Jackson
+absorption-band spectrum underlying the extended Burgers model (EBM) of
+Ivins & Caron (2021), so that the transient term of their creep function
+
+    relaxation_strength * ∫[tau_L, tau_H] F(τ) (1 − exp(−t/τ)) dτ
+
+(`F` the density returned by [`absorption_band_density`](@ref)) is approximated
+by the `nbranches`-branch Kelvin sum `Σⱼ Δⱼ (1 − exp(−t/τⱼ))` used by
+[`TransientCreepMantle`](@ref).
+
+`nbranches` log-spaced bins partition `[tau_L, tau_H]`. Each `Δⱼ` is the *exact*
+probability mass of its bin (so `sum(Δⱼ) == relaxation_strength` to machine
+precision for any `nbranches`, since the bins exactly partition the band) and
+`τⱼ` is the `F`-weighted mean retardation time within it — both closed-form
+(the density is a power law, so its CDF and first moment are elementary), no
+optimizer needed.
+
+Returns `(Δⱼ, τⱼ, fit_error)`, where `fit_error` is the maximum relative
+difference (against `relaxation_strength`) between the continuous and
+`nbranches`-branch transient term, sampled log-spaced over `t ∈ [tau_L, tau_H]`
+(`ntest` points; the continuous term is evaluated by Gauss-Legendre quadrature
+via [`quadrature1D`](@ref) with `nquad` points). Use `fit_error` to pick
+`nbranches`: I&C 2021 report that `N ≈ 3-5` typically fits their spectrum to a
+few percent (roadmaps/burgers.md §6).
+
+# Example
+```jldoctest
+julia> Δ, τ, err = fit_prony_series(relaxation_strength = 1.2, alpha = 0.5,
+           tau_L = 1.0, tau_H = 100.0, nbranches = 4);
+
+julia> sum(Δ)
+1.2
+
+julia> round.(τ, sigdigits = 3)
+(1.98, 6.26, 19.8, 62.6)
+
+julia> round(err, sigdigits = 2)
+0.014
+```
+"""
+function fit_prony_series(;
+    relaxation_strength::Real,
+    alpha::Real,
+    tau_L::Real,
+    tau_H::Real,
+    nbranches::Integer,
+    ntest::Integer = 50,
+    nquad::Integer = 200,
+)
+    T = float(promote_type(typeof(relaxation_strength), typeof(alpha),
+        typeof(tau_L), typeof(tau_H)))
+    Δ, α, τ_L, τ_H = T(relaxation_strength), T(alpha), T(tau_L), T(tau_H)
+
+    α > 0 || throw(ArgumentError("alpha must be > 0 (got $α)."))
+    τ_H > τ_L > 0 || throw(ArgumentError(
+        "need tau_H > tau_L > 0 (got tau_L = $τ_L, tau_H = $τ_H)."))
+    Δ > 0 || throw(ArgumentError("relaxation_strength must be > 0 (got $Δ)."))
+    nbranches >= 1 || throw(ArgumentError("nbranches must be >= 1 (got $nbranches)."))
+    N = Int(nbranches)
+
+    edges = ntuple(i -> τ_L * (τ_H / τ_L)^((i - 1) / N), N + 1)
+    band = τ_H^α - τ_L^α
+    Δj = ntuple(N) do j
+        a, b = edges[j], edges[j+1]
+        Δ * (b^α - a^α) / band
+    end
+    τj = ntuple(N) do j
+        a, b = edges[j], edges[j+1]
+        (α / (α + one(α))) * (b^(α + one(α)) - a^(α + one(α))) / (b^α - a^α)
+    end
+
+    fit_error = prony_fit_error(Δ, α, τ_L, τ_H, Δj, τj; ntest, nquad)
+    return Δj, τj, fit_error
+end
+
+"""
+$(TYPEDSIGNATURES)
+
+Maximum relative error (against `Δ`) of the `Δj, τj` Kelvin-branch sum against
+the continuous Faul-Jackson transient term it approximates, sampled log-spaced
+over `t ∈ [tau_L, tau_H]`. Used by [`fit_prony_series`](@ref) to report
+`fit_error` and by the `nbranches`-vs-error study in `test/test_prony_fit.jl`.
+"""
+function prony_fit_error(Δ, α, tau_L, tau_H, Δj, τj; ntest::Integer = 50,
+        nquad::Integer = 200)
+    T = typeof(Δ)
+    worst = zero(T)
+    for i in 0:(ntest-1)
+        t = tau_L * (tau_H / tau_L)^(i / (ntest - 1))
+        continuous = Δ * quadrature1D(
+            τ -> absorption_band_density(τ, α, tau_L, tau_H) * (1 - exp(-t / τ)),
+            Int(nquad), tau_L, tau_H)
+        discrete = sum(Δj[j] * (1 - exp(-t / τj[j])) for j in eachindex(Δj))
+        worst = max(worst, abs(discrete - continuous) / Δ)
+    end
+    return worst
 end

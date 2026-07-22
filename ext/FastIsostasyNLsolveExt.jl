@@ -1,56 +1,66 @@
+module FastIsostasyNLsolveExt
+
+# NLsolve.jl driver for `PiecewiseLinearOceanSurfaceBSL` (barystatic_sealevel.jl).
+#
+# Unlike `PiecewiseConstantBSL`, which uses the ocean area at the *current* BSL
+# for the whole increment, the piecewise-linear update accounts for the area
+# changing across the increment: flooding from `z_cur` to `z_new` displaces the
+# volume `(z_new - z_cur) * mean(A(z_cur), A(z_new))`. Matching that to the ice
+# volume change `delta_V` is a scalar nonlinear equation, solved here with a
+# box-constrained MCP solve (`NLsolve.mcpsolve`). The `PiecewiseLinearOceanSurfaceBSL`
+# struct lives in core; its constructor and `update_bsl!` method are only defined
+# once `NLsolve` is loaded, hence this extension.
+
 using NLsolve: mcpsolve
+import FastIsostasy: update_bsl!, PiecewiseLinearOceanSurfaceBSL
+using FastIsostasy: ReferenceBSL, interpolate, A_OCEAN_PD
 
-###########################################################################################
-# PiecewiseLinearOceanSurfaceBSL
-###########################################################################################
-
+# Default options for the mixed-complementarity solve.
+const DEFAULT_MCP_OPTS = (reformulation = :smooth, autodiff = :forward,
+    iterations = 100_000, ftol = 1e-5, xtol = 1e-5)
 
 function PiecewiseLinearOceanSurfaceBSL(; ref = ReferenceBSL(),
-    mcp_opts = (reformulation = :smooth, autodiff = :forward,
-        iterations = 100_000, ftol = 1e-5, xtol = 1e-5) )
-    return PiecewiseLinearOceanSurfaceBSL(ref, z, A, typemax(eltype(ref)), mcp_opts)
+        mcp_opts = DEFAULT_MCP_OPTS)
+    T = eltype(ref)
+    # `residual` starts at `typemax(T)` (no solve accepted yet); `z`/`A` at the
+    # reference state.
+    return PiecewiseLinearOceanSurfaceBSL(ref, T(ref.z), T(ref.A), typemax(T), mcp_opts)
 end
 
-function update_ocean!(bsl::PiecewiseLinearOceanSurfaceBSL, delta_V)
-    scr!(Vresidual, z) = surfacechange_residual!(Vresidual, z, bsl.z, bsl.ref.A_itp, delta_V)
+_ocean_area(z, ref) = interpolate(z, ref.A_itp)
 
-    # Update ocean surface within reasonable bounds defined by z_max_update and
-    # only if sea-level contribution is nonzero.
-    if delta_V != 0
-        if delta_V > 0
-            sol = mcpsolve(scr!, [bsl.z], [maximum(bsl.ref.z_vec)], [bsl.z]; bsl.mcp_opts...)
-        elseif delta_V < 0
-            sol = mcpsolve(scr!, [minimum(bsl.ref.z_vec)], [bsl.z], [bsl.z]; bsl.mcp_opts...)
-        end
+# Volume residual of moving the barystatic sea level from `z_cur` to `z_new`
+# against a target ocean-volume change `delta_V`.
+function surfacechange_residual(z_new, z_cur, ref, delta_V)
+    A_mean = (_ocean_area(z_new, ref) + _ocean_area(z_cur, ref)) / 2
+    return (z_new - z_cur) * A_mean - delta_V
+end
 
-        surfacechange_residual!(bsl, sol.zero[1], delta_V)
+function update_bsl!(bsl::PiecewiseLinearOceanSurfaceBSL, delta_V, t)
+    delta_V == 0 && return nothing
+    ref = bsl.ref
+    resid!(V, z) = (V[1] = surfacechange_residual(z[1], bsl.z, ref, delta_V); nothing)
 
-        # Residual must be less than 10 μm sea level in piecewise linear approximation.
-        # Otherwise, use piecewise constant approximation = very rare exception.
-        if bsl.residual < 1e-5 * A_OCEAN_PD
-            bsl.z = sol.zero[1]
-            bsl.A = bsl.ref.A_itp(bsl.z)
-        else
-            bsl.z += delta_V / bsl.A
-            bsl.A = bsl.ref.A_itp(bsl.z)
-        end
+    # Box-constrain the root by the sign of delta_V: rising sea level searches
+    # in [z_cur, z_max], falling in [z_min, z_cur].
+    if delta_V > 0
+        sol = mcpsolve(resid!, [bsl.z], [maximum(ref.z_vec)], [bsl.z]; bsl.mcp_opts...)
+    else
+        sol = mcpsolve(resid!, [minimum(ref.z_vec)], [bsl.z], [bsl.z]; bsl.mcp_opts...)
     end
+    z_new = sol.zero[1]
+    bsl.residual = surfacechange_residual(z_new, bsl.z, ref, delta_V)
 
+    # Accept the nonlinear solve only if its volume residual is below 10 μm of
+    # equivalent sea level; otherwise fall back to the piecewise-constant update
+    # (a very rare exception).
+    if abs(bsl.residual) < 1e-5 * A_OCEAN_PD
+        bsl.z = z_new
+    else
+        bsl.z += delta_V / bsl.A
+    end
+    bsl.A = _ocean_area(bsl.z, ref)
     return nothing
 end
 
-"""
-    surfacechange_residual!(bsl, z, delta_V)
-    surfacechange_residual!(Vresidual, z_sol, z_cur, A_itp, delta_V)
-
-Update the residual of the piecewise linear approximation, used to solve the
-sea-level/ocean-surface nonlinearity.
-"""
-function surfacechange_residual!(bsl::OceanSurfaceChange, z, delta_V)
-    surfacechange_residual!(bsl.residual, z, bsl.z, bsl.A_itp, delta_V)
-    return nothing
-end
-
-function surfacechange_residual!(Vresidual, z_sol, z_cur, A_itp, delta_V)
-    Vresidual[1] = (z_sol[1] - z_cur) * mean([A_itp(z_sol[1]), A_itp(z_cur)]) - delta_V
-end
+end # module

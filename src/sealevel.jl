@@ -154,7 +154,7 @@ It contains:
     UBSL,       # <:AbstractBSLUpdate,
     VC,         # <:AbstractVolumeContribution,
     AC,         # <:AbstractAdjustmentContribution,
-    DC          # <:AbstractDensityContribution
+    DC,          # <:AbstractDensityContribution
 }
     surface::S = LaterallyConstantSeaSurface()  # lc or lv
     load::L = NoSealevelLoad()                  # no or interactive
@@ -163,6 +163,22 @@ It contains:
     volume_contribution::VC = GoelzerVolumeContribution()
     density_contribution::DC = GoelzerDensityContribution()
     adjustment_contribution::AC = NoAdjustmentContribution()
+end
+
+function Base.show(io::IO, ::MIME"text/plain", sl::RegionalSeaLevel)
+    descriptors = [
+        "Sea surface" => typeof(sl.surface),
+        "Sea-level load" => typeof(sl.load),
+        "Barystatic sea level" => typeof(sl.bsl),
+        "BSL update" => typeof(sl.update_bsl),
+        "Volume contribution" => typeof(sl.volume_contribution),
+        "Density contribution" => typeof(sl.density_contribution),
+        "Adjustment contribution" => typeof(sl.adjustment_contribution),
+    ]
+    padlen = maximum(length(d[1]) for d in descriptors) + 2
+    for (desc, val) in descriptors
+        println(io, rpad(" $(desc): ", padlen), val)
+    end
 end
 
 """
@@ -174,10 +190,15 @@ function update_dz_ss!(sim::Simulation, sl::LaterallyVariableSeaSurface)
 
     # update_mass_anom! modifies sim.tools.prealloc.buffer_x in place
     update_mass_anom!(sim, sim.solidearth.lithosphere_column)
-    samesize_conv!(sim.now.dz_ss, sim.tools.prealloc.buffer_x,
-        sim.tools.dz_ss_convo, sim.tools.conv_helpers,
-        sim.domain, sim.bcs.sea_surface_perturbation,
-        sim.bcs.sea_surface_perturbation.space)
+    samesize_conv!(
+        sim.now.dz_ss,
+        sim.tools.prealloc.buffer_x,
+        sim.tools.dz_ss_convo,
+        sim.tools.conv_helpers,
+        sim.domain,
+        sim.bcs.sea_surface_perturbation,
+        sim.bcs.sea_surface_perturbation.space,
+    )
     return nothing
 end
 
@@ -191,9 +212,11 @@ function update_dz_ss!(sim::Simulation, sl::ImposedSeaSurface)
 end
 
 function update_mass_anom!(sim, lc::CompressibleLithosphereColumn)
-    @. sim.tools.prealloc.buffer_x = sim.now.columnanoms.load +
+    @. sim.tools.prealloc.buffer_x =
+        sim.now.columnanoms.load +
         sim.solidearth.maskactive * sim.now.columnanoms.mantle
-    @. sim.tools.prealloc.buffer_x = mass_anom(sim.domain.A, sim.tools.prealloc.buffer_x)
+    @. sim.tools.prealloc.buffer_x =
+        mass_anom(sim.domain.A, sim.tools.prealloc.buffer_x)
 end
 
 function update_mass_anom!(sim, lc::IncompressibleLithosphereColumn)
@@ -208,14 +231,14 @@ Return the Green's function used to compute the SSH perturbation `dz_ss` as in [
 function get_dz_ss_green(domain::RegionalDomain, c::PhysicalConstants)
     dz_ssgreen = unbounded_dz_ssgreen(domain.R, c)
     # max_dz_ssgreen = unbounded_dz_ssgreen(norm([100e3, 100e3]), c)
-        # tolerance = resolution on 100km
+    # tolerance = resolution on 100km
     max_dz_ssgreen = unbounded_dz_ssgreen(domain.dx/2, c)
     return min.(dz_ssgreen, max_dz_ssgreen)
     # equivalent to: dz_ssgreen[dz_ssgreen .> max_dz_ssgreen] .= max_dz_ssgreen
 end
 
 function unbounded_dz_ssgreen(R, c::PhysicalConstants)
-    return c.r_pole ./ ( 2 .* c.mE .* sin.( R ./ (2 .* c.r_pole) ) )
+    return c.r_pole ./ (2 .* c.mE .* sin.(R ./ (2 .* c.r_pole)))
 end
 
 """
@@ -276,18 +299,22 @@ function update_V_af!(sim::Simulation, vc::NoVolumeContribution)
 end
 
 function update_V_af!(sim::Simulation, vc::GoelzerVolumeContribution)
-    sim.tools.prealloc.buffer_x .= sim.now.H_af .* sim.domain.A 
-    sim.now.V_af = sum(sim.tools.prealloc.buffer_x) * sim.c.rho_ice / sim.c.rho_seawater
+    sim.tools.prealloc.buffer_x .= sim.now.H_af .* sim.domain.A
+    sim.now.V_af =
+        totalsum(sim.tools.prealloc.buffer_x) * sim.c.rho_ice / sim.c.rho_seawater
     return nothing
 end
 
 function update_V_af!(sim::Simulation, vc::AdhikariVolumeContribution)
-    L = 1 - mask_ocean
-    Lp1 = 1 - mask_ocean_p1
-    delta_H_m = delta_H * L * Lp1 + delta_H_f * (1 - L * Lp1)
-    delta_H_v = (1 - rho_water / rho_seawater) * (delta_H - delta_H_f) * (1 - L * Lp1)
-    sim.tools.prealloc.buffer_x .= (delta_H_m + delta_H_v) .* sim.domain.A
-    sim.now.V_af = sum(sim.tools.prealloc.buffer_x)
+    # Sketch of the intended implementation (Adhikari et al., 2020):
+    #   L = 1 - mask_ocean; Lp1 = 1 - mask_ocean_p1
+    #   delta_H_m = delta_H * L * Lp1 + delta_H_f * (1 - L * Lp1)
+    #   delta_H_v = (1 - rho_water / rho_seawater) * (delta_H - delta_H_f) * (1 - L * Lp1)
+    #   V_af = totalsum((delta_H_m + delta_H_v) .* sim.domain.A)
+    error(
+        "AdhikariVolumeContribution is not implemented yet; use " *
+        "GoelzerVolumeContribution or NoVolumeContribution.",
+    )
 end
 
 """
@@ -302,9 +329,10 @@ function update_V_den!(sim::Simulation, dc::NoDensityContribution)
 end
 
 function update_V_den!(sim::Simulation, dc::GoelzerDensityContribution)
-    density_factor = sim.c.rho_ice / sim.c.rho_water - sim.c.rho_ice / sim.c.rho_seawater
+    density_factor =
+        sim.c.rho_ice / sim.c.rho_water - sim.c.rho_ice / sim.c.rho_seawater
     sim.tools.prealloc.buffer_x .= sim.now.H_ice .* sim.domain.A
-    sim.now.V_den = sum( sim.tools.prealloc.buffer_x ) * density_factor
+    sim.now.V_den = totalsum(sim.tools.prealloc.buffer_x) * density_factor
     return nothing
 end
 
@@ -327,6 +355,6 @@ function update_V_pov!(sim::Simulation, ac::GoelzerAdjustmentContribution)
     sim.tools.prealloc.buffer_x .= sim.now.z_ss .- sim.now.z_b
     sim.tools.prealloc.buffer_x .= max.(sim.tools.prealloc.buffer_x, 0) .* sim.domain.A
 
-    sim.now.V_pov = sum( sim.tools.prealloc.buffer_x )
+    sim.now.V_pov = totalsum(sim.tools.prealloc.buffer_x)
     return nothing
 end

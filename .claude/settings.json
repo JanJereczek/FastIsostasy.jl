@@ -2,7 +2,44 @@
   "permissions": {
     "allow": [
       "Bash(git fetch *)",
-      "Bash(git merge *)"
+      "Bash(git merge *)",
+      "Bash(julia --project=/home/jan/.julia/dev/FastIsostasy -e ' *)",
+      "Bash(julia --project=/home/jan/.julia/dev/FastIsostasy -e 'import Pkg; println\\(names\\(Pkg.Registry, all=true\\)\\)')",
+      "Bash(julia --project docs/src/examples/benchmark_realfft.jl)",
+      "Bash(julia --project=docs docs/src/examples/benchmark_realfft.jl)",
+      "Bash(julia --project=docs -e ' *)",
+      "Bash(julia --project -e ' *)",
+      "Bash(julia --project -e 'using Pkg; Pkg.add\\(\"LoopVectorization\"\\)')",
+      "Bash(julia --project benchmarks/ka-derivatives.jl)",
+      "Bash(julia --project -e 'using Pkg; Pkg.status\\(\"CUDA\"; mode=PKGMODE_MANIFEST\\)')",
+      "Bash(timeout 600 julia --project=. -e ' *)",
+      "Bash(timeout 900 julia --project=. benchmarks/benchmark_integrators.jl)",
+      "Bash(timeout 900 julia --project=. /tmp/claude-1003/-home-jan--julia-dev-FastIsostasy/67de65ee-551e-4795-89fb-decd12e18cd5/scratchpad/verify_native.jl)",
+      "Bash(timeout 900 julia --project=. -e ' *)",
+      "Bash(timeout 1200 julia --project=. benchmarks/benchmark_integrators.jl)",
+      "Bash(timeout 600 julia --project=. -e 'using Pkg; Pkg.resolve\\(\\); Pkg.precompile\\(\\)')",
+      "Bash(timeout 900 julia --project=. -e 'using FastIsostasy, LinearAlgebra, Test; include\\(\"test/test_integrators.jl\"\\)')",
+      "Bash(timeout 1500 julia --project=. -e 'using Pkg; Pkg.test\\(\\)')",
+      "Bash(timeout 900 julia --startup-file=no --project=test /tmp/claude-1000/-home-jan--julia-dev-FastIsostasy/1f863f35-b4be-48b2-9b70-3be7163ffa88/scratchpad/ad_loss.jl)",
+      "Bash(timeout 1200 julia --startup-file=no --project=test /tmp/claude-1000/-home-jan--julia-dev-FastIsostasy/1f863f35-b4be-48b2-9b70-3be7163ffa88/scratchpad/runval.jl)",
+      "Bash(timeout 1800 julia --startup-file=no --project=test -e 'using Pkg; Pkg.develop\\(PackageSpec\\(path=\".\"\\)\\); include\\(\"test/runtests.jl\"\\)')",
+      "Bash(nvidia-smi --query-gpu=name,memory.total --format=csv)",
+      "Bash(python3 -)",
+      "Bash(julia --project=test -e 'using Pkg; Pkg.add\\(PackageSpec\\(name=\"Enzyme\", version=v\"0.13.184\"\\)\\); Pkg.status\\([\"Enzyme\"]\\)')",
+      "Bash(nohup julia --project=test test/runtests_gpu.jl)",
+      "Bash(echo \"launched PID $!\")",
+      "Bash(kill -0 23942)",
+      "WebSearch",
+      "Bash(sed -n 155-195p ~/.julia/packages/CUDACore/eDgUR/src/compiler/execution.jl 2>/dev/null || sed -n '155,195p' ~/.julia/packages/CUDACore/eDgUR/src/compiler/execution.jl; echo ===; grep -rn \"KernelRefValue\\\\|MixedDuplicated\" ~/.julia/packages/Enzyme/*/ext/EnzymeCUDAExt* 2>/dev/null | head; ls ~/.julia/packages/Enzyme/ 2>/dev/null)",
+      "Bash(julia --project=test -e 'import Pkg; d=Pkg.dependencies\\(\\); for \\(u,p\\) in d; if p.name==\"CUDA\"; println\\(p.version\\); end; end')",
+      "Bash(ps -o etime= -p 23942)",
+      "Bash(ps -o etime=,rss= -p 23942)",
+      "Bash(awk '{printf \"GPU suite: elapsed %s, RSS %.1f GB\\\\n\", $1, $2/1048576}')",
+      "Bash(julia --project=test -e 'using Pkg; Pkg.add\\([\"Aqua\", \"JET\"]\\); Pkg.status\\([\"Aqua\",\"JET\"]\\)')",
+      "Bash(julia --project=test -e ' *)"
+    ],
+    "additionalDirectories": [
+      "/home/jan/.julia/packages/CUDACore/eDgUR/src/compiler"
     ]
   }
 }

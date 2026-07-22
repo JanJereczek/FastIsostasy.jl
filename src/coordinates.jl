@@ -10,7 +10,7 @@ $(TYPEDSIGNATURES)
 
 Return a 2D meshgrid spanned by `x, y`.
 """
-function meshgrid(x::V, y::V) where {T<:AbstractFloat, V<:AbstractVector{T}}
+function meshgrid(x::V, y::V) where {T<:AbstractFloat,V<:AbstractVector{T}}
     one_x, one_y = ones(T, length(x)), ones(T, length(y))
     return x * one_y', one_x * y'
 end
@@ -22,7 +22,7 @@ Convert Euclidean to angular distance along great circle.
 """
 function dist2angulardist(r::T) where {T<:AbstractFloat}
     R = T(6371e3)       # radius at equator
-    return 2 * atan( r / (2 * R) )
+    return 2 * atan(r / (2 * R))
 end
 
 """
@@ -33,7 +33,7 @@ Convert longitude and field from `lon=0:360` to `lon=-180:180`.
 function lon360tolon180(lon, X)
     permidx = lon .> 180
     lon180 = vcat(lon[permidx] .- 360, lon[not.(permidx)])
-    X180 = cat(X[permidx, :, :], X[not.(permidx), :, :], dims=1)
+    X180 = cat(X[permidx, :, :], X[not.(permidx), :, :], dims = 1)
     return lon180, X180
 end
 
@@ -61,7 +61,7 @@ function scalefactor(
     Lat::M,     # latitude array
     lat_s::T;   # standard parallel
     kwargs...,
-) where {T<:AbstractFloat, M<:KernelMatrix{T}}
+) where {T<:AbstractFloat,M}
 
     lat_s = deg2rad(lat_s)
     t_s = lambert_t(lat_s)
@@ -81,7 +81,8 @@ $(TYPEDSIGNATURES)
 Compute `t` following (Eq. 15-9) of [snyder_projections_1987](@citet) for a given latitude
 `phi` and eccentricity `e`.
 """
-lambert_t(phi; e = 0.0819919) = tan(π/4+phi/2) / ((1+e*sin(phi))/(1 - e * sin(phi)))^(e/2)
+lambert_t(phi; e = 0.0819919) =
+    tan(π/4+phi/2) / ((1+e*sin(phi))/(1 - e * sin(phi)))^(e/2)
 
 """
 $(TYPEDSIGNATURES)
@@ -122,8 +123,7 @@ function scalefactor(lat::T, lon::T, lat_0::T, lon_0::T; k0::T = T(1)) where {T<
     return 2*k0 / (1 + sin(lat_0)*sin(lat) + cos(lat_0)*cos(lat)*cos(lon-lon_0))
 end
 
-function scalefactor(lat::M, lon::M, lat_0::T, lon_0::T; kwargs...,
-    ) where {T<:Real, M<:KernelMatrix{T}}
+function scalefactor(lat::M, lon::M, lat_0::T, lon_0::T; kwargs...) where {T<:Real,M}
     K = similar(lat)
     @inbounds for idx in CartesianIndices(lat)
         K[idx] = scalefactor(lat[idx], lon[idx], lat_0, lon_0; kwargs...)

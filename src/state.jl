@@ -1,4 +1,4 @@
-mutable struct ColumnAnomalies{T<:AbstractFloat, M<:KernelMatrix{T}}
+mutable struct ColumnAnomalies{M}
     ice::M
     seawater::M
     sediment::M
@@ -9,7 +9,8 @@ mutable struct ColumnAnomalies{T<:AbstractFloat, M<:KernelMatrix{T}}
 end
 
 function ColumnAnomalies(domain)
-    zero_columnanoms = [kernelzeros(domain) for _ in eachindex(fieldnames(ColumnAnomalies))]
+    zero_columnanoms =
+        [kernelzeros(domain) for _ in eachindex(fieldnames(ColumnAnomalies))]
     return ColumnAnomalies(zero_columnanoms...)
 end
 
@@ -20,11 +21,7 @@ $(TYPEDSIGNATURES)
 
 Return a struct containing the reference state.
 """
-struct ReferenceState{
-    T<:AbstractFloat,
-    M<:KernelMatrix{T},
-    B<:BoolMatrix,
-} <: AbstractState
+struct ReferenceState{T,M,B} <: AbstractState
 
     u::M                    # viscous displacement
     ue::M                   # elastic displacement
@@ -40,19 +37,40 @@ struct ReferenceState{
     maskocean::B            # mask for ocean
 end
 
+# `maskgrounded`/`maskocean` are crisp `Bool` under `SharpTransition` but a
+# continuous [0,1] field under `SmoothTransition`, so report an area fraction
+# rather than a cell count — meaningful either way.
+percent_string(mask) = string(round(100 * sum(mask) / length(mask), digits = 1), "%")
+
+function Base.show(io::IO, ::MIME"text/plain", ref::ReferenceState)
+    descriptors = [
+        "V_af, V_pov, V_den" => [ref.V_af, ref.V_pov, ref.V_den],
+        "extrema(u)" => extrema(ref.u),
+        "extrema(ue)" => extrema(ref.ue),
+        "extrema(H_ice)" => extrema(ref.H_ice),
+        "extrema(z_b)" => extrema(ref.z_b),
+        "extrema(z_ss)" => extrema(ref.z_ss),
+        "grounded area" => percent_string(ref.maskgrounded),
+        "ocean area" => percent_string(ref.maskocean),
+    ]
+    padlen = maximum(length(d[1]) for d in descriptors) + 2
+    for (desc, val) in descriptors
+        println(io, rpad(" $(desc): ", padlen), val)
+    end
+end
+
 """
 $(TYPEDSIGNATURES)
 
 Return a mutable struct containing the geostate which will be updated over the simulation.
 The geostate contains all the states of the [`Simulation`] to be solved.
 """
-mutable struct CurrentState{
-    T<:AbstractFloat,
-    M<:KernelMatrix{T},
-    B<:BoolMatrix,
-} <: AbstractState
+mutable struct CurrentState{T,M,K,B} <: AbstractState
 
-    u::M                        # viscous displacement
+    u::M                        # viscous displacement (total, = u_M + sum_j u_K[j])
+    u_K::K                      # transient Kelvin-branch displacements at t_K, (nx, ny, N)
+    u_K_next::K                 # same, pending for the end of the current step
+    t_K::T                      # time at which u_K is valid
     ue::M                       # elastic displacement
     u_x::M                      # horizontal displacement in x
     u_y::M                      # horizontal displacement in y
@@ -61,7 +79,7 @@ mutable struct CurrentState{
     H_ice::M                    # current height of ice column
     H_af::M                     # current height of ice column above floatation
     H_water::M                  # current height of water column
-    columnanoms::ColumnAnomalies{T, M}         # column anomalies
+    columnanoms::ColumnAnomalies{M}             # column anomalies
     z_b::M                      # vertical bedrock position
     dz_ss::M                    # current z_ss perturbation
     z_ss::M                     # current z_ss field
@@ -76,10 +94,18 @@ mutable struct CurrentState{
 end
 
 # Initialise CurrentState from ReferenceState
-function CurrentState(domain::RegionalDomain, ref::ReferenceState, z_bsl)
+# `nbranches` is 0 for every steady-creep rheology, giving a zero-size `u_K` that
+# costs nothing; `TransientCreepMantle` asks for one grid per Kelvin branch. A 3D
+# array rather than a vector of matrices so that `u_K` is a single `AbstractArray`
+# — snapshot/restore, GPU transfer and AD all then treat it like any other field.
+function CurrentState(domain::RegionalDomain, ref::ReferenceState, z_bsl, nbranch::Int = 0)
     T = eltype(domain.x)
+    u_K = kernelzeros(domain.backend, T, domain.nx, domain.ny, nbranch)
     return CurrentState(
         copy(ref.u),                # u
+        u_K,                        # u_K
+        copy(u_K),                  # u_K_next
+        T(0),                       # t_K  (overwritten by init_problem!/reset_state!)
         copy(ref.ue),               # ue
         kernelzeros(domain),         # u_x
         kernelzeros(domain),         # u_y
@@ -101,4 +127,71 @@ function CurrentState(domain::RegionalDomain, ref::ReferenceState, z_bsl)
         copy(ref.maskocean),        # maskocean
         0,                          # count_sparse_updates
     )
+end
+
+function Base.show(io::IO, ::MIME"text/plain", now::CurrentState)
+    descriptors = [
+        "t_K" => now.t_K,
+        "V_af, V_pov, V_den" => [now.V_af, now.V_pov, now.V_den],
+        "delta_V" => now.delta_V,
+        "z_bsl" => now.z_bsl,
+        "extrema(u)" => extrema(now.u),
+        "extrema(ue)" => extrema(now.ue),
+        "extrema(H_ice)" => extrema(now.H_ice),
+        "extrema(z_b)" => extrema(now.z_b),
+        "extrema(z_ss)" => extrema(now.z_ss),
+        "size(u_K)" => size(now.u_K),
+        "grounded area" => percent_string(now.maskgrounded),
+        "ocean area" => percent_string(now.maskocean),
+        "count_sparse_updates" => now.count_sparse_updates,
+    ]
+    padlen = maximum(length(d[1]) for d in descriptors) + 2
+    for (desc, val) in descriptors
+        println(io, rpad(" $(desc): ", padlen), val)
+    end
+end
+
+"""
+$(TYPEDSIGNATURES)
+
+Reset the integrated + diagnostic fields of `sim.now` back to the initial
+condition defined by `sim.ref`, and rewind the timer to `t_span[1]`. Used to
+re-run the forward model from scratch (e.g. between inversion `loss`
+evaluations) without reallocating the state. Does **not** touch model
+parameters (viscosity, densities, ice snapshots), so it composes with
+`reconstruct!`.
+"""
+function reset_state!(sim)
+    now, ref = sim.now, sim.ref
+    T = eltype(now.u)
+    now.u .= ref.u
+    now.u_K .= 0
+    now.u_K_next .= 0
+    now.t_K = T(sim.timer.t_span[1])
+    now.ue .= ref.ue
+    now.u_x .= 0
+    now.u_y .= 0
+    now.dudt .= 0
+    now.u_eq .= ref.u
+    now.H_ice .= ref.H_ice
+    now.H_af .= ref.H_af
+    now.H_water .= ref.H_water
+    for f in fieldnames(ColumnAnomalies)
+        getfield(now.columnanoms, f) .= 0
+    end
+    now.z_b .= ref.z_b
+    now.dz_ss .= 0
+    now.z_ss .= ref.z_ss
+    now.V_af = ref.V_af
+    now.V_pov = ref.V_pov
+    now.V_den = ref.V_den
+    now.delta_V = T(0)
+    now.z_bsl = T(sim.sealevel.bsl.z)
+    now.maskgrounded .= ref.maskgrounded
+    now.maskocean .= ref.maskocean
+    now.count_sparse_updates = 0
+    sim.timer.t = sim.timer.t_span[1]
+    empty!(sim.timer.t_computation)
+    empty!(sim.timer.t_vec)
+    return nothing
 end

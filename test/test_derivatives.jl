@@ -3,9 +3,9 @@ function inn(X)
     return view(X, 2:nx-1, 2:ny-1)
 end
 
-function derivative_stdsetup(use_cuda::Bool)
+function derivative_stdsetup(backend = CPU())
     W, n = 3f6, 7
-    domain = RegionalDomain(W, n, use_cuda = use_cuda)
+    domain = RegionalDomain(W, n, backend = backend)
     it = ExternallyUpdatedIceThickness()
     bcs = BoundaryConditions(domain, ice_thickness = it)
     solidearth = SolidEarth(domain)
@@ -16,7 +16,7 @@ function derivative_stdsetup(use_cuda::Bool)
     uxx = 2 .* domain.Y .^ 2
     uyy = 2 .* domain.X .^ 2
     uxy = 4 .* domain.X .* domain.Y
-    return domain, sim.tools.prealloc, domain.arraykernel(u), uxx, uyy, uxy
+    return domain, sim.tools.prealloc, kernelpromote(u, domain.backend), uxx, uyy, uxy
 end
 
 function test_derivatives(P, u, domain, uxx, uyy, uxy)
@@ -27,7 +27,7 @@ function test_derivatives(P, u, domain, uxx, uyy, uxy)
 end
 
 @testset "derivatives" begin
-    domain, P, u, uxx, uyy, uxy = derivative_stdsetup(false)
+    domain, P, u, uxx, uyy, uxy = derivative_stdsetup()
     test_derivatives(P, u, domain, uxx, uyy, uxy)
 end
 

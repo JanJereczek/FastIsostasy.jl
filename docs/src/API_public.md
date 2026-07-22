@@ -5,11 +5,31 @@
 ```@docs
 Simulation
 SolverOptions
-DiffEqOptions
 run!
 step!
 init_integrator
 PhysicalConstants
+```
+
+### Time integrators
+
+See [Time integration](@ref) for the algorithms and how to choose between them.
+
+```@docs
+AbstractIntegrator
+EulerIntegrator
+BS3Integrator
+Tsit5Integrator
+RKCIntegrator
+integrate
+```
+
+### Transitions
+
+```@docs
+AbstractTransition
+SharpTransition
+SmoothTransition
 ```
 
 ## Computation domains
@@ -110,12 +130,26 @@ update_elasticresponse!
 
 ### Mantle
 
+The mantle rheology says *what* is modelled. How the spectral step is computed is
+the orthogonal FFT-backend axis below.
+
 ```@docs
 AbstractMantle
 RigidMantle
 RelaxedMantle
-MaxwellMantle
+ViscousMantle
+TransientCreepMantle
+BurgersMantle
+ExtendedBurgersMantle
 update_dudt!
+```
+
+### FFT backend
+
+```@docs
+AbstractFFTBackend
+ComplexFFTBackend
+RealFFTBackend
 ```
 
 ### Layering
@@ -156,6 +190,8 @@ get_flexural_lengthscale
 get_relaxation_time
 get_relaxation_time_weaker
 get_relaxation_time_stronger
+absorption_band_density
+fit_prony_series
 ```
 
 ## Input/Output (I/O)
@@ -163,14 +199,4 @@ get_relaxation_time_stronger
 load_dataset
 NetcdfOutput
 NativeOutput
-```
-
-## Makie utilities
-```@docs
-plot_transect
-plot_load
-plot_earth
-plot_out_at_time
-plot_out_over_time
-plot_computation_time
 ```

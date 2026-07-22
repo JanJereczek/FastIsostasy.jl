@@ -34,11 +34,23 @@ struct InversionConfig{T<:AbstractFloat}
 end
 
 function InversionConfig(
-    method, N_ens, N_iter, n_samples;
-    α_reg = 1.0, update_freq = 1, scale_obscov = 1_000.0,
+    method,
+    N_ens,
+    N_iter,
+    n_samples;
+    α_reg = 1.0,
+    update_freq = 1,
+    scale_obscov = 1_000.0,
 )
-    return InversionConfig(method, N_ens, N_iter, n_samples,
-        α_reg, update_freq, scale_obscov)
+    return InversionConfig(
+        method,
+        N_ens,
+        N_iter,
+        n_samples,
+        α_reg,
+        update_freq,
+        scale_obscov,
+    )
 end
 
 """
@@ -54,7 +66,7 @@ Struct containing the inversion data.
 - `mask::BitMatrix`: Region of interest.
 - `countmask::Int`: count(mask) = number of cells used for inversion.
 """
-struct InversionData{T<:AbstractFloat, M<:Matrix{T}}
+struct InversionData{T<:AbstractFloat,M<:Matrix{T}}
     t::Vector{T}        # Time vector
     Y::Vector{M}        # Ground truth response
     nY::Int             # number of time steps
@@ -87,11 +99,17 @@ is the only method available.
 - `out::Vector{V}`: Output vector.
 - `G_ens::M`: Ensemble of the covariance matrix.
 """
-struct InversionProblem{T<:AbstractFloat, V<:Vector{T}, M<:Matrix{T},
-    R<:ParameterReduction{T}, PD, EKP}
-    sim::Simulation{T, <:Any, M, <:Any, <:Any, <:Any, <:Any, <:Any}
+struct InversionProblem{
+    T<:AbstractFloat,
+    V<:Vector{T},
+    M<:Matrix{T},
+    R<:ParameterReduction{T},
+    PD,
+    EKP,
+}
+    sim::Simulation{T,<:Any,M,<:Any,<:Any,<:Any,<:Any,<:Any}
     config::InversionConfig# {T}
-    data::InversionData{T, M}
+    data::InversionData{T,M}
     reduction::R
     priors::PD
     ukiobj::EKP
@@ -139,5 +157,10 @@ Extract the output of the forward run for the inversion.
 """
 function extract_output end
 
-export inversion_problem, run!, forward_fastiso,
-    print_inversion_evolution, extract_inversion, reconstruct!, extract_output
+export inversion_problem,
+    run!,
+    forward_fastiso,
+    print_inversion_evolution,
+    extract_inversion,
+    reconstruct!,
+    extract_output

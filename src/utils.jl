@@ -1,4 +1,41 @@
-cudainfo() = CUDA.versioninfo()
+# Extension name per GPU vendor. Each such extension defines a local `deviceinfo()`
+# (looked up below via `Base.get_extension`) and nothing else vendor-specific —
+# array allocation goes through KernelAbstractions and the FFT planner picks its
+# flags off the backend, so a new vendor needs no code beyond this pair.
+const GPU_EXTENSIONS = (
+    :FastIsostasyCUDAExt => "CUDA.jl",
+    :FastIsostasyAMDGPUExt => "AMDGPU.jl",
+)
+
+"""
+    deviceinfo()
+
+Print version information for whichever GPU package is currently loaded. Requires
+one of `using CUDA` / `using AMDGPU`; errors if none is loaded.
+"""
+function deviceinfo()
+    for (name, pkg) in GPU_EXTENSIONS
+        ext = Base.get_extension(@__MODULE__, name)
+        ext === nothing || return ext.deviceinfo()
+    end
+    error(
+        "No GPU package loaded. Add one of " *
+        join(("`using $(pkg)`" for (_, pkg) in GPU_EXTENSIONS), ", ") *
+        " before calling `deviceinfo()`.",
+    )
+end
+
+"""
+    cudainfo()
+
+!!! warning "Deprecated"
+    Use [`deviceinfo`](@ref), which reports whichever GPU backend is loaded rather
+    than assuming CUDA.
+"""
+function cudainfo()
+    Base.depwarn("`cudainfo()` is deprecated, use `deviceinfo()`.", :cudainfo)
+    return deviceinfo()
+end
 
 #####################################################
 # Unit conversion utils
@@ -38,6 +75,8 @@ end
 #####################################################
 
 not(x::Bool) = !x
+# Complement for smooth (floating-point) masks in [0, 1].
+not(x::AbstractFloat) = one(x) - x
 
 Base.zeros(domain::RegionalDomain) = zeros(eltype(domain.x), domain.nx, domain.ny)
 
@@ -80,26 +119,37 @@ Compute `Z = f(X,Y)` with `f` a Gaussian function parametrized by mean
 `mu` and covariance `sigma`.
 
 """
-function gauss_distr(X::M, Y::M, mu::Vector{T}, sigma::Matrix{T}) where
-    {T<:AbstractFloat, M<:Matrix{T}}
+function gauss_distr(
+    X::M,
+    Y::M,
+    mu::Vector{T},
+    sigma::Matrix{T},
+) where {T<:AbstractFloat,M<:Matrix{T}}
     k = length(mu)
     G = similar(X)
     invsigma = inv(sigma)
     invsqrtdetsigma = 1/sqrt(det(sigma))
-    @inbounds for i in axes(X,1), j in axes(X,2)
-        G[i, j] = (2*π)^(-k/2) * invsqrtdetsigma * exp( 
-            -0.5 * ([X[i,j], Y[i,j]] .- mu)' * invsigma * ([X[i,j], Y[i,j]] .- mu) )
+    @inbounds for i in axes(X, 1), j in axes(X, 2)
+        G[i, j] =
+            (2*π)^(-k/2) *
+            invsqrtdetsigma *
+            exp(
+                -0.5 *
+                ([X[i, j], Y[i, j]] .- mu)' *
+                invsigma *
+                ([X[i, j], Y[i, j]] .- mu),
+            )
     end
     return G
 end
 
 function generate_gaussian_field(
-    domain::RegionalDomain{T, M},
+    domain::RegionalDomain{T,M},
     z_background::T,
     xy_peak::Vector{T},
     z_peak::T,
     sigma::Matrix{T},
-) where {T<:AbstractFloat, M<:Matrix{T}}
+) where {T<:AbstractFloat,M<:Matrix{T}}
     G = gauss_distr(domain.X, domain.Y, xy_peak, sigma)
     G = G ./ maximum(G) .* z_peak
     return fill(z_background, domain.nx, domain.ny) + G
@@ -126,12 +176,16 @@ $(TYPEDSIGNATURES)
 Compute 1D Gauss-Legendre quadrature of `f` between `x1` and `x2`
 based on `n` support points.
 """
-function quadrature1D(f::Union{Function, Interpolations.Extrapolation},
-    n::Int, x1::T, x2::T) where {T<:AbstractFloat}
+function quadrature1D(
+    f::Union{Function,Interpolations.Extrapolation},
+    n::Int,
+    x1::T,
+    x2::T,
+) where {T<:AbstractFloat}
     x, w = get_quad_coeffs(T, n)
     m, p = get_normalized_lin_transform(x1, x2)
     sum = 0
-    @inbounds for i=1:n
+    @inbounds for i = 1:n
         sum = sum + f(normalized_lin_transform(x[i], m, p)) * w[i] / m
     end
     return sum
@@ -147,19 +201,25 @@ function quadrature2D(
     f::Function,
     x::Vector{T},
     w::Vector{T},
-    x1::T, x2::T,
-    y1::T, y2::T,
+    x1::T,
+    x2::T,
+    y1::T,
+    y2::T,
 ) where {T<:AbstractFloat}
 
     n = length(x)
     mx, px = get_normalized_lin_transform(x1, x2)
     my, py = get_normalized_lin_transform(y1, y2)
     sum = T(0)
-    @inbounds for i=1:n, j=1:n
-        sum = sum + f(
-            normalized_lin_transform(x[i], mx, px),
-            normalized_lin_transform(x[j], my, py),
-        ) * w[i] * w[j] / mx / my
+    @inbounds for i = 1:n, j = 1:n
+        sum =
+            sum +
+            f(
+                normalized_lin_transform(x[i], mx, px),
+                normalized_lin_transform(x[j], my, py),
+            ) *
+            w[i] *
+            w[j] / mx / my
     end
     return sum
 end
@@ -189,29 +249,70 @@ end
 # Kernel utils
 #####################################################
 
-kernelzeros(domain) = domain.arraykernel(zeros(domain))
+"""
+$(TYPEDSIGNATURES)
 
-function kernelcollect(X, domain)
-    if not(domain.use_cuda)
-        return collect(X)
-    else
-        return X
-    end
-end
+Allocate a zeroed array on a backend. With a `domain` it returns an `nx × ny`
+array of the domain's element type on the domain's backend; the explicit form
+takes any element type and shape.
+"""
+kernelzeros(domain::RegionalDomain) =
+    kernelzeros(domain.backend, eltype(domain), domain.nx, domain.ny)
+kernelzeros(backend::Backend, T, dims::Integer...) =
+    KernelAbstractions.zeros(backend, T, dims...)
 
 """
 $(TYPEDSIGNATURES)
 
-Promote X to the kernel (`Array` or `CuArray`) specified by `arraykernel`.
+True when `domain`'s arrays live in host memory.
 """
-function kernelpromote(X, arraykernel)
-    if isa(X, arraykernel)
-        return X
-    else
-        return arraykernel(X)
-    end
+on_host(domain::RegionalDomain) = domain.backend isa CPU
+
+# NOTE: `kernelcollect` and the `on_host` branch in `init_problem!` are not really
+# about hardware — they exist because a CPU mask comparison yields a `BitArray`,
+# which the state structs want materialised as a dense `Array{Bool}`, while a
+# device array is already dense and must not be pulled back to the host. Forcing
+# dense Bool at the point the masks are *built* would remove both. Left as-is here
+# to keep this refactor behaviour-preserving.
+kernelcollect(X, domain) = on_host(domain) ? collect(X) : X
+
+"""
+$(TYPEDSIGNATURES)
+
+Move `X` onto `backend`, leaving it untouched if it is already there.
+
+Allocation goes through `KernelAbstractions.allocate`, so this works for every
+KA backend without FastIsostasy ever naming a vendor array type.
+"""
+function kernelpromote(X::AbstractArray, backend::Backend)
+    _lives_on(X, backend) && return X
+    src = _dense_host(X)
+    Y = KernelAbstractions.allocate(backend, eltype(src), size(src)...)
+    copyto!(Y, src)
+    return Y
 end
-kernelpromote(X::Vector, arraykernel) = [arraykernel(x) for x in X]
+
+# A `BitArray` — which is what every mask comparison returns on the host — packs 64
+# booleans per word, and no GPU backend can `copyto!` from that layout. Materialise
+# it as a dense `Array{Bool}` first. (The old code got this for free because
+# `CuArray(::BitArray)` has a converting constructor; `copyto!` does not.)
+_dense_host(X::AbstractArray) = X
+_dense_host(X::BitArray) = Array(X)
+kernelpromote(X::Vector{<:AbstractArray}, backend::Backend) =
+    [kernelpromote(x, backend) for x in X]
+
+# Only a dense `Array` counts as "already on the CPU": a `BitArray` (what a mask
+# comparison returns) is deliberately re-materialised as `Array{Bool}`, which is
+# what the pre-backend `isa(X, Array)` test did too.
+#
+# `KernelAbstractions.get_backend` *throws* for host array types it does not know —
+# `BitArray` among them — so both host cases are settled before asking it. `backend`
+# is a singleton and `X`'s type is known at the call site, so all of this folds away.
+function _lives_on(X::AbstractArray, backend::Backend)
+    X isa Array && return backend isa CPU
+    X isa BitArray && return false
+    return get_backend(X) === backend
+end
 
 
 # function remake!(sim::Simulation)
@@ -251,12 +352,16 @@ function mask_disc(X, Y, R; center = [0, 0])
     return mask_disc(sqrt.((X .- center[1]) .^ 2 + (Y .- center[2]) .^ 2), R)
 end
 
-function mask_disc(r::KernelMatrix{T}, R) where {T<:AbstractFloat}
+function mask_disc(r::AbstractMatrix{T}, R) where {T<:AbstractFloat}
     return T.(r .< R)
 end
 
-function uniform_ice_cylinder(domain::RegionalDomain, R::T, H::T;
-    center::Vector{T} = T.([0.0, 0.0])) where {T<:AbstractFloat}
+function uniform_ice_cylinder(
+    domain::RegionalDomain,
+    R::T,
+    H::T;
+    center::Vector{T} = T.([0.0, 0.0]),
+) where {T<:AbstractFloat}
     M = mask_disc(domain.X, domain.Y, R, center = center)
     return T.(M .* H)
 end
@@ -273,5 +378,5 @@ function stereo_ice_cap(
 ) where {T<:AbstractFloat}
     alpha = deg2rad(alpha_deg)
     M = domain.Theta .< alpha
-    return H .* sqrt.( M .* (cos.(domain.Theta) .- cos(alpha)) ./ (1 - cos(alpha)) )
+    return H .* sqrt.(M .* (cos.(domain.Theta) .- cos(alpha)) ./ (1 - cos(alpha)))
 end
