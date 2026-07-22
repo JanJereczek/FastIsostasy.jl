@@ -65,7 +65,7 @@ This is the computation time that was required to compute 50 kyr of viscous disp
 
 ## Implicit time stepping
 
-If the Earth structure is laterally constant (i.e. the lithospheric thickness and the mantle viscosity do not vary in x and y), the performance can be improved by using an implicit time stepping, as derived by [bueler_fast_2007](@citet). This can be achieved by specifying the lithosphere as [`RigidLithosphere`](@ref) or as [`LaterallyConstantLithosphere`](@ref) and requires to set a fixed time step via [`DiffEqOptions`](@ref) in [`SolverOptions`](@ref):
+If the Earth structure is laterally constant (i.e. the lithospheric thickness and the mantle viscosity do not vary in x and y), the performance can be improved by using an implicit time stepping, as derived by [bueler_fast_2007](@citet). This can be achieved by specifying the lithosphere as [`RigidLithosphere`](@ref) or as [`LaterallyConstantLithosphere`](@ref) and requires to set a fixed time step via [`EulerIntegrator`](@ref) in [`SolverOptions`](@ref):
 =#
 
 solidearth = SolidEarth(
@@ -74,7 +74,7 @@ solidearth = SolidEarth(
     layer_boundaries = [88f3],
     layer_viscosities = [1f21],
 )
-opts = SolverOptions(diffeq = DiffEqOptions(alg = EulerIntegrator(), dt_min = 100f0))
+opts = SolverOptions(integ = EulerIntegrator(dt = 100f0))
 sim_implicit = Simulation(domain, bcs, sealevel, solidearth, (0, 50f3); nout = nout, opts = opts)
 run!(sim_implicit)
 fig_implicit = plot_transect(sim_implicit, [:u], analytic_cylinder_solution = true)

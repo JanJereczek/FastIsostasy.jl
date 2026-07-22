@@ -5,7 +5,6 @@
 ```@docs
 Simulation
 SolverOptions
-DiffEqOptions
 run!
 step!
 init_integrator
@@ -17,9 +16,12 @@ PhysicalConstants
 See [Time integration](@ref) for the algorithms and how to choose between them.
 
 ```@docs
-FIEuler
-FIBS3
-FITsit5
+AbstractIntegrator
+EulerIntegrator
+BS3Integrator
+Tsit5Integrator
+RKCIntegrator
+integrate
 ```
 
 ### Transitions
@@ -128,12 +130,24 @@ update_elasticresponse!
 
 ### Mantle
 
+The mantle rheology says *what* is modelled. How the spectral step is computed is
+the orthogonal FFT-backend axis below.
+
 ```@docs
 AbstractMantle
 RigidMantle
 RelaxedMantle
-MaxwellMantle
+ViscousMantle
+TransientCreepMantle
 update_dudt!
+```
+
+### FFT backend
+
+```@docs
+AbstractFFTBackend
+ComplexFFTBackend
+RealFFTBackend
 ```
 
 ### Layering
@@ -192,7 +206,7 @@ extension; reverse mode additionally needs `Checkpointing`, and [`solve!`](@ref)
 needs `Optim`. Worked examples: [Inverse ice history](@ref),
 [Inverse calibration](@ref) and [Full-field viscosity inversion](@ref).
 
-Note that AD requires a fixed-step integrator ([`FIEuler`](@ref)) and a
+Note that AD requires a fixed-step integrator ([`EulerIntegrator`](@ref)) and a
 [`SmoothTransition`](@ref).
 
 ### Inversion problems

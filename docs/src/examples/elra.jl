@@ -1,6 +1,4 @@
 #=
-# Alternative models
-
 ## Elastic Lithosphere, Relaxed Asthenosphere (ELRA)
 
 Sometimes people might want to use ELRA [le_meur_comparison_1996](@citep) for comparison purposes. This can be simply done by modfying [`SolidEarth`](@ref) as follows:
