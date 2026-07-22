@@ -1,7 +1,13 @@
 #=
-## Elastic Lithosphere, Relaxed Asthenosphere (ELRA)
+# Elastic Lithosphere, Relaxed Asthenosphere (ELRA)
 
-Sometimes people might want to use ELRA [le_meur_comparison_1996](@citep) for comparison purposes. This can be simply done by modfying [`SolidEarth`](@ref) as follows:
+Instead of representing the upper-mantle as a viscous body, ELRA assumes that it relaxes towards an equilibrium state with a characteristic relaxation time $$\tau$$. In reality, the relaxation time is dependent on the wavelength of the load, which is not accounted for in ELRA. This means that ELRA is only an approximation of the viscous response and is not recommended for real applications. However, it can be used for comparison purposes, since it is still widely used in the literature.
+
+ELRA is compatible with laterally-constant parameters [le_meur_comparison_1996](@citep), a laterally-variable relaxation time (Van Calcar et al., 2026) or with laterally-variable lithospheric thickness and mantle viscosity [coulon_contrasting_2021](@citep). The last option however requires to solve a linear system of equations at each update of the equilibrium displacement that is being relaxed towards. This is computationally expensive and therefore not implemented in FastIsostasy. The other two options are implemented and can be used as shown below.
+
+## Laterally-constant relaxation time
+
+ELRA with laterally-constant relaxation time is implemented in FastIsostasy by using [`RelaxedMantle`](@ref) as mantle rheology. The relaxation time can be specified by the user as follows:
 =#
 
 using FastIsostasy, CairoMakie
@@ -33,10 +39,8 @@ println("Took $(sim.timer.t_computation[end]) seconds!")
 fig = plot_transect(sim, [:u])
 
 #=
-!!! warning "ELRA is not recommended for real applications"
-    ELRA presents many shortcomings and is not recommended for real applications. It is only implemented in FastIsostasy for comparison purposes, since it is still widely used in the literature.
 
-## ELRA with 2D relaxation time
+## Laterally-variable relaxation time
 
 Sometimes people might want to use ELRA with 2D maps of the relaxation time, as suggested by [van_calcar_approximating_2026](@citet). This can be done by using [`get_relaxation_time_weaker`] or [`get_relaxation_time_stronger`](@ref) to generate a 2D map of the relaxation time from a 2D map of the viscosity. First let's generate an idealised 2D map of the viscosity, with a Gaussian-shaped low-viscosity anomaly in the center of the domain:
 =#

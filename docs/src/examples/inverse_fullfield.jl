@@ -36,7 +36,7 @@ turning that sub-minute inversion into one that grinds for hours.
 =#
 
 using FastIsostasy, CairoMakie, Optim
-import Enzyme, Checkpointing    # Enzyme + Checkpointing activate the adjoint engine
+using Enzyme, Checkpointing    # Enzyme + Checkpointing activate the adjoint engine
 using Printf
 
 #=
@@ -67,7 +67,7 @@ function build_sim()
     bcs = BoundaryConditions(domain, ice_thickness = it)
     se = SolidEarth(domain; lithosphere = LaterallyVariableLithosphere(),
         layer_boundaries = [88.0e3], layer_viscosities = [1.0e21])
-    opts = SolverOptions(; verbose = false, transition = SmoothTransition(10.0),
+    opts = SolverOptions(; show_progress = false, transition = SmoothTransition(10.0),
         integ = EulerIntegrator(dt = 500.0))
     nout = NativeOutput(t = Float64[], vars = Symbol[], T = Float64)
     return Simulation(domain, bcs, RegionalSeaLevel(), se, t_span;

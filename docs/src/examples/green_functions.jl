@@ -1,7 +1,7 @@
 #=
-## Green functions
+# Green functions
 
-In all examples shown so far, the elastic displacement and the gravitational response were computed by convolving the load with suitable Green's functions. [adhikari](@citet) suggested to expand this idea to the computation of the viscous displacement. This excludes the possibility of including lateral variability without significant improvement of the performance compared to the direct solution of the PDEs. Therefore, we offer this implementation for comparison purposes, but it is not recommended for real applications.
+In all examples shown so far, the elastic displacement and the gravitational response were computed by convolving the load with suitable Green's functions. Adhikari et al. (in rev.) suggested to expand this idea to the computation of the viscous displacement. This excludes the possibility of including lateral variability without significant improvement of the performance compared to the direct solution of the PDEs. Therefore, we offer this implementation for comparison purposes, but it is not recommended for real applications.
 =#
 
 using FastIsostasy, CairoMakie

@@ -17,9 +17,9 @@ speed-up on a standard benchmark geometry (cylindrical load, same setup as the
 [Analytical benchmark](@ref)).
 =#
 
-using FastIsostasy, CairoMakie
+using FastIsostasy
 
-W, n = 3f6, 9
+W, n = 3f6, 8
 domain = RegionalDomain(W, n)
 
 H_ice_0 = zeros(domain)
@@ -49,6 +49,7 @@ Run the simulation with the default complex-FFT backend.
 opts_complex = SolverOptions(
     integ = RKCIntegrator(),
     fft = ComplexFFTBackend(),
+    show_progress = false,            # hide progress bar
 )
 sim_complex = Simulation(domain, bcs, sealevel, solidearth, (0, 50f3);
     nout = nout, opts = opts_complex)
@@ -61,6 +62,7 @@ Run the same simulation with the real-FFT backend. Only `opts` changes.
 opts_real = SolverOptions(
     integ = RKCIntegrator(),
     fft = RealFFTBackend(),
+    show_progress = false,            # hide progress bar
 )
 sim_real = Simulation(domain, bcs, sealevel, solidearth, (0, 50f3);
     nout = nout, opts = opts_real)
@@ -90,3 +92,13 @@ t_comp_real    = sim_real.timer.t_computation
 println("Total computation time — ComplexFFTBackend: $(round(t_comp_complex[end]; digits=3)) s")
 println("Total computation time — RealFFTBackend:    $(round(t_comp_real[end];    digits=3)) s")
 println("Speed-up: $(round(t_comp_complex[end] / t_comp_real[end]; digits=2))×")
+
+#=
+Typically yields something like:
+
+Total computation time — ComplexFFTBackend: 12.279 s
+Total computation time — RealFFTBackend:    11.195 s
+Speed-up: 1.1×
+
+Hinting towards the fact that the bulk of the computation is not spent in the spectral step.
+=#

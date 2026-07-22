@@ -104,6 +104,41 @@ unresolved question; see §6). Setting every ``\hat u_K^{(j)} \equiv 0`` recover
 the `ViscousMantle` equation term for term, which is why the ``\Delta_j \to 0``
 limit is such a strong correctness check.
 
+### Fitting a continuous spectrum: `fit_prony_series`
+
+Ivins & Caron discretise a *continuous* absorption-band density,
+
+```math
+F(\tau) = \frac{\alpha\, \tau^{\alpha-1}}{\tau_H^\alpha - \tau_L^\alpha},
+\qquad \tau_L \le \tau \le \tau_H,
+```
+
+a probability density (``\int_{\tau_L}^{\tau_H} F\,d\tau = 1``), so that a
+total relaxation strength ``\Delta`` spread over the band contributes
+``\Delta \int_{\tau_L}^{\tau_H} F(\tau)\big(1-e^{-t/\tau}\big)\,d\tau`` to the
+creep function. [`fit_prony_series`](@ref) turns this into the ``N``-branch sum
+above *without* a nonlinear fit: because ``F`` is a power law, its CDF and
+first moment are elementary, so partitioning ``[\tau_L, \tau_H]`` into ``N``
+log-spaced bins gives closed-form ``\Delta_j`` (the exact probability mass of
+bin ``j``, so ``\sum_j \Delta_j = \Delta`` for any ``N``) and ``\tau_j`` (the
+``F``-weighted mean retardation time within it). [`BurgersMantle`](@ref) and
+[`ExtendedBurgersMantle`](@ref) wrap this — and the plain ``N=1`` case — into
+ready-to-use [`TransientCreepMantle`](@ref) constructors.
+
+`fit_prony_series` also returns `fit_error`: the largest relative deviation
+between the ``N``-branch sum and the continuous integral above, evaluated by
+Gauss-Legendre quadrature over a log-spaced grid of ``t \in [\tau_L,\tau_H]``.
+For ``\alpha=1/2`` and a two-decade band (``\tau_H/\tau_L = 100``), measured
+`fit_error` falls from 17% at ``N=1`` to under 1% by ``N=5``:
+
+| ``N``       | 1     | 2    | 3    | 4    | 5    | 6    | 7    | 8    |
+|:-----------:|:-----:|:----:|:----:|:----:|:----:|:----:|:----:|:----:|
+| `fit_error` | 16.6% | 5.6% | 2.5% | 1.4% | 0.9% | 0.6% | 0.5% | 0.4% |
+
+consistent with the ``N \approx 3\text{-}5`` rule of thumb in
+[ivins_notes_2021](@citet). There is no universal default ``N``: pick it from
+`fit_error` at your own ``(\alpha, \tau_L, \tau_H)``.
+
 ## 4. Time stepping: why Crank–Nicolson
 
 Kelvin retardation times can be years to decades while Maxwell relaxation times
@@ -266,6 +301,10 @@ validate the solver.
   Kelvin time, relaxes smoothly rather than ringing.
 - **Qualitative reproduction of [ivins_notes_2021](@citet).** See the
   [Transient creep](@ref) worked example.
+- **Extended Burgers fit.** [`fit_prony_series`](@ref)'s `N`-branch
+  approximation converges as `N` grows (measured `fit_error`, §3); `N ≈ 3-5`
+  lands within a few percent for a representative two-decade spectrum,
+  matching [ivins_notes_2021](@citet)'s rule of thumb.
 
 ## 9. Caveats
 
@@ -280,8 +319,11 @@ validate the solver.
   approximate what is physically a continuous spectrum
   [ivins_notes_2021](@citet). ``N=1`` (the classic Burgers body) captures the
   *amplitude* and *decay* of the transient enhancement but not the detailed
-  shape of a continuous spectrum; that needs a Prony fit with ``N \approx
-  3\text{--}5``, not yet implemented.
+  shape of a continuous spectrum. [`fit_prony_series`](@ref) (§3) fits
+  ``N \approx 3\text{-}5`` branches to any given ``(\Delta, \alpha, \tau_L,
+  \tau_H)`` band; what remains open is a *literature-calibrated* preset — the
+  actual published values from [ivins_notes_2021](@citet) have not yet been
+  entered into the package (roadmaps/burgers.md §6).
 - **Laterally constant parameters only** (§6).
 - **Requires** [`EulerIntegrator`](@ref) (a fixed step; the semi-implicit solve
   has no adaptive-step variant) with `SolverOptions(fft = ComplexFFTBackend())`

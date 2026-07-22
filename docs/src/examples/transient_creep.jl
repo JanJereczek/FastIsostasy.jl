@@ -14,32 +14,14 @@ body. This example reproduces the qualitative result of
 [ivins_notes_2021](@citet), whose Fig. 8 shows the subsidence beneath a suddenly
 imposed disc load for an extended-Burgers versus a Maxwell half-space.
 
-!!! note "What is and is not comparable"
-    Their §4 loading study is a *flat, homogeneous, gravitating half-space* with a
-    square-edged disc load, and their Fig. 8 is *incompressible* — the same regime
-    FastIsostasy solves, so the geometry matches. Three things still differ:
-
-    1. We compare **relative** subsidence `Δw(t) = w(t) − w(0⁺)`. Their `t = 0`
-       elastic offset is that of a homogeneous half-space with `μ = 67` GPa,
-       whereas FastIsostasy computes the elastic response from a Farrell (1972)
-       *layered-Earth* Green's function. Relative subsidence isolates exactly the
-       part the rheology controls.
-    2. `N = 1` here, against their *continuous* relaxation spectrum (`α = ½`). A
-       single branch captures the amplitude and the decay of the enhancement, not
-       the detailed curve shape; that needs a Prony fit with `N ≈ 3–5`.
-    3. Their load is a true Heaviside; ours ramps over a short but finite step.
-=#
-
-using FastIsostasy, CairoMakie
-
-#=
 ## Setup
 
-Their Fig. 8 geometry: a 25 m water disc of radius ``α_D = 1750`` km, switched on
+Fig. 8 of [ivins_notes_2021](@citet) presents the following geometry: a 25 m water disc of radius ``α_D = 1750`` km, switched on
 at ``t = 0``, with the subsidence read beneath the disc centre over 50 yr. The
 load is prescribed as ice, so 25 m of water becomes `25 ρ_water/ρ_ice` of ice.
 =#
 
+using FastIsostasy, CairoMakie
 c = PhysicalConstants()
 W, n = 8.0e6, 7                                  # 16 000 km wide box, 128 x 128
 domain = RegionalDomain(W, n)
@@ -77,7 +59,7 @@ function build(mantle)
     )
     ## The semi-implicit Crank-Nicolson path discretises time itself, so it needs
     ## a fixed step. dt must resolve the retardation time τ (here 7.14 yr).
-    opts = SolverOptions(verbose = false, integ = EulerIntegrator(dt = 0.25))
+    opts = SolverOptions(show_progress = false, integ = EulerIntegrator(dt = 0.25))
     nout = NativeOutput(vars = [:u], t = t_out, T = Float64)
     return Simulation(domain, bcs, RegionalSeaLevel(), se, (0.0, t_end);
         nout = nout, opts = opts)
@@ -104,30 +86,29 @@ w_steady = centre_subsidence(ViscousMantle())
 w_12 = centre_subsidence(TransientCreepMantle(
     shearmodulus = shearmodulus, relaxation_strength = 1.2, kelvin_time = 7.14))
 w_19 = centre_subsidence(TransientCreepMantle(
-    shearmodulus = shearmodulus, relaxation_strength = 1.9, kelvin_time = 7.14))
+    shearmodulus = shearmodulus, relaxation_strength = 1.9, kelvin_time = 7.14));
 
 #=
 ## Subsidence history
 
 The signature of transient creep is a vigorous early subsidence that then slows,
 leaving the steady-creep curve to catch up — compare their Fig. 8.
+
+The enhancement is largest immediately after loading and decays as `t` grows past
+the retardation time `τ`. Ivins et al. report the extended-Burgers subsidence
+exceeding the Maxwell one by 35–50 per cent at the end of their loading interval.
 =#
+
 
 fig = Figure(size = (760, 380))
 ax = Axis(fig[1, 1],
     xlabel = "time (yr)", ylabel = "relative subsidence (m)",
     title = "25 m water disc, α_D = 1750 km, η = 7.86e19 Pa s")
-lines!(ax, t_out, w_steady, label = "ViscousMantle (steady creep)", linewidth = 2)
-lines!(ax, t_out, w_12, label = "TransientCreepMantle, Δ = 1.2", linewidth = 2)
-lines!(ax, t_out, w_19, label = "TransientCreepMantle, Δ = 1.9", linewidth = 2,
+lines!(ax, t_out, w_steady, label = "viscous", linewidth = 2)
+lines!(ax, t_out, w_12, label = "transient creep, Δ = 1.2", linewidth = 2)
+lines!(ax, t_out, w_19, label = "transient creep, Δ = 1.9", linewidth = 2,
     linestyle = :dash)
-axislegend(ax, position = :lb)
-
-#=
-The enhancement is largest immediately after loading and decays as `t` grows past
-the retardation time `τ`. Ivins et al. report the extended-Burgers subsidence
-exceeding the Maxwell one by 35–50 per cent at the end of their loading interval.
-=#
+axislegend(ax, position = :rt)
 
 ax2 = Axis(fig[1, 2],
     xlabel = "time (yr)", ylabel = "transient / steady",
@@ -161,6 +142,22 @@ println("max |Δ→0 − steady| = ",
 println("peak steady subsidence = ", maximum(abs, w_steady), " m")
 
 #=
+
+!!! note "What is and is not comparable"
+    Their §4 loading study is a *flat, homogeneous, gravitating half-space* with a
+    square-edged disc load, and their Fig. 8 is *incompressible* — the same regime
+    FastIsostasy solves, so the geometry matches. Three things still differ:
+
+    1. We compare **relative** subsidence `Δw(t) = w(t) − w(0⁺)`. Their `t = 0`
+       elastic offset is that of a homogeneous half-space with `μ = 67` GPa,
+       whereas FastIsostasy computes the elastic response from a Farrell (1972)
+       *layered-Earth* Green's function. Relative subsidence isolates exactly the
+       part the rheology controls.
+    2. `N = 1` here, against their *continuous* relaxation spectrum (`α = ½`). A
+       single branch captures the amplitude and the decay of the enhancement, not
+       the detailed curve shape; that needs a Prony fit with `N ≈ 3–5`.
+    3. Their load is a true Heaviside; ours ramps over a short but finite step.
+
 !!! warning "Current limitations"
     `TransientCreepMantle` is implemented for `N = 1` Kelvin branch on the
     semi-implicit path only: [`LaterallyConstantLithosphere`](@ref) or

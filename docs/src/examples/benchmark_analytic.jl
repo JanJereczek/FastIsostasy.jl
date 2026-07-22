@@ -1,7 +1,7 @@
 #=
 # Analytical benchmark
 
-We here present a simple example to benchmark the accuracy of the numerical scheme against an analytical solution. The setup is the same as in [Bueler et al., 2007](@citet), where a cylindrical ice load with a radius of 1000 km and a thickness of 1 km is applied to a laterally homogeneous Maxwell body. First, let's generate the load and the computation domain:
+We here present a simple example to benchmark the accuracy of the numerical scheme against an analytical solution. The setup is the same as in [bueler_fast_2007](@citet), where a cylindrical ice load with a radius of 1000 km and a thickness of 1 km is applied to a laterally homogeneous Maxwell body. First, let's generate the load and the computation domain:
 =#
 
 using FastIsostasy, CairoMakie
@@ -26,7 +26,7 @@ bcs = BoundaryConditions(domain, ice_thickness = it)
 
 solidearth = SolidEarth(                    # same geometry as Bueler et al. (2007).
     domain,
-    lithosphere = RigidLithosphere(),
+    rho_litho = 0f0,
     layer_boundaries = [88f3],
     layer_viscosities = [1f21],
 )
@@ -70,6 +70,12 @@ Yes, this is the computation time that was required to compute 50 kyr of viscous
 If the Earth structure is laterally constant (i.e. the lithospheric thickness and the mantle viscosity do not vary in x and y), the performance can be improved by using an implicit time stepping, as derived by [bueler_fast_2007](@citet). This can be achieved by specifying the lithosphere as [`RigidLithosphere`](@ref) or as [`LaterallyConstantLithosphere`](@ref) and requires to set a fixed time step via [`EulerIntegrator`](@ref) in [`SolverOptions`](@ref):
 =#
 
+solidearth = SolidEarth(                    # same geometry as Bueler et al. (2007).
+    domain,
+    lithosphere = RigidLithosphere(),
+    layer_boundaries = [88f3],
+    layer_viscosities = [1f21],
+)
 opts = SolverOptions(integ = EulerIntegrator(dt = 100f0))
 sim_implicit = Simulation(domain, bcs, sealevel, solidearth, (0, 50f3); nout = nout, opts = opts)
 run!(sim_implicit)

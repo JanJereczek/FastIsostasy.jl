@@ -33,7 +33,11 @@ Pkg.add("FastIsostasy")
 
 ## How to read the docs?
 
-If you want a quick introduction to GIA, please go to [Quick intro to GIA](@ref). If you want to get started right away with forward runs, please go to the corresponding examples. If you want to tackle an inversion problem, you are free to directly go to the corresponding examples, but we recommend getting familiar with forward modelling first. If you face any problem using the code or want to know more about the functionalities of the package, visit the [Public API](@ref). If you face a problem you cannot solve, please open a [GitHub issue](https://github.com/JanJereczek/FastIsostasy.jl/issues) with a minimal and reproduceable example. We also welcome feature requests!
+If you want a quick introduction to GIA, please go to [Quick intro to GIA](@ref). If you want to get started right away with forward runs, please go to [the corresponding examples](@ref), which include stand-alone setups, as well as a guide to couple FastIsostasy to an ice-sheet model. These examples first showcase the accuracy and performance of the package when representing the solid Earth as a Maxwell body. However, a whole section is also dedicated to the use of alternative models, including the Elastic Lithosphere, Relaxed Asthenosphere (ELRA), the Adhikari model, and transient rheologies such as the Burgers model. This hopefully makes clear that, although FastIsostasy is first and foremost a tool to compute GIA assuming a laterally variable Maxwell body, it is also a unifying framework for regional GIA modelling.
+
+Although we strongly recommend getting familiar with forward modelling first, you are free to directly go to [the inversion examples](@ref).
+
+If you face any problem using the code or want to know more about the functionalities of the package, visit the [Public API](@ref). If you face a problem you cannot solve, please open a [GitHub issue](https://github.com/JanJereczek/FastIsostasy.jl/issues) with a minimal and reproduceable example. We also welcome feature requests!
 
 ## How to cite?
 
