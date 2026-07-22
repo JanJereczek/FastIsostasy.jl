@@ -42,7 +42,7 @@ Tlitho = Titp.(Lon, Lat) .* 1e3                     # convert from km to m
 (_, _, _), _, logeta_itp = load_dataset("Viscosity_Pan2022");
 
 #=
-The number of layers and the depth of viscous half-space are arbitrary parameters that have to be defined by the user. We here use a relatively shallow model (half-space begins at 300 km depth) with 1 equalisation layer and 3 intermediate layers.
+The number of layers and the depth of viscous half-space are arbitrary parameters that have to be defined by the user. We here use a relatively shallow model (half-space begins at $$300 \, \mathrm{km}$$ depth) with 1 equalisation layer and 3 intermediate layers.
 =#
 
 mindepth = maximum(Tlitho) + 1e3
@@ -81,3 +81,49 @@ This looks very much like what is obtained by Seakon ([swierczek-jereczek_fastis
 =#
 
 fig = plot_computation_time(sim)
+
+#=
+## Copy-pastable code
+
+```julia
+using FastIsostasy, CairoMakie, Statistics
+
+N = 140
+domain = RegionalDomain(3500e3, 3500e3, N, N)      # 50 km resolution
+Lon, Lat = domain.Lon, domain.Lat
+
+# ice history (ICE6G_D)
+(_, _, t), _, Hitp = load_dataset("ICE6G_D")
+Hice_vec = [Hitp.(Lon, Lat, tk) for tk in t]
+k_lgm = argmax([mean(H) for H in Hice_vec])
+it = TimeInterpolatedIceThickness(t .* 1e3, Hice_vec, domain)
+bcs = BoundaryConditions(domain, ice_thickness = it)
+
+# gravitationally consistent, interactive sea level
+sealevel = RegionalSeaLevel(surface = LaterallyVariableSeaSurface(),
+    load = InteractiveSealevelLoad(), bsl = PiecewiseConstantBSL())
+
+# laterally variable Earth structure (Pan et al., 2022)
+(_, _), _, Titp = load_dataset("Lithothickness_Pan2022")
+Tlitho = Titp.(Lon, Lat) .* 1e3
+(_, _, _), _, logeta_itp = load_dataset("Viscosity_Pan2022")
+
+layerboundary_vec = range(maximum(Tlitho) + 1e3, stop = 300e3, length = 3)
+lb = cat(Tlitho, [fill(v, N, N) for v in layerboundary_vec]..., dims = 3)
+rlb = 6371e3 .- lb
+lv_3D = 10 .^ cat([logeta_itp.(Lon, Lat, rlb[:, :, k]) for k in 1:size(rlb, 3)]...,
+    dims = 3)
+lv_3D[lv_3D .< 1e16] .= 1e16
+
+solidearth = SolidEarth(domain,
+    layer_boundaries = lb, layer_viscosities = lv_3D,
+    maskactive = gaussian_smooth(Hice_vec[k_lgm], domain, 0.05, 0) .> 10)
+
+nout = NativeOutput(vars = [:u, :ue, :dz_ss, :z_ss, :H_ice], t = [-26f3, -12f3, 0])
+sim = Simulation(domain, bcs, sealevel, solidearth, extrema(it.t_vec); nout = nout)
+run!(sim)
+
+plot_out_over_time(sim, :u_tot, [-26e3, -12e3, 0],
+    (colormap = :PuOr, colorrange = (-500, 500)))
+```
+=#

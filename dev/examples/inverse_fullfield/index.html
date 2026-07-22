@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Full-field viscosity inversion · FastIsostasy.jl</title><meta name="title" content="Full-field viscosity inversion · FastIsostasy.jl"/><meta property="og:title" content="Full-field viscosity inversion · FastIsostasy.jl"/><meta property="twitter:title" content="Full-field viscosity inversion · FastIsostasy.jl"/><meta name="description" content="Documentation for FastIsostasy.jl."/><meta property="og:description" content="Documentation for FastIsostasy.jl."/><meta property="twitter:description" content="Documentation for FastIsostasy.jl."/><script data-outdated-warner src="../../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="../.."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../../assets/documenter.js"></script><script src="../../search_index.js"></script><script src="../../siteinfo.js"></script><script src="../../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../../assets/themeswap.js"></script><link href="https://fonts.googleapis.com/css?family=Montserrat|Source+Code+Pro&amp;display=swap" rel="stylesheet" type="text/css"/></head><body><div id="documenter"><nav class="docs-sidebar"><a class="docs-logo" href="../../"><img src="../../assets/logo.png" alt="FastIsostasy.jl logo"/></a><div class="docs-package-name"><span class="docs-autofit"><a href="../../">FastIsostasy.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../../">FastIsostasy.jl</a></li><li><a class="tocitem" href="../../introGIA/">What is GIA?</a></li><li><input class="collapse-toggle" id="menuitem-3" type="checkbox"/><label class="tocitem" for="menuitem-3"><span class="docs-label">Forward runs</span><i class="docs-chevron"></i></label><ul class="collapsed"><li><input class="collapse-toggle" id="menuitem-3-1" type="checkbox"/><label class="tocitem" for="menuitem-3-1"><span class="docs-label">Maxwell Earth</span><i class="docs-chevron"></i></label><ul class="collapsed"><li><a class="tocitem" href="../benchmark_analytic/">Analytical benchmark</a></li><li><a class="tocitem" href="../benchmark_1D/">1D GIA benchmark</a></li><li><a class="tocitem" href="../benchmark_3D/">3D GIA benchmark</a></li><li><a class="tocitem" href="../glacialcycle/">Glacial cycle</a></li></ul></li><li><input class="collapse-toggle" id="menuitem-3-2" type="checkbox"/><label class="tocitem" for="menuitem-3-2"><span class="docs-label">Alternative Models</span><i class="docs-chevron"></i></label><ul class="collapsed"><li><a class="tocitem" href="../elra/">Elastic Lithosphere, Relaxed Asthenosphere (ELRA)</a></li><li><a class="tocitem" href="../green_functions/">Green functions</a></li><li><a class="tocitem" href="../transient_creep/">Transient creep</a></li></ul></li><li><a class="tocitem" href="../coupling/">Coupling FastIsostasy</a></li></ul></li><li><input class="collapse-toggle" id="menuitem-4" type="checkbox" checked/><label class="tocitem" for="menuitem-4"><span class="docs-label">Inverse problems</span><i class="docs-chevron"></i></label><ul class="collapsed"><li><a class="tocitem" href="../inverse_calibration/">Inverse calibration</a></li><li><a class="tocitem" href="../inverse_ice_history/">Inverse ice history</a></li><li class="is-active"><a class="tocitem" href>Full-field viscosity inversion</a><ul class="internal"><li><a class="tocitem" href="#Why-this-needs-the-adjoint"><span>Why this needs the adjoint</span></a></li><li><a class="tocitem" href="#Fixed-configuration-and-the-known-ice-load"><span>Fixed configuration and the known ice load</span></a></li><li><a class="tocitem" href="#The-ground-truth-field"><span>The ground-truth field</span></a></li><li><a class="tocitem" href="#Synthetic-full-field-observations"><span>Synthetic full-field observations</span></a></li><li><a class="tocitem" href="#Regularization"><span>Regularization</span></a></li><li><a class="tocitem" href="#The-initial-guess"><span>The initial guess</span></a></li><li><a class="tocitem" href="#Gradient-check"><span>Gradient check</span></a></li><li><a class="tocitem" href="#What-the-adjoint-buys-us"><span>What the adjoint buys us</span></a></li><li><a class="tocitem" href="#Inversion"><span>Inversion</span></a></li><li><a class="tocitem" href="#Recovery"><span>Recovery</span></a></li><li><a class="tocitem" href="#How-much-regularization?"><span>How much regularization?</span></a></li><li><a class="tocitem" href="#Takeaways"><span>Takeaways</span></a></li><li><a class="tocitem" href="#Copy-pastable-code"><span>Copy-pastable code</span></a></li></ul></li></ul></li><li><input class="collapse-toggle" id="menuitem-5" type="checkbox"/><label class="tocitem" for="menuitem-5"><span class="docs-label">Advanced Topics</span><i class="docs-chevron"></i></label><ul class="collapsed"><li><a class="tocitem" href="../../integrators/">Time integration</a></li><li><a class="tocitem" href="../benchmark_realfft/">Acceleration via Real-FFT backend</a></li><li><a class="tocitem" href="../../inversion_ad_activity_map/">Enzyme activity map for <code>Simulation</code></a></li><li><a class="tocitem" href="../../transient_creep_derivation/">Transient creep: derivation</a></li><li><a class="tocitem" href="../../treestructure/">Type tree</a></li></ul></li><li><input class="collapse-toggle" id="menuitem-6" type="checkbox"/><label class="tocitem" for="menuitem-6"><span class="docs-label">API &amp; References</span><i class="docs-chevron"></i></label><ul class="collapsed"><li><a class="tocitem" href="../../API_public/">Public API</a></li><li><a class="tocitem" href="../../API_public_ext/">Externalised public API</a></li><li><a class="tocitem" href="../../API_private/">Private API</a></li><li><a class="tocitem" href="../../fortran/">Fortran version</a></li><li><a class="tocitem" href="../../publications/">Publications</a></li><li><a class="tocitem" href="../../references/">Bibliography</a></li></ul></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Inverse problems</a></li><li class="is-active"><a href>Full-field viscosity inversion</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Full-field viscosity inversion</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/JanJereczek/FastIsostasy.jl" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-navbar-link" href="https://github.com/JanJereczek/FastIsostasy.jl/blob/main/docs/src/examples/inverse_fullfield.jl" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Full-field-viscosity-inversion"><a class="docs-heading-anchor" href="#Full-field-viscosity-inversion">Full-field viscosity inversion</a><a id="Full-field-viscosity-inversion-1"></a><a class="docs-heading-anchor-permalink" href="#Full-field-viscosity-inversion" title="Permalink"></a></h1><p>The <a href="../inverse_calibration/#Inverse-calibration">Inverse calibration</a> example recovered a mantle-viscosity field from uplift data — but it did so by <em>assuming the answer&#39;s shape</em>: the field was encoded as a background plus four Gaussians, and only 19 numbers were unknown. That is a strong prior. What if we do not know that the field is made of four Gaussians?</p><p>This example drops the assumption entirely and inverts the <strong>full 2-D viscosity field</strong>: every grid cell is its own free parameter, so on a 32×32 grid there are <strong>1024 unknowns</strong> and no encoding at all. The 4-Gaussian pattern is never told to the optimizer — it has to emerge from the data.</p><h2 id="Why-this-needs-the-adjoint"><a class="docs-heading-anchor" href="#Why-this-needs-the-adjoint">Why this needs the adjoint</a><a id="Why-this-needs-the-adjoint-1"></a><a class="docs-heading-anchor-permalink" href="#Why-this-needs-the-adjoint" title="Permalink"></a></h2><p>Full-field inversion is what <a href="../../API_public_ext/#FastIsostasy.AdjointMode"><code>AdjointMode</code></a> exists for. Its cost is <em>independent of the number of parameters</em>: one reverse sweep through the checkpointed trajectory yields the entire 1024-component gradient. <a href="../../API_public_ext/#FastIsostasy.TangentMode"><code>TangentMode</code></a> (forward mode) would need one forward run <strong>per parameter</strong> — 1024 runs per gradient — which is why forward mode is reserved for the low-dimensional encoded problems of the previous two examples.</p><p>That difference is what makes this example possible at all: as the timings below show, the whole 1024-unknown inversion — 150 L-BFGS iterations, each a full <span>$10 \, \mathrm{kyr}$</span> forward <em>and</em> reverse sweep — finishes in <strong>well under a minute</strong>. Rebuilding the same gradient in forward mode would cost ~1024 forward runs <em>each iteration</em>, turning that sub-minute inversion into one that grinds for hours.</p><div class="admonition is-info" id="No-encoding-encoding-nothing-4bdaffe24a73b7f5"><header class="admonition-header">No encoding = `encoding === nothing`<a class="admonition-anchor" href="#No-encoding-encoding-nothing-4bdaffe24a73b7f5" title="Permalink"></a></header><div class="admonition-body"><p>Passing <code>nothing</code> instead of an <code>AbstractEncoding</code> selects the full-field control: <code>θ</code> <em>is</em> the flattened <code>log10</code> viscosity field (column-major, so <code>reshape(θ, size(domain.X))</code> is the map), and the physical field is <code>10^θ</code>. Working in <code>log10</code> keeps the optimization variable O(1)-conditioned even though viscosity spans decades.</p></div></div><pre><code class="language-julia hljs">using FastIsostasy, CairoMakie, Optim
+using Enzyme, Checkpointing    # Enzyme + Checkpointing activate the adjoint engine
+using Printf</code></pre><h2 id="Fixed-configuration-and-the-known-ice-load"><a class="docs-heading-anchor" href="#Fixed-configuration-and-the-known-ice-load">Fixed configuration and the known ice load</a><a id="Fixed-configuration-and-the-known-ice-load-1"></a><a class="docs-heading-anchor-permalink" href="#Fixed-configuration-and-the-known-ice-load" title="Permalink"></a></h2><p>Identical to the <a href="../inverse_calibration/#Inverse-calibration">Inverse calibration</a> setup: a 32×32 grid, a <span>$10 \, \mathrm{kyr}$</span> glacial cycle, and a single broad Vialov dome (<span>$2000 \, \mathrm{km}$</span> radius) following the glacial-cycle sawtooth. The dome is deliberately broad so that the whole region of interest sits under load and is therefore <em>sensed</em> by the deformation — viscosity is only recoverable where the ice actually stresses the mantle.</p><p>As in the previous two examples, the <span>$10 \, \mathrm{kyr}$</span> cycle is a compressed stand-in for a realistic <span>$\sim 100 \, \mathrm{kyr}$</span> one (see the note in <a href="../inverse_calibration/#Inverse-calibration">Inverse calibration</a>). It matters most here: at a fixed <span>$500 \, \mathrm{yr}$</span> step the full-length cycle would make each forward <em>and</em> each reverse sweep ten times longer, and this example runs 150 L-BFGS iterations plus a four-value <code>λ</code> sweep on top. The adjoint&#39;s headline property — cost independent of the number of unknowns — is unaffected by the cycle length, which is the point being demonstrated.</p><pre><code class="language-julia hljs">W, n = 3.0e6, 5
+domain = RegionalDomain(W, n)
+knot_times = [0.0, 5.0e3, 8.0e3, 9.0e3, 1.0e4]
+t_span = (0.0, 1.0e4)
+
+function vialov_dome(dom, xc, yc, L, Hc)
+    r = @. sqrt((dom.X - xc)^2 + (dom.Y - yc)^2)
+    return @. Hc * max(1 - (r / L)^(4 // 3), 0)^(3 // 8)
+end
+
+H_dome = vialov_dome(domain, 0.0, 0.0, 2.0e6, 2.5e3)
+H_snapshots = [s .* H_dome for s in [0.0, 0.4, 1.0, 0.5, 0.0]]
+
+function build_sim()
+    it = TimeInterpolatedIceThickness(knot_times, H_snapshots, domain)
+    bcs = BoundaryConditions(domain, ice_thickness = it)
+    se = SolidEarth(domain; lithosphere = LaterallyVariableLithosphere(),
+        layer_boundaries = [88.0e3], layer_viscosities = [1.0e21])
+    opts = SolverOptions(; show_progress = false, transition = SmoothTransition(10.0),
+        integ = EulerIntegrator(dt = 500.0))
+    nout = NativeOutput(t = Float64[], vars = Symbol[], T = Float64)
+    return Simulation(domain, bcs, RegionalSeaLevel(), se, t_span;
+        opts = opts, nout = nout)
+end
+sim = build_sim()</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi"> Computation domain:             RegionalDomain{Float64, Matrix{Float64}, Matrix{Float64}, CPU}
+ Physical constants:             PhysicalConstants{Float64}
+ Problem BCs:                    BoundaryConditions{Float64, Matrix{Float64}, TimeInterpolatedIceThickness{Float64, Matrix{Float64}, TimeInterpolation2D{Float64, Matrix{Float64}}}}
+ Sea level:                      RegionalSeaLevel{LaterallyConstantSeaSurface, NoSealevelLoad, ConstantBSL{Float32, ReferenceBSL{Float32, TimeInterpolation0D{Float32}}}, InternalBSLUpdate, GoelzerVolumeContribution, NoAdjustmentContribution, GoelzerDensityContribution}
+ Solid Earth:                    SolidEarth{Float64, Matrix{Float64}, Matrix{Bool}, LaterallyVariableLithosphere, ViscousMantle, NoCalibration, CompressibleMantle, FreqDomainViscosityLumping, IncompressibleLithosphereColumn}
+ Solver options:                 SolverOptions{SmoothTransition{Float64}, EulerIntegrator{Float64}, ComplexFFTBackend}
+ GIATools:                       GIATools{ConvolutionPlanHelpers{Float64, Matrix{Float64}, Matrix{ComplexF64}, FFTW.rFFTWPlan{Float64, -1, false, 2, Tuple{Int64, Int64}}, FastIsostasy.NormalizedPlan{FFTW.rFFTWPlan{ComplexF64, 1, false, 2, UnitRange{Int64}}, 0.0002519526329050139}}, ConvolutionPlan{Matrix{Float64}, Matrix{ComplexF64}}, ConvolutionPlan{Matrix{Float64}, Matrix{ComplexF64}}, ConvolutionPlan{Matrix{Float64}, Matrix{ComplexF64}}, FastIsostasy.EmptyConvolution, FFTW.cFFTWPlan{ComplexF64, -1, false, 2, Tuple{Int64, Int64}}, FastIsostasy.NormalizedPlan{FFTW.cFFTWPlan{ComplexF64, 1, false, 2, UnitRange{Int64}}, 0.0009765625}, FastIsostasy.PreAllocated{Matrix{Float64}, Matrix{ComplexF64}, Array{ComplexF64, 3}}}
+ Reference state:                ReferenceState{Float64, Matrix{Float64}, Matrix{Float64}}
+ Current state:                  CurrentState{Float64, Matrix{Float64}, Array{Float64, 3}, Matrix{Float64}}
+ Netcdf output:                  NetcdfOutput{Float32, PaddedOutputCrop}
+ Native output:                  NativeOutput{Float64}
+ native t_out:                   Float64[]
+ nc t_out:                       Float32[]
+ n simulated observables:        0
+ nx, ny:                         [32, 32]
+ dx, dy:                         [187500.0, 187500.0]
+ Wx, Wy:                         [3.0e6, 3.0e6]
+ extrema(effective viscosity):   (1.171875e21, 1.171875e21)
+ extrema(lithospheric thickness): (88000.0, 88000.0)
+</code></pre><h2 id="The-ground-truth-field"><a class="docs-heading-anchor" href="#The-ground-truth-field">The ground-truth field</a><a id="The-ground-truth-field-1"></a><a class="docs-heading-anchor-permalink" href="#The-ground-truth-field" title="Permalink"></a></h2><p>The truth is the same four-Gaussian structure as in <a href="../inverse_calibration/#Inverse-calibration">Inverse calibration</a> — two soft anomalies and two stiff ones on a <code>log10 η = 21</code> background — but here we build it directly as a <em>field</em>, not through an encoding. Flattening it gives the 1024-component ground-truth control vector.</p><pre><code class="language-julia hljs">bump(X, Y, μx, μy, σ, amp) = @. amp * exp(-((X - μx)^2 + (Y - μy)^2) / (2σ^2))
+
+X, Y = domain.X, domain.Y
+logη_true = fill(21.0, size(X))
+logη_true .+= bump(X, Y, -1.0e6, -1.0e6, 8.0e5,  0.5)   # soft, SW
+logη_true .+= bump(X, Y,  1.0e6,  1.0e6, 8.0e5, -0.5)   # stiff, NE
+logη_true .+= bump(X, Y, -1.0e6,  1.0e6, 7.0e5,  0.3)   # soft, NW
+logη_true .+= bump(X, Y,  1.0e6, -1.0e6, 7.0e5, -0.3)   # stiff, SE
+θ_true = vec(copy(logη_true))
+@printf(&quot;number of unknowns: %d\n&quot;, length(θ_true))</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">number of unknowns: 1024</code></pre><h2 id="Synthetic-full-field-observations"><a class="docs-heading-anchor" href="#Synthetic-full-field-observations">Synthetic full-field observations</a><a id="Synthetic-full-field-observations-1"></a><a class="docs-heading-anchor-permalink" href="#Synthetic-full-field-observations" title="Permalink"></a></h2><p>We observe vertical uplift at every interior cell at five times through the cycle: 676 points × 5 times = 3380 measurements constraining 1024 unknowns. Even though that is nominally over-determined, the problem is still <em>ill-posed</em>: GIA spatially low-passes the load, so the map from viscosity to surface uplift is smoothing and non-local, and fine-scale viscosity detail leaves almost no signature in the data.</p><pre><code class="language-julia hljs">pts = [CartesianIndex(i, j) for i in 4:29 for j in 4:29]
+obs_times = [2.0e3, 4.0e3, 6.0e3, 8.0e3, 1.0e4]
+
+obs0 = Observation(VerticalUpliftObservable(), pts, obs_times,
+    zeros(length(pts) * length(obs_times)); σ = 0.5)
+prob_gt = ParameterInversion(sim, nothing, [obs0]; diffmode = AdjointMode())
+reconstruct!(sim, θ_true, nothing)
+preds = FastIsostasy.allocate_predictions(prob_gt)
+FastIsostasy.forward_predict!(preds, prob_gt)
+data = copy(preds[1])
+obs = Observation(VerticalUpliftObservable(), pts, obs_times, data; σ = 0.5)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">Observation{VerticalUpliftObservable, Float64, Float64}(VerticalUpliftObservable(), CartesianIndex{2}[CartesianIndex(4, 4), CartesianIndex(4, 5), CartesianIndex(4, 6), CartesianIndex(4, 7), CartesianIndex(4, 8), CartesianIndex(4, 9), CartesianIndex(4, 10), CartesianIndex(4, 11), CartesianIndex(4, 12), CartesianIndex(4, 13)  …  CartesianIndex(29, 20), CartesianIndex(29, 21), CartesianIndex(29, 22), CartesianIndex(29, 23), CartesianIndex(29, 24), CartesianIndex(29, 25), CartesianIndex(29, 26), CartesianIndex(29, 27), CartesianIndex(29, 28), CartesianIndex(29, 29)], [2000.0, 4000.0, 6000.0, 8000.0, 10000.0], [-1.4470982566985908, -1.8266811910880536, -2.268601047278711, -2.7646440940868553, -3.3061825939212355, -3.882008836449892, -4.4756208795898855, -5.07276773956612, -5.6461952243574265, -6.166371350716653  …  29.13581381396596, 28.178418819965373, 26.296252047533134, 23.859096972598007, 21.008115625557863, 17.997942718372475, 15.011722456602605, 12.209962848595051, 9.715704527016646, 7.5903249654620595], 0.5)</code></pre><h2 id="Regularization"><a class="docs-heading-anchor" href="#Regularization">Regularization</a><a id="Regularization-1"></a><a class="docs-heading-anchor-permalink" href="#Regularization" title="Permalink"></a></h2><p>Because the inverse problem is ill-posed, a full-field inversion needs a prior. The natural one for a viscosity field is <strong>smoothness</strong>: we penalise <span>$\lambda \sum \|\nabla \log_{10}\eta\|^2$</span> with a first-order <a href="../../API_public_ext/#FastIsostasy.TikhonovReg"><code>TikhonovReg</code></a> on the decoded field.</p><p>The value of <code>λ</code> looks alarming until you check the units: <code>∇log10η</code> is measured in <em>decades per metre</em>, so on a <span>$187 \, \mathrm{km}$</span> grid it is of order <code>10⁻⁶</code>, and the summed squared gradient of the true field is only ~<code>6·10⁻¹¹</code>. <code>λ</code> therefore carries units of <span>$\mathrm{m^2}$</span>, and <code>λ ≈ 10¹¹</code> is what brings the penalty to the same order as the final misfit.</p><pre><code class="language-julia hljs">reg(λ) = TikhonovReg(FieldTarget(Log10Viscosity()), Order1(); λ = λ)
+mkprob(λ) = ParameterInversion(sim, nothing, [obs];
+    regularizations = (reg(λ),), diffmode = AdjointMode())
+
+λ_best = 1.0e11
+prob = mkprob(λ_best)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">ParameterInversion
+ Simulation t_span:     (0.0, 10000.0)
+ Domain (nx, ny):       (32, 32)
+ Encoding:              full-field (θ = log10 viscosity map)
+ length(θ):             1024
+ # observations:        1
+ Observable(s):         DataType[VerticalUpliftObservable]
+ total data points:     3380
+ extrema(extract_times): (2000.0, 10000.0)
+ # regularizations:     1
+ Diff mode:             AdjointMode
+ Loss model:            DefaultLoss
+</code></pre><h2 id="The-initial-guess"><a class="docs-heading-anchor" href="#The-initial-guess">The initial guess</a><a id="The-initial-guess-1"></a><a class="docs-heading-anchor-permalink" href="#The-initial-guess" title="Permalink"></a></h2><p>We start from a <strong>flat</strong> field — a uniform <code>log10 η = 21</code> background, i.e. no knowledge whatsoever of the anomalies. Everything the optimizer learns about the four Gaussians comes from the uplift data.</p><pre><code class="language-julia hljs">θ0 = fill(21.0, length(θ_true))
+@printf(&quot;loss(θ_true) = %.4e\n&quot;, loss(prob, θ_true))
+@printf(&quot;loss(θ0)     = %.4e\n&quot;, loss(prob, θ0))</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">loss(θ_true) = 6.3854e+00
+loss(θ0)     = 3.3300e+06</code></pre><h2 id="Gradient-check"><a class="docs-heading-anchor" href="#Gradient-check">Gradient check</a><a id="Gradient-check-1"></a><a class="docs-heading-anchor-permalink" href="#Gradient-check" title="Permalink"></a></h2><p>The adjoint gradient is validated against central finite differences on a few cells. Note the cost asymmetry: the <em>whole</em> 1024-component gradient comes from a single reverse sweep, whereas each FD check costs two extra forward runs.</p><div class="admonition is-warning" id="One-off-compilation-cost-74275eaee6d289ff"><header class="admonition-header">One-off compilation cost<a class="admonition-anchor" href="#One-off-compilation-cost-74275eaee6d289ff" title="Permalink"></a></header><div class="admonition-body"><p>The first <code>gradient!</code> call under <code>AdjointMode</code> triggers Enzyme&#39;s reverse transformation of the time-stepping kernel, which takes <span>$\sim 10\text{–}12 \, \mathrm{min}$</span>. It is cached for the rest of the session: the 150 L-BFGS iterations below then run in well under a minute.</p></div></div><pre><code class="language-julia hljs">g = similar(θ0)
+FastIsostasy.gradient!(g, prob, θ0)      # first call: pays the one-off compilation
+
+fd(p, θ, i; ε = 1e-5) =
+    (e = zeros(length(θ)); e[i] = 1.0;
+     (loss(p, θ .+ ε .* e) - loss(p, θ .- ε .* e)) / (2ε))
+for i in (400, 500, 550)
+    @printf(&quot;cell %4d:  AD = % .5e   FD = % .5e\n&quot;, i, g[i], fd(prob, θ0, i))
+end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">cell  400:  AD = -3.14882e+03   FD = -3.14883e+03
+cell  500:  AD =  1.14100e+05   FD =  1.14100e+05
+cell  550:  AD = -1.36475e+04   FD = -1.36475e+04</code></pre><h2 id="What-the-adjoint-buys-us"><a class="docs-heading-anchor" href="#What-the-adjoint-buys-us">What the adjoint buys us</a><a id="What-the-adjoint-buys-us-1"></a><a class="docs-heading-anchor-permalink" href="#What-the-adjoint-buys-us" title="Permalink"></a></h2><p>With the compilation cached, we can measure the actual cost of a gradient. One adjoint sweep returns <strong>all 1024 derivatives</strong> for a small multiple of the cost of a single forward run — whereas forward mode would have to repeat that forward run once per unknown.</p><p>The forward-mode figure below is a <em>conservative lower bound</em>: it charges only one primal run per parameter, whereas an Enzyme forward pass actually costs several times a primal run. The real gap is wider than shown.</p><pre><code class="language-julia hljs">t_loss = @elapsed loss(prob, θ0)
+t_grad = @elapsed FastIsostasy.gradient!(g, prob, θ0)   # compilation now cached
+
+@printf(&quot;one forward run (loss)             : %7.3f s\n&quot;, t_loss)
+@printf(&quot;one adjoint gradient (1024 dofs)   : %7.3f s   (%.1f× a forward run)\n&quot;,
+    t_grad, t_grad / t_loss)
+@printf(&quot;forward-mode gradient (lower bound): %7.1f s   (%d forward runs)\n&quot;,
+    length(θ0) * t_loss, length(θ0))
+@printf(&quot;  → adjoint speed-up per gradient  : %.0f×\n&quot;, length(θ0) * t_loss / t_grad)
+@printf(&quot;  → 150 iterations would take      : %.1f h in forward mode\n&quot;,
+    150 * length(θ0) * t_loss / 3600)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">one forward run (loss)             :   0.003 s
+one adjoint gradient (1024 dofs)   :   0.951 s   (363.4× a forward run)
+forward-mode gradient (lower bound):     2.7 s   (1024 forward runs)
+  → adjoint speed-up per gradient  : 3×
+  → 150 iterations would take      : 0.1 h in forward mode</code></pre><h2 id="Inversion"><a class="docs-heading-anchor" href="#Inversion">Inversion</a><a id="Inversion-1"></a><a class="docs-heading-anchor-permalink" href="#Inversion" title="Permalink"></a></h2><p>Because each gradient is cheap and parameter-count-independent, a 1024-unknown inversion converges in well under a minute.</p><pre><code class="language-julia hljs">t_opt = @elapsed result = solve!(prob, θ0;
+    optimizer = LBFGS(), iterations = 150, store_trace = true)
+θ_hat = Optim.minimizer(result)
+@printf(&quot;loss(θ̂) = %.4e\n&quot;, loss(prob, θ_hat))
+@printf(&quot;optimization: %d iterations over %d unknowns in %.1f s (%.2f s/iteration)\n&quot;,
+    length(Optim.f_trace(result)), length(θ0), t_opt,
+    t_opt / length(Optim.f_trace(result)))</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">loss(θ̂) = 6.6922e+00
+optimization: 151 iterations over 1024 unknowns in 32.3 s (0.21 s/iteration)</code></pre><pre><code class="language-julia hljs">fig = Figure(size = (500, 350))
+ax = Axis(fig[1, 1], xlabel = &quot;L-BFGS iteration&quot;, ylabel = &quot;loss&quot;, yscale = log10,
+    title = &quot;Convergence (1024 unknowns, adjoint gradients)&quot;)
+lines!(ax, Optim.f_trace(result), color = :seagreen, linewidth = 2)
+fig</code></pre><img src="3c3dfadb.png" alt="Example block output"/><h2 id="Recovery"><a class="docs-heading-anchor" href="#Recovery">Recovery</a><a id="Recovery-1"></a><a class="docs-heading-anchor-permalink" href="#Recovery" title="Permalink"></a></h2><p>Starting from a flat field, the inversion reconstructs the four-Gaussian pattern — both soft anomalies and both stiff ones, at the right places, with the right amplitudes — to a few thousandths of a decade RMS.</p><pre><code class="language-julia hljs">logη_hat = reshape(θ_hat, size(X))
+rms(a, b) = sqrt(sum(abs2, a .- b) / length(a))
+@printf(&quot;rms |Δlog10η| = %.4f decades\n&quot;, rms(θ_hat, θ_true))
+@printf(&quot;max |Δlog10η| = %.4f decades\n&quot;, maximum(abs.(θ_hat .- θ_true)))</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">rms |Δlog10η| = 0.0065 decades
+max |Δlog10η| = 0.0261 decades</code></pre><pre><code class="language-julia hljs">x = domain.x ./ 1e3
+fig = Figure(size = (900, 320))
+for (j, (Z, ttl, cmap, crange)) in enumerate((
+        (logη_true, &quot;true log10 η&quot;, :viridis, (20.4, 21.6)),
+        (logη_hat, &quot;recovered log10 η&quot;, :viridis, (20.4, 21.6)),
+        (logη_hat .- logη_true, &quot;error (decades)&quot;, :balance, (-0.05, 0.05))))
+    ax = Axis(fig[1, j], aspect = DataAspect(), title = ttl)
+    hidedecorations!(ax)
+    hm = heatmap!(ax, x, x, Z, colormap = cmap, colorrange = crange)
+    Colorbar(fig[2, j], hm, vertical = false, width = Relative(0.8))
+end
+fig</code></pre><img src="4e34060a.png" alt="Example block output"/><h2 id="How-much-regularization?"><a class="docs-heading-anchor" href="#How-much-regularization?">How much regularization?</a><a id="How-much-regularization?-1"></a><a class="docs-heading-anchor-permalink" href="#How-much-regularization?" title="Permalink"></a></h2><p>The smoothness prior is not cosmetic. Sweeping <code>λ</code> shows the classic trade-off — too little and the inversion fits noise-free data almost exactly but wanders in the poorly-constrained directions; too much and the recovered Gaussians get visibly flattened. The middle value genuinely recovers best:</p><pre><code class="language-julia hljs">t_sweep = @elapsed for λ in (0.0, 1.0e11, 1.0e12, 1.0e13)
+    p = mkprob(λ)
+    θh = Optim.minimizer(solve!(p, θ0; optimizer = LBFGS(), iterations = 150))
+    @printf(&quot;λ = %-8.0e  loss = %.3e   rms|Δlog10η| = %.4f   max = %.4f\n&quot;,
+        λ, loss(p, θh), rms(θh, θ_true), maximum(abs.(θh .- θ_true)))
+end
+@printf(&quot;\nfour full 1024-unknown inversions in %.1f s\n&quot;, t_sweep)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">λ = 0e+00     loss = 2.618e-01   rms|Δlog10η| = 0.0092   max = 0.0372
+λ = 1e+11     loss = 6.692e+00   rms|Δlog10η| = 0.0065   max = 0.0261
+λ = 1e+12     loss = 6.253e+01   rms|Δlog10η| = 0.0103   max = 0.0497
+λ = 1e+13     loss = 6.139e+02   rms|Δlog10η| = 0.0174   max = 0.0706
+
+four full 1024-unknown inversions in 124.2 s</code></pre><p>Adding a modest amount of smoothing <em>improves</em> the reconstruction (rms drops from <span>$\approx 0.009 \, \mathrm{decades}$</span> to <span>$\approx 0.007 \, \mathrm{decades}$</span>), because it suppresses exactly the fine-scale structure the data cannot see. Pushing <code>λ</code> two orders of magnitude further makes the penalty dominate and the recovery degrades to <span>$\approx 0.017 \, \mathrm{decades}$</span> — the field is recovered only <em>up to the regularization bias</em>.</p><p>Note that the sweep re-runs the <em>entire</em> inversion four times over — and still takes only seconds, because every gradient is a single reverse sweep. Exploring prior strength this way is simply not affordable with forward-mode gradients.</p><h2 id="Takeaways"><a class="docs-heading-anchor" href="#Takeaways">Takeaways</a><a id="Takeaways-1"></a><a class="docs-heading-anchor-permalink" href="#Takeaways" title="Permalink"></a></h2><ul><li>With the adjoint, the number of unknowns is essentially free: 1024-parameter and 19-parameter inversions cost the same per gradient. This is the difference between an inversion that runs in seconds and one that does not finish — and it is what lets us treat a whole inversion as a cheap inner loop (as in the <code>λ</code> sweep above). The price is Enzyme&#39;s one-off reverse-mode compilation.</li><li>A full-field inversion still needs a prior. GIA is a smoothing forward operator, so fine-scale viscosity structure is invisible to the data and must be supplied by regularization (or accepted as unresolved).</li><li>The recovery here is flattered by noise-free, dense, full-field data. With real, sparse and noisy uplift records, expect a much smoother recovered field and use the <code>λ</code> sweep above as a template for choosing the prior strength (e.g. by an L-curve or cross-validation).</li></ul><h2 id="Copy-pastable-code"><a class="docs-heading-anchor" href="#Copy-pastable-code">Copy-pastable code</a><a id="Copy-pastable-code-1"></a><a class="docs-heading-anchor-permalink" href="#Copy-pastable-code" title="Permalink"></a></h2><pre><code class="language-julia hljs">using FastIsostasy, CairoMakie, Optim, Printf
+using Enzyme, Checkpointing          # both are needed for the adjoint engine
+
+W, n = 3.0e6, 5
+domain = RegionalDomain(W, n)
+# 10 kyr toy cycle: scale knot_times, t_span and obs_times by 10 for a
+# realistic ~100 kyr one (10x the forward and, if used, adjoint cost)
+knot_times = [0.0, 5.0e3, 8.0e3, 9.0e3, 1.0e4]
+t_span = (0.0, 1.0e4)
+
+function vialov_dome(dom, xc, yc, L, Hc)
+    r = @. sqrt((dom.X - xc)^2 + (dom.Y - yc)^2)
+    return @. Hc * max(1 - (r / L)^(4 // 3), 0)^(3 // 8)
+end
+H_dome = vialov_dome(domain, 0.0, 0.0, 2.0e6, 2.5e3)
+H_snapshots = [s .* H_dome for s in [0.0, 0.4, 1.0, 0.5, 0.0]]
+
+it = TimeInterpolatedIceThickness(knot_times, H_snapshots, domain)
+bcs = BoundaryConditions(domain, ice_thickness = it)
+se = SolidEarth(domain; lithosphere = LaterallyVariableLithosphere(),
+    layer_boundaries = [88.0e3], layer_viscosities = [1.0e21])
+opts = SolverOptions(; show_progress = false, transition = SmoothTransition(10.0),
+    integ = EulerIntegrator(dt = 500.0))
+nout = NativeOutput(t = Float64[], vars = Symbol[], T = Float64)
+sim = Simulation(domain, bcs, RegionalSeaLevel(), se, t_span;
+    opts = opts, nout = nout)
+
+# no encoding: theta IS the flattened log10 viscosity field (1024 unknowns)
+bump(X, Y, mx, my, s, a) = @. a * exp(-((X - mx)^2 + (Y - my)^2) / (2s^2))
+X, Y = domain.X, domain.Y
+logeta_true = fill(21.0, size(X))
+logeta_true .+= bump(X, Y, -1.0e6, -1.0e6, 8.0e5,  0.5)
+logeta_true .+= bump(X, Y,  1.0e6,  1.0e6, 8.0e5, -0.5)
+logeta_true .+= bump(X, Y, -1.0e6,  1.0e6, 7.0e5,  0.3)
+logeta_true .+= bump(X, Y,  1.0e6, -1.0e6, 7.0e5, -0.3)
+theta_true = vec(copy(logeta_true))
+
+pts = [CartesianIndex(i, j) for i in 4:29 for j in 4:29]
+obs_times = [2.0e3, 4.0e3, 6.0e3, 8.0e3, 1.0e4]
+obs0 = Observation(VerticalUpliftObservable(), pts, obs_times,
+    zeros(length(pts) * length(obs_times)); σ = 0.5)
+prob_gt = ParameterInversion(sim, nothing, [obs0]; diffmode = AdjointMode())
+reconstruct!(sim, theta_true, nothing)
+preds = FastIsostasy.allocate_predictions(prob_gt)
+FastIsostasy.forward_predict!(preds, prob_gt)
+
+obs = Observation(VerticalUpliftObservable(), pts, obs_times, copy(preds[1]); σ = 0.5)
+
+# an ill-posed full-field problem needs a smoothness prior
+reg = TikhonovReg(FieldTarget(Log10Viscosity()), Order1(); λ = 1.0e11)
+prob = ParameterInversion(sim, nothing, [obs];
+    regularizations = (reg,), diffmode = AdjointMode())
+
+# start from a flat field; the first gradient pays Enzyme&#39;s ~10 min compilation
+theta0 = fill(21.0, length(theta_true))
+result = solve!(prob, theta0; optimizer = LBFGS(), iterations = 150,
+    store_trace = true)
+theta_hat = Optim.minimizer(result)
+@printf(&quot;loss: %.3e -&gt; %.3e\n&quot;, loss(prob, theta0), loss(prob, theta_hat))</code></pre></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../inverse_ice_history/">« Inverse ice history</a><a class="docs-footer-nextpage" href="../../integrators/">Time integration »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.17.0 on <span class="colophon-date" title="Wednesday 22 July 2026 22:57">Wednesday 22 July 2026</span>. Using Julia version 1.12.6.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>

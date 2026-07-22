@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Type tree · FastIsostasy.jl</title><meta name="title" content="Type tree · FastIsostasy.jl"/><meta property="og:title" content="Type tree · FastIsostasy.jl"/><meta property="twitter:title" content="Type tree · FastIsostasy.jl"/><meta name="description" content="Documentation for FastIsostasy.jl."/><meta property="og:description" content="Documentation for FastIsostasy.jl."/><meta property="twitter:description" content="Documentation for FastIsostasy.jl."/><script data-outdated-warner src="../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL=".."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../assets/documenter.js"></script><script src="../search_index.js"></script><script src="../siteinfo.js"></script><script src="../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../assets/themeswap.js"></script><link href="https://fonts.googleapis.com/css?family=Montserrat|Source+Code+Pro&amp;display=swap" rel="stylesheet" type="text/css"/></head><body><div id="documenter"><nav class="docs-sidebar"><a class="docs-logo" href="../"><img src="../assets/logo.png" alt="FastIsostasy.jl logo"/></a><div class="docs-package-name"><span class="docs-autofit"><a href="../">FastIsostasy.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../">FastIsostasy.jl</a></li><li><a class="tocitem" href="../introGIA/">What is GIA?</a></li><li><input class="collapse-toggle" id="menuitem-3" type="checkbox"/><label class="tocitem" for="menuitem-3"><span class="docs-label">Forward runs</span><i class="docs-chevron"></i></label><ul class="collapsed"><li><input class="collapse-toggle" id="menuitem-3-1" type="checkbox"/><label class="tocitem" for="menuitem-3-1"><span class="docs-label">Maxwell Earth</span><i class="docs-chevron"></i></label><ul class="collapsed"><li><a class="tocitem" href="../examples/benchmark_analytic/">Analytical benchmark</a></li><li><a class="tocitem" href="../examples/benchmark_1D/">1D GIA benchmark</a></li><li><a class="tocitem" href="../examples/benchmark_3D/">3D GIA benchmark</a></li><li><a class="tocitem" href="../examples/glacialcycle/">Glacial cycle</a></li></ul></li><li><input class="collapse-toggle" id="menuitem-3-2" type="checkbox"/><label class="tocitem" for="menuitem-3-2"><span class="docs-label">Alternative Models</span><i class="docs-chevron"></i></label><ul class="collapsed"><li><a class="tocitem" href="../examples/elra/">Elastic Lithosphere, Relaxed Asthenosphere (ELRA)</a></li><li><a class="tocitem" href="../examples/green_functions/">Green functions</a></li><li><a class="tocitem" href="../examples/transient_creep/">Transient creep</a></li></ul></li><li><a class="tocitem" href="../examples/coupling/">Coupling FastIsostasy</a></li></ul></li><li><input class="collapse-toggle" id="menuitem-4" type="checkbox"/><label class="tocitem" for="menuitem-4"><span class="docs-label">Inverse problems</span><i class="docs-chevron"></i></label><ul class="collapsed"><li><a class="tocitem" href="../examples/inverse_calibration/">Inverse calibration</a></li><li><a class="tocitem" href="../examples/inverse_ice_history/">Inverse ice history</a></li><li><a class="tocitem" href="../examples/inverse_fullfield/">Full-field viscosity inversion</a></li></ul></li><li><input class="collapse-toggle" id="menuitem-5" type="checkbox" checked/><label class="tocitem" for="menuitem-5"><span class="docs-label">Advanced Topics</span><i class="docs-chevron"></i></label><ul class="collapsed"><li><a class="tocitem" href="../integrators/">Time integration</a></li><li><a class="tocitem" href="../examples/benchmark_realfft/">Acceleration via Real-FFT backend</a></li><li><a class="tocitem" href="../inversion_ad_activity_map/">Enzyme activity map for <code>Simulation</code></a></li><li><a class="tocitem" href="../transient_creep_derivation/">Transient creep: derivation</a></li><li class="is-active"><a class="tocitem" href>Type tree</a></li></ul></li><li><input class="collapse-toggle" id="menuitem-6" type="checkbox"/><label class="tocitem" for="menuitem-6"><span class="docs-label">API &amp; References</span><i class="docs-chevron"></i></label><ul class="collapsed"><li><a class="tocitem" href="../API_public/">Public API</a></li><li><a class="tocitem" href="../API_public_ext/">Externalised public API</a></li><li><a class="tocitem" href="../API_private/">Private API</a></li><li><a class="tocitem" href="../fortran/">Fortran version</a></li><li><a class="tocitem" href="../publications/">Publications</a></li><li><a class="tocitem" href="../references/">Bibliography</a></li></ul></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Advanced Topics</a></li><li class="is-active"><a href>Type tree</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Type tree</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/JanJereczek/FastIsostasy.jl" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-navbar-link" href="https://github.com/JanJereczek/FastIsostasy.jl/blob/main/docs/src/treestructure.jl" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Type-tree"><a class="docs-heading-anchor" href="#Type-tree">Type tree</a><a id="Type-tree-1"></a><a class="docs-heading-anchor-permalink" href="#Type-tree" title="Permalink"></a></h1><p>FastIsostasy is organized around a handful of small <code>abstract type</code> hierarchies (one per concern: domains, mantle rheology, sea-level contributions, ice-loading schemes, ...) rather than one big class tree. The snippet below walks the module with <a href="https://github.com/JuliaCollections/AbstractTrees.jl">AbstractTrees.jl</a> and prints every such hierarchy, so that this page stays in sync with the source instead of being maintained by hand.</p><pre><code class="language-julia hljs">using FastIsostasy, AbstractTrees, InteractiveUtils
+
+AbstractTrees.children(T::Type) = subtypes(T)
+
+roots = filter(names(FastIsostasy; all = true)) do name
+    isdefined(FastIsostasy, name) || return false
+    obj = getfield(FastIsostasy, name)
+    obj isa Type &amp;&amp; isabstracttype(obj) &amp;&amp; supertype(obj) === Any
+end
+roots = sort(unique(getfield.(Ref(FastIsostasy), roots)); by = string)
+
+for root in roots
+    print_tree(root)
+end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">AbstractAdjustmentContribution
+AbstractBC
+├─ NoBC
+└─ OffsetBC
+AbstractBCSpace
+├─ ExtendedBCSpace
+└─ RegularBCSpace
+AbstractBSL
+├─ CombinedBSL{T} where T&lt;:AbstractFloat
+├─ ConstantBSL{T} where T&lt;:AbstractFloat
+├─ ConstantOceanSurfaceBSL{T, R} where {T&lt;:AbstractFloat, R&lt;:(ReferenceBSL{T, I} where I&lt;:TimeInterpolation0D{T})}
+├─ ImposedBSL{T, R} where {T&lt;:AbstractFloat, R&lt;:(ReferenceBSL{T, I} where I&lt;:TimeInterpolation0D{T})}
+├─ PiecewiseConstantBSL{T, R} where {T&lt;:AbstractFloat, R&lt;:(ReferenceBSL{T, I} where I&lt;:TimeInterpolation0D{T})}
+└─ PiecewiseLinearOceanSurfaceBSL{T, R} where {T&lt;:AbstractFloat, R&lt;:(ReferenceBSL{T, I} where I&lt;:TimeInterpolation0D{T})}
+AbstractBSLUpdate
+├─ ExternalBSLUpdate
+└─ InternalBSLUpdate
+AbstractCalibration
+AbstractCompressibility
+AbstractDensityContribution
+AbstractDiffMode
+├─ AdjointMode
+└─ TangentMode
+AbstractDomain
+├─ GlobalDomain
+└─ RegionalDomain
+AbstractEncoding
+├─ AutoEncoding{T} where T&lt;:AbstractFloat
+├─ EOFEncoding{T} where T&lt;:AbstractFloat
+├─ Test1Encoding{T} where T&lt;:AbstractFloat
+├─ Test2Encoding
+└─ VariationalAutoEncoding{T} where T&lt;:AbstractFloat
+AbstractFFTBackend
+├─ ComplexFFTBackend
+└─ RealFFTBackend
+AbstractIceThickness
+├─ ExternallyUpdatedIceThickness
+└─ TimeInterpolatedIceThickness
+AbstractIntegrator
+├─ BS3Integrator
+├─ EulerIntegrator
+├─ RKCIntegrator
+└─ Tsit5Integrator
+AbstractInversion
+├─ IceLoadInversion
+└─ ParameterInversion
+AbstractLayering
+├─ EqualizedLayering{T} where T&lt;:AbstractFloat
+├─ FoldedLayering{T} where T&lt;:AbstractFloat
+├─ ParallelLayering{T} where T&lt;:AbstractFloat
+└─ UniformLayering{T} where T&lt;:AbstractFloat
+AbstractLithosphere
+├─ LaterallyConstantLithosphere
+├─ LaterallyVariableLithosphere
+└─ RigidLithosphere
+AbstractLithosphereColumn
+├─ CompressibleLithosphereColumn
+└─ IncompressibleLithosphereColumn
+AbstractLoss
+└─ DefaultLoss
+AbstractMantle
+├─ RelaxedMantle
+├─ RigidMantle
+├─ TransientCreepMantle
+└─ ViscousMantle
+AbstractObservable
+├─ BarystaticContributionObservable
+├─ HorizontalDisplacementRateObservable
+├─ RelativeSeaLevelObservable
+├─ VerticalUpliftObservable
+└─ VerticalUpliftRateObservable
+AbstractRegOrder
+├─ Order0
+└─ Order1
+AbstractRegTarget
+├─ FieldTarget
+├─ SurfaceTarget
+└─ ThetaTarget
+AbstractRegularization
+├─ DecodedBounds
+└─ TikhonovReg
+AbstractSeaSurface
+├─ ImposedSeaSurface
+├─ LaterallyConstantSeaSurface
+└─ LaterallyVariableSeaSurface
+AbstractSealevelLoad
+├─ InteractiveSealevelLoad
+└─ NoSealevelLoad
+AbstractTransition
+├─ SharpTransition
+└─ SmoothTransition
+AbstractViscosityLumping
+AbstractVolumeContribution
+BoundedQuantity
+├─ LithoDensity
+├─ Log10Viscosity
+└─ UpperMantleDensity
+AbstractBarystaticContribution
+AbstractIntegratorState
+├─ RKCIntegratorState
+└─ TableauIntegratorState
+AbstractOutputCrop
+├─ AsymetricOutputCrop
+└─ PaddedOutputCrop
+AbstractSedimentThickness
+├─ ExternallyUpdatedSedimentThickness
+└─ TimeInterpolatedSedimentThickness
+AbstractState
+├─ CurrentState
+└─ ReferenceState
+ParameterReduction</code></pre></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../transient_creep_derivation/">« Transient creep: derivation</a><a class="docs-footer-nextpage" href="../API_public/">Public API »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.17.0 on <span class="colophon-date" title="Wednesday 22 July 2026 22:57">Wednesday 22 July 2026</span>. Using Julia version 1.12.6.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>

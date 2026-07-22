@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Inverse ice history · FastIsostasy.jl</title><meta name="title" content="Inverse ice history · FastIsostasy.jl"/><meta property="og:title" content="Inverse ice history · FastIsostasy.jl"/><meta property="twitter:title" content="Inverse ice history · FastIsostasy.jl"/><meta name="description" content="Documentation for FastIsostasy.jl."/><meta property="og:description" content="Documentation for FastIsostasy.jl."/><meta property="twitter:description" content="Documentation for FastIsostasy.jl."/><script data-outdated-warner src="../../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="../.."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../../assets/documenter.js"></script><script src="../../search_index.js"></script><script src="../../siteinfo.js"></script><script src="../../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../../assets/themeswap.js"></script><link href="https://fonts.googleapis.com/css?family=Montserrat|Source+Code+Pro&amp;display=swap" rel="stylesheet" type="text/css"/></head><body><div id="documenter"><nav class="docs-sidebar"><a class="docs-logo" href="../../"><img src="../../assets/logo.png" alt="FastIsostasy.jl logo"/></a><div class="docs-package-name"><span class="docs-autofit"><a href="../../">FastIsostasy.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../../">FastIsostasy.jl</a></li><li><a class="tocitem" href="../../introGIA/">What is GIA?</a></li><li><input class="collapse-toggle" id="menuitem-3" type="checkbox"/><label class="tocitem" for="menuitem-3"><span class="docs-label">Forward runs</span><i class="docs-chevron"></i></label><ul class="collapsed"><li><input class="collapse-toggle" id="menuitem-3-1" type="checkbox"/><label class="tocitem" for="menuitem-3-1"><span class="docs-label">Maxwell Earth</span><i class="docs-chevron"></i></label><ul class="collapsed"><li><a class="tocitem" href="../benchmark_analytic/">Analytical benchmark</a></li><li><a class="tocitem" href="../benchmark_1D/">1D GIA benchmark</a></li><li><a class="tocitem" href="../benchmark_3D/">3D GIA benchmark</a></li><li><a class="tocitem" href="../glacialcycle/">Glacial cycle</a></li></ul></li><li><input class="collapse-toggle" id="menuitem-3-2" type="checkbox"/><label class="tocitem" for="menuitem-3-2"><span class="docs-label">Alternative Models</span><i class="docs-chevron"></i></label><ul class="collapsed"><li><a class="tocitem" href="../elra/">Elastic Lithosphere, Relaxed Asthenosphere (ELRA)</a></li><li><a class="tocitem" href="../green_functions/">Green functions</a></li><li><a class="tocitem" href="../transient_creep/">Transient creep</a></li></ul></li><li><a class="tocitem" href="../coupling/">Coupling FastIsostasy</a></li></ul></li><li><input class="collapse-toggle" id="menuitem-4" type="checkbox" checked/><label class="tocitem" for="menuitem-4"><span class="docs-label">Inverse problems</span><i class="docs-chevron"></i></label><ul class="collapsed"><li><a class="tocitem" href="../inverse_calibration/">Inverse calibration</a></li><li class="is-active"><a class="tocitem" href>Inverse ice history</a><ul class="internal"><li><a class="tocitem" href="#Fixed-configuration"><span>Fixed configuration</span></a></li><li><a class="tocitem" href="#Ground-truth"><span>Ground truth</span></a></li><li><a class="tocitem" href="#The-simulation-template"><span>The simulation template</span></a></li><li><a class="tocitem" href="#Synthetic-observations"><span>Synthetic observations</span></a></li><li><a class="tocitem" href="#Checking-the-gradient"><span>Checking the gradient</span></a></li><li><a class="tocitem" href="#Running-the-inversion"><span>Running the inversion</span></a></li><li><a class="tocitem" href="#Recovering-the-ice-history"><span>Recovering the ice history</span></a></li><li><a class="tocitem" href="#Field-level-recovery"><span>Field-level recovery</span></a></li><li><a class="tocitem" href="#Copy-pastable-code"><span>Copy-pastable code</span></a></li></ul></li><li><a class="tocitem" href="../inverse_fullfield/">Full-field viscosity inversion</a></li></ul></li><li><input class="collapse-toggle" id="menuitem-5" type="checkbox"/><label class="tocitem" for="menuitem-5"><span class="docs-label">Advanced Topics</span><i class="docs-chevron"></i></label><ul class="collapsed"><li><a class="tocitem" href="../../integrators/">Time integration</a></li><li><a class="tocitem" href="../benchmark_realfft/">Acceleration via Real-FFT backend</a></li><li><a class="tocitem" href="../../inversion_ad_activity_map/">Enzyme activity map for <code>Simulation</code></a></li><li><a class="tocitem" href="../../transient_creep_derivation/">Transient creep: derivation</a></li><li><a class="tocitem" href="../../treestructure/">Type tree</a></li></ul></li><li><input class="collapse-toggle" id="menuitem-6" type="checkbox"/><label class="tocitem" for="menuitem-6"><span class="docs-label">API &amp; References</span><i class="docs-chevron"></i></label><ul class="collapsed"><li><a class="tocitem" href="../../API_public/">Public API</a></li><li><a class="tocitem" href="../../API_public_ext/">Externalised public API</a></li><li><a class="tocitem" href="../../API_private/">Private API</a></li><li><a class="tocitem" href="../../fortran/">Fortran version</a></li><li><a class="tocitem" href="../../publications/">Publications</a></li><li><a class="tocitem" href="../../references/">Bibliography</a></li></ul></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Inverse problems</a></li><li class="is-active"><a href>Inverse ice history</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Inverse ice history</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/JanJereczek/FastIsostasy.jl" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-navbar-link" href="https://github.com/JanJereczek/FastIsostasy.jl/blob/main/docs/src/examples/inverse_ice_history.jl" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Inverse-ice-history"><a class="docs-heading-anchor" href="#Inverse-ice-history">Inverse ice history</a><a id="Inverse-ice-history-1"></a><a class="docs-heading-anchor-permalink" href="#Inverse-ice-history" title="Permalink"></a></h1><p>In <a href="../inverse_calibration/#Inverse-calibration">Inverse calibration</a> the ice history was known and only the solid Earth was unknown. Here we take the harder step, and the one glaciology usually faces: the <strong>ice-loading history is unknown too</strong>, and we reconstruct it <em>jointly</em> with the mantle viscosity from observations of the surface response. Machinery, optimizer and workflow are unchanged — what grows is the number and the nature of the unknowns, and with them the risk that different parameter combinations explain the same data equally well.</p><p>The unknowns are again wrapped in an encoding, this time a <a href="../../API_public_ext/#FastIsostasy.Test1Encoding"><code>Test1Encoding</code></a>, which parameterises both sides of the problem:</p><ul><li>three radially-symmetric <strong>Vialov ice domes</strong> whose central thicknesses <code>H_c(t)</code> evolve over a glacial cycle (piecewise-linear between a few time knots) and whose centres are unknown, and</li><li>a laterally-variable <strong>mantle viscosity</strong> field: a background value plus two Gaussian anomalies (a schematic soft/stiff dichotomy).</li></ul><p>Because the ice load is now part of the control vector, the problem is an <a href="../../API_public_ext/#FastIsostasy.IceLoadInversion"><code>IceLoadInversion</code></a> rather than a <code>ParameterInversion</code>. Two further differences to the previous example are worth watching: the observations are <strong>sparse</strong> (~2 % of the grid cells) instead of full-field, and we therefore judge the result at the level of the reconstructed <em>fields</em> rather than of the individual parameters.</p><pre><code class="language-julia hljs">using FastIsostasy, CairoMakie, Optim
+import Enzyme                      # loading Enzyme activates the AD extension;</code></pre><p><code>import</code> (not <code>using</code>) avoids clashing its <code>gradient!</code> export with FastIsostasy&#39;s</p><pre><code class="language-julia hljs">using Random: randperm, seed!
+using Printf</code></pre><h2 id="Fixed-configuration"><a class="docs-heading-anchor" href="#Fixed-configuration">Fixed configuration</a><a id="Fixed-configuration-1"></a><a class="docs-heading-anchor-permalink" href="#Fixed-configuration" title="Permalink"></a></h2><p>Same setup as in the previous example: a 32×32 regional grid over a <span>$6000 \, \mathrm{km} \times 6000 \, \mathrm{km}$</span> domain and a <span>$10 \, \mathrm{kyr}$</span> glacial cycle defined by five time knots, placed asymmetrically so the rapid deglaciation at the end of the cycle is resolved. The cycle is again a stand-in for a realistic <span>$\sim 100 \, \mathrm{kyr}$</span> one, compressed by a factor of ten to keep the docs build cheap (see the note in <a href="../inverse_calibration/#Inverse-calibration">Inverse calibration</a>).</p><p>The two fixed ingredients below — the dome radii and the viscosity-anomaly amplitudes — are <em>not</em> inverted for; holding a few of the more weakly constrained quantities fixed is a standard way to keep a joint inversion identifiable.</p><pre><code class="language-julia hljs">W, n = 3.0e6, 5
+domain = RegionalDomain(W, n)
+knot_times = [0.0, 5.0e3, 8.0e3, 9.0e3, 1.0e4]   # nt = 5
+nt = length(knot_times)
+t_span = (0.0, 1.0e4)
+radii = (0.8e6, 0.7e6, 0.7e6)      # the three (fixed) Vialov dome radii
+visc_amps = (-1.0, 1.0)            # the two (fixed) log10-viscosity anomaly amplitudes</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">(-1.0, 1.0)</code></pre><h3 id="Parameter-scaling"><a class="docs-heading-anchor" href="#Parameter-scaling">Parameter scaling</a><a id="Parameter-scaling-1"></a><a class="docs-heading-anchor-permalink" href="#Parameter-scaling" title="Permalink"></a></h3><p>As before, the <code>scale</code> vector maps the dimensionless optimization variable to physical units (<code>θ[i] * scale[i]</code>) so that the optimizer stays well conditioned. The spread of magnitudes is even wider here than in the calibration example: ice thicknesses are thousands of metres, dome centres millions of metres, and <code>log10(viscosity)</code> is a number around 21.</p><pre><code class="language-julia hljs">scales = vcat(fill(2.0e3, 3*nt),     # H_c(t) knots  (≈ km)
+              fill(1.0e6, 6),       # dome centres  (≈ 1000 km)
+              1.0,                  # background log10 viscosity
+              fill(1.0e6, 6))       # viscosity-anomaly centres &amp; widths
+enc = Test1Encoding(knot_times, radii, visc_amps; scale = scales)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">Test1Encoding{Float64}([0.0, 5000.0, 8000.0, 9000.0, 10000.0], (800000.0, 700000.0, 700000.0), (-1.0, 1.0), [2000.0, 2000.0, 2000.0, 2000.0, 2000.0, 2000.0, 2000.0, 2000.0, 2000.0, 2000.0  …  1.0e6, 1.0e6, 1.0e6, 1.0, 1.0e6, 1.0e6, 1.0e6, 1.0e6, 1.0e6, 1.0e6])</code></pre><h2 id="Ground-truth"><a class="docs-heading-anchor" href="#Ground-truth">Ground truth</a><a id="Ground-truth-1"></a><a class="docs-heading-anchor-permalink" href="#Ground-truth" title="Permalink"></a></h2><p>We define the true parameters in physical units and normalise them by <code>scales</code> to obtain the dimensionless <code>θ_true</code> the encoding expects. The three domes follow a glacial-cycle sawtooth: slow growth to a Last Glacial Maximum (LGM), then rapid retreat.</p><pre><code class="language-julia hljs">sawtooth(peak) = [0.0, 0.4, 1.0, 0.5, 0.0] .* peak     # H_c at the five knots
+Hc_phys      = vcat(sawtooth(2.5e3), sawtooth(2.0e3), sawtooth(1.8e3))
+centers_phys = [-1.3e6, -1.3e6,  1.3e6, 1.3e6,  1.3e6, -1.3e6]
+visc_phys    = [21.0,  -1.0e6, -1.0e6, 8.0e5,   1.0e6, 1.0e6, 8.0e5]
+θ_true = vcat(Hc_phys, centers_phys, visc_phys) ./ scales</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">28-element Vector{Float64}:
+  0.0
+  0.5
+  1.25
+  0.625
+  0.0
+  0.0
+  0.4
+  1.0
+  0.5
+  0.0
+  ⋮
+  1.3
+ -1.3
+ 21.0
+ -1.0
+ -1.0
+  0.8
+  1.0
+  1.0
+  0.8</code></pre><h2 id="The-simulation-template"><a class="docs-heading-anchor" href="#The-simulation-template">The simulation template</a><a id="The-simulation-template-1"></a><a class="docs-heading-anchor-permalink" href="#The-simulation-template" title="Permalink"></a></h2><p>Same AD requirements as before — the fixed-step <a href="../../API_public/#FastIsostasy.EulerIntegrator"><code>EulerIntegrator</code></a> and a <a href="../../API_public/#FastIsostasy.SmoothTransition"><code>SmoothTransition</code></a> for the masks. The one structural difference is the ice interpolation: since the ice history is now an unknown, it is created with placeholder snapshots at exactly the encoding&#39;s knot times, and <code>reconstruct!</code> overwrites them with the Vialov domes at every iteration.</p><pre><code class="language-julia hljs">function build_sim()
+    it = TimeInterpolatedIceThickness(knot_times,
+        [zeros(domain) for _ in knot_times], domain)
+    bcs = BoundaryConditions(domain, ice_thickness = it)
+    se = SolidEarth(domain; lithosphere = LaterallyVariableLithosphere(),
+        layer_boundaries = [88.0e3], layer_viscosities = [1.0e21])
+    opts = SolverOptions(; show_progress = false, transition = SmoothTransition(10.0),
+        integ = EulerIntegrator(dt = 500.0))
+    nout = NativeOutput(t = Float64[], vars = Symbol[], T = Float64)
+    return Simulation(domain, bcs, RegionalSeaLevel(), se, t_span;
+        opts = opts, nout = nout)
+end
+sim = build_sim()</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi"> Computation domain:             RegionalDomain{Float64, Matrix{Float64}, Matrix{Float64}, CPU}
+ Physical constants:             PhysicalConstants{Float64}
+ Problem BCs:                    BoundaryConditions{Float64, Matrix{Float64}, TimeInterpolatedIceThickness{Float64, Matrix{Float64}, TimeInterpolation2D{Float64, Matrix{Float64}}}}
+ Sea level:                      RegionalSeaLevel{LaterallyConstantSeaSurface, NoSealevelLoad, ConstantBSL{Float32, ReferenceBSL{Float32, TimeInterpolation0D{Float32}}}, InternalBSLUpdate, GoelzerVolumeContribution, NoAdjustmentContribution, GoelzerDensityContribution}
+ Solid Earth:                    SolidEarth{Float64, Matrix{Float64}, Matrix{Bool}, LaterallyVariableLithosphere, ViscousMantle, NoCalibration, CompressibleMantle, FreqDomainViscosityLumping, IncompressibleLithosphereColumn}
+ Solver options:                 SolverOptions{SmoothTransition{Float64}, EulerIntegrator{Float64}, ComplexFFTBackend}
+ GIATools:                       GIATools{ConvolutionPlanHelpers{Float64, Matrix{Float64}, Matrix{ComplexF64}, FFTW.rFFTWPlan{Float64, -1, false, 2, Tuple{Int64, Int64}}, FastIsostasy.NormalizedPlan{FFTW.rFFTWPlan{ComplexF64, 1, false, 2, UnitRange{Int64}}, 0.0002519526329050139}}, ConvolutionPlan{Matrix{Float64}, Matrix{ComplexF64}}, ConvolutionPlan{Matrix{Float64}, Matrix{ComplexF64}}, ConvolutionPlan{Matrix{Float64}, Matrix{ComplexF64}}, FastIsostasy.EmptyConvolution, FFTW.cFFTWPlan{ComplexF64, -1, false, 2, Tuple{Int64, Int64}}, FastIsostasy.NormalizedPlan{FFTW.cFFTWPlan{ComplexF64, 1, false, 2, UnitRange{Int64}}, 0.0009765625}, FastIsostasy.PreAllocated{Matrix{Float64}, Matrix{ComplexF64}, Array{ComplexF64, 3}}}
+ Reference state:                ReferenceState{Float64, Matrix{Float64}, Matrix{Float64}}
+ Current state:                  CurrentState{Float64, Matrix{Float64}, Array{Float64, 3}, Matrix{Float64}}
+ Netcdf output:                  NetcdfOutput{Float32, PaddedOutputCrop}
+ Native output:                  NativeOutput{Float64}
+ native t_out:                   Float64[]
+ nc t_out:                       Float32[]
+ n simulated observables:        0
+ nx, ny:                         [32, 32]
+ dx, dy:                         [187500.0, 187500.0]
+ Wx, Wy:                         [3.0e6, 3.0e6]
+ extrema(effective viscosity):   (1.171875e21, 1.171875e21)
+ extrema(lithospheric thickness): (88000.0, 88000.0)
+</code></pre><h2 id="Synthetic-observations"><a class="docs-heading-anchor" href="#Synthetic-observations">Synthetic observations</a><a id="Synthetic-observations-1"></a><a class="docs-heading-anchor-permalink" href="#Synthetic-observations" title="Permalink"></a></h2><p>Unlike the full-field data of the calibration example, here we observe the vertical bedrock uplift at only ~2 % of the grid cells, at ten times through the cycle — a more realistic, sparse dataset for a problem with more unknowns. As before, a single observable type is used per inversion (mixing types would make the observation container abstractly typed and break the AD compilation), and the data are generated by running the forward model at <code>θ_true</code>.</p><pre><code class="language-julia hljs">seed!(1234)
+allidx = vec([CartesianIndex(i, j) for i in 4:29, j in 4:29])
+pts = allidx[randperm(length(allidx))[1:24]]
+obs_times = collect(1.0e3:1.0e3:1.0e4)
+
+# run the forward model once at the truth to synthesise the &quot;measured&quot; data
+obs0 = Observation(VerticalUpliftObservable(), pts, obs_times,
+    zeros(length(pts) * length(obs_times)); σ = 0.5)
+prob_gt = IceLoadInversion(sim, enc, [obs0])
+reconstruct!(sim, θ_true, enc)
+preds = FastIsostasy.allocate_predictions(prob_gt)
+FastIsostasy.forward_predict!(preds, prob_gt)
+data = copy(preds[1])
+
+obs = Observation(VerticalUpliftObservable(), pts, obs_times, data; σ = 0.5)
+prob = IceLoadInversion(sim, enc, [obs])</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">IceLoadInversion
+ Simulation t_span:     (0.0, 10000.0)
+ Domain (nx, ny):       (32, 32)
+ Encoding:              Test1Encoding{Float64}
+ length(θ):             28
+ # observations:        1
+ Observable(s):         DataType[VerticalUpliftObservable]
+ total data points:     240
+ extrema(extract_times): (1000.0, 10000.0)
+ # regularizations:     0
+ Diff mode:             TangentMode
+ Loss model:            DefaultLoss
+</code></pre><p>By construction the loss vanishes at the truth:</p><pre><code class="language-julia hljs">@printf(&quot;loss(θ_true) = %.3e\n&quot;, loss(prob, θ_true))</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">loss(θ_true) = 0.000e+00</code></pre><h2 id="Checking-the-gradient"><a class="docs-heading-anchor" href="#Checking-the-gradient">Checking the gradient</a><a id="Checking-the-gradient-1"></a><a class="docs-heading-anchor-permalink" href="#Checking-the-gradient" title="Permalink"></a></h2><p>As in the previous example, we confirm the AD gradient of the loss against a finite-difference estimate before optimising. We perturb the truth to a well-informed initial guess <code>θ0</code> (≈ 10 % off in the dimensionless variables) and compare a few components.</p><pre><code class="language-julia hljs">seed!(2)
+θ0 = copy(θ_true)
+θ0[1:3*nt]      .+= 0.12 .* randn(3*nt)     # ice-thickness knots
+θ0[3*nt+1:3*nt+6] .+= 0.08 .* randn(6)      # ice-dome centres
+θ0[3*nt+7]       += 0.15 * randn()        # background viscosity
+θ0[3*nt+8:end]  .+= 0.08 .* randn(6)      # viscosity anomalies
+
+fd_dir(p, θ, e; ε = 1e-4) = (loss(p, θ .+ ε .* e) - loss(p, θ .- ε .* e)) / (2*ε)
+g = similar(θ0)
+FastIsostasy.gradient!(g, prob, θ0)
+for i in (1, 3*nt + 1, 3*nt + 7)
+    e = zeros(length(θ0)); e[i] = 1.0
+    @printf(&quot;θ[%2d]:  AD = % .4e   FD = % .4e\n&quot;, i, g[i], fd_dir(prob, θ0, e))
+end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">┌ Warning: Using fallback BLAS replacements for ([&quot;cblas_ddot64_&quot;]), performance may be degraded
+└ @ Enzyme.Compiler ~/.julia/packages/Enzyme/15yPJ/src/compiler.jl:5563
+θ[ 1]:  AD = -2.9608e+05   FD = -2.9608e+05
+θ[16]:  AD =  2.3573e+05   FD =  2.3573e+05
+θ[22]:  AD =  3.5243e+05   FD =  3.5243e+05</code></pre><h2 id="Running-the-inversion"><a class="docs-heading-anchor" href="#Running-the-inversion">Running the inversion</a><a id="Running-the-inversion-1"></a><a class="docs-heading-anchor-permalink" href="#Running-the-inversion" title="Permalink"></a></h2><p><code>solve!</code> minimises the loss with L-BFGS, using <code>gradient!</code> under the hood. Because we already work in dimensionless variables the default optimizer is well conditioned.</p><pre><code class="language-julia hljs">@printf(&quot;loss(θ0) = %.3e\n&quot;, loss(prob, θ0))
+result = solve!(prob, θ0; optimizer = LBFGS(), iterations = 100,
+    store_trace = true)
+θ_hat = Optim.minimizer(result)
+@printf(&quot;loss(θ̂)  = %.3e\n&quot;, loss(prob, θ_hat))</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">loss(θ0) = 2.230e+05
+┌ Warning: Using fallback BLAS replacements for ([&quot;cblas_ddot64_&quot;]), performance may be degraded
+└ @ Enzyme.Compiler ~/.julia/packages/Enzyme/15yPJ/src/compiler.jl:5563
+loss(θ̂)  = 3.564e+00</code></pre><p>The loss drops by several orders of magnitude:</p><pre><code class="language-julia hljs">fig = Figure(size = (500, 350))
+ax = Axis(fig[1, 1], xlabel = &quot;L-BFGS iteration&quot;, ylabel = &quot;loss&quot;, yscale = log10,
+    title = &quot;Convergence&quot;)
+lines!(ax, Optim.f_trace(result), color = :steelblue, linewidth = 2)
+fig</code></pre><img src="bca92875.png" alt="Example block output"/><h2 id="Recovering-the-ice-history"><a class="docs-heading-anchor" href="#Recovering-the-ice-history">Recovering the ice history</a><a id="Recovering-the-ice-history-1"></a><a class="docs-heading-anchor-permalink" href="#Recovering-the-ice-history" title="Permalink"></a></h2><p>The headline result is the reconstructed central-thickness curves <code>H_c(t)</code> of the three domes. Dashed lines are the truth, solid the inversion.</p><pre><code class="language-julia hljs">hc(θ, i) = (θ .* scales)[(i - 1) * nt + 1 : i * nt]
+fig = Figure(size = (800, 300))
+cols = [:tomato, :seagreen, :slateblue]
+ax = Axis(fig[1, 1], xlabel = &quot;time (kyr)&quot;, ylabel = &quot;central thickness Hc (m)&quot;,
+    title = &quot;Ice history: truth (dashed) vs inversion (solid)&quot;)
+for i in 1:3
+    lines!(ax, knot_times ./ 1e3, hc(θ_true, i), color = cols[i], linestyle = :dash)
+    lines!(ax, knot_times ./ 1e3, hc(θ_hat, i),  color = cols[i], linewidth = 2)
+end
+fig</code></pre><img src="5af3c47b.png" alt="Example block output"/><h2 id="Field-level-recovery"><a class="docs-heading-anchor" href="#Field-level-recovery">Field-level recovery</a><a id="Field-level-recovery-1"></a><a class="docs-heading-anchor-permalink" href="#Field-level-recovery" title="Permalink"></a></h2><p>Individual overlapping-dome parameters can trade off, so the physically meaningful check is the reconstructed <em>fields</em>. We compare the ice thickness at the LGM knot and the mantle-viscosity field.</p><pre><code class="language-julia hljs">reconstruct!(sim, θ_true, enc)
+H_true = copy(FastIsostasy.ice_snapshots(sim)[3])
+logη_true = log10.(copy(sim.solidearth.effective_viscosity))
+reconstruct!(sim, θ_hat, enc)
+H_hat = copy(FastIsostasy.ice_snapshots(sim)[3])
+logη_hat = log10.(copy(sim.solidearth.effective_viscosity))
+
+@printf(&quot;ice @ LGM:        max|ΔH| = %.1f m  (peak %.0f m)\n&quot;,
+    maximum(abs.(H_hat .- H_true)), maximum(H_true))
+@printf(&quot;log10 viscosity:  max|Δ|  = %.4f decades\n&quot;,
+    maximum(abs.(logη_hat .- logη_true)))</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">ice @ LGM:        max|ΔH| = 36.7 m  (peak 2494 m)
+log10 viscosity:  max|Δ|  = 0.0169 decades</code></pre><pre><code class="language-julia hljs">x = domain.x ./ 1e3
+fig = Figure(size = (900, 320))
+for (j, (Z, ttl, cmap)) in enumerate((
+        (H_true, &quot;true ice @ LGM (m)&quot;, :ice),
+        (H_hat, &quot;recovered ice @ LGM (m)&quot;, :ice),
+        (H_hat .- H_true, &quot;error (m)&quot;, :balance)))
+    ax = Axis(fig[1, j], aspect = DataAspect(), title = ttl)
+    hidedecorations!(ax)
+    hm = heatmap!(ax, x, x, Z, colormap = cmap)
+    Colorbar(fig[2, j], hm, vertical = false, width = Relative(0.8))
+end
+fig</code></pre><img src="74ca643f.png" alt="Example block output"/><p>The ice-thickness field is recovered to within a few percent of its peak, and the viscosity field to a few hundredths of a decade — even though the sparse surface data only weakly constrains the exact <em>location</em> of the viscosity anomalies. This is the expected behaviour of GIA inversions: the solid Earth acts as a spatial low-pass filter on the load, so integrated quantities (the loading history, the smoothed fields) are well determined while fine placement is not.</p><h2 id="Copy-pastable-code"><a class="docs-heading-anchor" href="#Copy-pastable-code">Copy-pastable code</a><a id="Copy-pastable-code-1"></a><a class="docs-heading-anchor-permalink" href="#Copy-pastable-code" title="Permalink"></a></h2><pre><code class="language-julia hljs">using FastIsostasy, CairoMakie, Optim, Printf
+import Enzyme                        # loading Enzyme activates the AD extension
+using Random: seed!, randperm
+
+W, n = 3.0e6, 5
+domain = RegionalDomain(W, n)
+# 10 kyr toy cycle: scale knot_times, t_span and obs_times by 10 for a
+# realistic ~100 kyr one (10x the forward and, if used, adjoint cost)
+knot_times = [0.0, 5.0e3, 8.0e3, 9.0e3, 1.0e4]
+nt, t_span = length(knot_times), (0.0, 1.0e4)
+
+# encoding: 3 Vialov domes + a viscosity field, all scaled to O(1)
+scales = vcat(fill(2.0e3, 3nt), fill(1.0e6, 6), 1.0, fill(1.0e6, 6))
+enc = Test1Encoding(knot_times, (0.8e6, 0.7e6, 0.7e6), (-1.0, 1.0); scale = scales)
+
+sawtooth(peak) = [0.0, 0.4, 1.0, 0.5, 0.0] .* peak
+theta_true = vcat(sawtooth(2.5e3), sawtooth(2.0e3), sawtooth(1.8e3),
+    [-1.3e6, -1.3e6, 1.3e6, 1.3e6, 1.3e6, -1.3e6],
+    [21.0, -1.0e6, -1.0e6, 8.0e5, 1.0e6, 1.0e6, 8.0e5]) ./ scales
+
+# forward template: fixed step + smooth masks are both required for AD
+it = TimeInterpolatedIceThickness(knot_times,
+    [zeros(domain) for _ in knot_times], domain)
+bcs = BoundaryConditions(domain, ice_thickness = it)
+se = SolidEarth(domain; lithosphere = LaterallyVariableLithosphere(),
+    layer_boundaries = [88.0e3], layer_viscosities = [1.0e21])
+opts = SolverOptions(; show_progress = false, transition = SmoothTransition(10.0),
+    integ = EulerIntegrator(dt = 500.0))
+nout = NativeOutput(t = Float64[], vars = Symbol[], T = Float64)
+sim = Simulation(domain, bcs, RegionalSeaLevel(), se, t_span;
+    opts = opts, nout = nout)
+
+# synthesise &quot;measurements&quot; by running the forward model at the truth
+seed!(1234)
+allidx = vec([CartesianIndex(i, j) for i in 4:29, j in 4:29])
+pts = allidx[randperm(length(allidx))[1:24]]
+obs_times = collect(1.0e3:1.0e3:1.0e4)
+obs0 = Observation(VerticalUpliftObservable(), pts, obs_times,
+    zeros(length(pts) * length(obs_times)); σ = 0.5)
+prob_gt = IceLoadInversion(sim, enc, [obs0])
+reconstruct!(sim, theta_true, enc)
+preds = FastIsostasy.allocate_predictions(prob_gt)
+FastIsostasy.forward_predict!(preds, prob_gt)
+
+obs = Observation(VerticalUpliftObservable(), pts, obs_times, copy(preds[1]); σ = 0.5)
+prob = IceLoadInversion(sim, enc, [obs])
+
+# invert from a perturbed start (forward-mode AD: cost grows with nθ)
+seed!(2)
+theta0 = theta_true .+ 0.1 .* randn(length(theta_true))
+result = solve!(prob, theta0; optimizer = LBFGS(), iterations = 100,
+    store_trace = true)
+theta_hat = Optim.minimizer(result)
+@printf(&quot;loss: %.3e -&gt; %.3e\n&quot;, loss(prob, theta0), loss(prob, theta_hat))</code></pre></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../inverse_calibration/">« Inverse calibration</a><a class="docs-footer-nextpage" href="../inverse_fullfield/">Full-field viscosity inversion »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.17.0 on <span class="colophon-date" title="Wednesday 22 July 2026 22:57">Wednesday 22 July 2026</span>. Using Julia version 1.12.6.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
