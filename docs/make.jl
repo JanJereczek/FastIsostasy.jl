@@ -1,4 +1,6 @@
 # Standard stuff
+using Pkg
+Pkg.activate(@__DIR__)
 cd(@__DIR__)
 CI = get(ENV, "CI", nothing) == "true" || get(ENV, "GITHUB_TOKEN", nothing) !== nothing
 using CairoMakie, Documenter, Literate
@@ -61,6 +63,7 @@ advanced_topics = [
     "integrators.md",
     "examples/benchmark_realfft.md",
     "inversion_ad_activity_map.md",
+    "transient_creep_derivation.md",
     "treestructure.md",
 ]
 
@@ -94,7 +97,7 @@ makedocs(
         assets = [
             asset("https://fonts.googleapis.com/css?family=Montserrat|Source+Code+Pro&display=swap", class=:css),
         ],
-        collapselevel = 2,
+        collapselevel = 1,
         ),
     sitename = "FastIsostasy.jl",
     authors = "Jan Swierczek-Jereczek",
