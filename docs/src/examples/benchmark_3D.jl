@@ -1,15 +1,15 @@
 #=
 # 3D GIA benchmark
 
-After comparing our results against analytical and 1D numerical solution, the obvious next step is to compare our results against 3D numerical solutions, where the lithospheric thickness and the mantle viscosity vary in x and y. We reproduce Test 3 from [swierczek-jereczek_fastisostasy_2024](@citet), where a 1D Earth structure is perturbed by a Gaussian field in 4 different ways:
-1. A reduction of the lithospheric thickness from 150 km (at the domain margin) to 50 km (at the domain center).
-2. An increase of the lithospheric thickness from 150 km (at the domain margin) to 250 km (at the domain center).
-3. A reduction of the mantle viscosity from 10^21 Pa s (at the domain margin) to 10^20 Pa s (at the domain center).
-4. An increase of the mantle viscosity from 10^21 Pa s (at the domain margin) to 10^22 Pa s (at the domain center).
+After comparing our results against analytical and 1D numerical solution, the obvious next step is to compare our results against 3D numerical solutions, where the lithospheric thickness and the mantle viscosity vary in $$x$$ and $$y$$. We reproduce Test 3 from [swierczek-jereczek_fastisostasy_2024](@citet), where a 1D Earth structure is perturbed by a Gaussian field in 4 different ways:
+1. A reduction of the lithospheric thickness from $$T = 150 \, \mathrm{km}$$ (at the domain margin) to $$T = 50 \, \mathrm{km}$$ (at the domain center).
+2. An increase of the lithospheric thickness from $$T = 150 \, \mathrm{km}$$ (at the domain margin) to $$T = 250 \, \mathrm{km}$$ (at the domain center).
+3. A reduction of the mantle viscosity from $$\eta = 10^{21} \, \mathrm{Pa \, s}$$ (at the domain margin) to $$\eta = 10^{20} \, \mathrm{Pa \, s}$$ (at the domain center).
+4. An increase of the mantle viscosity from $$\eta = 10^{21} \, \mathrm{Pa \, s}$$ (at the domain margin) to $$\eta = 10^{22} \, \mathrm{Pa \, s}$$ (at the domain center).
 
 The ice load used as a forcing is the same as in the analytical example and the sea level computation is turned off to isolate the effect of a 3D Earth structure on the deformational response.
 
-## Case 1: Reduction of lithospheric thickness
+## Case 1: Negative anomaly in lithospheric thickness
 =#
 
 using FastIsostasy, CairoMakie, LinearAlgebra
@@ -45,7 +45,7 @@ fig = plot_transect(sim1, [:u, :ue])
 #=
 This is very similar to the result obtained by Seakon (3D GIA model) as presented in [swierczek-jereczek_fastisostasy_2024](@citet) (Fig. 8.a)! Let's dig into the other cases:
 
-## Case 2: Increase of lithospheric thickness
+## Case 2: Positive anomaly in lithospheric thickness
 =#
 
 thickenning_lithosphere = generate_gaussian_field(domain, 150f3, [0f0, 0], 100f3, sigma)
@@ -73,7 +73,7 @@ It looks like a thicker lithosphere prevents flexure! This tends to "spread" the
 
 Comparing these results to those of Seakon gives a good match ([swierczek-jereczek_fastisostasy_2024](@citet), Fig. 8.b). Now let's dive into cases of laterally-varying mantle viscosities.
 
-## Case 3: Reduction of mantle viscosity
+## Case 3: Negative anomaly in mantle viscosity
 =#
 
 log10visc = generate_gaussian_field(domain, 21f0, [0f0, 0], -1f0, sigma)
@@ -96,7 +96,7 @@ fig = plot_transect(sim3, [:u, :ue])
 #=
 As expected, the displacement takes place much faster than in the previous cases. Comparing these results to those of Seakon gives a good match ([swierczek-jereczek_fastisostasy_2024](@citet), Fig. 8.c).
 
-## Case 4: Increase of mantle viscosity
+## Case 4: Positive anomaly in mantle viscosity
 
 We now perform the opposite viscosity perturbation to Case 3:
 =#
