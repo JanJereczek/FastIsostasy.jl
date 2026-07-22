@@ -14,7 +14,7 @@ function build_snapshot_sim(; n = 5, tend = 5.0e3)
     bcs = BoundaryConditions(domain, ice_thickness = it)
     se = SolidEarth(domain; lithosphere = LaterallyVariableLithosphere(),
         layer_boundaries = [88.0e3], layer_viscosities = [1.0e21])
-    opts = SolverOptions(; verbose = false,
+    opts = SolverOptions(; show_progress = false,
         integ = EulerIntegrator(dt = 250.0))
     nout = FastIsostasy.NativeOutput(t = Float64[], vars = Symbol[], T = Float64)
     return Simulation(domain, bcs, RegionalSeaLevel(), se, (0.0, tend);

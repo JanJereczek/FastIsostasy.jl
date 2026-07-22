@@ -11,9 +11,9 @@ using FastIsostasy, CUDA, Test
 
 CUDA.allowscalar(false)
 
-function build_gpu_sim(alg, arraykernel)
+function build_gpu_sim(alg, backend)
     W, n = 3f6, 5
-    domain = RegionalDomain(W, n; arraykernel = arraykernel)
+    domain = RegionalDomain(W, n; backend = backend)
     H0 = zeros(domain)
     H1 = 1f3 .* (domain.R .< 1f6)
     it = TimeInterpolatedIceThickness([0f0, 1f0, 10f3], [H0, H1, H1], domain)
@@ -21,7 +21,7 @@ function build_gpu_sim(alg, arraykernel)
     se = SolidEarth(domain, layer_boundaries = [88f3],
         layer_viscosities = [1f21], rho_litho = 0f0)
     nout = NativeOutput(vars = [:u], t = [1000f0, 5000f0, 10_000f0])
-    opts = SolverOptions(verbose = false, integ = alg)
+    opts = SolverOptions(show_progress = false, integ = alg)
     return Simulation(domain, bcs, RegionalSeaLevel(), se, (0f0, 10f3);
         nout = nout, opts = opts)
 end
@@ -33,9 +33,9 @@ end
         # comparison in test_integrators.jl.
         for (name, alg) in (("RKCIntegrator", RKCIntegrator(reltol = 1f-5)),
                 ("BS3Integrator", BS3Integrator(reltol = 1f-5)))
-            sim_cpu = build_gpu_sim(alg, Array)
+            sim_cpu = build_gpu_sim(alg, CPU())
             run!(sim_cpu)
-            sim_gpu = build_gpu_sim(alg, CuArray)
+            sim_gpu = build_gpu_sim(alg, CUDABackend())
             run!(sim_gpu)
 
             u_cpu = sim_cpu.now.u
@@ -51,7 +51,7 @@ end
         # GPU counterpart of the CPU regression test in test_integrators.jl:
         # RKCIntegrator's init-time spectral-radius estimate must leave `sim.now.u`
         # (the very array passed in as `u0`) untouched, on CuArray too.
-        sim = build_gpu_sim(RKCIntegrator(reltol = 1f-5), CuArray)
+        sim = build_gpu_sim(RKCIntegrator(reltol = 1f-5), CUDABackend())
         FastIsostasy.init_problem!(sim)
         u_before = Array(sim.now.u)
 

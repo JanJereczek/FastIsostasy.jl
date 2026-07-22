@@ -32,7 +32,7 @@ function build_vialov_problem()
     bcs = BoundaryConditions(domain, ice_thickness = it)
     se = SolidEarth(domain; lithosphere = LaterallyVariableLithosphere(),
         layer_boundaries = [88.0e3], layer_viscosities = [1.0e21])
-    opts = SolverOptions(; verbose = false, transition = SmoothTransition(10.0),
+    opts = SolverOptions(; show_progress = false, transition = SmoothTransition(10.0),
         integ = EulerIntegrator(dt = 500.0))
     nout = FastIsostasy.NativeOutput(t = Float64[], vars = Symbol[], T = Float64)
     sim = Simulation(domain, bcs, RegionalSeaLevel(), se, t_span; opts = opts, nout = nout)

@@ -16,7 +16,7 @@ function build_recording_prob(; n = 5, dt = 100.0, tend = 400.0,
     bcs = BoundaryConditions(domain, ice_thickness = it)
     se = SolidEarth(domain; lithosphere = LaterallyVariableLithosphere(),
         layer_boundaries = [88.0e3], layer_viscosities = [1.0e21])
-    opts = SolverOptions(; verbose = false, integ = alg)
+    opts = SolverOptions(; show_progress = false, integ = alg)
     nout = FastIsostasy.NativeOutput(t = Float64[], vars = Symbol[], T = Float64)
     sim = Simulation(domain, bcs, RegionalSeaLevel(), se, (0.0, tend);
         opts = opts, nout = nout)

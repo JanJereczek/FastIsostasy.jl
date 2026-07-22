@@ -39,7 +39,7 @@ function build_fullfield_problem(; n = 3, W = 3.0e6, dt = 100.0, tend = 400.0,
     bcs = BoundaryConditions(domain, ice_thickness = it)
     se = SolidEarth(domain; lithosphere = LaterallyVariableLithosphere(),
         layer_boundaries = [88.0e3], layer_viscosities = [1.0e21])
-    opts = SolverOptions(; verbose = false, transition = SmoothTransition(10.0),
+    opts = SolverOptions(; show_progress = false, transition = SmoothTransition(10.0),
         integ = EulerIntegrator(dt = dt))
     nout = FastIsostasy.NativeOutput(t = Float64[], vars = Symbol[], T = Float64)
     sim = Simulation(domain, bcs, RegionalSeaLevel(), se, (0.0, tend);

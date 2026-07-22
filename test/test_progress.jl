@@ -16,7 +16,7 @@ function build_progress_sim(; tspan = (0.0, 400.0), verbose = true, dt_walltime 
     bcs = BoundaryConditions(domain, ice_thickness = it)
     se = SolidEarth(domain; lithosphere = LaterallyVariableLithosphere(),
         layer_boundaries = [88.0e3], layer_viscosities = [1.0e21])
-    opts = SolverOptions(; verbose = verbose, dt_walltime = dt_walltime,
+    opts = SolverOptions(; show_progress = verbose, dt_walltime = dt_walltime,
         integ = EulerIntegrator(dt = 50.0))
     nout = FI.NativeOutput(t = Float64[], vars = Symbol[], T = Float64)
     return Simulation(domain, bcs, RegionalSeaLevel(), se, tspan;

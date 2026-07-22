@@ -61,7 +61,7 @@ using Test
         bcs = BoundaryConditions(domain, ice_thickness = it)
         se = SolidEarth(domain; lithosphere = LaterallyVariableLithosphere(),
             layer_boundaries = [88.0e3, 400e3], layer_viscosities = layer_viscosities)
-        opts = SolverOptions(; verbose = false,
+        opts = SolverOptions(; show_progress = false,
             integ = Tsit5Integrator{Float64}(dt_min = 1.0))
         nout = FastIsostasy.NativeOutput(t = Float64[], vars = Symbol[], T = Float64)
         sim = Simulation(domain, bcs, RegionalSeaLevel(), se, (0.0, 100.0);

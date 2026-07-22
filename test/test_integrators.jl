@@ -117,7 +117,7 @@ observed_order(errN, err2N) = log2(errN / err2N)
             se = SolidEarth(domain, layer_boundaries = [88f3],
                 layer_viscosities = [1f21], rho_litho = 0f0)
             nout = NativeOutput(vars = [:u], t = [1000, 5000, 10_000f0])
-            opts = SolverOptions(verbose = false, integ = alg)
+            opts = SolverOptions(show_progress = false, integ = alg)
             return Simulation(domain, bcs, RegionalSeaLevel(), se, (0f0, 10f3);
                 nout = nout, opts = opts)
         end
@@ -277,7 +277,7 @@ end
         bcs = BoundaryConditions(domain, ice_thickness = it)
         se = SolidEarth(domain; lithosphere = LaterallyVariableLithosphere(),
             layer_boundaries = [88.0e3], layer_viscosities = [1.0e19])
-        opts = SolverOptions(verbose = false, integ = RKCIntegrator())
+        opts = SolverOptions(show_progress = false, integ = RKCIntegrator())
         nout = FastIsostasy.NativeOutput(t = Float64[], vars = Symbol[], T = Float64)
         sim = Simulation(domain, bcs, RegionalSeaLevel(), se, (0.0, 100.0);
             opts = opts, nout = nout)

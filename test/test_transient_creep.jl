@@ -26,7 +26,7 @@ function build_creep_sim(mantle; tend = 10f3, dt = 100f0, n = 6,
     bcs = BoundaryConditions(domain, ice_thickness = it)
     se = SolidEarth(domain; lithosphere = litho, mantle = mantle,
         layer_boundaries = [88f3], layer_viscosities = [1f21])
-    opts = SolverOptions(verbose = false, integ = EulerIntegrator(dt = dt))
+    opts = SolverOptions(show_progress = false, integ = EulerIntegrator(dt = dt))
     nout = NativeOutput(vars = [:u], t = [tend])
     return Simulation(domain, bcs, RegionalSeaLevel(), se, (0f0, tend);
         nout = nout, opts = opts)
@@ -186,7 +186,7 @@ burgers(Δ, τ) = TransientCreepMantle(
             se = SolidEarth(domain; lithosphere = LaterallyConstantLithosphere(),
                 mantle = mantle, layer_boundaries = [88f3], layer_viscosities = [1f21],
                 rho_litho = 0f0)
-            opts = SolverOptions(verbose = false, integ = EulerIntegrator(dt = dt))
+            opts = SolverOptions(show_progress = false, integ = EulerIntegrator(dt = dt))
             nout = NativeOutput(vars = [:u], t = Float32.([50, 200, 500, 2000]))
             sim = Simulation(domain, bcs, RegionalSeaLevel(), se, (0f0, tend);
                 nout = nout, opts = opts)
@@ -261,7 +261,7 @@ burgers(Δ, τ) = TransientCreepMantle(
             se = SolidEarth(domain; lithosphere = LaterallyConstantLithosphere(),
                 mantle = burgers(1.2, 7.14), layer_boundaries = [88f3],
                 layer_viscosities = [1f21])
-            opts = SolverOptions(verbose = false, integ = EulerIntegrator(dt = dt))
+            opts = SolverOptions(show_progress = false, integ = EulerIntegrator(dt = dt))
             nout = NativeOutput(vars = [:u], t = collect(range(100f0, tend, length = n_out)))
             s = Simulation(domain, bcs, RegionalSeaLevel(), se, (0f0, tend);
                 nout = nout, opts = opts)
@@ -290,7 +290,7 @@ burgers(Δ, τ) = TransientCreepMantle(
                 layer_viscosities = [1f21])
             # deliberately large dt relative to the Kelvin time (7.14 yr), to
             # stress-test the CN amplification factor's high-k behaviour.
-            opts = SolverOptions(verbose = false, integ = EulerIntegrator(dt = 50f0))
+            opts = SolverOptions(show_progress = false, integ = EulerIntegrator(dt = 50f0))
             nout = NativeOutput(vars = [:u], t = collect(100f0:100f0:5f3))
             sim = Simulation(domain, bcs, RegionalSeaLevel(), se, (0f0, 5f3);
                 nout = nout, opts = opts)

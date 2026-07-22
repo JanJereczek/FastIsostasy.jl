@@ -27,12 +27,12 @@ const GPU_AD_THETA = Float64[
 ]
 
 """
-Build a `ParameterInversion` on `arraykernel` whose observations are the model's own
+Build a `ParameterInversion` on `backend` whose observations are the model's own
 output at `GPU_AD_THETA`, so the truth is reproducible on either backend.
 """
-function ad_validity_gpu_setup(arraykernel; n = 4, dt = 100.0, tend = 400.0)
+function ad_validity_gpu_setup(backend; n = 4, dt = 100.0, tend = 400.0)
     W = 3.0e6
-    domain = RegionalDomain(W, n; arraykernel = arraykernel)
+    domain = RegionalDomain(W, n; backend = backend)
 
     H0 = zeros(domain)
     H1 = 1.0e3 .* (domain.R .< 1.0e6)
@@ -40,7 +40,7 @@ function ad_validity_gpu_setup(arraykernel; n = 4, dt = 100.0, tend = 400.0)
     bcs = BoundaryConditions(domain, ice_thickness = it)
     se = SolidEarth(domain; lithosphere = LaterallyVariableLithosphere(),
         layer_boundaries = [88.0e3], layer_viscosities = [1.0e21])
-    opts = SolverOptions(; verbose = false, transition = SmoothTransition(10.0),
+    opts = SolverOptions(; show_progress = false, transition = SmoothTransition(10.0),
         integ = EulerIntegrator(dt = dt))
     nout = FastIsostasy.NativeOutput(t = Float64[], vars = Symbol[], T = Float64)
     sim = Simulation(domain, bcs, RegionalSeaLevel(), se, (0.0, tend); opts = opts, nout = nout)
@@ -70,8 +70,8 @@ function central_difference(prob, θ, i; ε_rel = 1.0e-5)
 end
 
 @testset "gpu forward-mode AD validity" begin
-    prob_cpu, θ = ad_validity_gpu_setup(Array)
-    prob_gpu, _ = ad_validity_gpu_setup(CuArray)
+    prob_cpu, θ = ad_validity_gpu_setup(CPU())
+    prob_gpu, _ = ad_validity_gpu_setup(CUDABackend())
 
     # Perturb off the truth so the gradient is non-zero.
     θ0 = copy(θ); θ0[1] += 0.15
