@@ -21,6 +21,7 @@ SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
 Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 
 [weakdeps]
+AMDGPU = "21141c5a-9bdb-4563-92ae-f87d6854732e"
 CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
 Checkpointing = "eb46d486-4f9c-4c3d-b445-a617f2a2f1ca"
 Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
@@ -31,6 +32,7 @@ NLsolve = "2774e3e8-f4cf-5e23-947b-6d7e65073b56"
 Optim = "429524aa-4258-5aef-a3af-852621145aeb"
 
 [extensions]
+FastIsostasyAMDGPUExt = ["AMDGPU"]
 FastIsostasyCUDAExt = ["CUDA"]
 FastIsostasyCheckpointingExt = ["Checkpointing", "Enzyme"]
 FastIsostasyEnsembleKalmanProcessesExt = ["EnsembleKalmanProcesses", "Distributions"]
@@ -42,6 +44,7 @@ FastIsostasyOptimExt = ["Optim"]
 
 [compat]
 AbstractFFTs = "1.5"
+AMDGPU = "1"
 CUDA = "5, 6"
 Checkpointing = "0.9, 1"
 DelimitedFiles = "1.9"
