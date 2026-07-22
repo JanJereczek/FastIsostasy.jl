@@ -1,3 +1,13 @@
+"""
+$(TYPEDSIGNATURES)
+
+Define the time interpolation of a scalar variable.
+
+# Fields
+- `t`: a vector of time points at which the variable is defined.
+- `y`: a vector of variable values corresponding to `t`.
+- `flat_bc`: a boolean indicating whether to use flat boundary conditions
+"""
 struct TimeInterpolation0D{T<:AbstractFloat}
     t::Vector{T}
     y::Vector{T}
@@ -9,6 +19,11 @@ function TimeInterpolation0D(t, y; flat_bc = false)
     return TimeInterpolation0D(t, y, flat_bc)
 end
 
+"""
+$(TYPEDSIGNATURES)
+
+Define the time interpolation of an array variable.
+"""
 mutable struct TimeInterpolation2D{T,M}
     t::Vector{T}
     X::Vector{M}
@@ -24,7 +39,11 @@ function TimeInterpolation2D(t, X; flat_bc = false, arraykernel = nothing)
     end
 end
 
+"""
+$(TYPEDSIGNATURES)
 
+Interpolate a timeseries at a given time `t_out` using the interpolation object `itp`.
+"""
 function interpolate(t_out, itp::TimeInterpolation0D)
     if t_out < minimum(itp.t)
         if itp.flat_bc
@@ -48,6 +67,11 @@ function interpolate(t_out, itp::TimeInterpolation0D)
     end
 end
 
+"""
+$(TYPEDSIGNATURES)
+
+Interpolate a time-dependent field (in-place) at a given time `t_out` using the interpolation object `itp`.
+"""
 function interpolate!(X_out::M, t::T, ti::TimeInterpolation2D{T,M}) where {T,M}
     if t < minimum(ti.t)
         if ti.flat_bc

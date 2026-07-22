@@ -1,12 +1,22 @@
 """
 $(TYPEDSIGNATURES)
 
+Define a cropping strategy for the output of the simulation.
+
+# Available subtypes
+- [`PaddedOutputCrop`](@ref)
+- [`AsymetricOutputCrop`](@ref)
 """
 abstract type AbstractOutputCrop end
 
 """
 $(TYPEDSIGNATURES)
 
+Define a symmetric cropping strategy for the output of the simulation.
+The output will be cropped by `pad` elements on each side of the domain.
+
+# Fields
+- `pad`: number of elements to crop on each side of the domain.
 """
 struct PaddedOutputCrop <: AbstractOutputCrop
     pad::Int
@@ -15,6 +25,13 @@ end
 """
 $(TYPEDSIGNATURES)
 
+Define an asymmetric cropping strategy for the output of the simulation.
+
+# Fields
+- `pad_x1`: number of elements to crop on the left side of the domain.
+- `pad_x2`: number of elements to crop on the right side of the domain.
+- `pad_y1`: number of elements to crop on the bottom side of the domain.
+- `pad_y2`: number of elements to crop on the top side of the domain.
 """
 struct AsymetricOutputCrop <: AbstractOutputCrop
     pad_x1::Int
@@ -26,6 +43,7 @@ end
 """
 $(TYPEDSIGNATURES)
 
+Crop a vector using the specified cropping strategy.
 """
 crop(x::V, c::PaddedOutputCrop) where {V<:AbstractVector} = x[(c.pad+1):(end-c.pad)]
 crop(X::M, c::PaddedOutputCrop) where {M<:AbstractMatrix} =
@@ -37,6 +55,14 @@ end
 
 function crop(X::M, c::AsymetricOutputCrop) where {M<:AbstractMatrix}
     return X[(c.pad_x1+1):(end-c.pad_x2), (c.pad_y1+1):(end-c.pad_y2)]
+end
+
+function crop_promote!(out, state, var, Tout, M, oc)
+    if M isa Matrix
+        out .= Tout.(crop(getfield(state, var), oc))
+    else
+        out .= Tout.(crop(Array(getfield(state, var)), oc))
+    end
 end
 
 ################################################################################
@@ -202,10 +228,17 @@ io_dict[:maskactive] = Dict(
 """
 $(TYPEDSIGNATURES)
 
-A struct that contains all the necessary information to store the output
-in a NetCDF file.
+Define the output NetCDF file for the simulation.
 
-Can be initilized as:
+# Fields
+- `t`: a vector of time points at which the variable is defined.
+- `filename`: the name of the NetCDF file.
+- `buffer`: a buffer to store the output data before writing to the NetCDF file.
+- `vars3D`: a vector of symbols representing the 3D variables to be output.
+- `vars1D`: a vector of symbols representing the 1D variables to be output.
+- `params2D`: a vector of symbols representing the 2D parameters to be output.
+- `oc`: an instance of [`AbstractOutputCrop`](@ref) that defines the cropping strategy for the output.
+- `k`: the current time step index for writing to the NetCDF file.
 """
 mutable struct NetcdfOutput{
     T<:AbstractFloat,
@@ -312,14 +345,6 @@ function NetcdfOutput(
     )
 end
 
-function crop_promote!(out, state, var, Tout, M, oc)
-    if M isa Matrix
-        out .= Tout.(crop(getfield(state, var), oc))
-    else
-        out .= Tout.(crop(Array(getfield(state, var)), oc))
-    end
-end
-
 function write_nc!(
     ncout::NetcdfOutput{Tout},
     state::CurrentState{T,M},
@@ -354,13 +379,20 @@ end
 """
 $(TYPEDSIGNATURES)
 
-Return a mutable struct containing the native output which will be updated over the simulation.
+Define the native output which will be updated over the simulation.
 
 Initialization example:
 ```julia
 nout = NativeOutput(vars = [:u, :ue, :b, :dz_ss, :H_ice, :H_water, :u_x, :u_y],
     t = collect(0:1f3:10f3))
 ```
+
+# Fields
+- `t`: a vector of time points at which the variable is defined.
+- `vars`: a vector of symbols representing the variables to be output.
+- `vals`: a dictionary mapping each variable symbol to a vector of matrices containing the output data.
+- `computation_time`: the total computation time for the simulation.
+- `k`: the current time step index for writing to the output.
 """
 mutable struct NativeOutput{T<:AbstractFloat}
     t::Vector{T}
