@@ -39,8 +39,35 @@ For a rectangular domain with spanning vectors `x` and `y`:
 ```julia
 domain = RegionalDomain(x, y)           # rectangular domain: spanning vectors x, y
 ```
+
+# Hardware
+
+The `backend` keyword selects where the arrays live and where the kernels run. It
+takes a [KernelAbstractions.jl](https://github.com/JuliaGPU/KernelAbstractions.jl)
+backend, so FastIsostasy is not tied to any single GPU vendor:
+
+| `backend` | needs |
+|---|---|
+| `CPU()` (default) | — |
+| `CUDABackend()` | `using CUDA` |
+| `ROCBackend()` | `using AMDGPU` |
+| `MetalBackend()` | `using Metal` |
+| `oneAPIBackend()` | `using oneAPI` |
+
+```julia
+using CUDA
+domain = RegionalDomain(3000e3, 7, backend = CUDABackend())
+```
+
+Everything downstream — `SolidEarth`, `BoundaryConditions`, `Simulation` — picks
+the backend up from the domain, so this is the only place hardware is named.
+
+!!! compat "Deprecated: `arraykernel`"
+    Before v2.1 the hardware was chosen with an array constructor
+    (`arraykernel = CuArray`). That keyword still works but warns; pass `backend`
+    instead.
 """
-struct RegionalDomain{T,L,M,K} <: AbstractDomain
+struct RegionalDomain{T,L,M,B} <: AbstractDomain
 
     Wx::T                       # Domain half-width in x (m)
     Wy::T                       # Domain half-width in y (m)
@@ -70,13 +97,17 @@ struct RegionalDomain{T,L,M,K} <: AbstractDomain
     correct_distortion::Bool
     zeros::M                     # a zero matrix of size nx x ny
     pseudodiff::M               # pseudodiff operator as matrix (Hadamard product)
-    use_cuda::Bool
-    # `Array` or `CuArray` depending on chosen hardware. Both are `UnionAll`s, so
-    # typing the field `Type{K}` lifts the value into the type domain: `K` is then a
-    # compile-time constant and `domain.arraykernel(x)` infers concretely instead of
-    # dispatching dynamically. `K` is the *last* parameter so that partially applied
-    # signatures (`RegionalDomain{T, L, M}`) keep dispatching.
-    arraykernel::Type{K}
+    # Which hardware the arrays live on, as a `KernelAbstractions.Backend`:
+    # `CPU()`, `CUDABackend()`, `ROCBackend()`, `MetalBackend()`, `oneAPIBackend()`.
+    # FastIsostasy never names a vendor array type — allocation goes through
+    # `kernelzeros`/`kernelpromote`, which call `KernelAbstractions.allocate`.
+    #
+    # KA backends are singletons, so storing the *instance* still lifts the choice
+    # into the type domain: `B` is a compile-time constant and every
+    # `backend`-dependent branch folds away, exactly as the old `Type{K}` field did.
+    # `B` is the *last* parameter so that partially applied signatures
+    # (`RegionalDomain{T, L, M}`) keep dispatching.
+    backend::B
 end
 
 function RegionalDomain(W::T, n::Int; kwargs...) where {T<:AbstractFloat}
@@ -132,7 +163,8 @@ function RegionalDomain(
     ny::Int,
     mx::Int,
     my::Int;
-    arraykernel = Array,
+    backend = CPU(),
+    arraykernel = nothing,      # deprecated, see `_backend_from_arraykernel`
     lat_ref::T = T(-71.0),      # Reference latitude for scale factor
     lon_ref::T = T(0.0),        # Reference longitude for scale factor
     lat_0::T = T(-90.0),        # Latitude of center point (allows oblique proj)
@@ -184,8 +216,8 @@ function RegionalDomain(
     # roadmaps/stabilise_dt.md §1/§4.
     pseudodiff[1, 1] = mean([pseudodiff[1, 2], pseudodiff[2, 1]])
 
-    use_cuda = arraykernel !== Array
-    zeros, K, pseudodiff = kernelpromote([zeros, K, pseudodiff], arraykernel)
+    backend = _backend_from_arraykernel(backend, arraykernel)
+    zeros, K, pseudodiff = kernelpromote([zeros, K, pseudodiff], backend)
 
     i1, i2 = samesize_conv_indices(nx, mx)
     j1, j2 = samesize_conv_indices(ny, my)
@@ -221,9 +253,34 @@ function RegionalDomain(
         correct_distortion,
         zeros,
         pseudodiff,
-        use_cuda,
-        arraykernel,
+        backend,
     )
+end
+
+"""
+$(TYPEDSIGNATURES)
+
+Resolve the hardware choice, accepting the deprecated `arraykernel` keyword.
+
+Before v2.1 the hardware was selected by passing an array *constructor*
+(`arraykernel = CuArray`); it is now a `KernelAbstractions.Backend`
+(`backend = CUDABackend()`), which is vendor-neutral and is the same object the
+`@kernel` launches already dispatch on. `arraykernel` still works but warns.
+"""
+function _backend_from_arraykernel(backend, arraykernel)
+    arraykernel === nothing && return backend
+    Base.depwarn(
+        "`RegionalDomain(...; arraykernel = $arraykernel)` is deprecated. Pass a " *
+        "KernelAbstractions backend instead: `backend = CPU()`, " *
+        "`backend = CUDABackend()` (CUDA.jl), `backend = ROCBackend()` (AMDGPU.jl), " *
+        "`backend = MetalBackend()` (Metal.jl) or `backend = oneAPIBackend()` " *
+        "(oneAPI.jl).",
+        :RegionalDomain,
+    )
+    arraykernel === Array && return CPU()
+    # A vendor array type: ask KernelAbstractions which backend owns it, using a
+    # 0-element instance so nothing meaningful is allocated on the device.
+    return get_backend(arraykernel(undef, ntuple(_ -> 0, 2)...))
 end
 
 Base.eltype(domain::RegionalDomain) = eltype(domain.x)
@@ -234,7 +291,7 @@ function Base.show(io::IO, ::MIME"text/plain", domain::RegionalDomain)
         "dx, dy" => [domain.dx, domain.dy],
         "Wx, Wy" => [domain.Wx, domain.Wy],
         "eltype" => eltype(domain),
-        "array backend" => domain.arraykernel,
+        "backend" => domain.backend,
         "correct_distortion" => domain.correct_distortion,
     ]
     padlen = maximum(length(d[1]) for d in descriptors) + 2

@@ -18,7 +18,7 @@ Update the time derivative of the viscous displacement based on an [`AbstractMan
   of [swierczek-jereczek_fastisostasy_2024](@citet).
 """
 # Dispatch is on three orthogonal axes: the mantle rheology, the lithosphere, and
-# the FFT backend. The backend used to masquerade as a rheology (`RealMaxwellMantle`),
+# the FFT backend. That choice used to masquerade as a rheology (`RealMaxwellMantle`),
 # which made "what is modelled" and "how the transform is computed" the same choice.
 function update_dudt!(dudt, u, sim, t, earth::SolidEarth)
     update_dudt!(dudt, u, sim, t, earth.mantle, earth.lithosphere, sim.opts.fft)

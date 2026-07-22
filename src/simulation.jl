@@ -163,17 +163,20 @@ function Simulation(
 
     u_ref, ue_ref, dz_ss_ref, z_b_ref, H_ice_ref = kernelpromote(
         [u_ref, ue_ref, dz_ss_ref, z_b_ref, H_ice_ref],
-        domain.arraykernel,
+        domain.backend,
     )
     z_ss_ref = sealevel.bsl.ref.z .+ dz_ss_ref
 
     tr = opts.transition
-    if domain.use_cuda
-        maskgrounded = get_maskgrounded(H_ice_ref, z_b_ref, z_ss_ref, c, tr)
-        maskocean = get_maskocean(z_ss_ref, z_b_ref, maskgrounded, tr)
-    else
+    # `collect` on the host turns the `BitArray` a mask comparison yields into a
+    # dense `Array{Bool}`; on a device the result is already dense and collecting it
+    # would pull it back to the host. See the note above `kernelcollect`.
+    if on_host(domain)
         maskgrounded = collect(get_maskgrounded(H_ice_ref, z_b_ref, z_ss_ref, c, tr))
         maskocean = collect(get_maskocean(z_ss_ref, z_b_ref, maskgrounded, tr))
+    else
+        maskgrounded = get_maskgrounded(H_ice_ref, z_b_ref, z_ss_ref, c, tr)
+        maskocean = get_maskocean(z_ss_ref, z_b_ref, maskgrounded, tr)
     end
 
     H_af_ref = height_above_floatation(H_ice_ref, z_b_ref, z_ss_ref, c, tr)

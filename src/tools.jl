@@ -20,7 +20,7 @@ abstract type AbstractFFTBackend end
 $(TYPEDSIGNATURES)
 
 Complex-to-complex plans (`plan_fft` / `plan_ifft`) over the full `(nx, ny)`
-spectrum. The default, and the backend to use for production runs.
+spectrum. The default, and the FFT backend to use for production runs.
 """
 struct ComplexFFTBackend <: AbstractFFTBackend end
 
@@ -35,8 +35,8 @@ arithmetic cost of the spectral step.
     In laterally-variable lithosphere setups the half-spectrum views introduce
     extra complexity that can produce larger numerical errors than
     [`ComplexFFTBackend`](@ref), and the expected performance gain may not
-    materialise on all hardware. A runtime warning is emitted when this backend
-    is selected.
+    materialise on all hardware. A runtime warning is emitted when this FFT
+    backend is selected.
 """
 struct RealFFTBackend <: AbstractFFTBackend end
 
@@ -106,7 +106,7 @@ function GIATools(
 
     T = eltype(domain.R)
 
-    viscous_green = domain.arraykernel(
+    viscous_green = kernelpromote(
         T.(
             green_viscous(
                 domain,
@@ -114,6 +114,7 @@ function GIATools(
                 mean(solidearth.litho_rigidity),
             ),
         ),
+        domain.backend,
     )
     conv_helpers = ConvolutionPlanHelpers(viscous_green)
     viscous_convo = ConvolutionPlan(viscous_green, conv_helpers)
@@ -122,7 +123,7 @@ function GIATools(
     distance, greenintegrand_coeffs = get_greenintegrand_coeffs(T)
     greenintegrand_function = build_greenintegrand(distance, greenintegrand_coeffs)
     quad_support, quad_coeffs = get_quad_coeffs(T, quad_precision)
-    elastic_green = domain.arraykernel(
+    elastic_green = kernelpromote(
         T.(
             get_elastic_green(
                 domain,
@@ -131,12 +132,13 @@ function GIATools(
                 quad_coeffs,
             ),
         ),
+        domain.backend,
     )
 
     elastic_convo = ConvolutionPlan(elastic_green, conv_helpers)
 
     # Build in-place convolution to compute dz_ss response
-    dz_ss_green = domain.arraykernel(T.(get_dz_ss_green(domain, c)))
+    dz_ss_green = kernelpromote(T.(get_dz_ss_green(domain, c)), domain.backend)
     dz_ss_convo = ConvolutionPlan(dz_ss_green, conv_helpers)
 
     # Build in-place convolution for smoothing
@@ -148,10 +150,10 @@ function GIATools(
             generate_gaussian_field(domain, T(0.0), T.([0.0, 0.0]), T(1.0), sigma)
         norm!(smoothing_kernel)
         smooth_convo =
-            ConvolutionPlan(domain.arraykernel(smoothing_kernel), conv_helpers)
+            ConvolutionPlan(kernelpromote(smoothing_kernel, domain.backend), conv_helpers)
     end
 
-    # FFT plans depending on CPU vs. GPU usage and the selected backend
+    # `domain.backend` decides host vs. device planning, `fft` complex vs. real
     pfft!, pifft! = choose_fft_plans(domain.K, fft)
 
     n_cplx_matrices = 4
@@ -181,9 +183,19 @@ end
 # inverse plan is wrapped by `normalize_plan` (→ `NormalizedPlan`): numerically
 # identical to the `ScaledPlan` from `plan_ifft`, but carrying its scale as a type
 # parameter so Enzyme doesn't treat the (constant) normalization as differentiable.
+#
+# `plan_fft` & friends are `AbstractFFTs` generics: FFTW claims them for host
+# arrays, and every GPU package claims them for its own array type (CUFFT, rocFFT,
+# …). So the planner needs *no* vendor-specific method — the one thing that is not
+# portable is the FFTW planner-effort flag, which only the host planner accepts.
+# Selecting that off the backend is what lets a new GPU vendor cost zero lines here.
+_planner_flags(::CPU) = (; flags = MEASURE)
+_planner_flags(::Backend) = (;)
+
 function choose_fft_plans(X)
-    return plan_fft(complex.(X); flags = MEASURE),
-    normalize_plan(plan_ifft(complex.(X); flags = MEASURE))
+    kw = _planner_flags(get_backend(X))
+    return plan_fft(complex.(X); kw...),
+    normalize_plan(plan_ifft(complex.(X); kw...))
 end
 
 choose_fft_plans(X, ::ComplexFFTBackend) = choose_fft_plans(X)
@@ -196,9 +208,10 @@ function choose_fft_plans(X, ::RealFFTBackend)
           "than ComplexFFTBackend for laterally-variable lithosphere setups, and " *
           "the expected performance gain may not materialise on all hardware. " *
           "Prefer ComplexFFTBackend for production runs."
+    kw = _planner_flags(get_backend(X))
     rfft_buf = similar(X, Complex{eltype(X)}, size(X, 1) ÷ 2 + 1, size(X, 2))
-    return plan_rfft(copy(X); flags = MEASURE),
-    normalize_plan(plan_irfft(rfft_buf, size(X, 1); flags = MEASURE))
+    return plan_rfft(copy(X); kw...),
+    normalize_plan(plan_irfft(rfft_buf, size(X, 1); kw...))
 end
 
 _make_cplx_matrices(domain, ::ComplexFFTBackend, n) =
@@ -207,17 +220,17 @@ _make_cplx_matrices(domain, ::ComplexFFTBackend, n) =
 function _make_cplx_matrices(domain, ::RealFFTBackend, n)
     T = eltype(domain.R)
     nx2 = domain.nx ÷ 2 + 1
-    return [domain.arraykernel(zeros(Complex{T}, nx2, domain.ny)) for _ = 1:n]
+    return [kernelzeros(domain.backend, Complex{T}, nx2, domain.ny) for _ = 1:n]
 end
 
 # One (nx, ny) complex plane per Kelvin branch, stacked along dim 3 — the
 # `PreAllocated.fftK` buffer. `N = 0` for every steady-creep rheology, giving a
 # zero-cost `(nx, ny, 0)` array, exactly like `u_K` in `src/state.jl`.
 _make_cplx_branch_array(domain, ::ComplexFFTBackend, N) =
-    domain.arraykernel(zeros(Complex{eltype(domain.R)}, domain.nx, domain.ny, N))
+    kernelzeros(domain.backend, Complex{eltype(domain.R)}, domain.nx, domain.ny, N)
 
 function _make_cplx_branch_array(domain, ::RealFFTBackend, N)
     T = eltype(domain.R)
     nx2 = domain.nx ÷ 2 + 1
-    return domain.arraykernel(zeros(Complex{T}, nx2, domain.ny, N))
+    return kernelzeros(domain.backend, Complex{T}, nx2, domain.ny, N)
 end

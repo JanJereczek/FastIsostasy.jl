@@ -1,13 +1,40 @@
+# Extension name per GPU vendor. Each such extension defines a local `deviceinfo()`
+# (looked up below via `Base.get_extension`) and nothing else vendor-specific —
+# array allocation goes through KernelAbstractions and the FFT planner picks its
+# flags off the backend, so a new vendor needs no code beyond this pair.
+const GPU_EXTENSIONS = (
+    :FastIsostasyCUDAExt => "CUDA.jl",
+    :FastIsostasyAMDGPUExt => "AMDGPU.jl",
+)
+
+"""
+    deviceinfo()
+
+Print version information for whichever GPU package is currently loaded. Requires
+one of `using CUDA` / `using AMDGPU`; errors if none is loaded.
+"""
+function deviceinfo()
+    for (name, pkg) in GPU_EXTENSIONS
+        ext = Base.get_extension(@__MODULE__, name)
+        ext === nothing || return ext.deviceinfo()
+    end
+    error(
+        "No GPU package loaded. Add one of " *
+        join(("`using $(pkg)`" for (_, pkg) in GPU_EXTENSIONS), ", ") *
+        " before calling `deviceinfo()`.",
+    )
+end
+
 """
     cudainfo()
 
-Print CUDA version information. Requires `using CUDA` (which loads
-`FastIsostasyCUDAExt`); errors otherwise.
+!!! warning "Deprecated"
+    Use [`deviceinfo`](@ref), which reports whichever GPU backend is loaded rather
+    than assuming CUDA.
 """
 function cudainfo()
-    ext = Base.get_extension(@__MODULE__, :FastIsostasyCUDAExt)
-    ext === nothing && error("CUDA not loaded. Add `using CUDA` before calling this.")
-    return ext.cudainfo()
+    Base.depwarn("`cudainfo()` is deprecated, use `deviceinfo()`.", :cudainfo)
+    return deviceinfo()
 end
 
 #####################################################
@@ -222,29 +249,70 @@ end
 # Kernel utils
 #####################################################
 
-kernelzeros(domain) = domain.arraykernel(zeros(domain))
+"""
+$(TYPEDSIGNATURES)
 
-function kernelcollect(X, domain)
-    if not(domain.use_cuda)
-        return collect(X)
-    else
-        return X
-    end
-end
+Allocate a zeroed array on a backend. With a `domain` it returns an `nx × ny`
+array of the domain's element type on the domain's backend; the explicit form
+takes any element type and shape.
+"""
+kernelzeros(domain::RegionalDomain) =
+    kernelzeros(domain.backend, eltype(domain), domain.nx, domain.ny)
+kernelzeros(backend::Backend, T, dims::Integer...) =
+    KernelAbstractions.zeros(backend, T, dims...)
 
 """
 $(TYPEDSIGNATURES)
 
-Promote X to the kernel (`Array` or `CuArray`) specified by `arraykernel`.
+True when `domain`'s arrays live in host memory.
 """
-function kernelpromote(X, arraykernel)
-    if isa(X, arraykernel)
-        return X
-    else
-        return arraykernel(X)
-    end
+on_host(domain::RegionalDomain) = domain.backend isa CPU
+
+# NOTE: `kernelcollect` and the `on_host` branch in `init_problem!` are not really
+# about hardware — they exist because a CPU mask comparison yields a `BitArray`,
+# which the state structs want materialised as a dense `Array{Bool}`, while a
+# device array is already dense and must not be pulled back to the host. Forcing
+# dense Bool at the point the masks are *built* would remove both. Left as-is here
+# to keep this refactor behaviour-preserving.
+kernelcollect(X, domain) = on_host(domain) ? collect(X) : X
+
+"""
+$(TYPEDSIGNATURES)
+
+Move `X` onto `backend`, leaving it untouched if it is already there.
+
+Allocation goes through `KernelAbstractions.allocate`, so this works for every
+KA backend without FastIsostasy ever naming a vendor array type.
+"""
+function kernelpromote(X::AbstractArray, backend::Backend)
+    _lives_on(X, backend) && return X
+    src = _dense_host(X)
+    Y = KernelAbstractions.allocate(backend, eltype(src), size(src)...)
+    copyto!(Y, src)
+    return Y
 end
-kernelpromote(X::Vector, arraykernel) = [arraykernel(x) for x in X]
+
+# A `BitArray` — which is what every mask comparison returns on the host — packs 64
+# booleans per word, and no GPU backend can `copyto!` from that layout. Materialise
+# it as a dense `Array{Bool}` first. (The old code got this for free because
+# `CuArray(::BitArray)` has a converting constructor; `copyto!` does not.)
+_dense_host(X::AbstractArray) = X
+_dense_host(X::BitArray) = Array(X)
+kernelpromote(X::Vector{<:AbstractArray}, backend::Backend) =
+    [kernelpromote(x, backend) for x in X]
+
+# Only a dense `Array` counts as "already on the CPU": a `BitArray` (what a mask
+# comparison returns) is deliberately re-materialised as `Array{Bool}`, which is
+# what the pre-backend `isa(X, Array)` test did too.
+#
+# `KernelAbstractions.get_backend` *throws* for host array types it does not know —
+# `BitArray` among them — so both host cases are settled before asking it. `backend`
+# is a singleton and `X`'s type is known at the call site, so all of this folds away.
+function _lives_on(X::AbstractArray, backend::Backend)
+    X isa Array && return backend isa CPU
+    X isa BitArray && return false
+    return get_backend(X) === backend
+end
 
 
 # function remake!(sim::Simulation)

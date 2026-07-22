@@ -325,7 +325,7 @@ function SolidEarth(
     if tau isa Real
         tau = fill(tau, domain)
     end
-    tau = kernelpromote(tau, domain.arraykernel)
+    tau = kernelpromote(tau, domain.backend)
 
     if layer_boundaries isa Vector
         layer_boundaries = matrify(layer_boundaries, domain.nx, domain.ny)
@@ -363,7 +363,7 @@ function SolidEarth(
             pseudodiff_scaling,
             maskactive,
         ],
-        domain.arraykernel,
+        domain.backend,
     )
 
     scaled_pseudodiff_inv = 1 ./ (pseudodiff_scaling .* domain.pseudodiff)

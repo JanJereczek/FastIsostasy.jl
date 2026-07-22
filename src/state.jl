@@ -100,7 +100,7 @@ end
 # — snapshot/restore, GPU transfer and AD all then treat it like any other field.
 function CurrentState(domain::RegionalDomain, ref::ReferenceState, z_bsl, nbranch::Int = 0)
     T = eltype(domain.x)
-    u_K = domain.arraykernel(zeros(T, domain.nx, domain.ny, nbranch))
+    u_K = kernelzeros(domain.backend, T, domain.nx, domain.ny, nbranch)
     return CurrentState(
         copy(ref.u),                # u
         u_K,                        # u_K

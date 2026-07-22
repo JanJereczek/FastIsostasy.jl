@@ -31,7 +31,7 @@ struct TimeInterpolatedIceThickness{T,M,I<:TimeInterpolation2D} <: AbstractIceTh
 end
 
 function TimeInterpolatedIceThickness(t_vec, H_vec, domain::RegionalDomain)
-    H_vec = kernelpromote(H_vec, domain.arraykernel)
+    H_vec = kernelpromote(H_vec, domain.backend)
     itp = TimeInterpolation2D(t_vec, H_vec)
     return TimeInterpolatedIceThickness(t_vec, H_vec, itp)
 end
@@ -231,28 +231,28 @@ Precompute the boundary condition for the given computation domain.
 """
 function precompute_bc(bc::CornerBC, sp::RegularBCSpace, domain::RegionalDomain)
     T = eltype(domain.R)
-    W = domain.arraykernel(corner_ones(T, domain.nx, domain.ny))
+    W = kernelpromote(corner_ones(T, domain.nx, domain.ny), domain.backend)
     norm!(W)
     return OffsetBC(bc.space, bc.x_border, W)
 end
 
 function precompute_bc(bc::CornerBC, sp::ExtendedBCSpace, domain::RegionalDomain)
     T = eltype(domain.R)
-    W = domain.arraykernel(corner_ones(T, 2*domain.nx-1, 2*domain.ny-1))
+    W = kernelpromote(corner_ones(T, 2*domain.nx-1, 2*domain.ny-1), domain.backend)
     norm!(W)
     return OffsetBC(bc.space, bc.x_border, W)
 end
 
 function precompute_bc(bc::BorderBC, sp::RegularBCSpace, domain::RegionalDomain)
     T = eltype(domain.R)
-    W = domain.arraykernel(border_ones(T, domain.nx, domain.ny))
+    W = kernelpromote(border_ones(T, domain.nx, domain.ny), domain.backend)
     norm!(W)
     return OffsetBC(bc.space, bc.x_border, W)
 end
 
 function precompute_bc(bc::BorderBC, sp::ExtendedBCSpace, domain::RegionalDomain)
     T = eltype(domain.R)
-    W = domain.arraykernel(border_ones(T, 2*domain.nx-1, 2*domain.ny-1))
+    W = kernelpromote(border_ones(T, 2*domain.nx-1, 2*domain.ny-1), domain.backend)
     norm!(W)
     return OffsetBC(bc.space, bc.x_border, W)
 end
@@ -263,7 +263,7 @@ function precompute_bc(
     domain::RegionalDomain,
 )
     T = eltype(domain.R)
-    W = domain.arraykernel(border_ones(T, domain.nx, domain.ny) .* domain.R)
+    W = kernelpromote(border_ones(T, domain.nx, domain.ny) .* domain.R, domain.backend)
     norm!(W)
     return OffsetBC(bc.space, bc.x_border, W)
 end
@@ -278,14 +278,14 @@ end
 
 function precompute_bc(bc::MeanBC, sp::RegularBCSpace, domain::RegionalDomain)
     T = eltype(domain.R)
-    W = domain.arraykernel(ones(T, domain.nx, domain.ny))
+    W = kernelpromote(ones(T, domain.nx, domain.ny), domain.backend)
     norm!(W)
     return OffsetBC(bc.space, bc.x_border, W)
 end
 
 function precompute_bc(bc::MeanBC, sp::ExtendedBCSpace, domain::RegionalDomain)
     T = eltype(domain.R)
-    W = domain.arraykernel(ones(T, 2*domain.nx-1, 2*domain.ny-1))
+    W = kernelpromote(ones(T, 2*domain.nx-1, 2*domain.ny-1), domain.backend)
     norm!(W)
     return OffsetBC(bc.space, bc.x_border, W)
 end

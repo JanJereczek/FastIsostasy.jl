@@ -243,10 +243,10 @@ function samesize_conv!(
 end
 
 function samesize_conv(kernel, input, domain::RegionalDomain; pad_val = 0)
-    (; i1, i2, j1, j2, convo_offset, arraykernel) = domain
+    (; i1, i2, j1, j2, convo_offset, backend) = domain
     h = ConvolutionPlanHelpers(kernel; pad_val = pad_val)
     p = ConvolutionPlan(kernel, h)
-    return samesize_conv(input, p, h, i1, i2, j1, j2, convo_offset, arraykernel)
+    return samesize_conv(input, p, h, i1, i2, j1, j2, convo_offset, backend)
 end
 function samesize_conv(
     input,
@@ -257,14 +257,15 @@ function samesize_conv(
     j1,
     j2,
     convo_offset,
-    arraykernel,
+    backend,
 )
     conv!(input, p, h)
-    return arraykernel(
+    return kernelpromote(
         h.output_cropped[
             (i1+convo_offset):(i2+convo_offset),
             (j1-convo_offset):(j2-convo_offset),
         ],
+        backend,
     )
 end
 

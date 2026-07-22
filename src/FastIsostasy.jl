@@ -11,7 +11,8 @@ using LinearAlgebra: Diagonal, det, diagm, norm, mul!, dot
 using NetCDF
 using ProgressMeter: Progress, update!, finish!
 
-using KernelAbstractions: @kernel, @index, get_backend, synchronize
+using KernelAbstractions:
+    KernelAbstractions, @kernel, @index, get_backend, synchronize, Backend, CPU
 using Statistics: mean, cov, std
 using SpecialFunctions: besselj0, besselj1, besselk
 
@@ -120,7 +121,10 @@ export meshgrid, kernelcollect
 
 export get_quad_coeffs, get_r, gauss_distr, generate_gaussian_field
 export uniform_ice_cylinder, stereo_ice_cylinder, stereo_ice_cap
-export zeros, not, cudainfo, kernelpromote, kernelzeros
+export zeros, not, deviceinfo, cudainfo, kernelpromote, kernelzeros, on_host
+# Re-exported so `backend = CPU()` works without `using KernelAbstractions`.
+# Vendor backends (`CUDABackend`, `ROCBackend`, …) come from their own packages.
+export CPU
 
 # derivatives.jl
 export update_second_derivatives!   #, dxx!, dyy!
