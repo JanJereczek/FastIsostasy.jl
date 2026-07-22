@@ -29,10 +29,12 @@ using Printf
 #=
 ## Fixed configuration and the known ice load
 
-Same 32×32 grid and 10 kyr glacial cycle as before. The ice load is a single
-broad Vialov dome (2000 km radius) whose thickness follows the glacial-cycle
-sawtooth — broad enough that all four viscosity anomalies sit under load and are
-therefore sensed by the deformation.
+Same 32×32 grid and 10 kyr glacial cycle as before — again a deliberately cheap
+stand-in for a ~100 kyr cycle, scalable by a factor of ten at ten times the cost
+(see the note in [Inverse ice history - Step by step](@ref)). The ice load is a
+single broad Vialov dome (2000 km radius) whose thickness follows the
+glacial-cycle sawtooth — broad enough that all four viscosity anomalies sit under
+load and are therefore sensed by the deformation.
 =#
 
 W, n = 3.0e6, 5
@@ -144,6 +146,7 @@ result = solve!(prob, θ0; optimizer = LBFGS(), iterations = 100, store_trace = 
 θ_hat = Optim.minimizer(result)
 @printf("loss(θ̂)  = %.3e\n", loss(prob, θ_hat))
 
+#-
 fig = Figure(size = (500, 350))
 ax = Axis(fig[1, 1], xlabel = "L-BFGS iteration", ylabel = "loss", yscale = log10,
     title = "Convergence")
@@ -174,6 +177,7 @@ logη_hat = log10.(copy(sim.solidearth.effective_viscosity))
 @printf("viscosity field: max|Δlog10η| = %.4f decades\n",
     maximum(abs.(logη_hat .- logη_true)))
 
+#-
 x = domain.x ./ 1e3
 fig = Figure(size = (900, 320))
 for (j, (Z, ttl, cmap, crange)) in enumerate((
@@ -197,4 +201,68 @@ multi-time observation is rich enough (3380 constraints on 19 parameters) to bre
 that degeneracy — the densities come back to better than 1 kg/m³. With realistic,
 sparse observations one should expect wider posterior uncertainty on the densities
 and may prefer to fix them, or add a prior, rather than invert them freely.
+=#
+
+#=
+## Copy-pastable code
+
+```julia
+using FastIsostasy, CairoMakie, Optim, Printf
+import Enzyme                        # loading Enzyme activates the AD extension
+using Random: seed!
+
+W, n = 3.0e6, 5
+domain = RegionalDomain(W, n)
+# 10 kyr toy cycle: scale knot_times, t_span and obs_times by 10 for a
+# realistic ~100 kyr one (10x the forward and, if used, adjoint cost)
+knot_times = [0.0, 5.0e3, 8.0e3, 9.0e3, 1.0e4]
+t_span = (0.0, 1.0e4)
+
+# known ice load: one broad Vialov dome following the cycle
+function vialov_dome(dom, xc, yc, L, Hc)
+    r = @. sqrt((dom.X - xc)^2 + (dom.Y - yc)^2)
+    return @. Hc * max(1 - (r / L)^(4 // 3), 0)^(3 // 8)
+end
+H_dome = vialov_dome(domain, 0.0, 0.0, 2.0e6, 2.5e3)
+H_snapshots = [s .* H_dome for s in [0.0, 0.4, 1.0, 0.5, 0.0]]
+
+# 19 unknowns: 4 Gaussian viscosity anomalies + background + 2 densities
+scales = vcat(1.0, repeat([1.0e6, 1.0e6, 1.0e6, 1.0], 4), 1.0e3, 1.0e3)
+enc = Test2Encoding(scale = scales)
+theta_true = [21.0,
+    -1.0e6, -1.0e6, 8.0e5,  0.5,
+     1.0e6,  1.0e6, 8.0e5, -0.5,
+    -1.0e6,  1.0e6, 7.0e5,  0.3,
+     1.0e6, -1.0e6, 7.0e5, -0.3,
+    3400.0, 3200.0] ./ scales
+
+it = TimeInterpolatedIceThickness(knot_times, H_snapshots, domain)
+bcs = BoundaryConditions(domain, ice_thickness = it)
+se = SolidEarth(domain; lithosphere = LaterallyVariableLithosphere(),
+    layer_boundaries = [88.0e3], layer_viscosities = [1.0e21])
+opts = SolverOptions(; show_progress = false, transition = SmoothTransition(10.0),
+    integ = EulerIntegrator(dt = 500.0))
+nout = NativeOutput(t = Float64[], vars = Symbol[], T = Float64)
+sim = Simulation(domain, bcs, RegionalSeaLevel(), se, t_span;
+    opts = opts, nout = nout)
+
+pts = [CartesianIndex(i, j) for i in 4:29 for j in 4:29]
+obs_times = [2.0e3, 4.0e3, 6.0e3, 8.0e3, 1.0e4]
+obs0 = Observation(VerticalUpliftObservable(), pts, obs_times,
+    zeros(length(pts) * length(obs_times)); σ = 0.5)
+prob_gt = ParameterInversion(sim, enc, [obs0])
+reconstruct!(sim, theta_true, enc)
+preds = FastIsostasy.allocate_predictions(prob_gt)
+FastIsostasy.forward_predict!(preds, prob_gt)
+
+obs = Observation(VerticalUpliftObservable(), pts, obs_times, copy(preds[1]); σ = 0.5)
+prob = ParameterInversion(sim, enc, [obs])
+
+seed!(3)
+theta0 = theta_true .+ 0.1 .* randn(19)
+result = solve!(prob, theta0; optimizer = LBFGS(), iterations = 100,
+    store_trace = true)
+theta_hat = Optim.minimizer(result)
+@printf("loss: %.3e -> %.3e\n", loss(prob, theta0), loss(prob, theta_hat))
+```
 =#

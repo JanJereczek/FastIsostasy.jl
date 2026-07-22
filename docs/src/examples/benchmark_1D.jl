@@ -109,3 +109,39 @@ Finally, we can check the computation times:
 
 println("Computation time (s): $(sim1.timer.t_computation[end])")
 println("Computation time (s): $(sim2.timer.t_computation[end])")
+
+#=
+## Copy-pastable code
+
+```julia
+using FastIsostasy, CairoMakie
+
+W, n, T = 3f6, 7, Float32
+domain = RegionalDomain(W, n)
+c = PhysicalConstants{T}(rho_ice = 0.931e3)
+
+H_ice_1 = stereo_ice_cap(domain, T(10), T(1500))   # 10 deg colatitude, 1500 m thick
+it = TimeInterpolatedIceThickness([0, 1f-6, 100f3],
+    [zeros(domain), H_ice_1, H_ice_1], domain)
+bcs = BoundaryConditions(domain, ice_thickness = it)
+
+# gravitational response on => laterally variable sea surface
+sealevel = RegionalSeaLevel(surface = LaterallyVariableSeaSurface())
+
+nu = 0.28f0
+solidearth = SolidEarth(domain,
+    layer_boundaries = T.(c.r_equator .- [6301f3, 5951f3, 5701f3]),
+    layer_viscosities = [1f21, 1f21, 2f21],
+    litho_youngmodulus = 50.605f9 * 2 * (1 + nu),
+    litho_poissonratio = nu,
+    rho_litho = 3100f0,
+    rho_uppermantle = 3500f0)
+
+nout = NativeOutput(vars = [:u, :ue, :dz_ss],
+    t = [0, 10, 1_000, 2_000, 5_000, 10_000, 100_000f0])
+sim = Simulation(domain, bcs, sealevel, solidearth, (0, 100f3); nout = nout)
+run!(sim)
+
+plot_transect(sim, [:ue, :u, :dz_ss])
+```
+=#

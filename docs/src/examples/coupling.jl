@@ -43,3 +43,31 @@ fig, ax, _ = lines(Δt:Δt:50f3, max_H_ice)
 ax.xlabel = "Time (yr)"
 ax.ylabel = "Max ice thickness (m)"
 fig
+
+#=
+## Copy-pastable code
+
+```julia
+using FastIsostasy, CairoMakie
+
+W, n = 3f6, 7
+domain = RegionalDomain(W, n)
+bcs = BoundaryConditions(domain)          # no ice_thickness: set inside the loop
+solidearth = SolidEarth(domain)
+nout = NativeOutput(vars = [:u], t = [100, 500, 1500, 5000, 10_000, 50_000f0])
+sim = Simulation(domain, bcs, RegionalSeaLevel(), solidearth, (0, 50f3); nout = nout)
+
+integrator = init_integrator(sim)
+tt, dt_couple, tau = 0f0, 10f0, 5f3
+H_ice_1 = 1f3 .* (domain.R .< 1f6)
+
+while tt < 50f3
+    ## replace this line with your own ice-sheet model
+    sim.now.H_ice .= H_ice_1 .* (1 - exp(-tt / tau))
+    step!(integrator, dt_couple, true)
+    global tt += dt_couple
+end
+
+plot_transect(sim, [:u])
+```
+=#

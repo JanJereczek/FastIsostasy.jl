@@ -100,3 +100,28 @@ All of the computations shown above are performed with `Float32` as floating poi
 
 Of course, this example remains simple. If you want to learn how to increase the complexity of your simulations, go to the next examples!
 =#
+
+#=
+## Copy-pastable code
+
+```julia
+using FastIsostasy, CairoMakie
+
+W, n = 3f6, 7                                # 6000 km box, 128 x 128
+domain = RegionalDomain(W, n)
+
+H_ice_1 = 1f3 .* (domain.R .< 1f6)           # 1 km thick, 1000 km radius cylinder
+it = TimeInterpolatedIceThickness([0, 1, 50f3],
+    [zeros(domain), H_ice_1, H_ice_1], domain)
+bcs = BoundaryConditions(domain, ice_thickness = it)
+
+solidearth = SolidEarth(domain, rho_litho = 0f0,
+    layer_boundaries = [88f3], layer_viscosities = [1f21])
+nout = NativeOutput(vars = [:u], t = [100, 500, 1500, 5000, 10_000, 50_000f0])
+
+sim = Simulation(domain, bcs, RegionalSeaLevel(), solidearth, (0, 50f3); nout = nout)
+run!(sim)
+
+plot_transect(sim, [:u], analytic_cylinder_solution = true)
+```
+=#

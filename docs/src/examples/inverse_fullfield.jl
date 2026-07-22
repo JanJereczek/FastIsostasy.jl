@@ -47,6 +47,15 @@ cycle, and a single broad Vialov dome (2000 km radius) following the glacial-cyc
 sawtooth. The dome is deliberately broad so that the whole region of interest sits
 under load and is therefore *sensed* by the deformation — viscosity is only
 recoverable where the ice actually stresses the mantle.
+
+As in the previous two examples, the 10 kyr cycle is a compressed stand-in for a
+realistic ~100 kyr one (see the note in
+[Inverse ice history - Step by step](@ref)). It matters most here: at a fixed
+500 yr step the full-length cycle would make each forward *and* each reverse
+sweep ten times longer, and this example runs 150 L-BFGS iterations plus a
+four-value `λ` sweep on top. The adjoint's headline property — cost independent
+of the number of unknowns — is unaffected by the cycle length, which is the point
+being demonstrated.
 =#
 
 W, n = 3.0e6, 5
@@ -215,6 +224,7 @@ t_opt = @elapsed result = solve!(prob, θ0;
     length(Optim.f_trace(result)), length(θ0), t_opt,
     t_opt / length(Optim.f_trace(result)))
 
+#-
 fig = Figure(size = (500, 350))
 ax = Axis(fig[1, 1], xlabel = "L-BFGS iteration", ylabel = "loss", yscale = log10,
     title = "Convergence (1024 unknowns, adjoint gradients)")
@@ -234,6 +244,7 @@ rms(a, b) = sqrt(sum(abs2, a .- b) / length(a))
 @printf("rms |Δlog10η| = %.4f decades\n", rms(θ_hat, θ_true))
 @printf("max |Δlog10η| = %.4f decades\n", maximum(abs.(θ_hat .- θ_true)))
 
+#-
 x = domain.x ./ 1e3
 fig = Figure(size = (900, 320))
 for (j, (Z, ttl, cmap, crange)) in enumerate((
@@ -289,4 +300,70 @@ prior strength this way is simply not affordable with forward-mode gradients.
   sparse and noisy uplift records, expect a much smoother recovered field and use
   the `λ` sweep above as a template for choosing the prior strength (e.g. by an
   L-curve or cross-validation).
+=#
+
+#=
+## Copy-pastable code
+
+```julia
+using FastIsostasy, CairoMakie, Optim, Printf
+using Enzyme, Checkpointing          # both are needed for the adjoint engine
+
+W, n = 3.0e6, 5
+domain = RegionalDomain(W, n)
+# 10 kyr toy cycle: scale knot_times, t_span and obs_times by 10 for a
+# realistic ~100 kyr one (10x the forward and, if used, adjoint cost)
+knot_times = [0.0, 5.0e3, 8.0e3, 9.0e3, 1.0e4]
+t_span = (0.0, 1.0e4)
+
+function vialov_dome(dom, xc, yc, L, Hc)
+    r = @. sqrt((dom.X - xc)^2 + (dom.Y - yc)^2)
+    return @. Hc * max(1 - (r / L)^(4 // 3), 0)^(3 // 8)
+end
+H_dome = vialov_dome(domain, 0.0, 0.0, 2.0e6, 2.5e3)
+H_snapshots = [s .* H_dome for s in [0.0, 0.4, 1.0, 0.5, 0.0]]
+
+it = TimeInterpolatedIceThickness(knot_times, H_snapshots, domain)
+bcs = BoundaryConditions(domain, ice_thickness = it)
+se = SolidEarth(domain; lithosphere = LaterallyVariableLithosphere(),
+    layer_boundaries = [88.0e3], layer_viscosities = [1.0e21])
+opts = SolverOptions(; show_progress = false, transition = SmoothTransition(10.0),
+    integ = EulerIntegrator(dt = 500.0))
+nout = NativeOutput(t = Float64[], vars = Symbol[], T = Float64)
+sim = Simulation(domain, bcs, RegionalSeaLevel(), se, t_span;
+    opts = opts, nout = nout)
+
+# no encoding: theta IS the flattened log10 viscosity field (1024 unknowns)
+bump(X, Y, mx, my, s, a) = @. a * exp(-((X - mx)^2 + (Y - my)^2) / (2s^2))
+X, Y = domain.X, domain.Y
+logeta_true = fill(21.0, size(X))
+logeta_true .+= bump(X, Y, -1.0e6, -1.0e6, 8.0e5,  0.5)
+logeta_true .+= bump(X, Y,  1.0e6,  1.0e6, 8.0e5, -0.5)
+logeta_true .+= bump(X, Y, -1.0e6,  1.0e6, 7.0e5,  0.3)
+logeta_true .+= bump(X, Y,  1.0e6, -1.0e6, 7.0e5, -0.3)
+theta_true = vec(copy(logeta_true))
+
+pts = [CartesianIndex(i, j) for i in 4:29 for j in 4:29]
+obs_times = [2.0e3, 4.0e3, 6.0e3, 8.0e3, 1.0e4]
+obs0 = Observation(VerticalUpliftObservable(), pts, obs_times,
+    zeros(length(pts) * length(obs_times)); σ = 0.5)
+prob_gt = ParameterInversion(sim, nothing, [obs0]; diffmode = AdjointMode())
+reconstruct!(sim, theta_true, nothing)
+preds = FastIsostasy.allocate_predictions(prob_gt)
+FastIsostasy.forward_predict!(preds, prob_gt)
+
+obs = Observation(VerticalUpliftObservable(), pts, obs_times, copy(preds[1]); σ = 0.5)
+
+# an ill-posed full-field problem needs a smoothness prior
+reg = TikhonovReg(FieldTarget(Log10Viscosity()), Order1(); λ = 1.0e11)
+prob = ParameterInversion(sim, nothing, [obs];
+    regularizations = (reg,), diffmode = AdjointMode())
+
+# start from a flat field; the first gradient pays Enzyme's ~10 min compilation
+theta0 = fill(21.0, length(theta_true))
+result = solve!(prob, theta0; optimizer = LBFGS(), iterations = 150,
+    store_trace = true)
+theta_hat = Optim.minimizer(result)
+@printf("loss: %.3e -> %.3e\n", loss(prob, theta0), loss(prob, theta_hat))
+```
 =#

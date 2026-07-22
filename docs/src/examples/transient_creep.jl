@@ -166,3 +166,42 @@ println("peak steady subsidence = ", maximum(abs, w_steady), " m")
     spectrum) and the real-FFT backend all raise an informative error. See
     `roadmaps/burgers.md`.
 =#
+
+#=
+## Copy-pastable code
+
+```julia
+using FastIsostasy, CairoMakie
+
+c = PhysicalConstants()
+W, n = 8.0e6, 7                                  # 16 000 km box, 128 x 128
+domain = RegionalDomain(W, n)
+
+H_disc = (25.0 * c.rho_water / c.rho_ice) .* (domain.R .< 1.75e6)
+it = TimeInterpolatedIceThickness([0.0, 1e-3, 1e3],
+    [zeros(domain), H_disc, H_disc], domain)
+bcs = BoundaryConditions(domain, ice_thickness = it)
+t_out = collect(0.0:1.0:50.0)
+
+# swap `mantle` for ViscousMantle() to get the steady-creep reference
+se = SolidEarth(domain;
+    lithosphere = LaterallyConstantLithosphere(),
+    mantle = TransientCreepMantle(shearmodulus = 67e9,
+        relaxation_strength = 1.2, kelvin_time = 7.14),
+    layer_boundaries = [1.0e3],                  # ~no plate: D grows as thickness^3
+    layer_viscosities = [7.86e19],
+    rho_uppermantle = 3380.0)
+
+# the semi-implicit path needs a fixed step resolving the retardation time
+opts = SolverOptions(show_progress = false, integ = EulerIntegrator(dt = 0.25))
+nout = NativeOutput(vars = [:u], t = t_out, T = Float64)
+sim = Simulation(domain, bcs, RegionalSeaLevel(), se, (0.0, 50.0);
+    nout = nout, opts = opts)
+run!(sim)
+
+i, j = domain.nx ÷ 2, domain.ny ÷ 2
+w = [snapshot[i, j] for snapshot in sim.nout.vals[:u]]
+lines(t_out, w .- w[1],
+    axis = (xlabel = "time (yr)", ylabel = "relative subsidence (m)"))
+```
+=#

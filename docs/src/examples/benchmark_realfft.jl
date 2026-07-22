@@ -102,3 +102,38 @@ Speed-up: 1.1×
 
 Hinting towards the fact that the bulk of the computation is not spent in the spectral step.
 =#
+
+#=
+## Copy-pastable code
+
+```julia
+using FastIsostasy
+
+W, n = 3f6, 8
+domain = RegionalDomain(W, n)
+H_ice_1 = 1f3 .* (domain.R .< 1f6)
+it = TimeInterpolatedIceThickness([0, 1, 50f3],
+    [zeros(domain), H_ice_1, H_ice_1], domain)
+bcs = BoundaryConditions(domain, ice_thickness = it)
+nout = NativeOutput(vars = [:u], t = [100, 500, 1500, 5000, 10_000, 50_000f0])
+solidearth = SolidEarth(domain,
+    mantle = ViscousMantle(), lithosphere = LaterallyVariableLithosphere(),
+    layer_boundaries = [88f3], layer_viscosities = [1f21])
+
+# the *only* difference between the two runs is the `fft` field
+function run_backend(backend)
+    opts = SolverOptions(integ = RKCIntegrator(), fft = backend,
+        show_progress = false)
+    sim = Simulation(domain, bcs, RegionalSeaLevel(), solidearth, (0, 50f3);
+        nout = nout, opts = opts)
+    run!(sim)
+    return sim
+end
+
+sim_complex = run_backend(ComplexFFTBackend())
+sim_real    = run_backend(RealFFTBackend())
+
+maximum(maximum(abs, uc .- ur)
+    for (uc, ur) in zip(sim_complex.nout.vals[:u], sim_real.nout.vals[:u]))
+```
+=#

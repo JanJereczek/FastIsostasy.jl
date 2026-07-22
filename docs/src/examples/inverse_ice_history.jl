@@ -40,6 +40,22 @@ using Printf
 We work on a 32×32 regional grid over a 6000 km × 6000 km domain and a 10 kyr
 glacial cycle. The ice history is defined by five time knots, placed
 asymmetrically so the rapid deglaciation at the end of the cycle is resolved.
+
+!!! note "A 10 kyr toy stand-in for a 100 kyr cycle"
+    A real glacial cycle lasts on the order of **100 kyr**, and that is what this
+    setup is meant to represent — read the knot times as a cycle compressed by a
+    factor of ten, not as a physically distinct scenario. Nothing in the model
+    forces the shortcut: multiply `knot_times`, `t_span` and `obs_times` by ten
+    and it runs unchanged.
+
+    The reason to keep it short is purely the docs build. The step size is fixed
+    at 500 yr for AD, so a 100 kyr cycle costs 200 steps per forward run instead
+    of 20 — and every L-BFGS iteration pays that tenfold, on top of one gradient
+    each. The inverse problem is structurally identical either way; what changes
+    is how much viscous relaxation the synthetic data actually contain, and hence
+    how strongly they constrain the mantle. **A production inversion should use
+    the full 100 kyr**; treat the numbers recovered below as a demonstration of
+    the machinery rather than as an accuracy claim.
 =#
 
 W, n = 3.0e6, 5
@@ -229,6 +245,7 @@ logη_hat = log10.(copy(sim.solidearth.effective_viscosity))
 @printf("log10 viscosity:  max|Δ|  = %.4f decades\n",
     maximum(abs.(logη_hat .- logη_true)))
 
+#-
 x = domain.x ./ 1e3
 fig = Figure(size = (900, 320))
 for (j, (Z, ttl, cmap)) in enumerate((
@@ -249,7 +266,65 @@ data only weakly constrains the exact *location* of the viscosity anomalies. Thi
 is the expected behaviour of GIA inversions: the solid Earth acts as a spatial
 low-pass filter on the load, so integrated quantities (the loading history, the
 smoothed fields) are well determined while fine placement is not.
+=#
 
-# Inverse ice history - The short version
+#=
+## Copy-pastable code
 
+```julia
+using FastIsostasy, CairoMakie, Optim, Printf
+import Enzyme                        # loading Enzyme activates the AD extension
+using Random: seed!, randperm
+
+W, n = 3.0e6, 5
+domain = RegionalDomain(W, n)
+# 10 kyr toy cycle: scale knot_times, t_span and obs_times by 10 for a
+# realistic ~100 kyr one (10x the forward and, if used, adjoint cost)
+knot_times = [0.0, 5.0e3, 8.0e3, 9.0e3, 1.0e4]
+nt, t_span = length(knot_times), (0.0, 1.0e4)
+
+# encoding: 3 Vialov domes + a viscosity field, all scaled to O(1)
+scales = vcat(fill(2.0e3, 3nt), fill(1.0e6, 6), 1.0, fill(1.0e6, 6))
+enc = Test1Encoding(knot_times, (0.8e6, 0.7e6, 0.7e6), (-1.0, 1.0); scale = scales)
+
+sawtooth(peak) = [0.0, 0.4, 1.0, 0.5, 0.0] .* peak
+theta_true = vcat(sawtooth(2.5e3), sawtooth(2.0e3), sawtooth(1.8e3),
+    [-1.3e6, -1.3e6, 1.3e6, 1.3e6, 1.3e6, -1.3e6],
+    [21.0, -1.0e6, -1.0e6, 8.0e5, 1.0e6, 1.0e6, 8.0e5]) ./ scales
+
+# forward template: fixed step + smooth masks are both required for AD
+it = TimeInterpolatedIceThickness(knot_times,
+    [zeros(domain) for _ in knot_times], domain)
+bcs = BoundaryConditions(domain, ice_thickness = it)
+se = SolidEarth(domain; lithosphere = LaterallyVariableLithosphere(),
+    layer_boundaries = [88.0e3], layer_viscosities = [1.0e21])
+opts = SolverOptions(; show_progress = false, transition = SmoothTransition(10.0),
+    integ = EulerIntegrator(dt = 500.0))
+nout = NativeOutput(t = Float64[], vars = Symbol[], T = Float64)
+sim = Simulation(domain, bcs, RegionalSeaLevel(), se, t_span;
+    opts = opts, nout = nout)
+
+# synthesise "measurements" by running the forward model at the truth
+seed!(1234)
+allidx = vec([CartesianIndex(i, j) for i in 4:29, j in 4:29])
+pts = allidx[randperm(length(allidx))[1:24]]
+obs_times = collect(1.0e3:1.0e3:1.0e4)
+obs0 = Observation(VerticalUpliftObservable(), pts, obs_times,
+    zeros(length(pts) * length(obs_times)); σ = 0.5)
+prob_gt = IceLoadInversion(sim, enc, [obs0])
+reconstruct!(sim, theta_true, enc)
+preds = FastIsostasy.allocate_predictions(prob_gt)
+FastIsostasy.forward_predict!(preds, prob_gt)
+
+obs = Observation(VerticalUpliftObservable(), pts, obs_times, copy(preds[1]); σ = 0.5)
+prob = IceLoadInversion(sim, enc, [obs])
+
+# invert from a perturbed start (forward-mode AD: cost grows with nθ)
+seed!(2)
+theta0 = theta_true .+ 0.1 .* randn(length(theta_true))
+result = solve!(prob, theta0; optimizer = LBFGS(), iterations = 100,
+    store_trace = true)
+theta_hat = Optim.minimizer(result)
+@printf("loss: %.3e -> %.3e\n", loss(prob, theta0), loss(prob, theta_hat))
+```
 =#

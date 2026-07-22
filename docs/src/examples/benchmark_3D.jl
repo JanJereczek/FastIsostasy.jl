@@ -127,3 +127,35 @@ FastIsostasy performs these runs much faster than 3D GIA models (several orders 
 for sim in (sim1, sim2, sim3, sim4)
     println("Computation time (s): $(sim.timer.t_computation[end])")
 end
+
+#=
+## Copy-pastable code
+
+```julia
+using FastIsostasy, CairoMakie, LinearAlgebra
+
+W, n = 3f6, 7
+domain = RegionalDomain(W, n)
+H_ice_1 = 1f3 .* (domain.R .< 1f6)
+it = TimeInterpolatedIceThickness([0, 1f-8, 50f3],
+    [zeros(domain), H_ice_1, H_ice_1], domain)
+bcs = BoundaryConditions(domain, ice_thickness = it)
+nout = NativeOutput(vars = [:u, :ue], t = vcat(0, 1f3:1f3:4f3, 5f3, 10f3:10f3:50f3))
+
+sigma = diagm([(W/4)^2, (W/4)^2])
+
+# swap this block for any of the four cases:
+#   thickness anomaly: layer_boundaries = generate_gaussian_field(domain, 150f3, [0f0, 0], +-100f3, sigma)
+#   viscosity anomaly: layer_viscosities = reshape(10 .^ log10visc, domain.nx, domain.ny, 1)
+log10visc = generate_gaussian_field(domain, 21f0, [0f0, 0], -1f0, sigma)
+solidearth = SolidEarth(domain,
+    layer_boundaries = [150f3],
+    layer_viscosities = reshape(10 .^ log10visc, domain.nx, domain.ny, 1),
+    calibration = SeakonCalibration())
+
+sim = Simulation(domain, bcs, RegionalSeaLevel(), solidearth, (0, 50f3); nout = nout)
+run!(sim)
+
+plot_transect(sim, [:u, :ue])
+```
+=#
