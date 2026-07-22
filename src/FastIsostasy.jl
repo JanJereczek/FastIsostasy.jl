@@ -9,6 +9,7 @@ using FFTW: fft, ifft, plan_fft, plan_ifft, plan_rfft, plan_irfft, MEASURE
 import LinearAlgebra
 using LinearAlgebra: Diagonal, det, diagm, norm, mul!, dot
 using NetCDF
+using ProgressMeter: Progress, update!, finish!
 
 using KernelAbstractions: @kernel, @index, get_backend, synchronize
 using Statistics: mean, cov, std
@@ -33,6 +34,12 @@ include("tools.jl")
 include("state.jl")
 include("snapshot.jl")
 include("io.jl")
+# Before simulation.jl: `SolverOptions` bounds its integrator field by
+# `AbstractIntegrator`, which must exist when that struct is defined. Everything
+# integrators.jl needs from later files (`Simulation`, `update_diagnostics!`,
+# `spectral_radius_estimate`) is referenced from function bodies only.
+include("integrators.jl")
+include("progress.jl")
 include("simulation.jl")
 include("loads.jl")
 include("topography.jl")
@@ -45,7 +52,6 @@ include("analytic_solutions.jl")
 include("dataloaders.jl")
 include("inversion.jl")
 include("coordinates.jl")
-include("integrators.jl")
 include("stability.jl")
 
 # inverse problem API (new; src/inverse/)
@@ -95,6 +101,7 @@ export samesize_conv_indices
 
 # tools.jl
 export GIATools
+export AbstractFFTBackend, ComplexFFTBackend, RealFFTBackend
 
 # state.jl
 export CurrentState, ReferenceState
@@ -154,7 +161,7 @@ export get_rigidity, get_shearmodulus, get_elastic_green, get_flexural_lengthsca
 export SolidEarth
 export AbstractLithosphere, AbstractMantle
 export RigidLithosphere, LaterallyConstantLithosphere, LaterallyVariableLithosphere
-export RigidMantle, RelaxedMantle, MaxwellMantle, RealMaxwellMantle
+export RigidMantle, RelaxedMantle, ViscousMantle, TransientCreepMantle
 export AbstractLithosphereColumn,
     IncompressibleLithosphereColumn, CompressibleLithosphereColumn
 
@@ -174,7 +181,7 @@ export load_spada2011, spada_cases
 export load_latychev_test3, load_latychev2023_ICE6G
 
 # simulation.jl
-export DiffEqOptions, SolverOptions, Simulation, run!, init_integrator
+export SolverOptions, Simulation, run!, init_integrator
 export update_diagnostics!, step!
 
 # integrators.jl
