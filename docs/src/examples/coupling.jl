@@ -36,7 +36,7 @@ end
 fig = plot_transect(sim, [:u])
 
 #=
-This yields a similar viscous displacement field as in the first example, but with a smaller amplitude at the beginning due to the transient increase of the load until it reaches its maximum after about 10 kyr:
+This yields a similar viscous displacement field as in the first example, but with a smaller amplitude at the beginning due to the transient increase of the load until it reaches its maximum after about $$10 \, \mathrm{kyr}$$:
 =#
 
 fig, ax, _ = lines(Δt:Δt:50f3, max_H_ice)

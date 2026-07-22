@@ -1,7 +1,7 @@
 #=
 # Analytical benchmark
 
-We here present a simple example to benchmark the accuracy of the numerical scheme against an analytical solution. The setup is the same as in [bueler_fast_2007](@citet), where a cylindrical ice load with a radius of 1000 km and a thickness of 1 km is applied to a laterally homogeneous Maxwell body. First, let's generate the load and the computation domain:
+We here present a simple example to benchmark the accuracy of the numerical scheme against an analytical solution. The setup is the same as in [bueler_fast_2007](@citet), where a cylindrical ice load with a radius of $$1000 \, \mathrm{km}$$ and a thickness of $$1 \, \mathrm{km}$$ is applied to a laterally homogeneous Maxwell body. First, let's generate the load and the computation domain:
 =#
 
 using FastIsostasy, CairoMakie
@@ -63,7 +63,7 @@ ax.ylabel = "Simulation years"
 fig
 
 #=
-Yes, this is the computation time that was required to compute 50 kyr of viscous displacement with a domain of 128x128 points! Pretty fast, huh?
+Yes, this is the computation time that was required to compute $$50 \, \mathrm{kyr}$$ of viscous displacement with a domain of 128x128 points! Pretty fast, huh?
 
 ## Implicit time stepping
 
@@ -92,7 +92,7 @@ fig
 #=
 !!! warning "Implicit time stepping is very specific"
     If you are not sure whether your Earth structure is laterally constant, you should not use the implicit time stepping. The results will be wrong if the lithosphere thickness or the mantle viscosity vary in x and y.
-    Also, stability does not guarantee accuracy! In the present example, the time step of 100 years is not small enough to accurately resolve the initial phase of the viscous response. The implicit time stepping is therefore not recommended for general applications, but it can be used to speed up computations in very specific cases.
+    Also, stability does not guarantee accuracy! In the present example, the time step of $$100 \, \mathrm{yr}$$ is not small enough to accurately resolve the initial phase of the viscous response. The implicit time stepping is therefore not recommended for general applications, but it can be used to speed up computations in very specific cases.
 
 ## Floating-point precision
 

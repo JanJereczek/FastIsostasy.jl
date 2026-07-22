@@ -1,40 +1,73 @@
 #=
 # Inverse calibration
 
-The [Inverse ice history](@ref) example reconstructed an unknown *ice load* from
-surface observations, holding the solid Earth fixed. This example does the
-complementary calibration: the ice history is **known**, and we invert for the
-unknown **solid-Earth parameters** — the mantle viscosity structure and the
-densities — that best reproduce observed deformation. This is the typical setup
-when tuning a GIA model against a more expensive 3-D reference model or against
-geophysical data.
+The previous examples all ran FastIsostasy *forward*: given an ice-loading history
+and a solid-Earth structure, compute the deformation and sea-level response. This
+example goes the other way. Given **observations of the surface response** and a
+**known ice history**, we recover the unknown **solid-Earth parameters** — the
+mantle viscosity structure and the densities — that produced them. This is an
+*inverse problem*, and it is the typical setup when tuning a GIA model against a
+more expensive 3-D reference model or against geophysical data. It is also the
+gentlest entry point into inversion: the ice load is fixed and known, so only the
+Earth is being asked for.
 
-The unknowns are wrapped in a [`Test2Encoding`](@ref) (19 parameters):
+FastIsostasy solves inverse problems by automatic differentiation (AD): the entire
+forward model is differentiable, so we can compute the exact gradient of a
+data-misfit objective with respect to the unknown parameters and hand it to a
+gradient-based optimizer (here L-BFGS from Optim.jl). This is far more efficient
+than derivative-free or ensemble methods once the number of parameters grows.
+
+The unknowns are not the raw model fields but a low-dimensional, physically
+meaningful *encoding* of them. Here that is a [`Test2Encoding`](@ref), 19
+parameters in total:
 
 - a background `log10(viscosity)` plus **four Gaussian viscosity anomalies**, each
   with a centre `(μₓ, μᵧ)`, a width `σ` and an amplitude, and
 - the upper-mantle and lithosphere **densities** `ρ_uppermantle`, `ρ_litho`.
 
-We use a [`ParameterInversion`](@ref) (rather than the `IceLoadInversion` of the
-previous example) and observe the vertical uplift over the **full field** at
-several times — a rich `(x, y, t)` dataset that, as we will see, constrains even
-the viscosity/density trade-off that is often degenerate with sparser data.
+Since the ice load is known, the problem is a [`ParameterInversion`](@ref). We
+observe the vertical uplift over the **full field** at several times — a rich
+`(x, y, t)` dataset that, as we will see, constrains even the viscosity/density
+trade-off that is often degenerate with sparser data. As in the two examples that
+follow, we generate synthetic "observations" by running the forward model with a
+known ground-truth parameter vector, then check that the inversion recovers it.
 =#
 
 using FastIsostasy, CairoMakie, Optim
-import Enzyme                      # loading Enzyme activates the AD extension
+import Enzyme                      # loading Enzyme activates the AD extension;
+                                   # `import` (not `using`) avoids clashing its
+                                   # `gradient!` export with FastIsostasy's
 using Random: seed!
 using Printf
 
 #=
 ## Fixed configuration and the known ice load
 
-Same 32×32 grid and 10 kyr glacial cycle as before — again a deliberately cheap
-stand-in for a ~100 kyr cycle, scalable by a factor of ten at ten times the cost
-(see the note in [Inverse ice history - Step by step](@ref)). The ice load is a
-single broad Vialov dome (2000 km radius) whose thickness follows the
-glacial-cycle sawtooth — broad enough that all four viscosity anomalies sit under
-load and are therefore sensed by the deformation.
+We work on a 32×32 regional grid over a $$6000 \, \mathrm{km} \times 6000 \,
+\mathrm{km}$$ domain and a $$10 \, \mathrm{kyr}$$ glacial cycle, defined by five
+time knots placed asymmetrically so that the rapid deglaciation at the end of the
+cycle is resolved. The ice load is a single broad Vialov dome ($$2000 \,
+\mathrm{km}$$ radius) whose thickness follows the glacial-cycle sawtooth — broad
+enough that all four viscosity anomalies sit under load and are therefore sensed
+by the deformation.
+
+!!! note "A 10 kyr toy stand-in for a 100 kyr cycle"
+    A real glacial cycle lasts on the order of $$100 \, \mathrm{kyr}$$, and that is
+    what this setup is meant to represent — read the knot times as a cycle
+    compressed by a factor of ten, not as a physically distinct scenario. Nothing
+    in the model forces the shortcut: multiply `knot_times`, `t_span` and
+    `obs_times` by ten and it runs unchanged.
+
+    The reason to keep it short is purely the docs build. The step size is fixed
+    at $$500 \, \mathrm{yr}$$ for AD, so a $$100 \, \mathrm{kyr}$$ cycle costs 200
+    steps per forward run instead of 20 — and every L-BFGS iteration pays that
+    tenfold, on top of one gradient each. The inverse problem is structurally
+    identical either way; what changes is how much viscous relaxation the
+    synthetic data actually contain, and hence how strongly they constrain the
+    mantle. **A production inversion should use the full $$100 \, \mathrm{kyr}$$**;
+    treat the numbers recovered below as a demonstration of the machinery rather
+    than as an accuracy claim. The same applies to the two inversion examples that
+    follow, which reuse this configuration.
 =#
 
 W, n = 3.0e6, 5
@@ -56,10 +89,12 @@ fig = plot_load(domain, H_snapshots[3])   # the LGM snapshot
 #=
 ## The unknowns and their scaling
 
-The 19 parameters span decades of viscosity, millions of metres of anomaly
-position/width, and thousands of kg/m³ of density. As in the ice-history example,
-`Test2Encoding` takes a `scale` vector so the optimization variable is
-dimensionless and O(1) — the physical value of parameter `i` is `θ[i]·scale[i]`.
+The 19 parameters live on wildly different scales: `log10(viscosity)` is a number
+around 21, anomaly positions and widths are millions of metres, and densities are
+thousands of kg/m³. A gradient-based optimizer is badly conditioned unless we work
+in dimensionless variables of order one. Every encoding takes a `scale` vector for
+exactly this: the physical value of parameter `i` is `θ[i] * scale[i]`, so the
+optimization variable `θ` is O(1) while the physics sees the true magnitudes.
 =#
 
 gscale = [1.0e6, 1.0e6, 1.0e6, 1.0]                 # (μₓ, μᵧ, σ, amp) per Gaussian
@@ -78,10 +113,17 @@ enc = Test2Encoding(scale = scales)
 #=
 ## The simulation template
 
+The inversion repeatedly runs this forward model with different parameters. Two
+choices matter for AD:
+
+- the fixed-step [`EulerIntegrator`](@ref) (forward-mode AD requires a fixed time-step
+  sequence), and
+- a [`SmoothTransition`](@ref) for the grounding-line / ocean masks, so the forward
+  map is differentiable rather than piecewise-constant.
+
 The ice interpolation is built from the known snapshots, so `ParameterInversion`
 never touches it — `reconstruct!` for `Test2Encoding` only writes the viscosity
-field and the two densities. As before we use the fixed-step [`EulerIntegrator`](@ref)
-integrator and a [`SmoothTransition`](@ref) for AD.
+field and the two densities.
 =#
 
 function build_sim()
@@ -101,8 +143,10 @@ sim = build_sim()
 ## Synthetic full-field observations
 
 We observe the vertical uplift at every interior cell, at five times through the
-cycle — 676 points × 5 times = 3380 measurements constraining 19 parameters. The
-data are generated by a forward run at `θ_true`.
+cycle — 676 points × 5 times = 3380 measurements constraining 19 parameters. A
+single observable type is used per inversion (mixing types would make the
+observation container abstractly typed and break the AD compilation). The data are
+generated by running the forward model at `θ_true`.
 =#
 
 pts = [CartesianIndex(i, j) for i in 4:29 for j in 4:29]
@@ -123,8 +167,13 @@ prob = ParameterInversion(sim, enc, [obs])
 #=
 ## Gradient check and inversion
 
-We perturb the truth to an initial guess and confirm the AD gradient against
-finite differences, then minimise with L-BFGS.
+Before optimising, it is worth confirming that the AD gradient of the loss agrees
+with a finite-difference estimate — a cheap sanity check that the differentiable
+path through the model is intact. We perturb the truth to a well-informed initial
+guess `θ0` (≈ 10 % off in the dimensionless variables), compare a few components,
+and then let `solve!` minimise the loss with L-BFGS, which calls `gradient!` under
+the hood. Because we already work in dimensionless variables, the default
+optimizer is well conditioned.
 =#
 
 seed!(3)
@@ -198,9 +247,10 @@ Viscosity and density are often *correlated* unknowns: raising the mantle densit
 and stiffening the mantle can produce similar surface responses, so with sparse
 data they trade off and cannot be recovered independently. Here the full-field,
 multi-time observation is rich enough (3380 constraints on 19 parameters) to break
-that degeneracy — the densities come back to better than 1 kg/m³. With realistic,
-sparse observations one should expect wider posterior uncertainty on the densities
-and may prefer to fix them, or add a prior, rather than invert them freely.
+that degeneracy — the densities come back to better than $$1 \, \mathrm{kg/m^3}$$.
+With realistic, sparse observations one should expect wider posterior uncertainty
+on the densities and may prefer to fix them, or add a prior, rather than invert
+them freely.
 =#
 
 #=

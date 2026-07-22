@@ -88,7 +88,7 @@ run!(sim1)
 fig = plot_transect(sim1, [:ue, :u])
 
 #=
-The second case assumes the absence of lithosphere and a homogeneous mantle with a viscosity of 1e21 Pa s:
+The second case assumes the absence of lithosphere and a homogeneous mantle with a viscosity of $$\eta = 10^{21} \, \mathrm{Pa \, s}$$:
 =#
 
 solidearth = SolidEarth(

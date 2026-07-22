@@ -86,7 +86,7 @@ solidearth = SolidEarth(
 fig = plot_earth(domain, solidearth)
 
 #=
-Here we used [`SeakonCalibration`](@ref) as calibration passed to [`SolidEarth`](@ref). As described in Appendix C of [swierczek-jereczek_fastisostasy_2024](@citet), this allows to include the effect of a laterally varying shear modulus on the effective viscosity, which yields about 1f20.5 instead of the expected 1f20.
+Here we used [`SeakonCalibration`](@ref) as calibration passed to [`SolidEarth`](@ref). As described in Appendix C of [swierczek-jereczek_fastisostasy_2024](@citet), this allows to include the effect of a laterally varying shear modulus on the effective viscosity, which yields about $$\eta = 10^{20.5} \, \mathrm{Pa \, s}$$ instead of the expected $$\eta = 10^{20} \, \mathrm{Pa \, s}$$.
 =#
 
 sim3 = Simulation(domain, bcs, sealevel, solidearth, (0, 50f3); nout = nout)
@@ -111,7 +111,7 @@ solidearth = SolidEarth(
 fig = plot_earth(domain, solidearth)
 
 #=
-Due to the applied calibration, the effective viscosity yields about 1f21.5 instead of the expected 1f22. This means that the calibration tends to reduce the difference between the viscosity and the reference one, set in [`SeakonCalibration`](@ref).
+Due to the applied calibration, the effective viscosity yields about $$\eta = 10^{21.5} \, \mathrm{Pa \, s}$$ instead of the expected $$\eta = 10^{22} \, \mathrm{Pa \, s}$$. This means that the calibration tends to reduce the difference between the viscosity and the reference one, set in [`SeakonCalibration`](@ref).
 =#
 
 sim4 = Simulation(domain, bcs, sealevel, solidearth, (0, 50f3); nout = nout)

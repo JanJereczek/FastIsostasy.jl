@@ -22,8 +22,9 @@ checkpointed trajectory yields the entire 1024-component gradient.
 low-dimensional encoded problems of the previous two examples.
 
 That difference is what makes this example possible at all: as the timings below
-show, the whole 1024-unknown inversion — 150 L-BFGS iterations, each a full 10 kyr
-forward *and* reverse sweep — finishes in **well under a minute**. Rebuilding the
+show, the whole 1024-unknown inversion — 150 L-BFGS iterations, each a full
+$$10 \, \mathrm{kyr}$$ forward *and* reverse sweep — finishes in **well under a
+minute**. Rebuilding the
 same gradient in forward mode would cost ~1024 forward runs *each iteration*,
 turning that sub-minute inversion into one that grinds for hours.
 
@@ -42,17 +43,18 @@ using Printf
 #=
 ## Fixed configuration and the known ice load
 
-Identical to the [Inverse calibration](@ref) setup: a 32×32 grid, a 10 kyr glacial
-cycle, and a single broad Vialov dome (2000 km radius) following the glacial-cycle
-sawtooth. The dome is deliberately broad so that the whole region of interest sits
-under load and is therefore *sensed* by the deformation — viscosity is only
-recoverable where the ice actually stresses the mantle.
+Identical to the [Inverse calibration](@ref) setup: a 32×32 grid, a $$10 \,
+\mathrm{kyr}$$ glacial cycle, and a single broad Vialov dome ($$2000 \,
+\mathrm{km}$$ radius) following the glacial-cycle sawtooth. The dome is
+deliberately broad so that the whole region of interest sits under load and is
+therefore *sensed* by the deformation — viscosity is only recoverable where the
+ice actually stresses the mantle.
 
-As in the previous two examples, the 10 kyr cycle is a compressed stand-in for a
-realistic ~100 kyr one (see the note in
-[Inverse ice history - Step by step](@ref)). It matters most here: at a fixed
-500 yr step the full-length cycle would make each forward *and* each reverse
-sweep ten times longer, and this example runs 150 L-BFGS iterations plus a
+As in the previous two examples, the $$10 \, \mathrm{kyr}$$ cycle is a compressed
+stand-in for a realistic $$\sim 100 \, \mathrm{kyr}$$ one (see the note in
+[Inverse calibration](@ref)). It matters most here: at a fixed $$500 \,
+\mathrm{yr}$$ step the full-length cycle would make each forward *and* each
+reverse sweep ten times longer, and this example runs 150 L-BFGS iterations plus a
 four-value `λ` sweep on top. The adjoint's headline property — cost independent
 of the number of unknowns — is unaffected by the cycle length, which is the point
 being demonstrated.
@@ -87,8 +89,8 @@ sim = build_sim()
 #=
 ## The ground-truth field
 
-The truth is the same four-Gaussian structure as in the previous example — two
-soft anomalies and two stiff ones on a `log10 η = 21` background — but here we
+The truth is the same four-Gaussian structure as in [Inverse calibration](@ref) —
+two soft anomalies and two stiff ones on a `log10 η = 21` background — but here we
 build it directly as a *field*, not through an encoding. Flattening it gives the
 1024-component ground-truth control vector.
 =#
@@ -136,9 +138,10 @@ The natural one for a viscosity field is **smoothness**: we penalise
 [`TikhonovReg`](@ref) on the decoded field.
 
 The value of `λ` looks alarming until you check the units: `∇log10η` is measured
-in *decades per metre*, so on a 187 km grid it is of order `10⁻⁶`, and the summed
-squared gradient of the true field is only ~`6·10⁻¹¹`. `λ` therefore carries m²,
-and `λ ≈ 10¹¹` is what brings the penalty to the same order as the final misfit.
+in *decades per metre*, so on a $$187 \, \mathrm{km}$$ grid it is of order
+`10⁻⁶`, and the summed squared gradient of the true field is only ~`6·10⁻¹¹`.
+`λ` therefore carries units of $$\mathrm{m^2}$$, and `λ ≈ 10¹¹` is what brings the
+penalty to the same order as the final misfit.
 =#
 
 reg(λ) = TikhonovReg(FieldTarget(Log10Viscosity()), Order1(); λ = λ)
@@ -169,9 +172,9 @@ single reverse sweep, whereas each FD check costs two extra forward runs.
 
 !!! warning "One-off compilation cost"
     The first `gradient!` call under `AdjointMode` triggers Enzyme's reverse
-    transformation of the time-stepping kernel, which takes ~10–12 minutes. It is
-    cached for the rest of the session: the 150 L-BFGS iterations below then run
-    in well under a minute.
+    transformation of the time-stepping kernel, which takes $$\sim 10\text{–}12 \,
+    \mathrm{min}$$. It is cached for the rest of the session: the 150 L-BFGS
+    iterations below then run in well under a minute.
 =#
 
 g = similar(θ0)
@@ -277,9 +280,10 @@ end
 
 #=
 Adding a modest amount of smoothing *improves* the reconstruction (rms drops from
-≈0.009 to ≈0.007 decades), because it suppresses exactly the fine-scale
-structure the data cannot see. Pushing `λ` two orders of magnitude further makes
-the penalty dominate and the recovery degrades to ≈0.017 decades — the field is
+$$\approx 0.009 \, \mathrm{decades}$$ to $$\approx 0.007 \, \mathrm{decades}$$),
+because it suppresses exactly the fine-scale structure the data cannot see.
+Pushing `λ` two orders of magnitude further makes the penalty dominate and the
+recovery degrades to $$\approx 0.017 \, \mathrm{decades}$$ — the field is
 recovered only *up to the regularization bias*.
 
 Note that the sweep re-runs the *entire* inversion four times over — and still

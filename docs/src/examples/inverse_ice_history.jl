@@ -1,21 +1,16 @@
 #=
-# Inverse ice history - Step by step
+# Inverse ice history
 
-The previous examples all ran FastIsostasy *forward*: given an ice-loading
-history and a solid-Earth structure, compute the deformation and sea-level
-response. This example goes the other way. Given **observations of the surface
-response**, we reconstruct the unknown ice-loading history that produced them —
-an *inverse problem*.
+In [Inverse calibration](@ref) the ice history was known and only the solid Earth
+was unknown. Here we take the harder step, and the one glaciology usually faces:
+the **ice-loading history is unknown too**, and we reconstruct it *jointly* with
+the mantle viscosity from observations of the surface response. Machinery,
+optimizer and workflow are unchanged — what grows is the number and the nature of
+the unknowns, and with them the risk that different parameter combinations explain
+the same data equally well.
 
-FastIsostasy solves inverse problems by automatic differentiation (AD): the
-entire forward model is differentiable, so we can compute the exact gradient of a
-data-misfit objective with respect to the unknown parameters and hand it to a
-gradient-based optimizer (here L-BFGS from Optim.jl). This is far more efficient
-than derivative-free or ensemble methods once the number of parameters grows.
-
-The unknowns are wrapped in an [`Test1Encoding`](@ref): a low-dimensional,
-physically-meaningful parameterisation of the high-dimensional model inputs. Here
-it encodes
+The unknowns are again wrapped in an encoding, this time a [`Test1Encoding`](@ref),
+which parameterises both sides of the problem:
 
 - three radially-symmetric **Vialov ice domes** whose central thicknesses
   `H_c(t)` evolve over a glacial cycle (piecewise-linear between a few time
@@ -23,8 +18,12 @@ it encodes
 - a laterally-variable **mantle viscosity** field: a background value plus two
   Gaussian anomalies (a schematic soft/stiff dichotomy).
 
-We generate synthetic "observations" by running the forward model with a known
-ground-truth parameter vector, then check that the inversion recovers it.
+Because the ice load is now part of the control vector, the problem is an
+[`IceLoadInversion`](@ref) rather than a `ParameterInversion`. Two further
+differences to the previous example are worth watching: the observations are
+**sparse** (~2 % of the grid cells) instead of full-field, and we therefore judge
+the result at the level of the reconstructed *fields* rather than of the
+individual parameters.
 =#
 
 using FastIsostasy, CairoMakie, Optim
@@ -37,25 +36,16 @@ using Printf
 #=
 ## Fixed configuration
 
-We work on a 32×32 regional grid over a 6000 km × 6000 km domain and a 10 kyr
-glacial cycle. The ice history is defined by five time knots, placed
-asymmetrically so the rapid deglaciation at the end of the cycle is resolved.
+Same setup as in the previous example: a 32×32 regional grid over a $$6000 \,
+\mathrm{km} \times 6000 \, \mathrm{km}$$ domain and a $$10 \, \mathrm{kyr}$$
+glacial cycle defined by five time knots, placed asymmetrically so the rapid
+deglaciation at the end of the cycle is resolved. The cycle is again a stand-in
+for a realistic $$\sim 100 \, \mathrm{kyr}$$ one, compressed by a factor of ten
+to keep the docs build cheap (see the note in [Inverse calibration](@ref)).
 
-!!! note "A 10 kyr toy stand-in for a 100 kyr cycle"
-    A real glacial cycle lasts on the order of **100 kyr**, and that is what this
-    setup is meant to represent — read the knot times as a cycle compressed by a
-    factor of ten, not as a physically distinct scenario. Nothing in the model
-    forces the shortcut: multiply `knot_times`, `t_span` and `obs_times` by ten
-    and it runs unchanged.
-
-    The reason to keep it short is purely the docs build. The step size is fixed
-    at 500 yr for AD, so a 100 kyr cycle costs 200 steps per forward run instead
-    of 20 — and every L-BFGS iteration pays that tenfold, on top of one gradient
-    each. The inverse problem is structurally identical either way; what changes
-    is how much viscous relaxation the synthetic data actually contain, and hence
-    how strongly they constrain the mantle. **A production inversion should use
-    the full 100 kyr**; treat the numbers recovered below as a demonstration of
-    the machinery rather than as an accuracy claim.
+The two fixed ingredients below — the dome radii and the viscosity-anomaly
+amplitudes — are *not* inverted for; holding a few of the more weakly constrained
+quantities fixed is a standard way to keep a joint inversion identifiable.
 =#
 
 W, n = 3.0e6, 5
@@ -69,12 +59,11 @@ visc_amps = (-1.0, 1.0)            # the two (fixed) log10-viscosity anomaly amp
 #=
 ### Parameter scaling
 
-The unknowns live on wildly different scales: ice thicknesses are thousands of
-metres, dome centres are millions of metres, and `log10(viscosity)` is a number
-around 21. A gradient-based optimizer is badly conditioned unless we work in
-dimensionless variables of order one. `Test1Encoding` takes a `scale` vector for
-exactly this: the physical value of parameter `i` is `θ[i] * scale[i]`, so the
-optimization variable `θ` is O(1) while the physics sees the true magnitudes.
+As before, the `scale` vector maps the dimensionless optimization variable to
+physical units (`θ[i] * scale[i]`) so that the optimizer stays well conditioned.
+The spread of magnitudes is even wider here than in the calibration example: ice
+thicknesses are thousands of metres, dome centres millions of metres, and
+`log10(viscosity)` is a number around 21.
 =#
 
 scales = vcat(fill(2.0e3, 3*nt),     # H_c(t) knots  (≈ km)
@@ -101,16 +90,11 @@ visc_phys    = [21.0,  -1.0e6, -1.0e6, 8.0e5,   1.0e6, 1.0e6, 8.0e5]
 #=
 ## The simulation template
 
-The inversion repeatedly runs this forward model with different parameters. Two
-choices matter for AD:
-
-- the fixed-step [`EulerIntegrator`](@ref) integrator (forward-mode AD requires a fixed
-  time-step sequence), and
-- a [`SmoothTransition`](@ref) for the grounding-line / ocean masks, so the
-  forward map is differentiable rather than piecewise-constant.
-
-The ice interpolation is created with placeholder snapshots at exactly the
-encoding's knot times; `reconstruct!` overwrites them with the Vialov domes.
+Same AD requirements as before — the fixed-step [`EulerIntegrator`](@ref) and a
+[`SmoothTransition`](@ref) for the masks. The one structural difference is the ice
+interpolation: since the ice history is now an unknown, it is created with
+placeholder snapshots at exactly the encoding's knot times, and `reconstruct!`
+overwrites them with the Vialov domes at every iteration.
 =#
 
 function build_sim()
@@ -130,10 +114,12 @@ sim = build_sim()
 #=
 ## Synthetic observations
 
-We observe the vertical bedrock uplift at ~2 % of the grid cells, at ten times
-through the cycle. A single observable type is used per inversion (mixing types
-would make the observation container abstractly typed and break the AD
-compilation). The data are generated by running the forward model at `θ_true`.
+Unlike the full-field data of the calibration example, here we observe the
+vertical bedrock uplift at only ~2 % of the grid cells, at ten times through the
+cycle — a more realistic, sparse dataset for a problem with more unknowns. As
+before, a single observable type is used per inversion (mixing types would make
+the observation container abstractly typed and break the AD compilation), and the
+data are generated by running the forward model at `θ_true`.
 =#
 
 seed!(1234)
@@ -162,10 +148,10 @@ By construction the loss vanishes at the truth:
 #=
 ## Checking the gradient
 
-Before optimising, it is worth confirming that the AD gradient of the loss agrees
-with a finite-difference estimate. We perturb the truth to a well-informed
-initial guess `θ0` (≈ 10 % off in the dimensionless variables) and compare a few
-components.
+As in the previous example, we confirm the AD gradient of the loss against a
+finite-difference estimate before optimising. We perturb the truth to a
+well-informed initial guess `θ0` (≈ 10 % off in the dimensionless variables) and
+compare a few components.
 =#
 
 seed!(2)

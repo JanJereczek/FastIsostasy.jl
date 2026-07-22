@@ -16,9 +16,11 @@ imposed disc load for an extended-Burgers versus a Maxwell half-space.
 
 ## Setup
 
-Fig. 8 of [ivins_notes_2021](@citet) presents the following geometry: a 25 m water disc of radius ``α_D = 1750`` km, switched on
-at ``t = 0``, with the subsidence read beneath the disc centre over 50 yr. The
-load is prescribed as ice, so 25 m of water becomes `25 ρ_water/ρ_ice` of ice.
+Fig. 8 of [ivins_notes_2021](@citet) presents the following geometry: a
+$$25 \, \mathrm{m}$$ water disc of radius $$\alpha_D = 1750 \, \mathrm{km}$$,
+switched on at $$t = 0$$, with the subsidence read beneath the disc centre over
+$$50 \, \mathrm{yr}$$. The load is prescribed as ice, so $$25 \, \mathrm{m}$$ of
+water becomes `25 ρ_water/ρ_ice` of ice.
 =#
 
 using FastIsostasy, CairoMakie
@@ -37,9 +39,11 @@ it = TimeInterpolatedIceThickness(
 bcs = BoundaryConditions(domain, ice_thickness = it)
 
 #=
-Elastic and gravitational parameters follow their Fig. 6: ``μ₁ = 67`` GPa,
-``ρ = 3380`` kg m``^{-3}``, ``g = 9.8`` m s``^{-2}``. Panel (b) of Fig. 8 uses
-``η = 7.86 × 10^{19}`` Pa s, i.e. a Maxwell time ``τ_M = η/μ₁ ≈ 37.2`` yr.
+Elastic and gravitational parameters follow their Fig. 6: $$\mu_1 = 67 \,
+\mathrm{GPa}$$, $$\rho = 3380 \, \mathrm{kg \, m^{-3}}$$, $$g = 9.8 \, \mathrm{m
+\, s^{-2}}$$. Panel (b) of Fig. 8 uses $$\eta = 7.86 \times 10^{19} \,
+\mathrm{Pa \, s}$$, i.e. a Maxwell time $$\tau_M = \eta/\mu_1 \approx 37.2 \,
+\mathrm{yr}$$.
 
 Their half-space carries no lithospheric plate, so we make the lithosphere
 vanishingly thin — flexural rigidity goes as the cube of its thickness, leaving
@@ -79,7 +83,7 @@ end
 
 `Δ` is the relaxation strength `μ₁/μ₂` and `τ` the retardation time `η₂/μ₂`. The
 values are the ones labelled on their Fig. 8: `Δ ∈ {1.2, 1.9}` from Jackson
-(2019) torsion experiments, `τ_H = 7.14` yr.
+(2019) torsion experiments, $$\tau_H = 7.14 \, \mathrm{yr}$$.
 =#
 
 w_steady = centre_subsidence(ViscousMantle())
@@ -149,10 +153,10 @@ println("peak steady subsidence = ", maximum(abs, w_steady), " m")
     FastIsostasy solves, so the geometry matches. Three things still differ:
 
     1. We compare **relative** subsidence `Δw(t) = w(t) − w(0⁺)`. Their `t = 0`
-       elastic offset is that of a homogeneous half-space with `μ = 67` GPa,
-       whereas FastIsostasy computes the elastic response from a Farrell (1972)
-       *layered-Earth* Green's function. Relative subsidence isolates exactly the
-       part the rheology controls.
+       elastic offset is that of a homogeneous half-space with $$\mu = 67 \,
+       \mathrm{GPa}$$, whereas FastIsostasy computes the elastic response from a
+       Farrell (1972) *layered-Earth* Green's function. Relative subsidence
+       isolates exactly the part the rheology controls.
     2. `N = 1` here, against their *continuous* relaxation spectrum (`α = ½`). A
        single branch captures the amplitude and the decay of the enhancement, not
        the detailed curve shape; that needs a Prony fit with `N ≈ 3–5`.

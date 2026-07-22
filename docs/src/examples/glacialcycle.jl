@@ -42,7 +42,7 @@ Tlitho = Titp.(Lon, Lat) .* 1e3                     # convert from km to m
 (_, _, _), _, logeta_itp = load_dataset("Viscosity_Pan2022");
 
 #=
-The number of layers and the depth of viscous half-space are arbitrary parameters that have to be defined by the user. We here use a relatively shallow model (half-space begins at 300 km depth) with 1 equalisation layer and 3 intermediate layers.
+The number of layers and the depth of viscous half-space are arbitrary parameters that have to be defined by the user. We here use a relatively shallow model (half-space begins at $$300 \, \mathrm{km}$$ depth) with 1 equalisation layer and 3 intermediate layers.
 =#
 
 mindepth = maximum(Tlitho) + 1e3
