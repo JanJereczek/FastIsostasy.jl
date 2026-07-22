@@ -2,16 +2,6 @@
 
 ❄ *Fast and flexible glacial isostatic adjustment on CPU and GPU.*
 
-!!! warning "Upgrade to v2.0!"
-    FastIsostasy.jl has been refactored under v2.0 to fix some performance issues, offer a more versatile API and propose new features. We strongly encourage to download v2.0 by running:
-    
-    ```julia
-    ] add https://github.com/JanJereczek/FastIsostasy.jl
-    ```
-
-    This version will soon be registered and available through the usual `Pkg.add("FastIsostasy")` command.
-
-
 ![GlacialCycle](assets/isl-ice6g-N=350.gif)
 
 FastIsostasy is a collection of models to compute the regional glacial isostatic adjustment (GIA) resulting from changes in the surface load (ice, liquid water and sediments). It is:
@@ -30,6 +20,16 @@ FastIsostasy.jl is a registered julia package. To install it, simply run:
 using Pkg
 Pkg.add("FastIsostasy")
 ```
+
+!!! warning "Upgrade to v2.0!"
+    FastIsostasy.jl has been refactored under v2.0 to fix some performance issues, offer a more versatile API and propose new features. We strongly encourage to download v2.0 by running:
+    
+    ```julia
+    ] add https://github.com/JanJereczek/FastIsostasy.jl
+    ```
+
+    This version will soon be registered and available through the usual `Pkg.add("FastIsostasy")` command.
+
 
 ## How to read the docs?
 
