@@ -4,42 +4,39 @@
 """
 $(TYPEDSIGNATURES)
 
-Control the options of `integrator<:AbstractIntegrator`.
-
-# Fields
- - `alg`: the [`AbstractIntegrator`](@ref) used to integrate the ODE forward in time,
-   one of `BS3Integrator()` (adaptive, default), `Tsit5Integrator()` (adaptive) or `EulerIntegrator()`
-   (fixed step, requires `dt_min`).
- - `reltol`: the relative error tolerance of the adaptive controller.
- - `abstol`: the absolute error tolerance of the adaptive controller.
- - `dt_min`: fixed step size for `EulerIntegrator`, and a lower bound on the adaptive
-   step size otherwise.
- - `dt0`: initial step size for the adaptive backend (`nothing` picks a
-   conservative default).
-"""
-@kwdef struct DiffEqOptions{S}
-    alg::S = BS3Integrator()
-    reltol::AbstractFloat = 1.0f-5
-    abstol::AbstractFloat = 1.0f-6
-    dt_min::Union{Real,Nothing} = nothing
-    dt0::Union{Real,Nothing} = nothing
-end
-
-"""
-$(TYPEDSIGNATURES)
-
 Control options relative to solving a [`Simulation`](@ref).
 
 # Fields
- - `diffeq`: the [`DiffEqOptions`](@ref) controlling the ODE solver.
+ - `integ`: the [`AbstractIntegrator`](@ref) used to integrate the ODE forward in
+   time, one of [`BS3Integrator`](@ref) (adaptive, default), [`Tsit5Integrator`](@ref)
+   (adaptive), [`RKCIntegrator`](@ref) (adaptive, stabilised for stiff problems) or
+   [`EulerIntegrator`](@ref) (fixed step). Each integrator carries its own
+   settings — tolerances, step-size bounds — as fields of its own struct.
  - `dt_sparse_diagnostics`: the time interval between updates of the diagnostics variables (elastic displacement, sea-surface elevation, etc.).
- - `verbose`: whether to print information about the simulation progress.
+ - `verbose`: whether to report the simulation progress. When `true`, [`run!`](@ref)
+   displays a live progress bar ([`ForwardProgress`](@ref)).
+ - `dt_walltime`: minimum wall time in seconds between two refreshes of that
+   progress bar. Refreshing reduces over the whole grid, so this bounds the
+   reporting cost by wall time rather than by step count.
+ - `fft`: the [`AbstractFFTBackend`](@ref) used for the spectral step. A purely
+   numerical choice, orthogonal to the mantle rheology.
  - `transition`: the [`AbstractTransition`](@ref) used to smooth the transition between grounded and floating ice, and between ocean and land.
+
+`integ` is a concrete type parameter rather than an abstract field, so
+`sim.opts.integ` infers to the integrator's own type. Code that branches on the
+integrator — the AD extensions in particular — then resolves that branch at
+compile time instead of paying to compile every arm of it.
 """
-@kwdef struct SolverOptions{TR<:AbstractTransition}
-    diffeq::DiffEqOptions = DiffEqOptions()
+@kwdef struct SolverOptions{
+    TR<:AbstractTransition,
+    I<:AbstractIntegrator,
+    F<:AbstractFFTBackend,
+}
+    integ::I = BS3Integrator()
     dt_sparse_diagnostics::Float64 = 10.0
     verbose::Bool = true
+    dt_walltime::Float64 = 0.5
+    fft::F = ComplexFFTBackend()
     transition::TR = SharpTransition()
 end
 
@@ -157,7 +154,7 @@ function Simulation(
         )
     end
 
-    tools = GIATools(domain, c, solidearth)
+    tools = GIATools(domain, c, solidearth; fft = opts.fft)
     timer = Timer(t_span, T = T)
 
     # Initialise the reference state
@@ -195,7 +192,7 @@ function Simulation(
         maskgrounded,
         maskocean,
     )
-    now = CurrentState(domain, ref, sealevel.bsl.z)
+    now = CurrentState(domain, ref, sealevel.bsl.z, nbranches(solidearth.mantle))
 
     return Simulation(
         domain,
@@ -252,11 +249,11 @@ $(TYPEDSIGNATURES)
 
 A function to be called by the integrator at each time step to write the output to NetCDF files.
 """
-function nc_affect!(integrator)
+function nc_affect!(integrator, progress = nothing)
     sim = integrator.p
 
     if occursin(".nc", sim.ncout.filename)
-        sim.opts.verbose && println(
+        verbose_log(sim, progress) && println(
             "Saving nc output at index $(sim.ncout.k), sim year $(integrator.t)...",
         )
 
@@ -280,9 +277,9 @@ $(TYPEDSIGNATURES)
 
 A function to be called by the integrator at each time step to write the output to native files.
 """
-function nout_affect!(integrator)
+function nout_affect!(integrator, progress = nothing)
     sim = integrator.p
-    sim.opts.verbose &&
+    verbose_log(sim, progress) &&
         println("Saving native output at simulation year $(integrator.t)...")
 
     if (:u_x in sim.nout.vars) || (:u_y in sim.nout.vars)
@@ -315,6 +312,42 @@ function init_problem!(sim::Simulation)
     total_volume(sim)
     update_diagnostics!(sim.now.dudt, sim.now.u, sim, sim.timer.t)
     return nothing
+end
+
+# The stepper itself is in integrators.jl, which is included *before* this file
+# so that `SolverOptions` can bound its integrator field. These two entry points
+# are the only ones that name `Simulation` in their signature, so they live here.
+
+"""
+$(TYPEDSIGNATURES)
+
+Solve the isostatic adjustment problem defined in `sim::Simulation`, integrating
+it forward over `sim.timer.t_span` with the integrator in
+`sim.opts.integ::AbstractIntegrator` and writing output at the requested times.
+"""
+function run!(sim::Simulation)
+    init_problem!(sim)
+    sim.timer.t_computation_0 = time()
+    integ = build_integrator(sim)
+    progress = sim.opts.verbose ? ForwardProgress(sim) : nothing
+    advance_with_output!(integ, sim, sim.timer.t_span[2], STEPPER_MAXITERS, progress)
+    finish_progress!(progress, integ)
+    isempty(sim.timer.t_computation) ||
+        (sim.timer.t_computation .-= sim.timer.t_computation[1])
+    return nothing
+end
+
+"""
+$(TYPEDSIGNATURES)
+
+Initialise the integrator of `sim::Simulation`, which can subsequently be
+advanced manually with `step!(integrator, Δt, force_dt)` (e.g. when coupling to
+an external ice-sheet model).
+"""
+function init_integrator(sim::Simulation)
+    init_problem!(sim)
+    sim.timer.t_computation_0 = time()
+    return build_integrator(sim)
 end
 
 function write_nc!(sim::Simulation)

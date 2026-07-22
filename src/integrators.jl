@@ -1,96 +1,199 @@
-# =============================================================================
-# Self-contained explicit Runge-Kutta integrators
-#
-# These are a lightweight, dependency-free alternative to the OrdinaryDiffEq.jl
-# solvers used in `run!`. They are designed to plug into the same in-place RHS
-# convention as SciML, i.e. `f!(du, u, p, t)`, and to work generically for any
-# array type `u` (CPU `Matrix`, `CuArray`, ...) since every kernel is expressed
-# as a broadcast.
-#
-# Implemented so far:
-#   - `EulerIntegrator`  : fixed-step explicit Euler (for the implicit/laterally-constant
-#                  workflow that needs a fixed time step).
-#   - `BS3Integrator`    : Bogacki-Shampine 3(2), FSAL, adaptive.
-#   - `Tsit5Integrator`  : Tsitouras 5(4), FSAL, adaptive.
-#
-# The adaptive step-size controller and the scaled error norm mirror the
-# defaults of OrdinaryDiffEq (Hairer's PI controller from `dopri5`, RMS error
-# norm scaled by `abstol + reltol * max(|uprev|, |unew|)`), so that a given
-# `reltol` produces a comparable number of steps across both backends.
-# =============================================================================
+"""
+$(TYPEDSIGNATURES)
 
+Define a self-contained, dependency-free time integrator for in-place ODEs.
+
+Available subtypes:
+- [`EulerIntegrator`](@ref)
+- [`BS3Integrator`](@ref)
+- [`Tsit5Integrator`](@ref)
+- [`RKCIntegrator`](@ref)
+"""
 abstract type AbstractIntegrator end
 
-# Common driver interface shared by every stepper's integrator state
-# (`TableauIntegratorState` for RKTableau-based methods, `RKCIntegratorState` for `RKCIntegrator`).
-# `solve_to!`/`solve_to_adaptive!`/`advance_with_output!`/`step!` dispatch on
-# this abstract type; only `perform_step!` and the small generic hooks
-# `stepper_order`, `fsal_carryover!`, `steplog_entry`, `maybe_reestimate!` have
-# per-concrete-integrator methods.
+"""
+$(TYPEDSIGNATURES)
+
+Common driver interface shared by every stepper's integrator state
+(`TableauIntegratorState` for RKTableau-based methods, `RKCIntegratorState` for `RKCIntegrator`).
+
+`solve_to!`/`solve_to_adaptive!`/`advance_with_output!`/`step!` dispatch on
+this abstract type; only `perform_step!` and the small generic hooks
+`stepper_order`, `fsal_carryover!`, `steplog_entry`, `maybe_reestimate!` have
+per-concrete-integrator methods.
+"""
 abstract type AbstractIntegratorState end
 
-"""
-    EulerIntegrator()
+# Every integrator stores its settings concretely in its own float type `T`.
+# `BS3Integrator()` infers `T` from the defaults below (`Float32`, the package-wide
+# default — cf. `Timer(t_span; T = Float32)`); `BS3Integrator{Float64}(reltol = 1e-8)`
+# pins it. Either way `init_integrator` converts every setting to the simulation's
+# own element type, so the stored type is a matter of precision, not of dispatch.
+#
+# The defaults deliberately name no type variable: `@kwdef` also generates the
+# `BS3Integrator(; ...)` method that leaves `T` to be inferred, and a `T`-dependent
+# default (`eps(T)`) would make that method throw `UndefVarError: T`. Hence the
+# concrete `eps(Float32)` floor and the `Inf32` ceiling, which widens to `Inf` for
+# any `T` and so means "unbounded" in every precision.
 
-Fixed-step explicit Euler. Non-adaptive: the step size is taken from `dt0`.
 """
-struct EulerIntegrator <: AbstractIntegrator end
+    EulerIntegrator(dt)
+    EulerIntegrator(; dt)
+
+Fixed-step explicit Euler. Non-adaptive, so `dt` is *the* step size and is
+required — there is no error estimate to adapt it with.
+
+# Fields
+$(TYPEDFIELDS)
+"""
+@kwdef struct EulerIntegrator{T<:AbstractFloat} <: AbstractIntegrator
+    "the fixed step size"
+    dt::T
+end
 
 """
-    BS3Integrator()
+    BS3Integrator(; kwargs...)
+    BS3Integrator{T}(; kwargs...)
 
 Bogacki-Shampine 3(2) embedded pair (FSAL, adaptive). Third-order accurate
 solution with a second-order embedded error estimate.
-"""
-struct BS3Integrator <: AbstractIntegrator end
 
+# Fields
+$(TYPEDFIELDS)
 """
-    Tsit5Integrator()
+@kwdef struct BS3Integrator{T<:AbstractFloat} <: AbstractIntegrator
+    "relative error tolerance of the adaptive controller"
+    reltol::T = 1.0f-5
+    "absolute error tolerance of the adaptive controller"
+    abstol::T = 1.0f-6
+    "lower bound on the adaptive step size"
+    dt_min::T = eps(Float32)
+    "upper bound on the adaptive step size"
+    dt_max::T = Inf32
+    "initial step size; the controller grows it from here, at most 10x per step"
+    dt0::T = 1.0f-3
+end
+"""
+    Tsit5Integrator(; kwargs...)
+    Tsit5Integrator{T}(; kwargs...)
 
 Tsitouras 5(4) embedded pair (FSAL, adaptive). Fifth-order accurate solution
 with a fourth-order embedded error estimate.
-"""
-struct Tsit5Integrator <: AbstractIntegrator end
 
-isadaptive(::AbstractIntegrator) = true
-isadaptive(::EulerIntegrator) = false
-
+# Fields
+$(TYPEDFIELDS)
 """
-    RKCIntegrator(; damping = 2/13, safety = 1.2, smax = 200, reestimate_every = 0)
+@kwdef struct Tsit5Integrator{T<:AbstractFloat} <: AbstractIntegrator
+    "relative error tolerance of the adaptive controller"
+    reltol::T = 1.0f-5
+    "absolute error tolerance of the adaptive controller"
+    abstol::T = 1.0f-6
+    "lower bound on the adaptive step size"
+    dt_min::T = eps(Float32)
+    "upper bound on the adaptive step size"
+    dt_max::T = Inf32
+    "initial step size; the controller grows it from here, at most 10x per step"
+    dt0::T = 1.0f-3
+end
+"""
+    RKCIntegrator(; kwargs...)
+    RKCIntegrator{T}(; kwargs...)
 
 Stabilised explicit Runge-Kutta-Chebyshev method (RKC2, Sommeijer-Shampine-
 Verwer 1997), second order, damped. Real-axis stability interval grows with the
 *square* of the stage count. For stiff systems with ~1.75x speedup.
 
-- `damping`: SSV damping parameter `ε` (default `2/13`); must be `> 0`.
-- `safety`: safety factor for `dt * λ_max` when choosing stage count.
-- `smax`: hard cap on stage count per step.
-- `reestimate_every`: re-run power iteration every N accepted steps (`0` = never).
+# Fields
+$(TYPEDFIELDS)
 """
-@kwdef struct RKCIntegrator <: AbstractIntegrator
-    damping::Float64 = 2 / 13
-    safety::Float64 = 1.2
+@kwdef struct RKCIntegrator{T<:AbstractFloat} <: AbstractIntegrator
+    "SSV damping parameter `ε`; must be `> 0`"
+    damping::T = 2.0f0 / 13
+    "safety factor for `dt * λ_max` when choosing the stage count"
+    safety::T = 1.2f0
+    "hard cap on the stage count per step"
     smax::Int = 200
+    "re-run the power iteration every N accepted steps (`0` = never)"
     reestimate_every::Int = 0
+    "relative error tolerance of the adaptive controller"
+    reltol::T = 1.0f-5
+    "absolute error tolerance of the adaptive controller"
+    abstol::T = 1.0f-6
+    "lower bound on the adaptive step size"
+    dt_min::T = eps(Float32)
+    "upper bound on the adaptive step size"
+    dt_max::T = Inf32
+    "initial step size; the controller grows it from here, at most 10x per step"
+    dt0::T = 1.0f-3
 end
+isadaptive(::AbstractIntegrator) = true
+isadaptive(::EulerIntegrator) = false
+
+# --- settings an integrator hands to `init_integrator` ------------------------
+#
+# Every stepper setting lives on the integrator itself, so `init_integrator` and
+# `integrate` take none of them as keywords: there is exactly one place a
+# tolerance or step bound can come from.
+
+integ_reltol(alg::AbstractIntegrator) = alg.reltol
+integ_abstol(alg::AbstractIntegrator) = alg.abstol
+integ_dt0(alg::AbstractIntegrator) = alg.dt0
+integ_dt_min(alg::AbstractIntegrator) = alg.dt_min
+integ_dt_max(alg::AbstractIntegrator) = alg.dt_max
+
+# `EulerIntegrator` is non-adaptive: it runs no error control (the tolerances
+# below are never read by `solve_to_fixed!`), and its fixed `dt` is the initial
+# step, the floor and the ceiling at once.
+integ_reltol(alg::EulerIntegrator) = one(alg.dt)
+integ_abstol(alg::EulerIntegrator) = one(alg.dt)
+integ_dt0(alg::EulerIntegrator) = alg.dt
+integ_dt_min(alg::EulerIntegrator) = alg.dt
+integ_dt_max(alg::EulerIntegrator) = alg.dt
+
+# `alg`'s step-size settings, converted to the element type the integration
+# actually runs in. The controller grows `dt0` from below (at most 10x per step,
+# which is robust for stiff starts and avoids initial blow-ups), so a small
+# initial step costs only a handful of extra steps.
+function step_bounds(::Type{T}, alg) where {T}
+    dtmin = T(integ_dt_min(alg))
+    dtmax = T(integ_dt_max(alg))
+    return clamp(T(integ_dt0(alg)), dtmin, dtmax), dtmin, dtmax
+end
+
+"""
+$(TYPEDSIGNATURES)
+
+The fixed step size of a non-adaptive integrator, i.e. of an
+[`EulerIntegrator`](@ref). The semi-implicit mantle update in
+[`update_dudt!`](@ref) (`ViscousMantle` on a laterally constant or rigid
+lithosphere) discretises time itself, so it needs the step size up front —
+which an adaptive controller cannot supply.
+"""
+fixed_dt(alg::EulerIntegrator) = alg.dt
+fixed_dt(alg::AbstractIntegrator) = error(
+    "$(nameof(typeof(alg))) is adaptive and has no fixed step size, but the " *
+    "semi-implicit mantle update needs one. Use " *
+    "`SolverOptions(integ = EulerIntegrator(dt = ...))`, or pick a mantle " *
+    "rheology that integrates explicitly.",
+)
 
 # -----------------------------------------------------------------------------
 # Butcher tableaus
 # -----------------------------------------------------------------------------
 
 """
-    RKTableau{T}
+$(TYPEDSIGNATURES)
 
 Butcher tableau for an (embedded) explicit Runge-Kutta method.
 
-- `A`       : `s×s` strictly-lower-triangular stage-coefficient matrix.
-- `c`       : `s` node vector (`c[1] == 0`).
-- `b`       : `s` weights of the propagated (higher-order) solution.
-- `btilde`  : `s` weights of the *error estimate* (`b - bhat`); empty if the
-              method is non-adaptive.
-- `order`   : order of the propagated solution (used by the step controller).
-- `fsal`    : whether the method is First-Same-As-Last (last stage of an
-              accepted step equals the first stage of the next one).
+# Fields
+- `A`: `s×s` strictly-lower-triangular stage-coefficient matrix.
+- `c`: `s` node vector (`c[1] == 0`).
+- `b`: `s` weights of the propagated (higher-order) solution.
+- `btilde`: `s` weights of the *error estimate* (`b - bhat`); empty if method non-adaptive.
+- `order`: order of the propagated solution (used by the step controller).
+- `fsal`: whether the method is First-Same-As-Last (last stage of an
+          accepted step equals the first stage of the next one).
 """
 struct RKTableau{T}
     A::Matrix{T}
@@ -167,7 +270,7 @@ end
 # -----------------------------------------------------------------------------
 
 """
-    TableauIntegratorState
+$(TYPEDSIGNATURES)
 
 Running state and pre-allocated work arrays of an in-flight integration driven by
 a tableau-based [`AbstractIntegrator`](@ref) (`EulerIntegrator`, `BS3Integrator`,
@@ -200,42 +303,26 @@ mutable struct TableauIntegratorState{A,T,F,P,Alg<:AbstractIntegrator} <:
 end
 
 """
-    init_integrator(f!, u0, tspan, alg::AbstractIntegrator, p = nothing; kwargs...)
+    init_integrator(f!, u0, tspan, alg::AbstractIntegrator, p = nothing)
 
 Build (and prime) the integrator state for the in-place ODE `f!(du, u, p, t)`,
 ready to be advanced by `solve_to!` / `step!`. Returns a
 [`TableauIntegratorState`](@ref), or an [`RKCIntegratorState`](@ref) when `alg`
-is an `RKCIntegrator`. Takes the same `reltol`/`abstol`/`dt0`/`dtmin`/`dtmax`
-keywords as [`integrate`](@ref).
+is an `RKCIntegrator`.
+
+Tolerances and step-size bounds are read off `alg` — set them there, e.g.
+`Tsit5Integrator(reltol = 1e-8)` or `EulerIntegrator(dt = 100.0)`.
 
 See [`init_integrator(sim::Simulation)`](@ref) for the `Simulation`-level entry
-point, which reads these settings off `sim.opts.diffeq` instead.
+point, which takes `alg` from `sim.opts.integ`.
 """
-function init_integrator(
-    f!,
-    u0::A,
-    tspan,
-    alg::AbstractIntegrator,
-    p = nothing;
-    reltol = 1e-5,
-    abstol = 1e-6,
-    dt0 = nothing,
-    dtmin = nothing,
-    dtmax = nothing,
-) where {A}
+function init_integrator(f!, u0::A, tspan, alg::AbstractIntegrator, p = nothing) where {A}
     T = eltype(u0)
     tab = tableau(alg, T)
     s = nstages(tab)
 
-    t0, tend = T(tspan[1]), T(tspan[2])
-    span = tend - t0
-
-    # Default to a small initial step and let the controller grow it (capped at
-    # 10x/step); this is robust for stiff-ish starts and avoids initial blow-ups.
-    dt = dt0 === nothing ? abs(span) / 10_000 : T(dt0)
-    dtmx = dtmax === nothing ? abs(span) : T(dtmax)
-    dtmn = dtmin === nothing ? eps(T) * max(abs(t0), abs(tend)) : T(dtmin)
-    dt = clamp(dt, dtmn, dtmx)
+    t0 = T(tspan[1])
+    dt, dtmn, dtmx = step_bounds(T, alg)
 
     u = copy(u0)
     ks = [similar(u0) for _ = 1:s]
@@ -252,8 +339,8 @@ function init_integrator(
         similar(u0),
         similar(u0),
         ks,
-        T(reltol),
-        T(abstol),
+        T(integ_reltol(alg)),
+        T(integ_abstol(alg)),
         dtmn,
         dtmx,
         T(1e-4),
@@ -377,9 +464,16 @@ end
 # `steplog`, when a `Vector{<:Tuple}`, receives one `(t, dt)` entry per *accepted*
 # step (`t` = time before the step, exactly as passed to the RHS) — the frozen
 # dt-sequence the Phase-5 adjoint replays; `nothing` (default) records nothing.
-function solve_to!(integ::AbstractIntegratorState, target, maxiters, steplog = nothing)
-    isadaptive(integ.alg) ? solve_to_adaptive!(integ, target, maxiters, steplog) :
-    solve_to_fixed!(integ, target, maxiters, steplog)
+function solve_to!(
+    integ::AbstractIntegratorState,
+    target,
+    maxiters,
+    steplog = nothing,
+    progress = nothing,
+)
+    isadaptive(integ.alg) ?
+    solve_to_adaptive!(integ, target, maxiters, steplog, progress) :
+    solve_to_fixed!(integ, target, maxiters, steplog, progress)
 end
 
 function solve_to_adaptive!(
@@ -387,6 +481,7 @@ function solve_to_adaptive!(
     target,
     maxiters,
     steplog = nothing,
+    progress = nothing,
 )
     T = typeof(integ.t)
     target = T(target)
@@ -418,6 +513,7 @@ function solve_to_adaptive!(
                 integ.facold = max(err, 1e-4)
             end
             maybe_reestimate!(integ)
+            report_progress!(progress, integ)
         else
             # reject: shrink and retry (u and t unchanged, so ks[1] stays valid)
             integ.nreject += 1
@@ -432,6 +528,7 @@ function solve_to_fixed!(
     target,
     maxiters,
     steplog = nothing,
+    progress = nothing,
 )
     T = typeof(integ.t)
     target = T(target)
@@ -449,6 +546,7 @@ function solve_to_fixed!(
         # Euler is not FSAL: refresh the first stage for the next step.
         integ.f!(integ.ks[1], integ.u, integ.p, integ.t)
         integ.nf += 1
+        report_progress!(progress, integ)
     end
     return integ
 end
@@ -697,29 +795,21 @@ mutable struct RKCIntegratorState{A,T,F,P} <: AbstractIntegratorState
     nf::Int
 end
 
+# `lambda_maxiter`/`lambda_tol` stay keywords: they tune the power iteration that
+# seeds the spectral-radius estimate, not the RKC method itself.
 function init_integrator(
     f!,
     u0::A,
     tspan,
     alg::RKCIntegrator,
     p = nothing;
-    reltol = 1e-5,
-    abstol = 1e-6,
-    dt0 = nothing,
-    dtmin = nothing,
-    dtmax = nothing,
     lambda_maxiter::Int = 100,
     lambda_tol = 1e-2,
 ) where {A}
     T = eltype(u0)
 
-    t0, tend = T(tspan[1]), T(tspan[2])
-    span = tend - t0
-
-    dt = dt0 === nothing ? abs(span) / 10_000 : T(dt0)
-    dtmx = dtmax === nothing ? abs(span) : T(dtmax)
-    dtmn = dtmin === nothing ? eps(T) * max(abs(t0), abs(tend)) : T(dtmin)
-    dt = clamp(dt, dtmn, dtmx)
+    t0 = T(tspan[1])
+    dt, dtmn, dtmx = step_bounds(T, alg)
 
     probe = p isa Simulation ? snapshotting_probe(f!, p) : f!
     counted_f!, nf0 = _counting_wrapper(probe)
@@ -747,8 +837,8 @@ function init_integrator(
         similar(u0),
         T(lambda_max),
         0,
-        T(reltol),
-        T(abstol),
+        T(integ_reltol(alg)),
+        T(integ_abstol(alg)),
         dtmn,
         dtmx,
         T(1e-4),
@@ -1012,12 +1102,13 @@ Integrate the in-place ODE `f!(du, u, p, t)` from `tspan[1]` to `tspan[2]`.
 Returns the sorted save times `ts` and a vector `us` of solution snapshots
 (copies) at those times.
 
+Error tolerances and step-size bounds are fields of `alg` — e.g.
+`integrate(f!, u0, tspan, Tsit5Integrator(reltol = 1e-8))` or
+`integrate(f!, u0, tspan, EulerIntegrator(dt = 0.05))`.
+
 Keyword arguments:
-- `reltol`, `abstol`: error tolerances for the adaptive controller.
 - `saveat`: times at which to store the solution (defaults to `tspan[2]`).
   Must lie within `tspan`. The endpoint is always included.
-- `dt0`: initial step size (also *the* step for `EulerIntegrator`).
-- `dtmin`, `dtmax`: bounds on the adaptive step size.
 - `maxiters`: safety cap on the number of steps per save interval.
 """
 function integrate(
@@ -1026,27 +1117,11 @@ function integrate(
     tspan,
     alg::AbstractIntegrator,
     p = nothing;
-    reltol = 1e-5,
-    abstol = 1e-6,
     saveat = nothing,
-    dt0 = nothing,
-    dtmin = nothing,
-    dtmax = nothing,
     maxiters = 10_000_000,
 )
     T = eltype(u0)
-    integ = init_integrator(
-        f!,
-        u0,
-        tspan,
-        alg,
-        p;
-        reltol = reltol,
-        abstol = abstol,
-        dt0 = dt0,
-        dtmin = dtmin,
-        dtmax = dtmax,
-    )
+    integ = init_integrator(f!, u0, tspan, alg, p)
 
     t0, tend = T(tspan[1]), T(tspan[2])
     save = saveat === nothing ? T[tend] : sort!(unique(T.(collect(saveat))))
@@ -1077,33 +1152,16 @@ const STEPPER_MAXITERS = 10_000_000
 
 # Build a primed integrator from a Simulation's options. `init_problem!` and
 # `t_computation_0` must already have been set by the caller.
-function build_integrator(sim)
-    opts = sim.opts.diffeq
-    alg = opts.alg
-    T = eltype(sim.now.u)
-
-    dtmin = opts.dt_min isa Real ? T(opts.dt_min) : nothing
-    if alg isa EulerIntegrator
-        opts.dt_min isa Real || error(
-            "EulerIntegrator requires `DiffEqOptions(dt_min = ...)` (fixed step size).",
-        )
-        dt0 = T(opts.dt_min)
-    else
-        dt0 = opts.dt0 isa Real ? T(opts.dt0) : nothing
-    end
-
-    return init_integrator(
-        update_diagnostics!,
-        sim.now.u,
-        sim.timer.t_span,
-        alg,
-        sim;
-        reltol = opts.reltol,
-        abstol = opts.abstol,
-        dt0 = dt0,
-        dtmin = dtmin,
-    )
-end
+#
+# The integrator carries its own tolerances and step bounds, so there is nothing
+# to forward here: `init_integrator` reads them off `sim.opts.integ`.
+build_integrator(sim) = init_integrator(
+    update_diagnostics!,
+    sim.now.u,
+    sim.timer.t_span,
+    sim.opts.integ,
+    sim,
+)
 
 # Earliest pending recording time across all attached `SimulatedObservable`s
 # (roadmap §4c item 2), or `nothing` if none are pending.
@@ -1138,27 +1196,28 @@ function advance_with_output!(
     sim,
     target,
     maxiters = STEPPER_MAXITERS,
+    progress = nothing,
 )
     T = typeof(integ.t)
     target = T(target)
     while true
         te = _next_output_time(sim)
         if te === nothing || te > target
-            solve_to!(integ, target, maxiters)
+            solve_to!(integ, target, maxiters, nothing, progress)
             return integ
         end
-        solve_to!(integ, te, maxiters)
+        solve_to!(integ, te, maxiters, nothing, progress)
         # Fire netCDF first then native output (matches previous callback order),
         # then any simulated observables pending at this time.
         if length(sim.ncout.t) >= 1 &&
            sim.ncout.k <= length(sim.ncout.t) &&
            sim.ncout.t[sim.ncout.k] == te
-            nc_affect!(integ)
+            nc_affect!(integ, progress)
         end
         if length(sim.nout.t) >= 1 &&
            sim.nout.k <= length(sim.nout.t) &&
            sim.nout.t[sim.nout.k] == te
-            nout_affect!(integ)
+            nout_affect!(integ, progress)
         end
         for so in sim.simobs
             next_simobs_time(so) == te && record!(so, sim)
@@ -1166,35 +1225,9 @@ function advance_with_output!(
     end
 end
 
-"""
-$(TYPEDSIGNATURES)
-
-Solve the isostatic adjustment problem defined in `sim::Simulation`, integrating
-it forward over `sim.timer.t_span` with the algorithm in
-`sim.opts.diffeq.alg::AbstractIntegrator` and writing output at the requested times.
-"""
-function run!(sim::Simulation)
-    init_problem!(sim)
-    sim.timer.t_computation_0 = time()
-    integ = build_integrator(sim)
-    advance_with_output!(integ, sim, sim.timer.t_span[2])
-    isempty(sim.timer.t_computation) ||
-        (sim.timer.t_computation .-= sim.timer.t_computation[1])
-    return nothing
-end
-
-"""
-$(TYPEDSIGNATURES)
-
-Initialise the integrator of `sim::Simulation`, which can subsequently be
-advanced manually with `step!(integrator, Δt, force_dt)` (e.g. when coupling to
-an external ice-sheet model).
-"""
-function init_integrator(sim::Simulation)
-    init_problem!(sim)
-    sim.timer.t_computation_0 = time()
-    return build_integrator(sim)
-end
+# `run!(sim::Simulation)` and `init_integrator(sim::Simulation)` — the two entry
+# points whose *signature* mentions `Simulation` — live in simulation.jl, which
+# is included after this file (see the note at that include in FastIsostasy.jl).
 
 """
 $(TYPEDSIGNATURES)

@@ -64,21 +64,31 @@ function real_axis_stability_limit(tab::RKTableau{T}; tol = sqrt(eps(T))) where 
     return lo
 end
 
-const _STABILITY_LIMIT = Dict(
-    EulerIntegrator =>
-        real_axis_stability_limit(tableau(EulerIntegrator(), Float64)),
-    BS3Integrator => real_axis_stability_limit(tableau(BS3Integrator(), Float64)),
-    Tsit5Integrator =>
-        real_axis_stability_limit(tableau(Tsit5Integrator(), Float64)),
-)
+# Computed once at package load. A method's tableau — hence its stability
+# boundary — does not depend on the integrator's settings, so the probe
+# instances below are built with arbitrary ones.
+const _STABILITY_LIMIT_EULER =
+    real_axis_stability_limit(tableau(EulerIntegrator(dt = 1.0), Float64))
+const _STABILITY_LIMIT_BS3 =
+    real_axis_stability_limit(tableau(BS3Integrator(), Float64))
+const _STABILITY_LIMIT_TSIT5 =
+    real_axis_stability_limit(tableau(Tsit5Integrator(), Float64))
 
 """
 $(TYPEDSIGNATURES)
 
-Real-axis stability limit of `alg` (computed once at package load into
-`_STABILITY_LIMIT`).
+Real-axis stability limit of an integrator, computed once at package load.
+
+A property of the method's tableau, not of how it is configured, so it takes the
+*type* — `stability_limit(Tsit5Integrator)` — and an instance is accepted as a
+convenience. Defined for the tableau methods only; `RKCIntegrator` has no fixed
+boundary, its stability interval grows with the per-step stage count (see
+`rkc_stability_boundary`).
 """
-stability_limit(alg::AbstractIntegrator) = _STABILITY_LIMIT[typeof(alg)]
+stability_limit(::Type{<:EulerIntegrator}) = _STABILITY_LIMIT_EULER
+stability_limit(::Type{<:BS3Integrator}) = _STABILITY_LIMIT_BS3
+stability_limit(::Type{<:Tsit5Integrator}) = _STABILITY_LIMIT_TSIT5
+stability_limit(alg::AbstractIntegrator) = stability_limit(typeof(alg))
 
 """
 $(TYPEDSIGNATURES)
@@ -247,8 +257,8 @@ function stiffness_report(sim::Simulation; t = sim.timer.t_span[1], kwargs...)
     return (
         lambda_max = lambda_max,
         analytic_bound = bound,
-        dt_euler = dt_stable(EulerIntegrator()),
-        dt_bs3 = dt_stable(BS3Integrator()),
-        dt_tsit5 = dt_stable(Tsit5Integrator()),
+        dt_euler = dt_stable(EulerIntegrator),
+        dt_bs3 = dt_stable(BS3Integrator),
+        dt_tsit5 = dt_stable(Tsit5Integrator),
     )
 end
