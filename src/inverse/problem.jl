@@ -244,6 +244,36 @@ for Inv in (:IceLoadInversion, :ParameterInversion)
     end
 end
 
+function _show_inversion(io::IO, title::AbstractString, prob::AbstractInversion)
+    domain = prob.sim.domain
+    n_theta = prob.encoding === nothing ? domain.nx * domain.ny : nparams(prob.encoding)
+    descriptors = [
+        "Simulation t_span" => prob.sim.timer.t_span,
+        "Domain (nx, ny)" => (domain.nx, domain.ny),
+        "Encoding" => prob.encoding === nothing ?
+                      "full-field (θ = log10 viscosity map)" : typeof(prob.encoding),
+        "length(θ)" => n_theta,
+        "# observations" => length(prob.observations),
+        "Observable(s)" => unique(typeof(o.tag) for o in prob.observations),
+        "total data points" => sum(nentries, prob.observations),
+        "extrema(extract_times)" => extrema(prob.extract_times),
+        "# regularizations" => length(prob.regularizations),
+        "Diff mode" => typeof(prob.diffmode),
+        "Loss model" => typeof(prob.lossmodel),
+    ]
+    padlen = maximum(length(d[1]) for d in descriptors) + 2
+    println(io, title)
+    for (desc, val) in descriptors
+        println(io, rpad(" $(desc): ", padlen), val)
+    end
+end
+
+Base.show(io::IO, ::MIME"text/plain", prob::IceLoadInversion) =
+    _show_inversion(io, "IceLoadInversion", prob)
+
+Base.show(io::IO, ::MIME"text/plain", prob::ParameterInversion) =
+    _show_inversion(io, "ParameterInversion", prob)
+
 # --- forward prediction ------------------------------------------------------
 
 # Allocate one prediction vector per observation, on the same array family as the
@@ -277,12 +307,12 @@ end
 # differentiable — TangentMode v1 is fixed-step only). Static dispatch keeps Enzyme
 # from analysing the integrator branch when the sim is `EulerIntegrator`.
 function forward_predict!(preds, prob::AbstractInversion)
-    return _forward_run!(preds, prob, prob.sim.opts.diffeq.alg)
+    return _forward_run!(preds, prob, prob.sim.opts.integ)
 end
 
 function _forward_run!(preds, prob::AbstractInversion, ::EulerIntegrator)
     sim = prob.sim
-    dt = sim.opts.diffeq.dt_min
+    dt = sim.opts.integ.dt
     reset_state!(sim)          # restart from the initial condition each evaluation
     init_problem!(sim)
     u = copy(sim.now.u)

@@ -31,7 +31,7 @@
 Preallocated recording buffers for `record_forward!`: one `StateSnapshot` per
 save/observation-interval boundary (`length(prob.extract_times) + 1`, including
 the state at the end of the run) and one accepted-steplog-entry vector per
-interval. The entry type `E` follows `prob.sim.opts.diffeq.alg` via
+interval. The entry type `E` follows `prob.sim.opts.integ` via
 `steplog_entry_type` (`Tuple{T,T}` for the tableau algorithms, widened to
 `Tuple{T,T,Int}` for `RKCIntegrator` — see `steplog_entry`/`steplog_entry_type` in
 `src/integrators.jl`), so `push!`ing whatever `steplog_entry` a given
@@ -48,7 +48,7 @@ function ForwardRecord(prob::AbstractInversion)
     T = promote_type(eltype(prob.sim.now.u), eltype(prob.extract_times))
     n = length(prob.extract_times)
     checkpoints = [StateSnapshot(prob.sim) for _ in 1:(n + 1)]
-    E = steplog_entry_type(prob.sim.opts.diffeq.alg, T)
+    E = steplog_entry_type(prob.sim.opts.integ, T)
     steps = [E[] for _ in 1:n]
     return ForwardRecord{T, eltype(checkpoints), E}(checkpoints, steps)
 end
@@ -68,7 +68,7 @@ function record_forward!(preds, rec::ForwardRecord, prob::AbstractInversion)
         "ForwardRecord has $(nintervals(rec)) intervals but the problem has " *
         "$(length(prob.extract_times)) extract times — build the record from " *
         "this problem (`ForwardRecord(prob)`)."))
-    return _record_run!(preds, rec, prob, prob.sim.opts.diffeq.alg)
+    return _record_run!(preds, rec, prob, prob.sim.opts.integ)
 end
 
 # Fixed-step explicit Euler: the recorded twin of `_forward_run!(_, _, ::EulerIntegrator)`
@@ -78,7 +78,7 @@ end
 function _record_run!(preds, rec::ForwardRecord{T}, prob::AbstractInversion,
         ::EulerIntegrator) where {T}
     sim = prob.sim
-    dt = T(sim.opts.diffeq.dt_min)
+    dt = T(sim.opts.integ.dt)
     reset_state!(sim)
     init_problem!(sim)
     u = copy(sim.now.u)
@@ -133,7 +133,7 @@ recorded trajectory bit for bit: afterwards the state matches
 checkpointing extension reverses step by step.
 """
 function replay_interval!(u, dudt, rec::ForwardRecord, prob::AbstractInversion, i)
-    return _replay_interval!(u, dudt, rec, prob, i, prob.sim.opts.diffeq.alg)
+    return _replay_interval!(u, dudt, rec, prob, i, prob.sim.opts.integ)
 end
 
 function _replay_interval!(u, dudt, rec::ForwardRecord{T}, prob::AbstractInversion,
