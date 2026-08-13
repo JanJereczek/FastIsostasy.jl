@@ -10,7 +10,7 @@
 [ci-img]: https://github.com/JanJereczek/FastIsostasy.jl/workflows/CI/badge.svg
 [ci-url]: https://github.com/JanJereczek/FastIsostasy.jl/actions
 
-[codecov-img]: https://codecov.io/gh/JanJereczek/FastIsostasy.jl/branch/master/graph/badge.svg
+[codecov-img]: https://codecov.io/gh/JanJereczek/FastIsostasy.jl/branch/main/graph/badge.svg
 [codecov-url]: https://codecov.io/gh/JanJereczek/FastIsostasy.jl
 
 

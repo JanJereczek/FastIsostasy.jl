@@ -18,8 +18,8 @@ FastIsostasy can be differentiated with [Enzyme](https://enzyme.mit.edu/julia/)
 and run *backwards*: given observations of the surface, infer the ice load or the
 solid-Earth parameters that produced them. Loading `Enzyme` activates the AD
 extension; reverse mode additionally needs `Checkpointing`, and [`solve!`](@ref)
-needs `Optim`. Worked examples: [Inverse ice history](@ref),
-[Inverse calibration](@ref) and [Full-field viscosity inversion](@ref).
+needs `Optim`. Worked examples: [Inverse calibration](@ref),
+[Inverse ice history](@ref) and [Full-field viscosity inversion](@ref).
 
 Note that AD requires a fixed-step integrator ([`EulerIntegrator`](@ref)) and a
 [`SmoothTransition`](@ref).
