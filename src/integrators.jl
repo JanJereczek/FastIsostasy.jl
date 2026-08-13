@@ -718,26 +718,74 @@ function rkc_coeffs(::Type{T}, s::Int, damping) where {T}
     return mu, nu, mutilde, gammatilde, c
 end
 
+# -----------------------------------------------------------------------------
+# Per-integrator coefficient cache
+#
+# `rkc_coeffs` and `rkc_stability_boundary` are pure functions of `(T, s, damping)`,
+# and `damping` is fixed for the lifetime of an integrator. Recomputing them per
+# step is what they used to cost: `rkc_coeffs` allocates five `Vector{T}` (plus
+# three more inside `chebyshev_table`) and `rkc_stability_boundary` bisects, calling
+# `rkc_coeffs` again at every probe — and `rkc_choose_stages` calls *that* once per
+# candidate stage count. Caching here keeps both pure functions intact (the tests
+# and the AD replay plan call them directly) while making the steady state
+# allocation-free: `s` rarely changes between steps, and each boundary is computed
+# at most once per integrator.
+# -----------------------------------------------------------------------------
+
+mutable struct RKCCoeffCache{T}
+    damping::T
+    s::Int                  # stage count `mu…c` are valid for (0 = unset)
+    mu::Vector{T}
+    nu::Vector{T}
+    mutilde::Vector{T}
+    gammatilde::Vector{T}
+    c::Vector{T}
+    boundary::Vector{T}     # boundary[s] = rkc_stability_boundary(s, damping); 0 = unset
+end
+
+RKCCoeffCache(::Type{T}, damping, smax::Int) where {T} =
+    RKCCoeffCache(T(damping), 0, T[], T[], T[], T[], T[], zeros(T, max(smax, 0)))
+
+function cached_stability_boundary!(cache::RKCCoeffCache{T}, s::Int) where {T}
+    checkbounds(Bool, cache.boundary, s) ||
+        return rkc_stability_boundary(s, cache.damping)
+    @inbounds begin
+        cache.boundary[s] > 0 && return cache.boundary[s]
+        b = rkc_stability_boundary(s, cache.damping)
+        cache.boundary[s] = b
+        return b
+    end
+end
+
+function cached_coeffs!(cache::RKCCoeffCache{T}, s::Int) where {T}
+    if cache.s != s
+        cache.mu, cache.nu, cache.mutilde, cache.gammatilde, cache.c =
+            rkc_coeffs(T, s, cache.damping)
+        cache.s = s
+    end
+    return cache.mu, cache.nu, cache.mutilde, cache.gammatilde, cache.c
+end
+
 # Smallest stage count (clamped to [2, smax]) whose exact stability boundary
 # covers `safety * dt * lambda_max`, seeded by the closed-form asymptotic
 # `β(s) ≈ 0.65 s²` (roadmap §2.2/§5) and refined against the exact boundary
-# (`rkc_stability_boundary`) so the result is correct regardless of how
-# accurate that seed constant is — a bad seed only costs a few extra integer
+# (`rkc_stability_boundary`, via `cache`) so the result is correct regardless of
+# how accurate that seed constant is — a bad seed only costs a few extra integer
 # increments here, utterly negligible next to the RHS evaluations the chosen
 # `s` will cost. If `smax` is reached and still insufficient, `s = smax` is
 # returned anyway and the ordinary error-based reject/shrink cycle (not a
 # special code path here) drives `dt` down on retry.
 function rkc_choose_stages(
+    cache::RKCCoeffCache{T},
     dt,
     lambda_max::T,
-    damping::T,
     smax::Int;
     safety::T = T(1.2),
 ) where {T}
     z = safety * dt * lambda_max
     z <= 0 && return 2
     s = clamp(ceil(Int, sqrt(z / T(0.65))), 2, smax)
-    while s < smax && rkc_stability_boundary(s, damping) < z
+    while s < smax && cached_stability_boundary!(cache, s) < z
         s += 1
     end
     return s
@@ -762,15 +810,18 @@ Mutable state and O(1) (independent of stage count) work arrays for `RKCIntegrat
 The rolling Chebyshev recurrence needs only three grid-sized buffers for the
 `Y_{j-2}, Y_{j-1}, Y_j` sequence (`ym2`, `ym1`, `unew`, cycled by reference
 swap — no per-step allocation) plus `F0` (the RHS at `Y_0`, constant through a
-step) and `Fj` (the RHS at the current stage). The per-step coefficient
-vectors from `rkc_coeffs` are small (`O(s)` scalars, `s <= smax`, a few KB at
-most) and are *not* part of this O(1)-work-array guarantee, which concerns the
-grid-sized state only.
+step) and `Fj` (the RHS at the current stage). The stage-coefficient vectors are
+small (`O(s)` scalars, `s <= smax`, a few KB at most), live in the `cache` field
+and are rebuilt only when the stage count changes; they are *not* part of this
+O(1)-work-array guarantee, which concerns the grid-sized state only.
 """
-mutable struct RKCIntegratorState{A,T,F,P} <: AbstractIntegratorState
+mutable struct RKCIntegratorState{A,T,F,P,Alg<:RKCIntegrator} <: AbstractIntegratorState
     f!::F
     p::P
-    alg::RKCIntegrator
+    # Concretely typed, exactly like `TableauIntegratorState.alg`: as the bare
+    # `RKCIntegrator` (a UnionAll) every `alg.damping`/`alg.safety`/`alg.reltol`
+    # read inside `perform_step!` inferred as `Any`.
+    alg::Alg
     t::T
     dt::T
     u::A                 # current solution (== uprev during a step)
@@ -790,6 +841,7 @@ mutable struct RKCIntegratorState{A,T,F,P} <: AbstractIntegratorState
     naccept::Int
     nreject::Int
     nf::Int
+    cache::RKCCoeffCache{T}    # stage coefficients + stability boundaries, memoised
 end
 
 # `lambda_maxiter`/`lambda_tol` stay keywords: they tune the power iteration that
@@ -842,6 +894,7 @@ function init_integrator(
         0,
         0,
         nf0[],
+        RKCCoeffCache(T, alg.damping, alg.smax),
     )
 end
 
@@ -859,14 +912,14 @@ function perform_step!(integ::RKCIntegratorState, dt)
     T = eltype(u)
 
     s = rkc_choose_stages(
+        integ.cache,
         T(dt),
         integ.lambda_max,
-        T(alg.damping),
         alg.smax;
         safety = T(alg.safety),
     )
     integ.s = s
-    mu, nu, mutilde, gammatilde, c = rkc_coeffs(T, s, T(alg.damping))
+    mu, nu, mutilde, gammatilde, c = cached_coeffs!(integ.cache, s)
 
     F0, Fj = integ.F0, integ.Fj
     integ.f!(F0, u, p, t)
