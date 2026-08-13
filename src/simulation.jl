@@ -140,7 +140,7 @@ function Simulation(
     dz_ss_ref = zeros(domain),
     z_b_ref = fill(1.0f6, domain),
     ncout = NetcdfOutput(domain, T[], ""),
-    nout = NativeOutput(t = T[]),
+    nout = NativeOutput(t = T[], T = T),
     c = PhysicalConstants{T}(),
     simobs = SimulatedObservable[],
 )
@@ -180,12 +180,15 @@ function Simulation(
     end
 
     H_af_ref = height_above_floatation(H_ice_ref, z_b_ref, z_ss_ref, c, tr)
+    H_F_ref = similar(H_af_ref)
+    update_HF!(H_F_ref, H_ice_ref, z_b_ref, z_ss_ref, maskgrounded, c, tr)
     H_water_ref = watercolumn(H_ice_ref, maskgrounded, z_b_ref, z_ss_ref, c, tr)
     ref = ReferenceState(
         u_ref,
         ue_ref,
         H_ice_ref,
         H_af_ref,
+        H_F_ref,
         H_water_ref,
         z_b_ref,
         z_ss_ref,
@@ -195,7 +198,13 @@ function Simulation(
         maskgrounded,
         maskocean,
     )
-    now = CurrentState(domain, ref, sealevel.bsl.z, nbranches(solidearth.mantle))
+    now = CurrentState(
+        domain,
+        ref,
+        sealevel.bsl.z,
+        nbranches(solidearth.mantle),
+        needs_kinematic_state(sealevel.formalism),
+    )
 
     return Simulation(
         domain,
@@ -237,10 +246,7 @@ function Base.show(io::IO, ::MIME"text/plain", sim::Simulation)
         "extrema(effective viscosity)" => extrema(solidearth.effective_viscosity),
         "extrema(lithospheric thickness)" => extrema(solidearth.litho_thickness),
     ]
-    padlen = maximum(length(d[1]) for d in descriptors) + 2
-    for (desc, val) in descriptors
-        println(io, rpad(" $(desc): ", padlen), val)
-    end
+    show_descriptors(io, descriptors)
 end
 
 #####################################################
@@ -309,10 +315,7 @@ $(TYPEDSIGNATURES)
 Initialize the simulation problem by computing the diagnostics variables.
 """
 function init_problem!(sim::Simulation)
-    update_V_af!(sim, sim.sealevel.volume_contribution)
-    update_V_den!(sim, sim.sealevel.density_contribution)
-    update_V_pov!(sim, sim.sealevel.adjustment_contribution)
-    total_volume(sim)
+    init_bsl_formalism!(sim, sim.sealevel.formalism)
     update_diagnostics!(sim.now.dudt, sim.now.u, sim, sim.timer.t)
     return nothing
 end
@@ -378,9 +381,6 @@ function update_diagnostics!(dudt, u, sim::Simulation, t)
     update_Haf!(sim)
     columnanom_ice!(sim)                        # Compute associated column anomaly
 
-    # apply_bc!(sim.now.H_sed, t, sim.bcs.)
-    # columnanom_sediment!(sim)
-
     # As integration requires smaller time steps than what we typically want
     # for the elastic displacement and the sea-surface elevation,
     # we only update them every sim.opts.dt_sparse_diagnostics
@@ -405,6 +405,7 @@ function update_diagnostics!(dudt, u, sim::Simulation, t)
         update_Haf!(sim)
         update_maskgrounded!(sim)
         update_maskocean!(sim)
+        update_HF!(sim)
 
         # Update the anomaly of seawater column
         columnanom_water!(sim, sim.sealevel.load)

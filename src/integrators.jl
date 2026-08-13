@@ -24,17 +24,14 @@ per-concrete-integrator methods.
 """
 abstract type AbstractIntegratorState end
 
-# Every integrator stores its settings concretely in its own float type `T`.
-# `BS3Integrator()` infers `T` from the defaults below (`Float32`, the package-wide
-# default — cf. `Timer(t_span; T = Float32)`); `BS3Integrator{Float64}(reltol = 1e-8)`
-# pins it. Either way `init_integrator` converts every setting to the simulation's
-# own element type, so the stored type is a matter of precision, not of dispatch.
+# Every integrator stores its settings in its own float type `T`, inferred from the
+# defaults below (`Float32`) unless pinned (`BS3Integrator{Float64}(reltol = 1e-8)`).
+# `init_integrator` converts them to the simulation's element type either way.
 #
-# The defaults deliberately name no type variable: `@kwdef` also generates the
-# `BS3Integrator(; ...)` method that leaves `T` to be inferred, and a `T`-dependent
-# default (`eps(T)`) would make that method throw `UndefVarError: T`. Hence the
-# concrete `eps(Float32)` floor and the `Inf32` ceiling, which widens to `Inf` for
-# any `T` and so means "unbounded" in every precision.
+# CAUTION: the defaults must name no type variable — `@kwdef`'s inferring method
+# would throw `UndefVarError: T` on a `T`-dependent default like `eps(T)`. Hence
+# the concrete `eps(Float32)` floor and the `Inf32` ceiling, which widens to `Inf`
+# in any precision.
 
 """
     EulerIntegrator(dt)

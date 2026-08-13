@@ -141,11 +141,9 @@ function watercolumn(
     return H_water
 end
 
-function columnanom_sediment!(sim::Simulation) end
-
 function columnanom_load!(sim::Simulation)
     canoms = sim.now.columnanoms
-    @. canoms.load .=
+    @. canoms.load =
         sim.solidearth.maskactive * (canoms.ice + canoms.seawater + canoms.sediment)
     return nothing
 end
@@ -157,11 +155,4 @@ function columnanom_full!(sim::Simulation)
     return nothing
 end
 
-function mass_anom(sim::Simulation)
-    return sim.domain.A .* (sim.now.columnanoms.full) # .-
-    # sim.c.rho_seawater .* sim.now.z_bsl .* sim.now.maskocean .* sim.ref.maskactive
-end
-
-function mass_anom(A, canom_full)
-    return A * canom_full
-end
+@inline mass_anom(A, canom_full) = A * canom_full

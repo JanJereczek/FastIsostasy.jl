@@ -64,7 +64,7 @@ end
 """
 $(TYPEDSIGNATURES)
 
-Convert displacement rate `dudt` from ``m \\, s^{-1} ``to ``mm \\, \\mathrm{yr}^{-1} ``.
+Convert displacement rate `dudt` from `m s⁻¹` to `mm yr⁻¹`.
 """
 function m_per_sec2mm_per_yr(dudt::Real)
     return dudt * 1e3 * SECONDS_PER_YEAR
@@ -74,22 +74,16 @@ end
 # Array utils
 #####################################################
 
-not(x::Bool) = !x
+@inline not(x::Bool) = !x
 # Complement for smooth (floating-point) masks in [0, 1].
-not(x::AbstractFloat) = one(x) - x
+@inline not(x::AbstractFloat) = one(x) - x
 
 Base.zeros(domain::RegionalDomain) = zeros(eltype(domain.x), domain.nx, domain.ny)
 
 Base.fill(x::Real, sim::Simulation) = fill(x, sim.domain)
 Base.fill(x, domain::RegionalDomain) = fill(eltype(domain.x)(x), domain.nx, domain.ny)
 
-approx_in(item, collection, tol) = any(abs.(collection .- item) .< tol)
-
-function corner_matrix(T, nx, ny)
-    M = zeros(T, nx, ny)
-    M[1, 1], M[nx, 1], M[1, ny], M[nx, ny] = T.([1, 1, 1, 1])
-    return M
-end
+approx_in(item, collection, tol) = any(x -> abs(x - item) < tol, collection)
 
 """
 $(TYPEDSIGNATURES)
@@ -106,6 +100,20 @@ function matrify(x::Vector{T}, nx::Int, ny::Int) where {T<:Real}
         X[:, :, i] = fill(x[i], nx, ny)
     end
     return X
+end
+
+#####################################################
+# Show utils
+#####################################################
+
+# Shared body of the package's `Base.show(::IO, ::MIME"text/plain", ::T)` methods:
+# print each `" name: "` padded to a common width, followed by its value.
+function show_descriptors(io::IO, descriptors)
+    padlen = maximum(length(d[1]) for d in descriptors) + 2
+    for (desc, val) in descriptors
+        println(io, rpad(" $(desc): ", padlen), val)
+    end
+    return nothing
 end
 
 #####################################################
@@ -268,12 +276,9 @@ True when `domain`'s arrays live in host memory.
 """
 on_host(domain::RegionalDomain) = domain.backend isa CPU
 
-# NOTE: `kernelcollect` and the `on_host` branch in `init_problem!` are not really
-# about hardware — they exist because a CPU mask comparison yields a `BitArray`,
-# which the state structs want materialised as a dense `Array{Bool}`, while a
-# device array is already dense and must not be pulled back to the host. Forcing
-# dense Bool at the point the masks are *built* would remove both. Left as-is here
-# to keep this refactor behaviour-preserving.
+# Materialise the `BitArray` a host mask comparison yields as a dense `Array{Bool}`,
+# which is what the state structs want. A device array is already dense and must
+# not be pulled back to the host, hence the `on_host` guard.
 kernelcollect(X, domain) = on_host(domain) ? collect(X) : X
 
 """
@@ -313,36 +318,6 @@ function _lives_on(X::AbstractArray, backend::Backend)
     X isa BitArray && return false
     return get_backend(X) === backend
 end
-
-
-# function remake!(sim::Simulation)
-
-#     T = Float64
-#     (; domain, ref, now) = sim
-
-#     now.u .= ref.u
-#     now.dudt .= T.(0.0)
-#     now.ue .= ref.ue
-#     now.u_eq .= ref.u
-#     now.ucorner = T(0.0)
-#     now.H_ice .= ref.H_ice
-#     now.H_water .= ref.H_water
-#     now.columnanoms = ColumnAnomalies(domain)
-#     now.z_b .= ref.z_b
-#     now.bsl = ref.bsl
-#     now.dz_ss .= T.(0.0)
-#     now.z_ss .= ref.z_ss
-#     now.V_af = ref.V_af
-#     now.V_pov = ref.V_pov
-#     now.V_den = ref.V_den
-#     now.maskgrounded .= ref.maskgrounded
-#     now.maskocean .= ref.maskocean
-#     now.osc = OceanSurfaceChange(T = T, z0 = ref.bsl)
-#     now.count_sparse_updates = 0
-#     now.k = 1
-
-#     return nothing
-# end
 
 #####################################################
 # Example utils

@@ -26,29 +26,41 @@ get_shearmodulus(m::ReferenceSolidEarthModel) =
 
 """
 $(TYPEDSIGNATURES)
+
+Whether the effective viscosity is corrected for mantle compressibility. Available
+subtypes are:
+ - [`CompressibleMantle`](@ref) (default)
+ - [`IncompressibleMantle`](@ref)
 """
 abstract type AbstractCompressibility end
 
 """
 $(TYPEDSIGNATURES)
+
+Assume a compressible mantle, i.e. rescale the effective viscosity by
+`(1 + 1/2) / (1 + ν)` with `ν` the mantle Poisson ratio.
 """
-struct CompressibleMantle end
+struct CompressibleMantle <: AbstractCompressibility end
 
 """
 $(TYPEDSIGNATURES)
+
+Assume an incompressible mantle (`ν = 1/2`), i.e. leave the effective viscosity
+unchanged.
 """
-struct IncompressibleMantle end
+struct IncompressibleMantle <: AbstractCompressibility end
 
 """
 $(TYPEDSIGNATURES)
+
+Apply the compressibility correction of `compressibility` to the viscosity `eta`,
+given the mantle Poisson ratio `nu`.
 """
-apply_compressibility!(eta, nu, compressibility::IncompressibleMantle) = eta
+apply_compressibility!(eta, nu, compressibility::IncompressibleMantle) = nothing
 
 function apply_compressibility!(eta, nu, compressibility::CompressibleMantle)
-    incompressible_poissonratio = 0.5f0
-    mantle_poissonratio = nu
-    compressibility_scaling =
-        (1 + incompressible_poissonratio) / (1 + mantle_poissonratio)
+    incompressible_poissonratio = oneunit(nu) / 2
+    compressibility_scaling = (1 + incompressible_poissonratio) / (1 + nu)
     eta .*= compressibility_scaling
     return nothing
 end
@@ -59,28 +71,44 @@ end
 
 """
 $(TYPEDSIGNATURES)
+
+Calibration of the effective viscosity against a specific 3D GIA model. Available
+subtypes are:
+ - [`NoCalibration`](@ref) (default)
+ - [`SeakonCalibration`](@ref)
 """
 abstract type AbstractCalibration end
 
 """
 $(TYPEDSIGNATURES)
+
+Leave the effective viscosity uncalibrated.
 """
-struct NoCalibration end
+struct NoCalibration <: AbstractCalibration end
 
 """
 $(TYPEDSIGNATURES)
+
+Calibrate the effective viscosity against Seakon, as described in Appendix C of
+[swierczek-jereczek_fastisostasy_2024](@citet). This accounts for the effect of a
+laterally varying shear modulus by pulling `eta` towards `ref_viscosity`: with the
+default `ref_viscosity = 1e21`, an input of `1e20` yields `≈ 10^20.4` and an input
+of `1e22` yields `≈ 10^21.6`.
+
+# Fields
+$(TYPEDFIELDS)
 """
-@kwdef struct SeakonCalibration{T}
+@kwdef struct SeakonCalibration{T} <: AbstractCalibration
+    "the viscosity (Pa s) the calibration pulls towards"
     ref_viscosity::T = 1.0f21
 end
-
 
 """
 $(TYPEDSIGNATURES)
 
 Apply the `calibration` to the viscosity `eta`.
 """
-apply_calibration!(eta, calibraton::NoCalibration) = eta
+apply_calibration!(eta, calibration::NoCalibration) = nothing
 
 function apply_calibration!(eta, calibration::SeakonCalibration)
     T = eltype(eta)
@@ -94,30 +122,56 @@ end
 
 """
 $(TYPEDSIGNATURES)
+
+How a radially layered (3D) viscosity profile is lumped into the effective 2D
+viscosity the solver uses. Available subtypes are:
+ - [`FreqDomainViscosityLumping`](@ref) (default)
+ - [`TimeDomainViscosityLumping`](@ref)
+ - [`MeanViscosityLumping`](@ref)
+ - [`MeanLogViscosityLumping`](@ref)
 """
 abstract type AbstractViscosityLumping end
 
 """
 $(TYPEDSIGNATURES)
+
+Lump the layers with the Lingle & Clark (1975) channel-flow correction evaluated
+at a single wavenumber `κ = π / characteristic_loadlength`, i.e. in the time
+domain. Cheaper than [`FreqDomainViscosityLumping`](@ref) but tied to one
+assumed load size.
+
+# Fields
+$(TYPEDFIELDS)
 """
-@kwdef struct TimeDomainViscosityLumping
+@kwdef struct TimeDomainViscosityLumping <: AbstractViscosityLumping
+    "the assumed horizontal length scale (m) of the load"
     characteristic_loadlength::Float32 = 2.0f6
 end
 
 """
 $(TYPEDSIGNATURES)
+
+Lump the layers with the channel-flow correction evaluated over the whole
+spectrum of the pseudo-differential operator [bueler_fast_2007](@citet), i.e. in
+the frequency domain. The default, and the most faithful of the four.
 """
-struct FreqDomainViscosityLumping end
+struct FreqDomainViscosityLumping <: AbstractViscosityLumping end
 
 """
 $(TYPEDSIGNATURES)
+
+Lump the layers by taking the depth-mean viscosity over the upper mantle.
 """
-struct MeanViscosityLumping end
+struct MeanViscosityLumping <: AbstractViscosityLumping end
 
 """
 $(TYPEDSIGNATURES)
+
+Lump the layers by taking the depth-mean of `log10(viscosity)` over the upper
+mantle — the geometric mean, which is usually the better summary of a profile
+spanning orders of magnitude.
 """
-struct MeanLogViscosityLumping end
+struct MeanLogViscosityLumping <: AbstractViscosityLumping end
 
 """
 $(TYPEDSIGNATURES)
@@ -246,6 +300,10 @@ end
 
 """
 $(TYPEDSIGNATURES)
+
+Channel-flow correction of [`TimeDomainViscosityLumping`](@ref), i.e.
+[`channel_scaling`](@ref) evaluated at the single wavenumber
+`κ = π / characteristic_loadlength`.
 """
 function channel_scaling_timedomain(
     domain::RegionalDomain,
@@ -443,8 +501,19 @@ function besselkei(x)
     return imag(besselk(0, z))
 end
 
-function green_viscous(domain, rho, D)
-    L = get_flexural_lengthscale(D, rho, 9.81)
+"""
+$(TYPEDSIGNATURES)
+
+Green's function of the viscous (ELRA) response to a point load, for an upper
+mantle of density `rho` under a lithosphere of rigidity `D`, with gravitational
+acceleration `g`.
+
+`g` is an argument rather than a hardcoded constant so that the Green's function
+uses the same gravity as the rest of the model: [`GIATools`](@ref) passes
+`c.g` from the simulation's [`PhysicalConstants`](@ref).
+"""
+function green_viscous(domain, rho, D, g)
+    L = get_flexural_lengthscale(D, rho, g)
     R = max.(domain.R, 1)
     return map(r -> -(L^2 / (2 * pi * D) * besselkei(r / L)), R) .*
            (domain.dx * domain.dy)
@@ -490,10 +559,8 @@ Compute the relaxation time for a stronger mantle, following Van Calcar et al. (
 """
 get_relaxation_time_stronger(eta) = get_relaxation_time(eta, 0.20, 1.41)
 
-# eta1 = 1e21
-# τ1_low = get_relaxation_time(eta1, 0.35, 4.63)
-# τ1_high = get_relaxation_time(eta1, 0.20, 1.41)
-# Gives lb, ub = 524, 616 years for 1e21, which could be a caveat compared to Spada et al. (2011)
+# NOTE: for η = 1e21 the two bracket τ ∈ [524, 616] yr, which may be a caveat when
+# comparing against Spada et al. (2011).
 
 function maxwelltime_scaling(layer_viscosities, layer_shearmoduli)
     return layer_shearmoduli[end] ./ layer_shearmoduli .* layer_viscosities

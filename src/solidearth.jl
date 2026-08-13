@@ -263,9 +263,9 @@ lv = [1e19, 1e21]
 solidearth = SolidEarth(domain, layer_boundaries = lb, layer_viscosities = lv)
 ```
 
-which initializes a lithosphere of thickness ``T_1 = 100 \\mathrm{km}``, a viscous
-channel between ``T_1``and ``T_2 = 300 \\mathrm{km}``and a viscous halfspace starting
-at ``T_2``. This represents a homogenous case. For heterogeneous ones, simply make
+which initializes a lithosphere of thickness `T₁ = 100 km`, a viscous
+channel between `T₁` and `T₂ = 300 km` and a viscous halfspace starting
+at `T₂`. This represents a homogenous case. For heterogeneous ones, simply make
 `lb::Vector{Matrix}`, `lv::Vector{Matrix}` such that the vector elements represent the
 lateral variability of each layer on the grid of `domain::RegionalDomain`.
 """
@@ -277,7 +277,7 @@ mutable struct SolidEarth{
     MA, # <:AbstractMantle,
     CA, # <:AbstractCalibration,
     CO, # <:AbstractCompressibility,
-    LU, # <:AbstractLumping,
+    LU, # <:AbstractViscosityLumping,
     LC, # <:AbstractLithosphereColumn,
 }
     lithosphere::LI
@@ -411,8 +411,5 @@ function Base.show(io::IO, ::MIME"text/plain", se::SolidEarth)
             [se.litho_poissonratio, se.mantle_poissonratio],
         "rho_uppermantle, rho_litho" => [se.rho_uppermantle, se.rho_litho],
     ]
-    padlen = maximum(length(d[1]) for d in descriptors) + 2
-    for (desc, val) in descriptors
-        println(io, rpad(" $(desc): ", padlen), val)
-    end
+    show_descriptors(io, descriptors)
 end

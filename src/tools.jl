@@ -55,12 +55,8 @@ mutable struct PreAllocated{M,C,C3}
     fftrhs::C
     fftF::C
     fftU::C
-    # Per-branch spectral buffer for the coupled (N+1)-field solve of
-    # `TransientCreepMantle` (roadmap burgers.md §3/§4): one (nx, ny) complex
-    # plane per Kelvin branch, stacked along dim 3 — mirrors `u_K`'s 3D-array
-    # design in `src/state.jl` for the same GPU/AD reasons. Sized `(nx, ny, 0)`
-    # for every steady-creep rheology, so it costs nothing unless a Kelvin branch
-    # exists.
+    # One complex plane per Kelvin branch of `TransientCreepMantle`, stacked along
+    # dim 3 exactly like `u_K` in `src/state.jl`; zero-sized otherwise.
     fftK::C3
 end
 
@@ -112,6 +108,7 @@ function GIATools(
                 domain,
                 solidearth.rho_uppermantle,
                 mean(solidearth.litho_rigidity),
+                c.g,
             ),
         ),
         domain.backend,
@@ -223,9 +220,6 @@ function _make_cplx_matrices(domain, ::RealFFTBackend, n)
     return [kernelzeros(domain.backend, Complex{T}, nx2, domain.ny) for _ = 1:n]
 end
 
-# One (nx, ny) complex plane per Kelvin branch, stacked along dim 3 — the
-# `PreAllocated.fftK` buffer. `N = 0` for every steady-creep rheology, giving a
-# zero-cost `(nx, ny, 0)` array, exactly like `u_K` in `src/state.jl`.
 _make_cplx_branch_array(domain, ::ComplexFFTBackend, N) =
     kernelzeros(domain.backend, Complex{eltype(domain.R)}, domain.nx, domain.ny, N)
 

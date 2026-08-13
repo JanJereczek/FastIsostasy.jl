@@ -312,10 +312,7 @@ function Base.show(io::IO, ::MIME"text/plain", sl::RegionalSeaLevel)
         "BSL update" => typeof(sl.update_bsl),
         "BSL formalism" => typeof(sl.formalism),
     ]
-    padlen = maximum(length(d[1]) for d in descriptors) + 2
-    for (desc, val) in descriptors
-        println(io, rpad(" $(desc): ", padlen), val)
-    end
+    show_descriptors(io, descriptors)
 end
 
 """

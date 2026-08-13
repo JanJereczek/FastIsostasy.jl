@@ -31,7 +31,7 @@ All constants are given in SI units (kilogram, meter, second).
     r_equator::T = 6371e3
     r_pole::T = 6357e3
     A_ocean_pd::T = 3.625e14
-    g::T = 9.8
+    g::T = 9.81
     G::T = 6.674e-11
     seconds_per_year::T = SECONDS_PER_YEAR
     rho_ice::T = 0.910e3

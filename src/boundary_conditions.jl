@@ -224,71 +224,36 @@ function norm!(W)
     return nothing
 end
 
+# The grid a BC's weights live on: the computation domain itself, or the larger
+# one a convolution produces.
+bc_gridsize(::RegularBCSpace, domain) = (domain.nx, domain.ny)
+bc_gridsize(::ExtendedBCSpace, domain) = (2*domain.nx-1, 2*domain.ny-1)
+
+# Unnormalised weights per BC flavour, on a grid of size `(nx, ny)`. `domain` is
+# only needed by `DistanceWeightedBC`, which weights by distance from the centre
+# and therefore has no `ExtendedBCSpace` counterpart.
+bc_weights(::CornerBC, T, nx, ny, domain) = corner_ones(T, nx, ny)
+bc_weights(::BorderBC, T, nx, ny, domain) = border_ones(T, nx, ny)
+bc_weights(::MeanBC, T, nx, ny, domain) = ones(T, nx, ny)
+bc_weights(::DistanceWeightedBC, T, nx, ny, domain) =
+    border_ones(T, nx, ny) .* domain.R
+
 """
 $(TYPEDSIGNATURES)
 
-Precompute the boundary condition for the given computation domain.
+Precompute the boundary condition for the given computation domain, i.e. resolve
+it into the normalised weight matrix `W` of an [`OffsetBC`](@ref).
 """
-function precompute_bc(bc::CornerBC, sp::RegularBCSpace, domain::RegionalDomain)
+function precompute_bc(bc, sp::AbstractBCSpace, domain::RegionalDomain)
     T = eltype(domain.R)
-    W = kernelpromote(corner_ones(T, domain.nx, domain.ny), domain.backend)
+    nx, ny = bc_gridsize(sp, domain)
+    W = kernelpromote(bc_weights(bc, T, nx, ny, domain), domain.backend)
     norm!(W)
     return OffsetBC(bc.space, bc.x_border, W)
 end
 
-function precompute_bc(bc::CornerBC, sp::ExtendedBCSpace, domain::RegionalDomain)
-    T = eltype(domain.R)
-    W = kernelpromote(corner_ones(T, 2*domain.nx-1, 2*domain.ny-1), domain.backend)
-    norm!(W)
-    return OffsetBC(bc.space, bc.x_border, W)
-end
-
-function precompute_bc(bc::BorderBC, sp::RegularBCSpace, domain::RegionalDomain)
-    T = eltype(domain.R)
-    W = kernelpromote(border_ones(T, domain.nx, domain.ny), domain.backend)
-    norm!(W)
-    return OffsetBC(bc.space, bc.x_border, W)
-end
-
-function precompute_bc(bc::BorderBC, sp::ExtendedBCSpace, domain::RegionalDomain)
-    T = eltype(domain.R)
-    W = kernelpromote(border_ones(T, 2*domain.nx-1, 2*domain.ny-1), domain.backend)
-    norm!(W)
-    return OffsetBC(bc.space, bc.x_border, W)
-end
-
-function precompute_bc(
-    bc::DistanceWeightedBC,
-    sp::RegularBCSpace,
-    domain::RegionalDomain,
-)
-    T = eltype(domain.R)
-    W = kernelpromote(border_ones(T, domain.nx, domain.ny) .* domain.R, domain.backend)
-    norm!(W)
-    return OffsetBC(bc.space, bc.x_border, W)
-end
-
-function precompute_bc(
-    bc::DistanceWeightedBC,
-    sp::ExtendedBCSpace,
-    domain::RegionalDomain,
-)
+precompute_bc(bc::DistanceWeightedBC, sp::ExtendedBCSpace, domain::RegionalDomain) =
     error("DistanceWeightedBC is not implemented for ExtendedBCSpace")
-end
-
-function precompute_bc(bc::MeanBC, sp::RegularBCSpace, domain::RegionalDomain)
-    T = eltype(domain.R)
-    W = kernelpromote(ones(T, domain.nx, domain.ny), domain.backend)
-    norm!(W)
-    return OffsetBC(bc.space, bc.x_border, W)
-end
-
-function precompute_bc(bc::MeanBC, sp::ExtendedBCSpace, domain::RegionalDomain)
-    T = eltype(domain.R)
-    W = kernelpromote(ones(T, 2*domain.nx-1, 2*domain.ny-1), domain.backend)
-    norm!(W)
-    return OffsetBC(bc.space, bc.x_border, W)
-end
 
 #########################################################################
 # Simulation level

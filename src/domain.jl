@@ -97,16 +97,10 @@ struct RegionalDomain{T,L,M,B} <: AbstractDomain
     correct_distortion::Bool
     zeros::M                     # a zero matrix of size nx x ny
     pseudodiff::M               # pseudodiff operator as matrix (Hadamard product)
-    # Which hardware the arrays live on, as a `KernelAbstractions.Backend`:
-    # `CPU()`, `CUDABackend()`, `ROCBackend()`, `MetalBackend()`, `oneAPIBackend()`.
-    # FastIsostasy never names a vendor array type — allocation goes through
-    # `kernelzeros`/`kernelpromote`, which call `KernelAbstractions.allocate`.
-    #
-    # KA backends are singletons, so storing the *instance* still lifts the choice
-    # into the type domain: `B` is a compile-time constant and every
-    # `backend`-dependent branch folds away, exactly as the old `Type{K}` field did.
-    # `B` is the *last* parameter so that partially applied signatures
-    # (`RegionalDomain{T, L, M}`) keep dispatching.
+    # Which hardware the arrays live on, as a `KernelAbstractions.Backend` (see the
+    # docstring). KA backends are singletons, so `B` is a compile-time constant and
+    # every backend-dependent branch folds away. `B` is the *last* parameter so that
+    # partially applied signatures (`RegionalDomain{T, L, M}`) keep dispatching.
     backend::B
 end
 
@@ -221,7 +215,7 @@ function RegionalDomain(
 
     i1, i2 = samesize_conv_indices(nx, mx)
     j1, j2 = samesize_conv_indices(ny, my)
-    convo_offset = (ny - nx) ÷ 2
+    # convo_offset = (ny - nx) ÷ 2
     convo_offset = 0
 
     return RegionalDomain(
@@ -294,8 +288,5 @@ function Base.show(io::IO, ::MIME"text/plain", domain::RegionalDomain)
         "backend" => domain.backend,
         "correct_distortion" => domain.correct_distortion,
     ]
-    padlen = maximum(length(d[1]) for d in descriptors) + 2
-    for (desc, val) in descriptors
-        println(io, rpad(" $(desc): ", padlen), val)
-    end
+    show_descriptors(io, descriptors)
 end

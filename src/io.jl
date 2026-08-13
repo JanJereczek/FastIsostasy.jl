@@ -58,7 +58,7 @@ function crop(X::M, c::AsymetricOutputCrop) where {M<:AbstractMatrix}
 end
 
 function crop_promote!(out, state, var, Tout, M, oc)
-    if M isa Matrix
+    if M <: Matrix
         out .= Tout.(crop(getfield(state, var), oc))
     else
         out .= Tout.(crop(Array(getfield(state, var)), oc))

@@ -261,11 +261,8 @@ function _show_inversion(io::IO, title::AbstractString, prob::AbstractInversion)
         "Diff mode" => typeof(prob.diffmode),
         "Loss model" => typeof(prob.lossmodel),
     ]
-    padlen = maximum(length(d[1]) for d in descriptors) + 2
     println(io, title)
-    for (desc, val) in descriptors
-        println(io, rpad(" $(desc): ", padlen), val)
-    end
+    show_descriptors(io, descriptors)
 end
 
 Base.show(io::IO, ::MIME"text/plain", prob::IceLoadInversion) =

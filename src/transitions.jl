@@ -1,28 +1,12 @@
-# =============================================================================
-# Grounding-line / load transitions.
-#
-# The forward model contains several non-smooth switches at the grounding line
-# and the ocean margin: `max(x, 0)` (height above floatation, water column),
-# `min(x, 0)` (flotation correction) and Heaviside thresholds `x > 0` (grounded
-# and ocean masks). These are exact but non-differentiable, which is a problem
-# for gradient-based inversion.
-#
-# `AbstractTransition` selects how those switches are evaluated:
-#   - `SharpTransition` (default): the exact `max`/`min`/`>` operators. Zero
-#     cost, byte-identical to the original model, Boolean masks.
-#   - `SmoothTransition(ε)`: branch-free C∞ approximations with a length scale
-#     `ε` (metres of height-above-flotation). Masks become floating-point.
-#
-# Scalar primitives are broadcast by the callers; dispatch happens at the
-# array-operation level (on the transition type), never per element.
-# =============================================================================
-
 """
     AbstractTransition
 
 Supertype of the transition traits, which decide how the model's non-smooth
 switches — grounded/ocean masks, the `max(0, ·)` clamps in the water column — are
 evaluated. Stored on [`SolverOptions`](@ref).
+
+The scalar primitives are broadcast by the callers, so dispatch happens at the
+array-operation level, never per element.
 
 [`SharpTransition`](@ref) (the default) keeps the exact `max`/Heaviside behaviour
 at zero cost. [`SmoothTransition`](@ref) replaces them by `ε`-smoothed
@@ -56,11 +40,11 @@ struct SmoothTransition{T<:Real} <: AbstractTransition
     eps::T
 end
 
-# --- scalar primitives -------------------------------------------------------
+# --- scalar primitives (broadcast into GPU kernels, hence `@inline`) ----------
 
 # max(x, 0)
-srelu(x, eps) = (x + sqrt(x * x + eps * eps)) / 2
+@inline srelu(x, eps) = (x + sqrt(x * x + eps * eps)) / 2
 # min(x, 0)
-snegrelu(x, eps) = (x - sqrt(x * x + eps * eps)) / 2
+@inline snegrelu(x, eps) = (x - sqrt(x * x + eps * eps)) / 2
 # Heaviside (x > 0), smoothed to [0, 1]
-sheaviside(x, eps) = (one(x) + x / sqrt(x * x + eps * eps)) / 2
+@inline sheaviside(x, eps) = (one(x) + x / sqrt(x * x + eps * eps)) / 2

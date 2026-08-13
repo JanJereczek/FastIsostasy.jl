@@ -22,7 +22,14 @@ nextfastfft(ns::Tuple{Vararg{Integer}}) = nextfastfft.(ns)
 $(TYPEDSIGNATURES)
 
 An unnormalized inverse FFT plan (the `bfft`/`brfft` inside a `ScaledPlan`) paired
-with the exact normalization `S` that the `ScaledPlan` (`ifft`/`irfft`) would apply. `S` is carried as a TYPE PARAMETER — a compile-time constant, hence invisible to Enzyme. A `Float64` *field* here would be spuriously treated as differentiable when the plan lives inside an autodiff'd `Simulation`, corrupting gradients (the plan's scale is a constant, not a differentiable quantity). `mul!(y, np, x)` reproduces the `ScaledPlan` result bit-for-bit: `(raw_inverse * x) * S`, matching `lmul!(S, …)`.
+with the exact normalization `S` that the `ScaledPlan` (`ifft`/`irfft`) would apply.
+`mul!(y, np, x)` reproduces the `ScaledPlan` result bit-for-bit: `(raw_inverse * x) * S`.
+
+`S` is carried as a TYPE PARAMETER rather than a field, so that it is a
+compile-time constant and hence invisible to Enzyme. As a `Float64` field it would
+be treated as differentiable whenever the plan lives inside an autodiff'd
+[`Simulation`](@ref), corrupting gradients — the plan's scale is a constant, not a
+differentiable quantity.
 """
 struct NormalizedPlan{P,S}
     p::P
@@ -185,15 +192,8 @@ function samesize_conv!(output, input, p::EmptyConvolution, h, domain)
     return nothing
 end
 
-function samesize_conv!(
-    output::M,
-    input::M,
-    p::ConvolutionPlan,
-    h::ConvolutionPlanHelpers,
-    domain,
-) where {M}
-
-    conv!(input, p, h)
+# Crop the (2n-1)-sized convolution result back onto the computation grid.
+function crop_conv!(output, h::ConvolutionPlanHelpers, domain)
     output .= view(
         h.output_cropped,
         (domain.i1+domain.convo_offset):(domain.i2+domain.convo_offset),
@@ -208,17 +208,30 @@ function samesize_conv!(
     p::ConvolutionPlan,
     h::ConvolutionPlanHelpers,
     domain,
+) where {M}
+
+    conv!(input, p, h)
+    crop_conv!(output, h, domain)
+    return nothing
+end
+
+# The two BC-carrying methods differ only in *when* the BC is applied: on the
+# extended grid the convolution produced (before cropping), or on the computation
+# grid (after). That ordering is the whole point of `AbstractBCSpace`, so they
+# cannot collapse into one.
+function samesize_conv!(
+    output::M,
+    input::M,
+    p::ConvolutionPlan,
+    h::ConvolutionPlanHelpers,
+    domain,
     bc,
     bc_space::ExtendedBCSpace,
 ) where {M}
 
     conv!(input, p, h)
     apply_bc!(h.output_cropped, bc)
-    output .= view(
-        h.output_cropped,
-        (domain.i1+domain.convo_offset):(domain.i2+domain.convo_offset),
-        (domain.j1-domain.convo_offset):(domain.j2-domain.convo_offset),
-    )
+    crop_conv!(output, h, domain)
     return nothing
 end
 
@@ -233,11 +246,7 @@ function samesize_conv!(
 ) where {M}
 
     conv!(input, p, h)
-    output .= view(
-        h.output_cropped,
-        (domain.i1+domain.convo_offset):(domain.i2+domain.convo_offset),
-        (domain.j1-domain.convo_offset):(domain.j2-domain.convo_offset),
-    )
+    crop_conv!(output, h, domain)
     apply_bc!(output, bc)
     return nothing
 end
