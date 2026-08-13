@@ -1,4 +1,3 @@
-# AbstractBSLcontributions
 """
 $(TYPEDSIGNATURES)
 
@@ -505,7 +504,7 @@ Note: we do not use (eq. 1) as it is only a special case of (eq. 13) that does n
 allow a correct representation of external sea-level forcings.
 """
 function update_V_af!(sim::Simulation, vc::NoVolumeContribution)
-    sim.now.V_af = 0.0
+    sim.now.V_af = 0
     return nothing
 end
 
@@ -523,7 +522,7 @@ Update the volume contribution associated with the density difference between me
 sea water, as in [goelzer_brief_2020](@cite) (eq. 10).
 """
 function update_V_den!(sim::Simulation, dc::NoDensityContribution)
-    sim.now.V_den = 0.0
+    sim.now.V_den = 0
     return nothing
 end
 
@@ -545,7 +544,7 @@ Note: we do not use eq. (8) as it is only a special case of eq. (14) that does n
 allow a correct representation of external sea-level forcings.
 """
 function update_V_pov!(sim::Simulation, ac::NoAdjustmentContribution)
-    sim.now.V_pov = 0.0
+    sim.now.V_pov = 0
     return nothing
 end
 
