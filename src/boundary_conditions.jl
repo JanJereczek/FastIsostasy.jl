@@ -121,9 +121,14 @@ Apply an offset to the values at the boundaries of a computational domain.
 - `space`: the [`AbstractBCSpace`](@ref) in which the boundary condition is defined.
 - `x_border`: the offset value to be applied at the boundaries.
 - `W`: a weight matrix to apply the boundary condition according to some [`AbstractBC`](@ref).
+
+`space` is a type parameter rather than an abstract field: it is the argument
+`samesize_conv!` dispatches on (in `update_elasticresponse!` and `update_dz_ss!`),
+so an abstract field type would turn each of those into a runtime dispatch on the
+sparse-diagnostics path.
 """
-struct OffsetBC{T,M} <: AbstractBC
-    space::AbstractBCSpace
+struct OffsetBC{S<:AbstractBCSpace,T,M} <: AbstractBC
+    space::S
     x_border::T
     W::M
 end
@@ -194,7 +199,7 @@ Impose a mean value for the field.
 """
 struct MeanBC{B,T}
     space::B               # <:AbstractBCSpace
-    x_border::Any
+    x_border::T
 end
 
 function corner_ones(T, nx, ny)
@@ -271,14 +276,18 @@ Define the boundary conditions of the problem.
 - `sea_surface_perturbation`: a boundary condition for the sea surface perturbation, defined as an [`OffsetBC`](@ref).
 """
 struct BoundaryConditions{
-    T,      # <:AbstractFloat,
-    M,      # <:AbstractMatrix{T},
     IT,     # <:AbstractIceThickness,
+    VD,     # <:OffsetBC, always on a RegularBCSpace
+    ED,     # <:OffsetBC
+    SS,     # <:OffsetBC
 }
     ice_thickness::IT
-    viscous_displacement::OffsetBC{T,M}
-    elastic_displacement::OffsetBC{T,M}
-    sea_surface_perturbation::OffsetBC{T,M}
+    # One parameter per BC rather than a shared `OffsetBC{T,M}`: each carries its
+    # own `AbstractBCSpace` in its type now, and they genuinely differ — the
+    # viscous BC is Regular while the other two default to Extended.
+    viscous_displacement::VD
+    elastic_displacement::ED
+    sea_surface_perturbation::SS
 end
 
 function BoundaryConditions(
@@ -289,8 +298,12 @@ function BoundaryConditions(
     sea_surface_perturbation = CornerBC(ExtendedBCSpace(), T(0)),
 ) where {T<:AbstractFloat,L,M}
 
-    # viscous_displacement must be defined on a regular grid
-    @assert isa(viscous_displacement.space, RegularBCSpace)
+    # The viscous displacement is not convolved, so it has no extended grid to
+    # impose a BC on. `ArgumentError`, not `@assert`: this validates user input and
+    # `@assert` may be elided.
+    viscous_displacement.space isa RegularBCSpace || throw(ArgumentError(
+        "`viscous_displacement` must use a `RegularBCSpace`, got " *
+        "$(typeof(viscous_displacement.space))."))
 
     return BoundaryConditions(
         ice_thickness,
