@@ -168,7 +168,7 @@ println("peak steady subsidence = ", maximum(abs, w_steady), " m")
     [`RigidLithosphere`](@ref), [`ComplexFFTBackend`](@ref) and a fixed step.
     Laterally variable parameters, `N > 1` (needed to fit a continuous relaxation
     spectrum) and the real-FFT backend all raise an informative error. See
-    `roadmaps/burgers.md`.
+    `fastisostasy-roadmap/burgers.md`.
 =#
 
 #=

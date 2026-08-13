@@ -553,7 +553,7 @@ difference (against `relaxation_strength`) between the continuous and
 (`ntest` points; the continuous term is evaluated by Gauss-Legendre quadrature
 via [`quadrature1D`](@ref) with `nquad` points). Use `fit_error` to pick
 `nbranches`: I&C 2021 report that `N ≈ 3-5` typically fits their spectrum to a
-few percent (roadmaps/burgers.md §6).
+few percent (fastisostasy-roadmap/burgers.md §6).
 
 # Example
 ```jldoctest

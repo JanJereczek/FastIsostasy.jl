@@ -1,4 +1,4 @@
-# fit_prony_series (roadmaps/burgers.md Phase 4): discretise the continuous
+# fit_prony_series (fastisostasy-roadmap/burgers.md Phase 4): discretise the continuous
 # Faul-Jackson absorption-band spectrum underlying I&C 2021's extended Burgers
 # model into an N-branch Prony series for TransientCreepMantle.
 #
@@ -28,7 +28,7 @@ const FI = FastIsostasy
     end
 
     @testset "fit_error vs N (nbranches-vs-cost study)" begin
-        # α = 1/2 is the spectrum shape roadmaps/burgers.md §5 calls out for the
+        # α = 1/2 is the spectrum shape fastisostasy-roadmap/burgers.md §5 calls out for the
         # I&C 2021 comparison; τ_L, τ_H span two decades (years to a century),
         # matching the "years to centuries" range in §1's design table.
         errors = [fit_prony_series(relaxation_strength = 1.2, alpha = 0.5,

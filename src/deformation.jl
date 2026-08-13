@@ -263,7 +263,7 @@ update_dudt!(
 ) = error(
     "TransientCreepMantle does not support LaterallyVariableLithosphere: the " *
     "v1 effective-viscosity trick has no proven analogue for the coupled " *
-    "(N+1)-field system (roadmaps/burgers.md §8). Use " *
+    "(N+1)-field system (fastisostasy-roadmap/burgers.md §8). Use " *
     "LaterallyConstantLithosphere or RigidLithosphere.",
 )
 
@@ -320,7 +320,7 @@ function update_dudt!(
     #
     # Writing `u .= P.rhs` here instead — mutating the integrator's own state from
     # inside the RHS and leaving `dudt` untouched — is what produced the NaN
-    # tracked in roadmaps/ad_inversion.md §8: `dudt` is `integ.ks[1]`, a `similar`
+    # tracked in fastisostasy-roadmap/ad_inversion.md §8: `dudt` is `integ.ks[1]`, a `similar`
     # array this method never wrote, so the stepper added `Δt ·` uninitialised
     # memory on top of the already-updated `u`. As a rate the method is also pure,
     # which is what lets it be called more than once per step (init_problem!, FSAL

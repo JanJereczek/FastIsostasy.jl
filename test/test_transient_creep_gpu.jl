@@ -1,4 +1,4 @@
-# GPU counterpart of test_transient_creep.jl (roadmaps/burgers.md Phase 3: GPU
+# GPU counterpart of test_transient_creep.jl (fastisostasy-roadmap/burgers.md Phase 3: GPU
 # validation). `TransientCreepMantle`'s state (`u_K`, 3D) and solver buffers
 # (`PreAllocated.fftK`, 3D) were designed to be GPU-compatible from the start
 # (roadmap §1, "State layout"), but this is the first time the general-N

@@ -213,7 +213,7 @@ function RegionalDomain(
     # is scaled_pseudodiff_inv[1,1] = 0 in src/solidearth.jl, per Bueler et al.
     # 2007's corner normalisation — the constant is then supplied by the BC,
     # not the dynamics; it only differs from this under NoBC.) See
-    # roadmaps/stabilise_dt.md §1/§4.
+    # fastisostasy-roadmap/stabilise_dt.md §1/§4.
     pseudodiff[1, 1] = mean([pseudodiff[1, 2], pseudodiff[2, 1]])
 
     backend = _backend_from_arraykernel(backend, arraykernel)

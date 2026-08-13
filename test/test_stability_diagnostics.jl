@@ -95,7 +95,7 @@ using Test
         @test all(isfinite, (rep.analytic_bound.dc, rep.analytic_bound.k_max))
 
         # Lowering the channel viscosity must increase the estimated stiffness
-        # (lambda ~ 1/eta in the U-shaped bound, roadmaps/stabilise_dt.md §2.1).
+        # (lambda ~ 1/eta in the U-shaped bound, fastisostasy-roadmap/stabilise_dt.md §2.1).
         sim_stiffer = build_lv_sim(layer_viscosities = [1e18, 1e21])
         rep_stiffer = stiffness_report(sim_stiffer; t = 10.0)
         @test rep_stiffer.lambda_max > rep.lambda_max

@@ -323,7 +323,7 @@ validate the solver.
   ``N \approx 3\text{-}5`` branches to any given ``(\Delta, \alpha, \tau_L,
   \tau_H)`` band; what remains open is a *literature-calibrated* preset — the
   actual published values from [ivins_notes_2021](@citet) have not yet been
-  entered into the package (roadmaps/burgers.md §6).
+  entered into the package (fastisostasy-roadmap/burgers.md §6).
 - **Laterally constant parameters only** (§6).
 - **Requires** [`EulerIntegrator`](@ref) (a fixed step; the semi-implicit solve
   has no adaptive-step variant) with `SolverOptions(fft = ComplexFFTBackend())`

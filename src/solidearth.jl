@@ -135,7 +135,7 @@ julia> FastIsostasy.nbranches(m)
 1
 ```
 
-See `roadmaps/burgers.md` for the design and derivation.
+See `fastisostasy-roadmap/burgers.md` for the design and derivation.
 """
 struct TransientCreepMantle{T<:AbstractFloat,N} <: AbstractMantle
     "unrelaxed shear modulus `μ₁` of the mantle [Pa]"

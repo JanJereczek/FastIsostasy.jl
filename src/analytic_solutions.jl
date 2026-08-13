@@ -67,7 +67,7 @@ function analytic_integrand(
 end
 
 # ViscousMantle (Maxwell dashpot): single-exponential step response
-# û(t) = û_eq (1 - exp(-βt/(2ηk))), see `roadmaps/burgers.md` §2.1. This is also
+# û(t) = û_eq (1 - exp(-βt/(2ηk))), see `fastisostasy-roadmap/burgers.md` §2.1. This is also
 # the fallback for any mantle not handled below (matches the historical
 # behaviour of this function, which never checked the mantle type).
 relaxation_minus_1(kappa, beta, t, solidearth, mantle) =
