@@ -41,7 +41,12 @@ end
 # Unit conversion utils
 #####################################################
 
-global SECONDS_PER_YEAR = 60^2 * 24 * 365.25
+"""
+Seconds in a Julian year. `const` so that every use site can constant-fold it: as a
+non-constant global it made `m_per_sec2mm_per_yr` (and any other unconverted read)
+infer as `Any`.
+"""
+const SECONDS_PER_YEAR = 60^2 * 24 * 365.25
 
 """
 $(TYPEDSIGNATURES)
