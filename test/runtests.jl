@@ -16,6 +16,7 @@ const TEST_AD = lowercase(get(ENV, "FASTISOSTASY_TEST_AD", "true")) in ("1", "tr
 include("test_aqua.jl")
 include("test_jet.jl")
 include("test_barystatic_sea_level.jl")
+include("test_adhikari_bsl.jl")
 include("test_convolution.jl")
 include("test_dataloaders.jl")
 include("test_derivatives.jl")

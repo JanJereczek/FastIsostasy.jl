@@ -30,6 +30,7 @@ Literate.markdown("src/examples/glacialcycle.jl", "src/examples"; credit = false
 Literate.markdown("src/examples/elra.jl", "src/examples"; credit = false)
 Literate.markdown("src/examples/green_functions.jl", "src/examples"; credit = false)
 Literate.markdown("src/examples/transient_creep.jl", "src/examples"; credit = false)
+Literate.markdown("src/examples/sealevel_formalisms.jl", "src/examples"; credit = false)
 
 Literate.markdown("src/examples/coupling.jl", "src/examples"; credit = false)
 
@@ -60,6 +61,7 @@ inverse_problems = [
 ]
 
 advanced_topics = [
+    "examples/sealevel_formalisms.md",
     "integrators.md",
     "examples/benchmark_realfft.md",
     "inversion_ad_activity_map.md",

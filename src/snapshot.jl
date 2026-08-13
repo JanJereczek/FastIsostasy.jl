@@ -34,16 +34,19 @@ StateSnapshot(sim) =
     StateSnapshot(deepcopy(sim.now), deepcopy(sim.sealevel.bsl), sim.timer.t)
 
 # Copy every mutated field of a `CurrentState` (arrays in place, the nested
-# `ColumnAnomalies` array-by-array, scalars by assignment).
+# array-only structs `ColumnAnomalies`/`KinematicBSL` array-by-array, scalars by
+# assignment). The nested structs must go through `copyto!` like everything else:
+# `setfield!`-ing them would make `dst` alias `src`'s arrays, and a restore would
+# then silently be a no-op.
 function _copy_state!(dst::CurrentState, src::CurrentState)
     for f in fieldnames(CurrentState)
         sv = getfield(src, f)
         if sv isa AbstractArray
             copyto!(getfield(dst, f), sv)
-        elseif sv isa ColumnAnomalies
-            dcol = getfield(dst, f)
-            for cf in fieldnames(ColumnAnomalies)
-                copyto!(getfield(dcol, cf), getfield(sv, cf))
+        elseif sv isa ColumnAnomalies || sv isa KinematicBSL
+            dnested = getfield(dst, f)
+            for cf in fieldnames(typeof(sv))
+                copyto!(getfield(dnested, cf), getfield(sv, cf))
             end
         else
             setfield!(dst, f, sv)          # scalar (`T` or `Int`)

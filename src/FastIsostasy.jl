@@ -105,7 +105,7 @@ export GIATools
 export AbstractFFTBackend, ComplexFFTBackend, RealFFTBackend
 
 # state.jl
-export CurrentState, ReferenceState
+export CurrentState, ReferenceState, KinematicBSL
 
 # snapshot.jl
 export StateSnapshot, snapshot!, restore!
@@ -142,6 +142,8 @@ export RegionalSeaLevel
 export AbstractSeaSurface, AbstractSealevelLoad
 export NoSealevelLoad, InteractiveSealevelLoad
 export LaterallyConstantSeaSurface, LaterallyVariableSeaSurface, ImposedSeaSurface
+export AbstractBSLFormalism, GoelzerBSLFormalism, AdhikariBSLFormalism
+export AbstractBarystaticContribution
 export AbstractVolumeContribution, GoelzerVolumeContribution, NoVolumeContribution
 export AbstractAdjustmentContribution,
     GoelzerAdjustmentContribution, NoAdjustmentContribution
