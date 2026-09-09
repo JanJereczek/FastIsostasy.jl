@@ -67,29 +67,30 @@ $(TYPEDSIGNATURES)
 A helper for convolution plans.
 
 # Fields
-- `nx`: number of rows in the kernel
-- `ny`: number of columns in the kernel
-- `p_rfft`: the real-valued FFT plan
-- `p_irfft`: the real-valued inverse FFT plan (including scaling)
-- `nffts`: the padded size of the FFTs
-- `kernel_padded`: the padded kernel to convolve the input with
-- `input_padded`: the padded input
-- `output_padded`: the padded output
-- `output_cropped`: the cropped output
-- `input_fft`: the transformed (padded) input
-- `pad_val`: the value used to pad the input and kernel
+$(TYPEDFIELDS)
 """
 struct ConvolutionPlanHelpers{T,M,C,FP,IP}
+    "number of rows in the kernel"
     nx::Int
+    "number of columns in the kernel"
     ny::Int
+    "the real-valued FFT plan"
     p_rfft::FP
+    "the real-valued inverse FFT plan (including scaling)"
     p_irfft::IP
+    "the padded size of the FFTs"
     nffts::Tuple{Int64,Int64}
+    "the padded kernel to convolve the input with"
     kernel_padded::M
+    "the padded input"
     input_padded::M
+    "the padded output"
     output_padded::M
+    "the cropped output"
     output_cropped::M
+    "the transformed (padded) input"
     input_fft::C
+    "the value used to pad the input and kernel"
     pad_val::T
 end
 
@@ -139,11 +140,12 @@ instead of `conv!`. The `samesize_conv` function will automatically crop the out
 to the same size as the input, and apply boundary conditions if provided.
 
 # Fields
-- `kernel`: the kernel to convolve the input with
-- `kernel_fft`: the transformed (padded) kernel
+$(TYPEDFIELDS)
 """
 struct ConvolutionPlan{M,C}
+    "the kernel to convolve the input with"
     kernel::M
+    "the transformed (padded) kernel"
     kernel_fft::C
 end
 

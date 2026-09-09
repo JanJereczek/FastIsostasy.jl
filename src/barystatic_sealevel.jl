@@ -7,11 +7,7 @@ Define a reference of barystatic sea level and ocean surface area.
 Used in all subtypes of [`AbstractBSL`](@ref) to compute the BSL evolution.
 
 # Fields
- - `z`: the reference BSL (m), which defaults to 0 (reference year 2020).
- - `A`: the reference ocean surface area (m^2) computed based on `z`.
- - `z_vec`: a vector of BSL values (m) used for interpolation.
- - `A_vec`: a vector of ocean surface area values (m^2) used for interpolation.
- - `A_itp`: an interpolator function for ocean surface area over BSL.
+$(TYPEDFIELDS)
 
 In the constructor, `T` determines the floating point arithmetic used in all
 computations, and `itp_kwargs` allows customization of the interpolation.
@@ -27,10 +23,15 @@ ref = ReferenceBSL(z = 0.1)       # assume BSL = 0.1 m and compute A accordingly
 ```
 """
 struct ReferenceBSL{T<:AbstractFloat,I<:TimeInterpolation0D{T}}
+    "the reference BSL (m), which defaults to 0 (reference year 2020)"
     z::T
+    "the reference ocean surface area (m²), computed from `z`"
     A::T
+    "a vector of BSL values (m) used for interpolation"
     z_vec::Vector{T}
+    "a vector of ocean surface area values (m²) used for interpolation"
     A_vec::Vector{T}
+    "an interpolator of ocean surface area over BSL"
     A_itp::I
 end
 

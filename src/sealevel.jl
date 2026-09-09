@@ -121,9 +121,7 @@ potential ocean volume — recomputed at every coupling interval and differenced
 against their previous values.
 
 # Fields
- - `volume`: an [`AbstractVolumeContribution`](@ref), `V_af`.
- - `density`: an [`AbstractDensityContribution`](@ref), `V_den`.
- - `adjustment`: an [`AbstractAdjustmentContribution`](@ref), `V_pov`.
+$(TYPEDFIELDS)
 
 ```jldoctest
 julia> using FastIsostasy
@@ -133,8 +131,11 @@ GoelzerBSLFormalism{GoelzerVolumeContribution, GoelzerDensityContribution, NoAdj
 ```
 """
 @kwdef struct GoelzerBSLFormalism{VC,DC,AC} <: AbstractBSLFormalism
+    "an [`AbstractVolumeContribution`](@ref), `V_af`"
     volume::VC = GoelzerVolumeContribution()
+    "an [`AbstractDensityContribution`](@ref), `V_den`"
     density::DC = GoelzerDensityContribution()
+    "an [`AbstractAdjustmentContribution`](@ref), `V_pov`"
     adjustment::AC = NoAdjustmentContribution()
 end
 

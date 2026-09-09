@@ -184,20 +184,26 @@ $(TYPEDSIGNATURES)
 Butcher tableau for an (embedded) explicit Runge-Kutta method.
 
 # Fields
-- `A`: `s×s` strictly-lower-triangular stage-coefficient matrix.
-- `c`: `s` node vector (`c[1] == 0`).
-- `b`: `s` weights of the propagated (higher-order) solution.
-- `btilde`: `s` weights of the *error estimate* (`b - bhat`); empty if method non-adaptive.
-- `order`: order of the propagated solution (used by the step controller).
-- `fsal`: whether the method is First-Same-As-Last (last stage of an
-          accepted step equals the first stage of the next one).
+$(TYPEDFIELDS)
 """
 struct RKTableau{T}
+    "`s×s` strictly-lower-triangular stage-coefficient matrix"
     A::Matrix{T}
+    "`s` node vector (`c[1] == 0`)"
     c::Vector{T}
+    "`s` weights of the propagated (higher-order) solution"
     b::Vector{T}
+    """
+    `s` weights of the *error estimate* (`b - bhat`); empty if the method is
+    non-adaptive
+    """
     btilde::Vector{T}
+    "order of the propagated solution (used by the step controller)"
     order::Int
+    """
+    whether the method is First-Same-As-Last, i.e. the last stage of an accepted step
+    equals the first stage of the next one
+    """
     fsal::Bool
 end
 

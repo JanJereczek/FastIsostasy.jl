@@ -27,21 +27,22 @@ the fixed reference, `sim.now` the current time). It writes its two per-cell
 increments here as well, so the whole thing is one allocation-free broadcast.
 
 # Fields
- - `H_ice_prev`: `H(t)`, ice thickness at the start of the interval (m).
- - `H_F_prev`: `H_F(t)`, height above floatation at the start of the interval (m).
- - `maskland_prev`: `ℒ(t)`, land mask at the start of the interval.
- - `delta_H_M`: `ΔH_M`, the component changing ocean **mass and volume** (their Eq. 11).
- - `delta_H_V`: `ΔH_V`, the component changing ocean **volume only** (their Eq. 12).
+$(TYPEDFIELDS)
 
 All five arrays are zero-size unless the simulation runs an
 [`AdhikariBSLFormalism`](@ref), so [`GoelzerBSLFormalism`](@ref) pays nothing for them —
 the same trick `u_K` uses for the Kelvin branches.
 """
 struct KinematicBSL{M}
+    "`H(t)`, ice thickness at the start of the interval (m)"
     H_ice_prev::M
+    "`H_F(t)`, height above floatation at the start of the interval (m)"
     H_F_prev::M
+    "`ℒ(t)`, land mask at the start of the interval"
     maskland_prev::M
+    "`ΔH_M`, the component changing ocean **mass and volume** (their Eq. 11)"
     delta_H_M::M
+    "`ΔH_V`, the component changing ocean **volume only** (their Eq. 12)"
     delta_H_V::M
 end
 

@@ -65,8 +65,8 @@ function build_pair(; z_b, ice_bc, mantle, litho, t_end, dt)
         bcs = BoundaryConditions(domain, ice_thickness = ice_bc)
         se = SolidEarth(domain; mantle = mantle, lithosphere = litho)
         ## One BSL update per coupling step, so `delta_V` can be read out per
-        ## interval below. `dt_sparse_diagnostics` is a `Float64` field.
-        opts = SolverOptions(show_progress = false, dt_sparse_diagnostics = Float64(dt),
+        ## interval below.
+        opts = SolverOptions(show_progress = false, dt_sparse_diagnostics = dt,
             integ = EulerIntegrator(dt = dt))
         sealevel = RegionalSeaLevel(formalism = formalism)
         Simulation(domain, bcs, sealevel, se, (0f0, t_end);
@@ -306,7 +306,7 @@ ice_bc = TimeInterpolatedIceThickness([0f0, 2f2, 5f3],
 function bsl_history(formalism; t_end = 5f3, dt = 50f0)
     bcs = BoundaryConditions(domain, ice_thickness = ice_bc)
     se = SolidEarth(domain)
-    opts = SolverOptions(show_progress = false, dt_sparse_diagnostics = Float64(dt),
+    opts = SolverOptions(show_progress = false, dt_sparse_diagnostics = dt,
         integ = EulerIntegrator(dt = dt))
     sim = Simulation(domain, bcs, RegionalSeaLevel(formalism = formalism), se,
         (0f0, t_end); opts = opts, z_b_ref = z_b)

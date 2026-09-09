@@ -20,13 +20,14 @@ $(TYPEDSIGNATURES)
 Update the ice thickness based on a time interpolation.
 
 # Fields
-- `t_vec`: a vector of time points at which the ice thickness is defined.
-- `H_vec`: a vector of ice thickness values corresponding to `t_vec`.
-- `H_itp`: a function that interpolates the ice thickness based on time.
+$(TYPEDFIELDS)
 """
 struct TimeInterpolatedIceThickness{T,M,I<:TimeInterpolation2D} <: AbstractIceThickness
+    "a sorted vector of time points at which the ice thickness is defined"
     t_vec::Vector{T}
+    "a vector of ice thickness fields corresponding to `t_vec`"
     H_vec::Vector{M}
+    "the [`TimeInterpolation2D`](@ref) interpolating `H_vec` over `t_vec`"
     H_itp::I
 end
 
@@ -118,9 +119,7 @@ $(TYPEDSIGNATURES)
 Apply an offset to the values at the boundaries of a computational domain.
 
 # Fields
-- `space`: the [`AbstractBCSpace`](@ref) in which the boundary condition is defined.
-- `x_border`: the offset value to be applied at the boundaries.
-- `W`: a weight matrix to apply the boundary condition according to some [`AbstractBC`](@ref).
+$(TYPEDFIELDS)
 
 `space` is a type parameter rather than an abstract field: it is the argument
 `samesize_conv!` dispatches on (in `update_elasticresponse!` and `update_dz_ss!`),
@@ -128,8 +127,14 @@ so an abstract field type would turn each of those into a runtime dispatch on th
 sparse-diagnostics path.
 """
 struct OffsetBC{S<:AbstractBCSpace,T,M} <: AbstractBC
+    "the [`AbstractBCSpace`](@ref) in which the boundary condition is defined"
     space::S
+    "the offset value to be applied at the boundaries"
     x_border::T
+    """
+    the normalised weight matrix selecting which cells the condition is imposed on,
+    per the [`AbstractBC`](@ref) it was built from
+    """
     W::M
 end
 
@@ -270,10 +275,12 @@ $(TYPEDSIGNATURES)
 Define the boundary conditions of the problem.
 
 # Fields
-- `ice_thickness`: an instance of [`AbstractIceThickness`](@ref) that defines how the ice thickness is updated.
-- `viscous_displacement`: a boundary condition for the viscous displacement, defined as an [`OffsetBC`](@ref).
-- `elastic_displacement`: a boundary condition for the elastic displacement, defined as an [`OffsetBC`](@ref).
-- `sea_surface_perturbation`: a boundary condition for the sea surface perturbation, defined as an [`OffsetBC`](@ref).
+$(TYPEDFIELDS)
+
+There is one type parameter per boundary condition rather than a shared
+`OffsetBC{T,M}`: each carries its own [`AbstractBCSpace`](@ref) in its type, and
+they genuinely differ — the viscous BC is regular while the other two default to
+extended.
 """
 struct BoundaryConditions{
     IT,     # <:AbstractIceThickness,
@@ -281,12 +288,13 @@ struct BoundaryConditions{
     ED,     # <:OffsetBC
     SS,     # <:OffsetBC
 }
+    "an [`AbstractIceThickness`](@ref) defining how the ice thickness is updated"
     ice_thickness::IT
-    # One parameter per BC rather than a shared `OffsetBC{T,M}`: each carries its
-    # own `AbstractBCSpace` in its type now, and they genuinely differ — the
-    # viscous BC is Regular while the other two default to Extended.
+    "an [`OffsetBC`](@ref) for the viscous displacement, on a [`RegularBCSpace`](@ref)"
     viscous_displacement::VD
+    "an [`OffsetBC`](@ref) for the elastic displacement"
     elastic_displacement::ED
+    "an [`OffsetBC`](@ref) for the sea-surface perturbation"
     sea_surface_perturbation::SS
 end
 

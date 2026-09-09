@@ -10,26 +10,32 @@ abstract type ParameterReduction{T} end
 """
     InversionConfig
 
-Struct containing configuration parameters for a [`InversionProblem`].
+Struct containing configuration parameters for an [`InversionProblem`](@ref).
 
 # Fields
-
-- `method::Any`: Inversion method to use.
-- `paramspriors::NamedTuple`: Prior information about the parameters to invert.
-- `N_iter::Int`: Number of iterations for the inversion.
-- `α_reg::Real`: Regularization factor. When you have enough observation data α=1 (no regularization)
-- `update_freq::Int`: Update frequency for the inversion.
-1 : approximate posterior cov matrix with an uninformative prior.
-0 : weighted average between posterior cov matrix with an uninformative prior and prior.
-- `scale_obscov::Real`: Scaling factor for the observational covariance matrix.
+$(TYPEDFIELDS)
 """
 struct InversionConfig{T<:AbstractFloat}
+    "inversion method to use"
     method::Any
+    "number of ensemble members"
     N_ens::Int
+    "number of iterations for the inversion"
     N_iter::Int
+    "number of noisy samples drawn from the observations"
     n_samples::Int
+    """
+    regularization factor. With enough observational data, `α = 1` (no
+    regularization).
+    """
     α_reg::T
+    """
+    update frequency for the inversion. `1`: approximate the posterior covariance
+    matrix with an uninformative prior. `0`: weighted average between the posterior
+    covariance matrix with an uninformative prior, and the prior.
+    """
     update_freq::Int
+    "scaling factor for the observational covariance matrix"
     scale_obscov::T
 end
 
@@ -59,19 +65,19 @@ end
 Struct containing the inversion data.
 
 # Fields
-
-- `t::Vector{T}`: Time vector.
-- `Y::Vector{M}`: Ground truth response.
-- `nY::Int`: Number of output time steps used for inversion.
-- `mask::BitMatrix`: Region of interest.
-- `countmask::Int`: count(mask) = number of cells used for inversion.
+$(TYPEDFIELDS)
 """
 struct InversionData{T<:AbstractFloat,M<:Matrix{T}}
-    t::Vector{T}        # Time vector
-    Y::Vector{M}        # Ground truth response
-    nY::Int             # number of time steps
-    mask::BitMatrix     # Region of interest
-    countmask::Int      # count(mask) = number of cells used for inversion
+    "time vector"
+    t::Vector{T}
+    "ground truth response"
+    Y::Vector{M}
+    "number of output time steps used for inversion"
+    nY::Int
+    "region of interest"
+    mask::BitMatrix
+    "`count(mask)`, the number of cells used for inversion"
+    countmask::Int
 end
 
 function InversionData(t, Y, mask)
@@ -89,15 +95,7 @@ using [`inversion_problem`](@ref). For now, the unscented Kalman inversion
 is the only method available.
 
 # Fields
-- `sim::Simulation`: Simulation object.
-- `config::InversionConfig`: Configuration for the inversion.
-- `data::InversionData`: Data for the inversion.
-- `reduction::R`: Parameter reduction method.
-- `priors::PD`: Prior distribution.
-- `ukiobj::EKP`: Unscented Kalman inversion object.
-- `error::V`: Error vector.
-- `out::Vector{V}`: Output vector.
-- `G_ens::M`: Ensemble of the covariance matrix.
+$(TYPEDFIELDS)
 """
 struct InversionProblem{
     T<:AbstractFloat,
@@ -107,14 +105,23 @@ struct InversionProblem{
     PD,
     EKP,
 }
+    "the [`Simulation`](@ref) template the forward runs are made from"
     sim::Simulation{T,<:Any,M,<:Any,<:Any,<:Any,<:Any,<:Any}
+    "the [`InversionConfig`](@ref) for the inversion"
     config::InversionConfig# {T}
+    "the [`InversionData`](@ref) for the inversion"
     data::InversionData{T,M}
+    "the [`ParameterReduction`](@ref) method"
     reduction::R
+    "the prior distribution"
     priors::PD
+    "the unscented Kalman inversion object"
     ukiobj::EKP
+    "the error at each iteration"
     error::V
+    "the mean parameter vector at each saved iteration"
     out::Vector{V}
+    "the ensemble of forward responses"
     G_ens::M
 end
 

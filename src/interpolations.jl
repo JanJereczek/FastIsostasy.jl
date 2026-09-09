@@ -17,13 +17,16 @@ $(TYPEDSIGNATURES)
 Define the time interpolation of a scalar variable.
 
 # Fields
-- `t`: a vector of time points at which the variable is defined.
-- `y`: a vector of variable values corresponding to `t`.
-- `flat_bc`: a boolean indicating whether to use flat boundary conditions
+$(TYPEDFIELDS)
 """
 struct TimeInterpolation0D{T<:AbstractFloat}
+    "a sorted vector of time points at which the variable is defined"
     t::Vector{T}
+    "a vector of variable values corresponding to `t`"
     y::Vector{T}
+    """
+    whether to clamp to the end values outside `[t[1], t[end]]` instead of throwing
+    """
     flat_bc::Bool
 end
 

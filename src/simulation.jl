@@ -7,20 +7,10 @@ $(TYPEDSIGNATURES)
 Control options relative to solving a [`Simulation`](@ref).
 
 # Fields
- - `integ`: the [`AbstractIntegrator`](@ref) used to integrate the ODE forward in
-   time, one of [`BS3Integrator`](@ref) (adaptive, default), [`Tsit5Integrator`](@ref)
-   (adaptive), [`RKCIntegrator`](@ref) (adaptive, stabilised for stiff problems) or
-   [`EulerIntegrator`](@ref) (fixed step). Each integrator carries its own
-   settings — tolerances, step-size bounds — as fields of its own struct.
- - `dt_sparse_diagnostics`: the time interval between updates of the diagnostics variables (elastic displacement, sea-surface elevation, etc.).
- - `show_progress`: whether to report the simulation progress. When `true`, [`run!`](@ref)
-   displays a live progress bar ([`ForwardProgress`](@ref)).
- - `dt_walltime`: minimum wall time in seconds between two refreshes of that
-   progress bar. Refreshing reduces over the whole grid, so this bounds the
-   reporting cost by wall time rather than by step count.
- - `fft`: the [`AbstractFFTBackend`](@ref) used for the spectral step. A purely
-   numerical choice, orthogonal to the mantle rheology.
- - `transition`: the [`AbstractTransition`](@ref) used to smooth the transition between grounded and floating ice, and between ocean and land.
+$(TYPEDFIELDS)
+
+`dt_sparse_diagnostics` carries the struct's float type `T`, so an all-`Float32`
+script does not silently drag a `Float64` into the step-cadence comparison.
 
 `integ` is a concrete type parameter rather than an abstract field, so
 `sim.opts.integ` infers to the integrator's own type. Code that branches on the
@@ -28,15 +18,47 @@ integrator — the AD extensions in particular — then resolves that branch at
 compile time instead of paying to compile every arm of it.
 """
 @kwdef struct SolverOptions{
+    T<:AbstractFloat,
     TR<:AbstractTransition,
     I<:AbstractIntegrator,
     F<:AbstractFFTBackend,
 }
+    """
+    the [`AbstractIntegrator`](@ref) used to integrate the ODE forward in time, one of
+    [`BS3Integrator`](@ref) (adaptive, default), [`Tsit5Integrator`](@ref) (adaptive),
+    [`RKCIntegrator`](@ref) (adaptive, stabilised for stiff problems) or
+    [`EulerIntegrator`](@ref) (fixed step). Each integrator carries its own settings —
+    tolerances, step-size bounds — as fields of its own struct.
+    """
     integ::I = BS3Integrator()
-    dt_sparse_diagnostics::Float64 = 10.0
+    """
+    the time interval between updates of the diagnostic variables (elastic
+    displacement, sea-surface elevation, etc.). Simulation time, so its type follows
+    the value given: pass a `Float32` in an all-`Float32` setup and the whole struct
+    is `Float32`.
+    """
+    dt_sparse_diagnostics::T = 10.0
+    """
+    whether to report the simulation progress. When `true`, [`run!`](@ref) displays a
+    live progress bar ([`ForwardProgress`](@ref)).
+    """
     show_progress::Bool = true
+    """
+    minimum wall time in seconds between two refreshes of that progress bar.
+    Refreshing reduces over the whole grid, so this bounds the reporting cost by wall
+    time rather than by step count. Deliberately **not** tied to `T`: this is
+    wall-clock time, unrelated to the simulation's arithmetic.
+    """
     dt_walltime::Float64 = 0.5
+    """
+    the [`AbstractFFTBackend`](@ref) used for the spectral step. A purely numerical
+    choice, orthogonal to the mantle rheology.
+    """
     fft::F = ComplexFFTBackend()
+    """
+    the [`AbstractTransition`](@ref) used to smooth the transition between grounded and
+    floating ice, and between ocean and land
+    """
     transition::TR = SharpTransition()
 end
 
@@ -46,17 +68,18 @@ $(TYPEDSIGNATURES)
 Control the timing of the simulation and store the time evolution of the computation time.
 
 # Fields
- - `t`: the current simulation time.
- - `t_span`: the time span of the simulation.
- - `t_vec`: the vector of times at which the computation time was recorded.
- - `t_computation_0`: the time at which the computation started.
- - `t_computation`: the vector of computation times corresponding to `t_vec`.
+$(TYPEDFIELDS)
 """
 mutable struct Timer{T}
+    "the current simulation time"
     t::T
+    "the time span of the simulation"
     t_span::Tuple{T,T}
+    "the vector of times at which the computation time was recorded"
     t_vec::Vector{T}
+    "the wall-clock time at which the computation started"
     t_computation_0::T
+    "the vector of computation times corresponding to `t_vec`"
     t_computation::Vector{T}
 end
 
@@ -83,19 +106,7 @@ $(TYPEDSIGNATURES)
 A superstruct needed for the forward integration of the model.
 
 # Fields
- - `domain`: the [`AbstractDomain`](@ref) defining the spatial discretization.
- - `c`: the [`PhysicalConstants`](@ref) defining the physical constants of the model.
- - `bcs`: the [`BoundaryConditions`](@ref) defining the boundary conditions of the model.
- - `sealevel`: the [`RegionalSeaLevel`](@ref) defining the sea level evolution.
- - `solidearth`: the [`SolidEarth`](@ref) defining the solid earth properties.
- - `opts`: the [`SolverOptions`](@ref) controlling the solver options.
- - `tools`: the [`GIATools`](@ref) providing tools for GIA computations.
- - `ref`: the [`ReferenceState`](@ref) defining the reference state of the model.
- - `now`: the [`CurrentState`](@ref) defining the current state of the model.
- - `ncout`: the [`NetcdfOutput`](@ref) controlling the NetCDF output.
- - `nout`: the [`NativeOutput`](@ref) controlling the native output.
- - `timer`: the [`Timer`](@ref) controlling and recording timing information.
- - `simobs`: a vector of [`SimulatedObservable`](@ref) defining simulated observables to be computed during integration.
+$(TYPEDFIELDS)
 """
 struct Simulation{
     CD,     # <:AbstractDomain
@@ -112,18 +123,33 @@ struct Simulation{
     TM,     # <:Timer
     VO,     # <:AbstractVector{<:SimulatedObservable} (inverse/observables.jl)
 }
+    "the [`AbstractDomain`](@ref) defining the spatial discretization"
     domain::CD
+    "the [`PhysicalConstants`](@ref) defining the physical constants of the model"
     c::PC
+    "the [`BoundaryConditions`](@ref) defining the boundary conditions of the model"
     bcs::BCS
+    "the [`RegionalSeaLevel`](@ref) defining the sea level evolution"
     sealevel::SL
+    "the [`SolidEarth`](@ref) defining the solid earth properties"
     solidearth::SE
+    "the [`SolverOptions`](@ref) controlling the solver options"
     opts::SO
+    "the [`GIATools`](@ref) providing tools for GIA computations"
     tools::TL
+    "the [`ReferenceState`](@ref) defining the reference state of the model"
     ref::RS
+    "the [`CurrentState`](@ref) defining the current state of the model"
     now::CS
+    "the [`NetcdfOutput`](@ref) controlling the NetCDF output"
     ncout::NCO
+    "the [`NativeOutput`](@ref) controlling the native output"
     nout::NO
+    "the [`Timer`](@ref) controlling and recording timing information"
     timer::TM
+    """
+    a vector of [`SimulatedObservable`](@ref) to be computed during integration
+    """
     simobs::VO
 end
 

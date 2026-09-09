@@ -16,9 +16,10 @@ Define a symmetric cropping strategy for the output of the simulation.
 The output will be cropped by `pad` elements on each side of the domain.
 
 # Fields
-- `pad`: number of elements to crop on each side of the domain.
+$(TYPEDFIELDS)
 """
 struct PaddedOutputCrop <: AbstractOutputCrop
+    "number of elements to crop on each side of the domain"
     pad::Int
 end
 
@@ -28,15 +29,16 @@ $(TYPEDSIGNATURES)
 Define an asymmetric cropping strategy for the output of the simulation.
 
 # Fields
-- `pad_x1`: number of elements to crop on the left side of the domain.
-- `pad_x2`: number of elements to crop on the right side of the domain.
-- `pad_y1`: number of elements to crop on the bottom side of the domain.
-- `pad_y2`: number of elements to crop on the top side of the domain.
+$(TYPEDFIELDS)
 """
 struct AsymetricOutputCrop <: AbstractOutputCrop
+    "number of elements to crop on the left side of the domain"
     pad_x1::Int
+    "number of elements to crop on the right side of the domain"
     pad_x2::Int
+    "number of elements to crop on the bottom side of the domain"
     pad_y1::Int
+    "number of elements to crop on the top side of the domain"
     pad_y2::Int
 end
 
@@ -231,26 +233,27 @@ $(TYPEDSIGNATURES)
 Define the output NetCDF file for the simulation.
 
 # Fields
-- `t`: a vector of time points at which the variable is defined.
-- `filename`: the name of the NetCDF file.
-- `buffer`: a buffer to store the output data before writing to the NetCDF file.
-- `vars3D`: a vector of symbols representing the 3D variables to be output.
-- `vars1D`: a vector of symbols representing the 1D variables to be output.
-- `params2D`: a vector of symbols representing the 2D parameters to be output.
-- `oc`: an instance of [`AbstractOutputCrop`](@ref) that defines the cropping strategy for the output.
-- `k`: the current time step index for writing to the NetCDF file.
+$(TYPEDFIELDS)
 """
 mutable struct NetcdfOutput{
     T<:AbstractFloat,
     OC,                 # <: AbstractOutputCrop
 }
+    "a vector of time points at which the output is written"
     t::Vector{T}
+    "the name of the NetCDF file"
     filename::String
+    "a buffer holding the output data before writing to the NetCDF file"
     buffer::Matrix{T}
+    "the 3D (x, y, t) variables to be output"
     vars3D::Vector{Symbol}
+    "the 1D (t) variables to be output"
     vars1D::Vector{Symbol}
+    "the 2D (x, y) parameters to be output"
     params2D::Vector{Symbol}
+    "an [`AbstractOutputCrop`](@ref) defining the cropping strategy for the output"
     oc::OC
+    "the current time index for writing to the NetCDF file"
     k::Int
 end
 
@@ -388,17 +391,18 @@ nout = NativeOutput(vars = [:u, :ue, :b, :dz_ss, :H_ice, :H_water, :u_x, :u_y],
 ```
 
 # Fields
-- `t`: a vector of time points at which the variable is defined.
-- `vars`: a vector of symbols representing the variables to be output.
-- `vals`: a dictionary mapping each variable symbol to a vector of matrices containing the output data.
-- `computation_time`: the total computation time for the simulation.
-- `k`: the current time step index for writing to the output.
+$(TYPEDFIELDS)
 """
 mutable struct NativeOutput{T<:AbstractFloat}
+    "a vector of time points at which the output is stored"
     t::Vector{T}
+    "the variables to be output"
     vars::Vector{Symbol}
+    "maps each variable to the vector of matrices holding its output data"
     vals::Dict{Symbol,Vector{Matrix{T}}}
+    "the total computation time for the simulation"
     computation_time::T
+    "the current time index for writing to the output"
     k::Int
 end
 
