@@ -96,20 +96,20 @@ abstract type AbstractBSL{T<:AbstractFloat} end
 """
 $(TYPEDSIGNATURES)
 
-A `mutable struct` containing:
-- `ref`: an instance of [`ReferenceBSL`](@ref).
-- `z`: the BSL, considered constant in time.
-- `A`: the ocean surface area, considered constant in time.
-
 Assume that the BSL is constant in time.
+
+# Fields
+$(TYPEDFIELDS)
 """
 mutable struct ConstantBSL{
     T,                      # <: AbstractFloat
     R,                      # <: ReferenceBSL
 } <: AbstractBSL{T}
-
+    "the [`ReferenceBSL`](@ref)"
     ref::R
+    "the BSL (m), constant in time"
     z::T
+    "the ocean surface area (m²), constant in time"
     A::T
 end
 
@@ -118,17 +118,18 @@ ConstantBSL(; ref = ReferenceBSL()) = ConstantBSL(ref, ref.z, ref.A)
 """
 $(TYPEDSIGNATURES)
 
-A `mutable struct` containing:
-- `ref`: an instance of [`ReferenceBSL`](@ref).
-- `z`: the BSL at current time step.
-- `A`: the ocean surface area, considered constant in time.
-
 Assume that the ocean surface is constant in time and that the BSL evolves
 only according to the changes in ice volume covered by the `RegionalDomain`.
+
+# Fields
+$(TYPEDFIELDS)
 """
 mutable struct ConstantOceanSurfaceBSL{T,R<:ReferenceBSL{T}} <: AbstractBSL{T}
+    "the [`ReferenceBSL`](@ref)"
     ref::R
+    "the BSL (m) at the current time step"
     z::T
+    "the ocean surface area (m²), constant in time"
     A::T
 end
 
@@ -138,17 +139,18 @@ ConstantOceanSurfaceBSL(; ref = ReferenceBSL()) =
 """
 $(TYPEDSIGNATURES)
 
-A `mutable struct` containing:
-- `ref`: an instance of [`ReferenceBSL`](@ref).
-- `z`: the BSL at current time step.
-- `A`: the ocean surface at current time step.
-
 Assume that the ocean surface evolves in time according to a piecewise constant function
 of the BSL, which evolves in time according to the changes in ice volume covered by the `RegionalDomain`.
+
+# Fields
+$(TYPEDFIELDS)
 """
 mutable struct PiecewiseConstantBSL{T,R<:ReferenceBSL{T}} <: AbstractBSL{T}
+    "the [`ReferenceBSL`](@ref)"
     ref::R
+    "the BSL (m) at the current time step"
     z::T
+    "the ocean surface area (m²) at the current time step"
     A::T
 end
 
@@ -159,56 +161,64 @@ PiecewiseConstantBSL(; ref = ReferenceBSL()) = PiecewiseConstantBSL(ref, ref.z, 
     PiecewiseLinearOceanSurfaceBSL{T}
     PiecewiseLinearOceanSurfaceBSL(; ref, mcp_opts)
 
-A `mutable struct` that is only available if `using NLsolve` and contains:
-- `ref`: a [`ReferenceBSL`](@ref).
-- `z`: the current BSL.
-- `A`: the current ocean surface.
-- `residual`: residual of the nonlinear equation solved numerically.
-- `mcp_opts`: options for the MCP solver, such as `reformulation`, `autodiff`, `iterations`, `ftol`, and `xtol`.
+A `mutable struct` that is only available if `using NLsolve`.
+
+# Fields
+$(TYPEDFIELDS)
 
 Note that, unlike [`ConstantOceanSurface`](@ref) and [`PiecewiseConstantOceanSurface`](@ref), this will only work if `using NLsolve`.
 """
 mutable struct PiecewiseLinearOceanSurfaceBSL{T,R<:ReferenceBSL{T}} <: AbstractBSL{T}
+    "the [`ReferenceBSL`](@ref)"
     ref::R
+    "the BSL (m) at the current time step"
     z::T
+    "the ocean surface area (m²) at the current time step"
     A::T
+    "the residual of the nonlinear equation solved numerically"
     residual::T
+    """
+    the options of the MCP solver, such as `reformulation`, `autodiff`,
+    `iterations`, `ftol` and `xtol`
+    """
     mcp_opts::NamedTuple
 end
 
 """
 $(TYPEDSIGNATURES)
 
-A `mutable struct` containing:
-- `ref`: an instance of [`ReferenceBSL`](@ref).
-- `z`: the BSL at current time step.
-- `t_vec`: the time vector.
-- `z_vec`: the BSL values corresponding to the time vector.
-- `z_itp`: an interpolation of `z_vec` over `t_vec`.
-
 Impose an externally computed BSL, which is internally computed via a time interpolation.
+
+# Fields
+$(TYPEDFIELDS)
 """
 mutable struct ImposedBSL{T,R<:ReferenceBSL{T}} <: AbstractBSL{T}
+    "the [`ReferenceBSL`](@ref)"
     ref::R
+    "the BSL (m) at the current time step"
     z::T
+    "the times (yr) at which the BSL is imposed"
     t_vec::Vector{T}
+    "the imposed BSL values (m) at `t_vec`"
     z_vec::Vector{T}
+    "the interpolation of `z_vec` over `t_vec`"
     z_itp::TimeInterpolation0D{T}
 end
 
 """
 $(TYPEDSIGNATURES)
 
-A `mutable struct`containing:
-- `bsl1`: an [`ImposedBSL`](@ref).
-- `bsl2`: an [`AbstractBSL`](@ref).
-
 This imposes a mixture of BSL. For instance, if you simulate Antarctica over the LGM,
 you can impose an offline BSL contribution from the other ice sheets via `bsl1`. The
 contribution of Antarctica will be intercatively added to this via `bsl2`.
+
+# Fields
+$(TYPEDFIELDS)
 """
 mutable struct CombinedBSL{T,B1<:ImposedBSL,B2<:AbstractBSL} <: AbstractBSL{T}
+    "the imposed, offline BSL contribution"
     bsl1::B1
+    "the interactively computed BSL contribution"
     bsl2::B2
 end
 

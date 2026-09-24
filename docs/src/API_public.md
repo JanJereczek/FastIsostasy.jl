@@ -227,4 +227,7 @@ fit_prony_series
 load_dataset
 NetcdfOutput
 NativeOutput
+RestartOutput
+write_restart
+read_restart!
 ```

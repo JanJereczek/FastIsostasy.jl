@@ -71,7 +71,7 @@ end
 # NetCDF output
 ################################################################################
 
-io_dict = Dict{Symbol,Dict{String,Any}}()
+const io_dict = Dict{Symbol,Dict{String,Any}}()
 io_dict[:u] = Dict(
     "shortname" => "u",
     "longname" => "Viscous displacement",

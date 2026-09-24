@@ -84,12 +84,20 @@ A set of measurements of `tag::AbstractObservable` at grid `points`
 (`Vector{CartesianIndex{2}}`) and `times`. `data` is ordered points-fastest,
 then times: `[p1@t1, p2@t1, …, p1@t2, …]`, i.e. length `npoints * ntimes`.
 `σ` is a scalar or a per-entry vector of the same length.
+
+# Fields
+$(TYPEDFIELDS)
 """
 struct Observation{O<:AbstractObservable, T<:AbstractFloat, S}
+    "the [`AbstractObservable`](@ref) that is measured"
     tag::O
+    "the grid points of the measurements"
     points::Vector{CartesianIndex{2}}
+    "the times of the measurements (yr)"
     times::Vector{T}
+    "the measurements, points-fastest then times, of length `npoints * ntimes`"
     data::Vector{T}
+    "the measurement uncertainty, a scalar or a per-entry vector"
     σ::S
 end
 
@@ -183,13 +191,22 @@ points-fastest then times (`Observation`'s convention); `k` is the cursor index
 into `times` of the next pending recording. Construct after `sim` exists (its
 linear indices are backend-promoted onto `sim`'s field array family), then
 attach with `attach_simobs!(sim, tag, points, times)`.
+
+# Fields
+$(TYPEDFIELDS)
 """
 mutable struct SimulatedObservable{O<:AbstractObservable, T<:AbstractFloat, LI, D}
+    "the [`AbstractObservable`](@ref) that is recorded"
     tag::O
+    "the grid points of the station"
     points::Vector{CartesianIndex{2}}
+    "the recording times (yr)"
     times::Vector{T}
+    "the linear indices of `points`, promoted to the backend of the simulation"
     linear_indices::LI
+    "the recorded values, points-fastest then times"
     data::D
+    "the index into `times` of the next pending recording"
     k::Int
 end
 

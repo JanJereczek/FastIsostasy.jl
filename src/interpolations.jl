@@ -39,10 +39,18 @@ end
 $(TYPEDSIGNATURES)
 
 Define the time interpolation of an array variable.
+
+# Fields
+$(TYPEDFIELDS)
 """
 mutable struct TimeInterpolation2D{T,M}
+    "a sorted vector of time points"
     t::Vector{T}
+    "a vector of arrays corresponding to `t`"
     X::Vector{M}
+    """
+    whether to clamp to the end values outside `[t[1], t[end]]` instead of throwing
+    """
     flat_bc::Bool
 end
 

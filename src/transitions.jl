@@ -35,8 +35,12 @@ metres of height-above-flotation). Uses the branch-free approximations
 
 which are symmetric, GPU-friendly and converge to the exact operators as ε → 0
 (error confined to |x| ≲ ε). Masks become floating-point fields in [0, 1].
+
+# Fields
+$(TYPEDFIELDS)
 """
 struct SmoothTransition{T<:Real} <: AbstractTransition
+    "the smoothing width ε, in metres of height above flotation"
     eps::T
 end
 

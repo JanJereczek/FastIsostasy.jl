@@ -281,28 +281,50 @@ a tableau-based [`AbstractIntegrator`](@ref) (`EulerIntegrator`, `BS3Integrator`
 itself is the `alg` field — with `p` the user parameter object passed to the RHS
 `f!(du, u, p, t)`. Built by [`init_integrator`](@ref); `RKCIntegrator` uses
 [`RKCIntegratorState`](@ref) instead.
+
+# Fields
+$(TYPEDFIELDS)
 """
 mutable struct TableauIntegratorState{A,T,F,P,Alg<:AbstractIntegrator} <:
                AbstractIntegratorState
+    "the in-place right-hand side `f!(du, u, p, t)`"
     f!::F
+    "the parameter object passed to `f!`, typically a [`Simulation`](@ref)"
     p::P
+    "the [`AbstractIntegrator`](@ref) defining the method and its settings"
     alg::Alg
+    "the Butcher tableau of `alg`"
     tableau::RKTableau{T}
+    "the current time"
     t::T
+    "the current step size"
     dt::T
-    u::A                 # current solution (== uprev during a step)
-    unew::A              # candidate solution of the current step
-    utmp::A              # stage temporary
-    atmp::A              # error-estimate / scaling temporary
-    ks::Vector{A}        # stage derivatives; ks[1] is the FSAL derivative
+    "the current solution (equal to the previous solution during a step)"
+    u::A
+    "the candidate solution of the current step"
+    unew::A
+    "a stage temporary"
+    utmp::A
+    "an error-estimate and scaling temporary"
+    atmp::A
+    "the stage derivatives; `ks[1]` is the FSAL derivative"
+    ks::Vector{A}
+    "the relative tolerance of the step-size control"
     reltol::T
+    "the absolute tolerance of the step-size control"
     abstol::T
+    "the smallest step size allowed"
     dtmin::T
+    "the largest step size allowed"
     dtmax::T
-    facold::T            # PI-controller memory (previous accepted error)
+    "the memory of the PI controller, i.e. the error of the previous accepted step"
+    facold::T
+    "the number of accepted steps"
     naccept::Int
+    "the number of rejected steps"
     nreject::Int
-    nf::Int              # number of RHS evaluations
+    "the number of right-hand-side evaluations"
+    nf::Int
 end
 
 """
@@ -738,15 +760,32 @@ end
 # at most once per integrator.
 # -----------------------------------------------------------------------------
 
+"""
+$(TYPEDSIGNATURES)
+
+Memoised stage coefficients and stability boundaries of an [`RKCIntegrator`](@ref),
+see the comment above.
+
+# Fields
+$(TYPEDFIELDS)
+"""
 mutable struct RKCCoeffCache{T}
+    "the damping of the Chebyshev polynomial, fixed for the lifetime of the integrator"
     damping::T
-    s::Int                  # stage count `mu…c` are valid for (0 = unset)
+    "the stage count for which `mu`, `nu`, `mutilde`, `gammatilde` and `c` are valid (0 = unset)"
+    s::Int
+    "the `μⱼ` coefficients of the Chebyshev recurrence"
     mu::Vector{T}
+    "the `νⱼ` coefficients of the Chebyshev recurrence"
     nu::Vector{T}
+    "the `μ̃ⱼ` coefficients of the Chebyshev recurrence"
     mutilde::Vector{T}
+    "the `γ̃ⱼ` coefficients of the Chebyshev recurrence"
     gammatilde::Vector{T}
+    "the stage times, as fractions of the step size"
     c::Vector{T}
-    boundary::Vector{T}     # boundary[s] = rkc_stability_boundary(s, damping); 0 = unset
+    "the stability boundaries, `boundary[s] = rkc_stability_boundary(s, damping)` (0 = unset)"
+    boundary::Vector{T}
 end
 
 RKCCoeffCache(::Type{T}, damping, smax::Int) where {T} =
@@ -810,7 +849,7 @@ end
 # -----------------------------------------------------------------------------
 
 """
-    RKCIntegratorState
+$(TYPEDSIGNATURES)
 
 Mutable state and O(1) (independent of stage count) work arrays for `RKCIntegrator`.
 The rolling Chebyshev recurrence needs only three grid-sized buffers for the
@@ -820,34 +859,62 @@ step) and `Fj` (the RHS at the current stage). The stage-coefficient vectors are
 small (`O(s)` scalars, `s <= smax`, a few KB at most), live in the `cache` field
 and are rebuilt only when the stage count changes; they are *not* part of this
 O(1)-work-array guarantee, which concerns the grid-sized state only.
+
+# Fields
+$(TYPEDFIELDS)
 """
 mutable struct RKCIntegratorState{A,T,F,P,Alg<:RKCIntegrator} <: AbstractIntegratorState
+    "the in-place right-hand side `f!(du, u, p, t)`"
     f!::F
+    "the parameter object passed to `f!`, typically a [`Simulation`](@ref)"
     p::P
-    # Concretely typed, exactly like `TableauIntegratorState.alg`: as the bare
-    # `RKCIntegrator` (a UnionAll) every `alg.damping`/`alg.safety`/`alg.reltol`
-    # read inside `perform_step!` inferred as `Any`.
+    """
+    the [`RKCIntegrator`](@ref) defining the method and its settings. Concretely
+    typed, exactly like `TableauIntegratorState.alg`: as the bare `RKCIntegrator`
+    (a UnionAll) every `alg.damping`/`alg.safety`/`alg.reltol` read inside
+    `perform_step!` inferred as `Any`.
+    """
     alg::Alg
+    "the current time"
     t::T
+    "the current step size"
     dt::T
-    u::A                 # current solution (== uprev during a step)
-    unew::A              # candidate solution of the current step
-    ym1::A                # Y_{j-1} rolling buffer
-    ym2::A                # Y_{j-2} rolling buffer
-    F0::A                 # f(Y_0), constant through a step
-    Fj::A                 # f(Y_{j-1}), refreshed every stage
-    atmp::A               # error-estimate / scaling temporary
-    lambda_max::T          # cached spectral-radius estimate
-    s::Int                 # stage count used by the most recent step
+    "the current solution (equal to the previous solution during a step)"
+    u::A
+    "the candidate solution of the current step"
+    unew::A
+    "the rolling buffer holding `Y_{j-1}`"
+    ym1::A
+    "the rolling buffer holding `Y_{j-2}`"
+    ym2::A
+    "`f(Y_0)`, constant through a step"
+    F0::A
+    "`f(Y_{j-1})`, refreshed at every stage"
+    Fj::A
+    "an error-estimate and scaling temporary"
+    atmp::A
+    "the cached estimate of the spectral radius"
+    lambda_max::T
+    "the stage count used by the most recent step"
+    s::Int
+    "the relative tolerance of the step-size control"
     reltol::T
+    "the absolute tolerance of the step-size control"
     abstol::T
+    "the smallest step size allowed"
     dtmin::T
+    "the largest step size allowed"
     dtmax::T
+    "the memory of the PI controller, i.e. the error of the previous accepted step"
     facold::T
+    "the number of accepted steps"
     naccept::Int
+    "the number of rejected steps"
     nreject::Int
+    "the number of right-hand-side evaluations"
     nf::Int
-    cache::RKCCoeffCache{T}    # stage coefficients + stability boundaries, memoised
+    "the memoised stage coefficients and stability boundaries"
+    cache::RKCCoeffCache{T}
 end
 
 # `lambda_maxiter`/`lambda_tol` stay keywords: they tune the power iteration that
@@ -1231,8 +1298,8 @@ function _next_simobs_time(sim)
     return t
 end
 
-# Next pending output time across the native, netCDF and simulated-observable
-# streams.
+# Next pending output time across the native, netCDF, simulated-observable and
+# restart streams.
 function _next_output_time(sim)
     tn =
         (length(sim.nout.t) >= 1 && sim.nout.k <= length(sim.nout.t)) ?
@@ -1241,9 +1308,13 @@ function _next_output_time(sim)
         (length(sim.ncout.t) >= 1 && sim.ncout.k <= length(sim.ncout.t)) ?
         sim.ncout.t[sim.ncout.k] : nothing
     ts = _next_simobs_time(sim)
-    t = tn === nothing ? tc : (tc === nothing ? tn : min(tn, tc))
-    return t === nothing ? ts : (ts === nothing ? t : min(t, ts))
+    tr = next_restart_time(sim.restartout)
+    t = _min_or_nothing(tn, tc)
+    t = _min_or_nothing(t, ts)
+    return _min_or_nothing(t, tr)
 end
+
+_min_or_nothing(a, b) = a === nothing ? b : (b === nothing ? a : min(a, b))
 
 # Advance the integrator up to `target`, stopping exactly on every output time
 # in between and writing output there.
@@ -1278,6 +1349,7 @@ function advance_with_output!(
         for so in sim.simobs
             next_simobs_time(so) == te && record!(so, sim)
         end
+        next_restart_time(sim.restartout) == te && restart_affect!(sim, progress)
     end
 end
 

@@ -107,16 +107,28 @@ Arguments and keywords are shared with [`ParameterInversion`](@ref):
 - `lossmodel`: an [`AbstractLoss`](@ref) defining the misfit norm.
 
 See also [`loss`](@ref), [`gradient!`](@ref), [`solve!`](@ref).
+
+# Fields
+$(TYPEDFIELDS)
 """
 struct IceLoadInversion{S, E, OB, RG, DM, T, LI, LM} <: AbstractInversion
+    "the [`Simulation`](@ref) template, reset to its initial condition on every `loss` evaluation"
     sim::S
+    "the [`AbstractEncoding`](@ref) mapping `θ` onto the model inputs, or `nothing` for full-field control"
     encoding::E
+    "the [`Observation`](@ref)s to fit"
     observations::OB
+    "the [`AbstractRegularization`](@ref)s added to the misfit"
     regularizations::RG
+    "the [`AbstractDiffMode`](@ref) used to compute the gradient"
     diffmode::DM
+    "the sorted unique union of all observation times (yr)"
     extract_times::Vector{T}
+    "for each of `extract_times`, the `(observation index, time index)` pairs falling on it"
     extract_plan::Vector{Vector{Tuple{Int, Int}}}
+    "for each observation, the linear indices of its points, promoted to the backend of `sim`"
     linear_indices::LI
+    "the [`AbstractLoss`](@ref) defining the misfit norm"
     lossmodel::LM
 end
 
@@ -140,16 +152,28 @@ The `encoding` decides the parameterization:
   independent of `length(θ)`.
 
 See also [`loss`](@ref), [`gradient!`](@ref), [`solve!`](@ref).
+
+# Fields
+$(TYPEDFIELDS)
 """
 struct ParameterInversion{S, E, OB, RG, DM, T, LI, LM} <: AbstractInversion
+    "the [`Simulation`](@ref) template, reset to its initial condition on every `loss` evaluation"
     sim::S
+    "the [`AbstractEncoding`](@ref) mapping `θ` onto the model inputs, or `nothing` for full-field control"
     encoding::E
+    "the [`Observation`](@ref)s to fit"
     observations::OB
+    "the [`AbstractRegularization`](@ref)s added to the misfit"
     regularizations::RG
+    "the [`AbstractDiffMode`](@ref) used to compute the gradient"
     diffmode::DM
+    "the sorted unique union of all observation times (yr)"
     extract_times::Vector{T}
+    "for each of `extract_times`, the `(observation index, time index)` pairs falling on it"
     extract_plan::Vector{Vector{Tuple{Int, Int}}}
+    "for each observation, the linear indices of its points, promoted to the backend of `sim`"
     linear_indices::LI
+    "the [`AbstractLoss`](@ref) defining the misfit norm"
     lossmodel::LM
 end
 

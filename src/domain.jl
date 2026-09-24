@@ -66,41 +66,73 @@ the backend up from the domain, so this is the only place hardware is named.
     Before v2.1 the hardware was chosen with an array constructor
     (`arraykernel = CuArray`). That keyword still works but warns; pass `backend`
     instead.
+
+# Fields
+$(TYPEDFIELDS)
 """
 struct RegionalDomain{T,L,M,B} <: AbstractDomain
-
-    Wx::T                       # Domain half-width in x (m)
-    Wy::T                       # Domain half-width in y (m)
-    nx::Int                     # Number of grid points in x-dimension
-    ny::Int                     # Number of grid points in y-dimension
-    mx::Int                     # nx/2
-    my::Int                     # ny/2
-    dx::T                       # Spatial discretization in x
-    dy::T                       # Spatial discretization in y
-    x::Vector{T}                # spanning vector in x-dimension
-    y::Vector{T}                # spanning vector in y-dimension
+    "the domain half-width in x (m)"
+    Wx::T
+    "the domain half-width in y (m)"
+    Wy::T
+    "the number of grid points in x"
+    nx::Int
+    "the number of grid points in y"
+    ny::Int
+    "the index of the centre in x, `nx ÷ 2`"
+    mx::Int
+    "the index of the centre in y, `ny ÷ 2`"
+    my::Int
+    "the grid spacing in x (m)"
+    dx::T
+    "the grid spacing in y (m)"
+    dy::T
+    "the spanning vector in x (m)"
+    x::Vector{T}
+    "the spanning vector in y (m)"
+    y::Vector{T}
+    "the x-coordinate of each grid point (m)"
     X::L
+    "the y-coordinate of each grid point (m)"
     Y::L
-    i1::Int                     # indices for samesize_conv
+    "the first x-index of the same-size window of a convolution, see `samesize_conv`"
+    i1::Int
+    "the last x-index of the same-size window of a convolution"
     i2::Int
+    "the first y-index of the same-size window of a convolution"
     j1::Int
+    "the last y-index of the same-size window of a convolution"
     j2::Int
+    "an index offset applied to the convolution window, currently always 0"
     convo_offset::Int
-    R::L                        # euclidean distance from center
-    Theta::L                    # colatitude
+    "the Euclidean distance of each grid point from the centre of the domain (m)"
+    R::L
+    "the angular distance of each grid point from the centre of the domain (rad)"
+    Theta::L
+    "the latitude of each grid point (°)"
     Lat::L
+    "the longitude of each grid point (°)"
     Lon::L
-    K::M                        # Length distortion matrix
-    Dx::M                       # dx matrix accounting for distortion.  TODO: macro
-    Dy::M                       # dy matrix accounting for distortion.  TODO: macro
-    A::M                        # area (accounting for distortion).     TODO: macro
+    "the scale factor of the projection, i.e. the length distortion (1)"
+    K::M
+    "the grid spacing in x, corrected for distortion (m)"
+    Dx::M
+    "the grid spacing in y, corrected for distortion (m)"
+    Dy::M
+    "the cell area, corrected for distortion (m²)"
+    A::M
+    "whether the projection distortion is corrected for"
     correct_distortion::Bool
-    zeros::M                     # a zero matrix of size nx x ny
-    pseudodiff::M               # pseudodiff operator as matrix (Hadamard product)
-    # Which hardware the arrays live on, as a `KernelAbstractions.Backend` (see the
-    # docstring). KA backends are singletons, so `B` is a compile-time constant and
-    # every backend-dependent branch folds away. `B` is the *last* parameter so that
-    # partially applied signatures (`RegionalDomain{T, L, M}`) keep dispatching.
+    "a matrix of zeros of size `(nx, ny)`"
+    zeros::M
+    "the pseudo-differential operator in Fourier space, applied as a Hadamard product"
+    pseudodiff::M
+    """
+    the `KernelAbstractions.Backend` on which the arrays live (see above). KA
+    backends are singletons, so `B` is a compile-time constant and every
+    backend-dependent branch folds away. `B` is the *last* parameter so that
+    partially applied signatures (`RegionalDomain{T, L, M}`) keep dispatching.
+    """
     backend::B
 end
 

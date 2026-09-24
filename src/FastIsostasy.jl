@@ -42,6 +42,7 @@ include("io.jl")
 include("integrators.jl")
 include("progress.jl")
 include("simulation.jl")
+include("restart.jl")
 include("loads.jl")
 include("topography.jl")
 include("utils.jl")
@@ -191,6 +192,9 @@ export load_latychev_test3, load_latychev2023_ICE6G
 # simulation.jl
 export SolverOptions, Simulation, run!, init_integrator
 export update_diagnostics!, step!
+
+# restart.jl
+export RestartOutput, write_restart, read_restart!
 
 # integrators.jl
 export AbstractIntegrator,

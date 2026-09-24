@@ -81,10 +81,17 @@ mutable struct Timer{T}
     t_computation_0::T
     "the vector of computation times corresponding to `t_vec`"
     t_computation::Vector{T}
+    """
+    the origin of the clock that schedules the sparse diagnostics (every
+    `dt_sparse_diagnostics`). Equal to `t_span[1]`, except in a simulation restarted
+    from a file, where it keeps the origin of the original run so that the
+    schedule continues where it stopped.
+    """
+    t_sparse0::T
 end
 
 function Timer(t_span; T = Float32)
-    return Timer(T(t_span[1]), T.(t_span), T[], T(0), T[])
+    return Timer(T(t_span[1]), T.(t_span), T[], T(0), T[], T(t_span[1]))
 end
 
 function t_computation!(tt::Timer)
@@ -122,6 +129,7 @@ struct Simulation{
     NO,     # <:NativeOutput
     TM,     # <:Timer
     VO,     # <:AbstractVector{<:SimulatedObservable} (inverse/observables.jl)
+    RO,     # <:Union{Nothing,RestartOutput}
 }
     "the [`AbstractDomain`](@ref) defining the spatial discretization"
     domain::CD
@@ -151,8 +159,25 @@ struct Simulation{
     a vector of [`SimulatedObservable`](@ref) to be computed during integration
     """
     simobs::VO
+    "the [`RestartOutput`](@ref) controlling the writing of restart files, or `nothing`"
+    restartout::RO
 end
 
+"""
+    Simulation(domain, bcs, sealevel, solidearth, t_span; kwargs...)
+
+Set up the [`Simulation`](@ref) of the GIA problem over `t_span`.
+
+Two keywords handle restarts:
+- `restartout`: `nothing` (default), a path, or a [`RestartOutput`](@ref). A path
+  writes a restart file at the end of [`run!`](@ref); a `RestartOutput` can
+  also write one at intermediate times.
+- `restart_from`: `nothing` (default) or the path of a restart file written by
+  [`write_restart`](@ref). The simulation then starts from the state saved in that
+  file instead of from the reference state. `t_span[1]` must be the time at which
+  the file was written, and the other arguments define the physics as in the
+  original run. See [`read_restart!`](@ref).
+"""
 function Simulation(
     domain,         # RegionalDomain
     bcs,            # BoundaryConditions
@@ -169,6 +194,8 @@ function Simulation(
     nout = NativeOutput(t = T[], T = T),
     c = PhysicalConstants{T}(),
     simobs = SimulatedObservable[],
+    restartout = nothing,
+    restart_from = nothing,
 )
 
     if (sealevel.load isa NoSealevelLoad)
@@ -232,7 +259,7 @@ function Simulation(
         needs_kinematic_state(sealevel.formalism),
     )
 
-    return Simulation(
+    sim = Simulation(
         domain,
         c,
         bcs,
@@ -246,7 +273,10 @@ function Simulation(
         deepcopy(nout),
         timer,
         simobs,
+        RestartOutput(restartout, timer),
     )
+    isnothing(restart_from) || read_restart!(sim, restart_from)
+    return sim
 end
 
 function Base.show(io::IO, ::MIME"text/plain", sim::Simulation)
@@ -265,6 +295,7 @@ function Base.show(io::IO, ::MIME"text/plain", sim::Simulation)
         "Native output" => typeof(sim.nout),
         "native t_out" => sim.nout.t,
         "nc t_out" => sim.ncout.t,
+        "restart t_out" => isnothing(sim.restartout) ? "none" : sim.restartout.t,
         "n simulated observables" => length(sim.simobs),
         "nx, ny" => [domain.nx, domain.ny],
         "dx, dy" => [domain.dx, domain.dy],
@@ -341,7 +372,10 @@ $(TYPEDSIGNATURES)
 Initialize the simulation problem by computing the diagnostics variables.
 """
 function init_problem!(sim::Simulation)
-    init_bsl_formalism!(sim, sim.sealevel.formalism)
+    # The formalism is primed before the first sparse update. A state restored from
+    # a restart file (or a snapshot taken later in a run) is already primed, and
+    # priming it again would overwrite what the previous interval left behind.
+    sim.now.count_sparse_updates == 0 && init_bsl_formalism!(sim, sim.sealevel.formalism)
     update_diagnostics!(sim.now.dudt, sim.now.u, sim, sim.timer.t)
     return nothing
 end
@@ -364,6 +398,7 @@ function run!(sim::Simulation)
     progress = sim.opts.show_progress ? ForwardProgress(sim) : nothing
     advance_with_output!(integ, sim, sim.timer.t_span[2], STEPPER_MAXITERS, progress)
     finish_progress!(progress, integ)
+    isnothing(sim.restartout) || write_restart(sim.restartout.filename, sim)
     isempty(sim.timer.t_computation) ||
         (sim.timer.t_computation .-= sim.timer.t_computation[1])
     return nothing
@@ -411,7 +446,7 @@ function update_diagnostics!(dudt, u, sim::Simulation, t)
     # for the elastic displacement and the sea-surface elevation,
     # we only update them every sim.opts.dt_sparse_diagnostics
     update_diagnostics = (
-        ((t - sim.timer.t_span[1]) / sim.opts.dt_sparse_diagnostics) >=
+        ((t - sim.timer.t_sparse0) / sim.opts.dt_sparse_diagnostics) >=
         sim.now.count_sparse_updates
     )   # +1
 

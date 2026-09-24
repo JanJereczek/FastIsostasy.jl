@@ -43,20 +43,43 @@ struct RealFFTBackend <: AbstractFFTBackend end
 #########################################################
 # Prealloc
 #########################################################
+"""
+$(TYPEDSIGNATURES)
+
+Preallocated work arrays of the [`GIATools`](@ref), so that the right-hand side of
+the model is allocation-free.
+
+# Fields
+$(TYPEDFIELDS)
+"""
 mutable struct PreAllocated{M,C,C3}
+    "the right-hand side of the deformation equation"
     rhs::M
+    "a real buffer"
     buffer_xx::M
+    "a real buffer"
     buffer_yy::M
+    "a real buffer, e.g. for reductions over the domain"
     buffer_x::M
+    "a real buffer"
     buffer_xy::M
+    "the bending moment `Mxx` of the thin plate"
     Mxx::M
+    "the bending moment `Myy` of the thin plate"
     Myy::M
+    "the bending moment `Mxy` of the thin plate"
     Mxy::M
+    "the complex staging buffer of the forward FFTs"
     fftrhs::C
+    "the FFT of the load term"
     fftF::C
+    "the FFT of the viscous displacement"
     fftU::C
-    # One complex plane per Kelvin branch of `TransientCreepMantle`, stacked along
-    # dim 3 exactly like `u_K` in `src/state.jl`; zero-sized otherwise.
+    """
+    the FFTs of the Kelvin-branch displacements of a [`TransientCreepMantle`](@ref),
+    stacked along dim 3 exactly like `u_K` in `CurrentState`; zero-sized
+    otherwise
+    """
     fftK::C3
 end
 
@@ -70,6 +93,9 @@ Return a `struct` containing pre-computed tools to perform forward-stepping of t
 This includes the Green's functions for the computation of the lithosphere and the SSH
 perturbation, plans for FFTs, interpolators of the load and the viscosity over time and
 preallocated arrays.
+
+# Fields
+$(TYPEDFIELDS)
 """
 struct GIATools{
     CPH<:ConvolutionPlanHelpers,
@@ -81,13 +107,21 @@ struct GIATools{
     IP,     # <:InversePlan,
     PA<:PreAllocated,
 }
+    "the `ConvolutionPlanHelpers` shared by all convolution plans"
     conv_helpers::CPH
+    "the `ConvolutionPlan` with the viscous Green's function"
     viscous_convo::I1
+    "the `ConvolutionPlan` with the elastic Green's function"
     elastic_convo::I2
+    "the `ConvolutionPlan` with the Green's function of the sea-surface perturbation"
     dz_ss_convo::I3
+    "the `ConvolutionPlan` smoothing the right-hand side, or `EmptyConvolution` if none"
     smooth_convo::I4
+    "the forward FFT plan"
     pfft!::FP
+    "the inverse FFT plan"
     pifft!::IP
+    "the `PreAllocated` work arrays"
     prealloc::PA
 end
 

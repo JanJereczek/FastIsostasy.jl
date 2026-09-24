@@ -169,9 +169,14 @@ end
 $(TYPEDSIGNATURES)
 
 Impose a Dirichlet-like boundary condition at the corners of the computational domain.
+
+# Fields
+$(TYPEDFIELDS)
 """
 struct CornerBC{B,T}
-    space::B               # <:AbstractBCSpace
+    "the [`AbstractBCSpace`](@ref) on which the boundary condition is imposed"
+    space::B
+    "the value imposed by the boundary condition"
     x_border::T
 end
 
@@ -179,9 +184,14 @@ end
 $(TYPEDSIGNATURES)
 
 Impose a Dirichlet-like boundary condition at the borders of the computational domain.
+
+# Fields
+$(TYPEDFIELDS)
 """
 struct BorderBC{B,T}
-    space::B               # <:AbstractBCSpace
+    "the [`AbstractBCSpace`](@ref) on which the boundary condition is imposed"
+    space::B
+    "the value imposed by the boundary condition"
     x_border::T
 end
 
@@ -190,9 +200,14 @@ $(TYPEDSIGNATURES)
 
 Impose a Dirichlet-like boundary condition at the borders of the computational domain,
 weighted by the distance from the center of the domain.
+
+# Fields
+$(TYPEDFIELDS)
 """
 struct DistanceWeightedBC{B,T}
-    space::B               # <:AbstractBCSpace
+    "the [`AbstractBCSpace`](@ref) on which the boundary condition is imposed"
+    space::B
+    "the value imposed by the boundary condition"
     x_border::T
 end
 
@@ -201,9 +216,14 @@ end
 $(TYPEDSIGNATURES)
 
 Impose a mean value for the field.
+
+# Fields
+$(TYPEDFIELDS)
 """
 struct MeanBC{B,T}
-    space::B               # <:AbstractBCSpace
+    "the [`AbstractBCSpace`](@ref) on which the boundary condition is imposed"
+    space::B
+    "the value imposed by the boundary condition"
     x_border::T
 end
 

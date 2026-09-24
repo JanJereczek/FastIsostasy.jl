@@ -30,8 +30,12 @@ compile-time constant and hence invisible to Enzyme. As a `Float64` field it wou
 be treated as differentiable whenever the plan lives inside an autodiff'd
 [`Simulation`](@ref), corrupting gradients — the plan's scale is a constant, not a
 differentiable quantity.
+
+# Fields
+$(TYPEDFIELDS)
 """
 struct NormalizedPlan{P,S}
+    "the unnormalized inverse FFT plan"
     p::P
 end
 NormalizedPlan(p, scale::Real) = NormalizedPlan{typeof(p),Float64(scale)}(p)

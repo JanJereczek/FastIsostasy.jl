@@ -268,6 +268,9 @@ channel between `T₁` and `T₂ = 300 km` and a viscous halfspace starting
 at `T₂`. This represents a homogenous case. For heterogeneous ones, simply make
 `lb::Vector{Matrix}`, `lv::Vector{Matrix}` such that the vector elements represent the
 lateral variability of each layer on the grid of `domain::RegionalDomain`.
+
+# Fields
+$(TYPEDFIELDS)
 """
 mutable struct SolidEarth{
     T,  # <:AbstractFloat,
@@ -280,25 +283,45 @@ mutable struct SolidEarth{
     LU, # <:AbstractViscosityLumping,
     LC, # <:AbstractLithosphereColumn,
 }
+    "the [`AbstractLithosphere`](@ref) defining the rheology of the lithosphere"
     lithosphere::LI
+    "the [`AbstractMantle`](@ref) defining the rheology of the mantle"
     mantle::MA
+    "the [`AbstractCalibration`](@ref) applied to the effective viscosity"
     calibration::CA
+    "the `AbstractCompressibility` applied to the effective viscosity"
     compressibility::CO
+    "the [`AbstractViscosityLumping`](@ref) lumping the layered viscosity into an effective one"
     lumping::LU
+    "the `AbstractLithosphereColumn` deciding how the lithosphere contributes to the column anomaly"
     lithosphere_column::LC
+    "the effective mantle viscosity (Pa s)"
     effective_viscosity::M
+    "the scaling of the pseudo-differential operator resulting from the viscosity lumping (1)"
     pseudodiff_scaling::M
+    "the inverse of the scaled pseudo-differential operator, precomputed for the viscous update"
     scaled_pseudodiff_inv::M
+    "the lithospheric thickness (m)"
     litho_thickness::M
+    "the flexural rigidity of the lithosphere (N m)"
     litho_rigidity::M
+    "the mask of the cells where the load is active"
     maskactive::B
+    "the Poisson ratio of the lithosphere (1)"
     litho_poissonratio::T
+    "the Poisson ratio of the mantle (1)"
     mantle_poissonratio::T
+    "the relaxation time of the mantle (yr), used by the [`RelaxedMantle`](@ref)"
     tau::M
+    "the scaling of the ELRA length, following LeMeur (1996, text below Eq. 3) (1)"
     scale_elralength::T
+    "the Young modulus of the lithosphere (N m⁻²)"
     litho_youngmodulus::T
+    "the shear modulus of the lithosphere (N m⁻²)"
     litho_shearmodulus::T
+    "the mean density of the topmost upper mantle (kg m⁻³)"
     rho_uppermantle::T
+    "the mean density of the lithosphere (kg m⁻³)"
     rho_litho::T
 end
 

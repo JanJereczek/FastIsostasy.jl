@@ -23,10 +23,16 @@
 Allocate a buffer holding a full copy of `sim`'s mutable state (its `CurrentState`,
 its barystatic-sea-level object, and the clock). Reuse it across many
 `snapshot!`/`restore!` calls.
+
+# Fields
+$(TYPEDFIELDS)
 """
 mutable struct StateSnapshot{CS,BSL,T}
+    "a copy of the `CurrentState`"
     now::CS
+    "a copy of the [`AbstractBSL`](@ref)"
     bsl::BSL
+    "the simulation time"
     timer_t::T
 end
 

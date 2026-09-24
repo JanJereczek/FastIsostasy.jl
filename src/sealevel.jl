@@ -222,7 +222,17 @@ the gravitational response is included in the sea surface perturbation.
 """
 struct LaterallyVariableSeaSurface <: AbstractSeaSurface end
 
+"""
+$(TYPEDSIGNATURES)
+
+Impose the sea-surface perturbation from an external time series, e.g. the output
+of a global GIA model.
+
+# Fields
+$(TYPEDFIELDS)
+"""
 struct ImposedSeaSurface{ITP} <: AbstractSeaSurface
+    "the time interpolation of the sea-surface perturbation (m), e.g. a `TimeInterpolation2D`"
     dz_ss_itp::ITP
 end
 
@@ -234,14 +244,9 @@ end
 $(TYPEDSIGNATURES)
 
 A struct that gathers the modelling choices for the sea-level component of the simulation.
-It contains:
- - `surface`: an instance of [`AbstractSeaSurface`](@ref) to represent the sea surface.
- - `load`: an instance of [`AbstractSealevelLoad`](@ref) to represent the sea-level load.
- - `bsl`: an instance of [`AbstractBSL`](@ref) to represent the barystatic sea level.
- - `update_bsl`: an instance of [`AbstractBSLUpdate`](@ref) to represent the update mechanism for the barystatic sea level.
- - `formalism`: an instance of [`AbstractBSLFormalism`](@ref) deciding how the BSL
-   contribution of the domain is computed, [`GoelzerBSLFormalism`](@ref) (default) or
-   [`AdhikariBSLFormalism`](@ref).
+
+# Fields
+$(TYPEDFIELDS)
 
 ```jldoctest
 julia> using FastIsostasy
@@ -266,11 +271,20 @@ struct RegionalSeaLevel{
     UBSL,       # <:AbstractBSLUpdate,
     F,          # <:AbstractBSLFormalism
 }
-    surface::S          # lc or lv
-    load::L             # no or interactive
-    bsl::BSL            # constant, imposed, pw-constant or -linear
-    update_bsl::UBSL    # internal or external
-    formalism::F        # Goelzer or Adhikari
+    "the [`AbstractSeaSurface`](@ref) representing the sea surface"
+    surface::S
+    "the [`AbstractSealevelLoad`](@ref) representing the sea-level load"
+    load::L
+    "the [`AbstractBSL`](@ref) representing the barystatic sea level"
+    bsl::BSL
+    "the [`AbstractBSLUpdate`](@ref) deciding how the barystatic sea level is updated"
+    update_bsl::UBSL
+    """
+    the [`AbstractBSLFormalism`](@ref) deciding how the BSL contribution of the
+    domain is computed, [`GoelzerBSLFormalism`](@ref) (default) or
+    [`AdhikariBSLFormalism`](@ref)
+    """
+    formalism::F
 end
 
 function RegionalSeaLevel(;
