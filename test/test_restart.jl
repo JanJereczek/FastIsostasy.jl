@@ -30,7 +30,7 @@ function build_restart_sim(case, t_span; n = 5, kwargs...)
         # margin, so that every piece of state a restart must carry is non-trivial.
         # The semi-implicit Kelvin update needs a fixed step.
         opts = SolverOptions(show_progress = false, integ = EulerIntegrator(dt = 10f0))
-        mantle = TransientCreepMantle(shearmodulus = 67e9,
+        mantle = TransientViscousMantle(shearmodulus = 67e9,
             relaxation_strength = 1.2, kelvin_time = 500.0)
         se = SolidEarth(domain; mantle = mantle, maskactive = domain.R .< 1.5f6,
             lithosphere = LaterallyConstantLithosphere(),

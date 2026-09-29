@@ -166,7 +166,9 @@ AbstractMantle
 RigidMantle
 RelaxedMantle
 ViscousMantle
-TransientCreepMantle
+TransientViscousMantle
+ViscoElasticMantle
+TransientViscoElasticMantle
 BurgersMantle
 ExtendedBurgersMantle
 update_dudt!

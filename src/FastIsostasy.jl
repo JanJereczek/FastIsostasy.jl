@@ -169,7 +169,8 @@ export absorption_band_density, fit_prony_series
 export SolidEarth
 export AbstractLithosphere, AbstractMantle
 export RigidLithosphere, LaterallyConstantLithosphere, LaterallyVariableLithosphere
-export RigidMantle, RelaxedMantle, ViscousMantle, TransientCreepMantle
+export RigidMantle, RelaxedMantle, ViscousMantle, TransientViscousMantle
+export ViscoElasticMantle, TransientViscoElasticMantle
 export BurgersMantle, ExtendedBurgersMantle
 export AbstractLithosphereColumn,
     IncompressibleLithosphereColumn, CompressibleLithosphereColumn

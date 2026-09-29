@@ -76,11 +76,17 @@ mutable struct PreAllocated{M,C,C3}
     "the FFT of the viscous displacement"
     fftU::C
     """
-    the FFTs of the Kelvin-branch displacements of a [`TransientCreepMantle`](@ref),
+    the FFTs of the Kelvin-branch displacements of a [`TransientViscousMantle`](@ref),
     stacked along dim 3 exactly like `u_K` in `CurrentState`; zero-sized
     otherwise
     """
     fftK::C3
+    """
+    the inverse-FFT buffer of the coupled elastic displacement of a
+    [`ViscoElasticMantle`](@ref) or [`TransientViscoElasticMantle`](@ref), a single
+    plane along dim 3; zero-sized otherwise
+    """
+    fftE::C3
 end
 
 #########################################################
@@ -187,14 +193,15 @@ function GIATools(
     # `domain.backend` decides host vs. device planning, `fft` complex vs. real
     pfft!, pifft! = choose_fft_plans(domain.K, fft)
 
-    n_cplx_matrices = 4
+    n_cplx_matrices = 5
     realmatrices = [
         kernelzeros(domain) for
         _ in eachindex(fieldnames(PreAllocated))[1:(end-n_cplx_matrices)]
     ]
-    cplxmatrices = _make_cplx_matrices(domain, fft, n_cplx_matrices - 1)
+    cplxmatrices = _make_cplx_matrices(domain, fft, n_cplx_matrices - 2)
     fftK = _make_cplx_branch_array(domain, fft, nbranches(solidearth.mantle))
-    prealloc = PreAllocated(realmatrices..., cplxmatrices..., fftK)
+    fftE = _make_cplx_branch_array(domain, fft, nsprings(solidearth.mantle))
+    prealloc = PreAllocated(realmatrices..., cplxmatrices..., fftK, fftE)
     return GIATools(
         conv_helpers,
         viscous_convo,

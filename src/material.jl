@@ -605,7 +605,7 @@ Ivins & Caron (2021), so that the transient term of their creep function
 
 (`F` the density returned by [`absorption_band_density`](@ref)) is approximated
 by the `nbranches`-branch Kelvin sum `Σⱼ Δⱼ (1 − exp(−t/τⱼ))` used by
-[`TransientCreepMantle`](@ref).
+[`TransientViscousMantle`](@ref).
 
 `nbranches` log-spaced bins partition `[tau_L, tau_H]`. Each `Δⱼ` is the *exact*
 probability mass of its bin (so `sum(Δⱼ) == relaxation_strength` to machine

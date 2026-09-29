@@ -454,7 +454,7 @@ function update_diagnostics!(dudt, u, sim::Simulation, t)
     if update_diagnostics
 
         # Update the elastic response and the resulting anomaly in lithospheric column
-        update_elasticresponse!(sim, sim.solidearth.lithosphere)
+        update_elasticresponse!(sim, sim.solidearth.mantle, sim.solidearth.lithosphere)
         columnanom_litho!(sim)
 
         # Update barystatic sea level

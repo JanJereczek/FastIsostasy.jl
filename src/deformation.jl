@@ -18,14 +18,15 @@ Supported combinations are:
   fixed step size, i.e. `SolverOptions(integ = EulerIntegrator(dt = ...))`.
 - [`ViscousMantle`](@ref) with [`LaterallyVariableLithosphere`](@ref): the approach
   of [swierczek-jereczek_fastisostasy_2024](@citet).
-- [`TransientCreepMantle`](@ref) with [`LaterallyConstantLithosphere`](@ref) or
+- [`TransientViscousMantle`](@ref), [`ViscoElasticMantle`](@ref) or
+  [`TransientViscoElasticMantle`](@ref) with [`LaterallyConstantLithosphere`](@ref) or
   [`RigidLithosphere`](@ref), on [`ComplexFFTBackend`](@ref) only: the coupled
   `(N+1)`-field semi-implicit solve, also fixed-step.
 
 Not implemented, and erroring rather than silently approximating:
 - [`RelaxedMantle`](@ref) with [`LaterallyVariableLithosphere`](@ref), which is
   what [coulon_contrasting_2021](@citet) describes.
-- [`TransientCreepMantle`](@ref) with [`LaterallyVariableLithosphere`](@ref), or on
+- The three mantles above with [`LaterallyVariableLithosphere`](@ref), or on
   [`RealFFTBackend`](@ref).
 """
 function update_dudt!(dudt, u, sim, t, earth::SolidEarth)
@@ -82,7 +83,7 @@ function update_dudt!(
 end
 
 # =============================================================================
-# TransientCreepMantle: steady Maxwell dashpot + N Kelvin-Voigt branches.
+# TransientViscousMantle: steady Maxwell dashpot + N Kelvin-Voigt branches.
 #
 # Per Fourier mode (roadmap burgers.md §2.3), with k the wavenumber, all branches
 # in series so they carry the same stress and their displacements add
@@ -116,9 +117,20 @@ end
 # term is just u_Mⁿ — and u_Mⁿ = Sⁿ − Σⱼ u_K[j]ⁿ (linearity), so the Maxwell branch
 # never has to be materialised: only Sⁿ (= FFT of the state array `u`, which
 # already *is* u_M + Σⱼ u_K[j]) and the Kelvin branches' own state are needed. See
-# `update_dudt!(..., ::TransientCreepMantle{MT,N}, ...)` below for the expansion;
+# `update_dudt!(..., ::TransientViscousMantle{MT,N}, ...)` below for the expansion;
 # setting N = 1 there reproduces the closed-form 2×2 solve this comment used to
 # describe line for line.
+#
+# ViscoElasticMantle / TransientViscoElasticMantle add the unrelaxed spring μ in
+# series. Writing the total displacement as w = w_E + S, the spring obeys
+# 2kμ w_E = F − β w (same stress as every other element). Eliminating w_E,
+#
+#     F − β w = γ (F − β S),      γ = 2kμ / (2kμ + β),
+#     w_E = (F − β S) / (2kμ + β),
+#
+# so the viscous system above is unchanged except that F → γF and β → γβ, and
+# w_E is a diagnostic of (F, S) that goes to `ue`. A pure Maxwell body is the
+# N = 0 member. See `couple_elastic_spring!` below.
 # =============================================================================
 
 function update_dudt!(
@@ -126,16 +138,17 @@ function update_dudt!(
     u,
     sim,
     t,
-    mantle::TransientCreepMantle{MT,N},
+    mantle::SpectralCreepMantle,
     litho::Union{LaterallyConstantLithosphere,RigidLithosphere},
     fft::ComplexFFTBackend,
-) where {MT,N}
+)
 
     tools = sim.tools
     P = tools.prealloc
     domain, se = sim.domain, sim.solidearth
     dt = fixed_dt(sim.opts.integ) * sim.c.seconds_per_year
     a = dt / 2
+    N = nbranches(mantle)
 
     # `update_dudt!` is a *pure* RHS: the stepper calls it more than once per step
     # (init_problem!, FSAL priming, then once per accepted step), so it must not
@@ -164,14 +177,20 @@ function update_dudt!(
         mul!(view(P.fftK, :, :, j), tools.pfft!, P.fftrhs)
     end
 
+    # The ρ_litho·ue feedback is dropped when the spring is coupled: the buoyancy
+    # of the elastic deflection is then already part of β w.
+    litho_feedback = elastic_litho_feedback(mantle)
     @. P.fftrhs =
-        - (sim.now.columnanoms.load + sim.now.columnanoms.litho) *
+        - (sim.now.columnanoms.load + litho_feedback * sim.now.columnanoms.litho) *
         sim.c.g *
         domain.K ^ 2
     mul!(P.fftF, tools.pfft!, P.fftrhs)
 
     @. P.fftrhs = u
     mul!(P.fftU, tools.pfft!, P.fftrhs)        # Sⁿ = FFT(u_M + Σⱼ u_K[j])ⁿ
+
+    # F → γF, β → γβ and ue = w_E if the elastic spring is coupled; no-op otherwise.
+    couple_elastic_spring!(sim, mantle, beta)
 
     # `common = dt F − aβ Sⁿ` is shared by every branch's rᵢ (see comment above).
     @. P.fftrhs = dt * P.fftF - a * beta * P.fftU
@@ -185,9 +204,9 @@ function update_dudt!(
     # collapses to a *scalar*-weighted sum; only 1/gⱼ needs the spectral field Cⱼ.
     @. P.buffer_xy = 1 / A                     # Σᵢ 1/gᵢ, i = 0 term
     P.fftF .= 0                                 # Σᵢ rᵢ/gᵢ accumulator (F̂ baked into `common` already)
-    for j in 1:N
-        tau_j = mantle.kelvin_time[j] * sim.c.seconds_per_year
-        mu2_j = mantle.shearmodulus / mantle.relaxation_strength[j]
+    for (j, (Δ_j, τ_j)) in enumerate(kelvin_branches(mantle))
+        tau_j = τ_j * sim.c.seconds_per_year
+        mu2_j = mantle.shearmodulus / Δ_j
         fftKj = view(P.fftK, :, :, j)
         @. P.buffer_yy =                       # gⱼ = Cⱼ (τⱼ + a)
             2 * mu2_j * domain.pseudodiff * se.pseudodiff_scaling * (tau_j + a)
@@ -200,9 +219,9 @@ function update_dudt!(
     # --- finalise each Kelvin branch: uⱼⁿ⁺¹ = ratioⱼ uⱼⁿ + (common − aβ Sⁿ⁺¹)/gⱼ -
     # (each entry depends only on itself, so the in-place update is safe, exactly
     # like the N = 1 method's self-referential `P.fftK` update.)
-    for j in 1:N
-        tau_j = mantle.kelvin_time[j] * sim.c.seconds_per_year
-        mu2_j = mantle.shearmodulus / mantle.relaxation_strength[j]
+    for (j, (Δ_j, τ_j)) in enumerate(kelvin_branches(mantle))
+        tau_j = τ_j * sim.c.seconds_per_year
+        mu2_j = mantle.shearmodulus / Δ_j
         fftKj = view(P.fftK, :, :, j)
         @. P.buffer_yy =
             2 * mu2_j * domain.pseudodiff * se.pseudodiff_scaling * (tau_j + a)
@@ -230,10 +249,36 @@ function update_dudt!(
     return nothing
 end
 
+elastic_litho_feedback(::TransientViscousMantle) = true
+elastic_litho_feedback(::ElasticSpringMantle) = false
+
+couple_elastic_spring!(sim, mantle::TransientViscousMantle, beta) = nothing
+
+# Expects `P.fftF = F̂` and `P.fftU = Ŝⁿ`; see the derivation above. Writes the
+# coupled elastic displacement to `sim.now.ue` (which the Farrell convolution in
+# `update_elasticresponse!` leaves alone for these mantles) and rescales F̂ and β
+# in place. `P.fftrhs` is free at this point and used as staging buffer.
+function couple_elastic_spring!(sim, mantle::ElasticSpringMantle, beta)
+    P, domain, tools = sim.tools.prealloc, sim.domain, sim.tools
+    mu = mantle.shearmodulus
+    fftE = view(P.fftE, :, :, 1)
+
+    @. P.fftrhs = (P.fftF - beta * P.fftU) / (2 * mu * domain.pseudodiff + beta)
+    mul!(fftE, tools.pifft!, P.fftrhs)
+    sim.now.ue .= real.(fftE)
+    # Same (linear) BC as the viscous displacement it lives next to.
+    apply_bc!(sim.now.ue, sim.bcs.viscous_displacement)
+
+    # γ uses the unscaled β, so F̂ must be rescaled first.
+    @. P.fftF *= 2 * mu * domain.pseudodiff / (2 * mu * domain.pseudodiff + beta)
+    @. beta *= 2 * mu * domain.pseudodiff / (2 * mu * domain.pseudodiff + beta)
+    return nothing
+end
+
 # --- guard rails: combinations the semi-implicit solve does not cover yet -----
 #
 # CAUTION: these must stay *disjoint* from the real method above on `litho` or
-# `fft`. A single `(mantle::TransientCreepMantle, litho, fft)` catch-all is
+# `fft`. A single `(mantle::TransientViscousMantle, litho, fft)` catch-all is
 # ambiguous with it, because the two are equal (not strictly ordered) on `mantle`
 # and Julia does not break that tie using the remaining arguments.
 
@@ -242,11 +287,11 @@ update_dudt!(
     u,
     sim,
     t,
-    mantle::TransientCreepMantle,
+    mantle::SpectralCreepMantle,
     litho::Union{LaterallyConstantLithosphere,RigidLithosphere},
     fft::RealFFTBackend,
 ) = error(
-    "TransientCreepMantle does not yet support RealFFTBackend (roadmap " *
+    "$(nameof(typeof(mantle))) does not yet support RealFFTBackend (roadmap " *
     "burgers.md §4: 'implement against ComplexFFTBackend first'). Use " *
     "SolverOptions(fft = ComplexFFTBackend()).",
 )
@@ -256,11 +301,11 @@ update_dudt!(
     u,
     sim,
     t,
-    mantle::TransientCreepMantle,
+    mantle::SpectralCreepMantle,
     litho::LaterallyVariableLithosphere,
     fft,
 ) = error(
-    "TransientCreepMantle does not support LaterallyVariableLithosphere: the " *
+    "$(nameof(typeof(mantle))) does not support LaterallyVariableLithosphere: the " *
     "v1 effective-viscosity trick has no proven analogue for the coupled " *
     "(N+1)-field system (fastisostasy-roadmap/burgers.md §8). Use " *
     "LaterallyConstantLithosphere or RigidLithosphere.",
@@ -535,6 +580,12 @@ function update_elasticresponse!(
     )
     return nothing
 end
+
+# A coupled elastic spring computes `ue` itself inside `update_dudt!`, every step.
+update_elasticresponse!(sim::Simulation, mantle::AbstractMantle, lithosphere) =
+    update_elasticresponse!(sim, lithosphere)
+update_elasticresponse!(sim::Simulation, mantle::ElasticSpringMantle, lithosphere) =
+    nothing
 
 function update_elasticresponse!(sim::Simulation, lithosphere::RigidLithosphere)
     sim.now.ue .= 0
