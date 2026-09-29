@@ -24,17 +24,14 @@ per-concrete-integrator methods.
 """
 abstract type AbstractIntegratorState end
 
-# Every integrator stores its settings concretely in its own float type `T`.
-# `BS3Integrator()` infers `T` from the defaults below (`Float32`, the package-wide
-# default — cf. `Timer(t_span; T = Float32)`); `BS3Integrator{Float64}(reltol = 1e-8)`
-# pins it. Either way `init_integrator` converts every setting to the simulation's
-# own element type, so the stored type is a matter of precision, not of dispatch.
+# Every integrator stores its settings in its own float type `T`, inferred from the
+# defaults below (`Float32`) unless pinned (`BS3Integrator{Float64}(reltol = 1e-8)`).
+# `init_integrator` converts them to the simulation's element type either way.
 #
-# The defaults deliberately name no type variable: `@kwdef` also generates the
-# `BS3Integrator(; ...)` method that leaves `T` to be inferred, and a `T`-dependent
-# default (`eps(T)`) would make that method throw `UndefVarError: T`. Hence the
-# concrete `eps(Float32)` floor and the `Inf32` ceiling, which widens to `Inf` for
-# any `T` and so means "unbounded" in every precision.
+# CAUTION: the defaults must name no type variable — `@kwdef`'s inferring method
+# would throw `UndefVarError: T` on a `T`-dependent default like `eps(T)`. Hence
+# the concrete `eps(Float32)` floor and the `Inf32` ceiling, which widens to `Inf`
+# in any precision.
 
 """
     EulerIntegrator(dt)
@@ -187,20 +184,26 @@ $(TYPEDSIGNATURES)
 Butcher tableau for an (embedded) explicit Runge-Kutta method.
 
 # Fields
-- `A`: `s×s` strictly-lower-triangular stage-coefficient matrix.
-- `c`: `s` node vector (`c[1] == 0`).
-- `b`: `s` weights of the propagated (higher-order) solution.
-- `btilde`: `s` weights of the *error estimate* (`b - bhat`); empty if method non-adaptive.
-- `order`: order of the propagated solution (used by the step controller).
-- `fsal`: whether the method is First-Same-As-Last (last stage of an
-          accepted step equals the first stage of the next one).
+$(TYPEDFIELDS)
 """
 struct RKTableau{T}
+    "`s×s` strictly-lower-triangular stage-coefficient matrix"
     A::Matrix{T}
+    "`s` node vector (`c[1] == 0`)"
     c::Vector{T}
+    "`s` weights of the propagated (higher-order) solution"
     b::Vector{T}
+    """
+    `s` weights of the *error estimate* (`b - bhat`); empty if the method is
+    non-adaptive
+    """
     btilde::Vector{T}
+    "order of the propagated solution (used by the step controller)"
     order::Int
+    """
+    whether the method is First-Same-As-Last, i.e. the last stage of an accepted step
+    equals the first stage of the next one
+    """
     fsal::Bool
 end
 
@@ -278,28 +281,50 @@ a tableau-based [`AbstractIntegrator`](@ref) (`EulerIntegrator`, `BS3Integrator`
 itself is the `alg` field — with `p` the user parameter object passed to the RHS
 `f!(du, u, p, t)`. Built by [`init_integrator`](@ref); `RKCIntegrator` uses
 [`RKCIntegratorState`](@ref) instead.
+
+# Fields
+$(TYPEDFIELDS)
 """
 mutable struct TableauIntegratorState{A,T,F,P,Alg<:AbstractIntegrator} <:
                AbstractIntegratorState
+    "the in-place right-hand side `f!(du, u, p, t)`"
     f!::F
+    "the parameter object passed to `f!`, typically a [`Simulation`](@ref)"
     p::P
+    "the [`AbstractIntegrator`](@ref) defining the method and its settings"
     alg::Alg
+    "the Butcher tableau of `alg`"
     tableau::RKTableau{T}
+    "the current time"
     t::T
+    "the current step size"
     dt::T
-    u::A                 # current solution (== uprev during a step)
-    unew::A              # candidate solution of the current step
-    utmp::A              # stage temporary
-    atmp::A              # error-estimate / scaling temporary
-    ks::Vector{A}        # stage derivatives; ks[1] is the FSAL derivative
+    "the current solution (equal to the previous solution during a step)"
+    u::A
+    "the candidate solution of the current step"
+    unew::A
+    "a stage temporary"
+    utmp::A
+    "an error-estimate and scaling temporary"
+    atmp::A
+    "the stage derivatives; `ks[1]` is the FSAL derivative"
+    ks::Vector{A}
+    "the relative tolerance of the step-size control"
     reltol::T
+    "the absolute tolerance of the step-size control"
     abstol::T
+    "the smallest step size allowed"
     dtmin::T
+    "the largest step size allowed"
     dtmax::T
-    facold::T            # PI-controller memory (previous accepted error)
+    "the memory of the PI controller, i.e. the error of the previous accepted step"
+    facold::T
+    "the number of accepted steps"
     naccept::Int
+    "the number of rejected steps"
     nreject::Int
-    nf::Int              # number of RHS evaluations
+    "the number of right-hand-side evaluations"
+    nf::Int
 end
 
 """
@@ -721,26 +746,91 @@ function rkc_coeffs(::Type{T}, s::Int, damping) where {T}
     return mu, nu, mutilde, gammatilde, c
 end
 
+# -----------------------------------------------------------------------------
+# Per-integrator coefficient cache
+#
+# `rkc_coeffs` and `rkc_stability_boundary` are pure functions of `(T, s, damping)`,
+# and `damping` is fixed for the lifetime of an integrator. Recomputing them per
+# step is what they used to cost: `rkc_coeffs` allocates five `Vector{T}` (plus
+# three more inside `chebyshev_table`) and `rkc_stability_boundary` bisects, calling
+# `rkc_coeffs` again at every probe — and `rkc_choose_stages` calls *that* once per
+# candidate stage count. Caching here keeps both pure functions intact (the tests
+# and the AD replay plan call them directly) while making the steady state
+# allocation-free: `s` rarely changes between steps, and each boundary is computed
+# at most once per integrator.
+# -----------------------------------------------------------------------------
+
+"""
+$(TYPEDSIGNATURES)
+
+Memoised stage coefficients and stability boundaries of an [`RKCIntegrator`](@ref),
+see the comment above.
+
+# Fields
+$(TYPEDFIELDS)
+"""
+mutable struct RKCCoeffCache{T}
+    "the damping of the Chebyshev polynomial, fixed for the lifetime of the integrator"
+    damping::T
+    "the stage count for which `mu`, `nu`, `mutilde`, `gammatilde` and `c` are valid (0 = unset)"
+    s::Int
+    "the `μⱼ` coefficients of the Chebyshev recurrence"
+    mu::Vector{T}
+    "the `νⱼ` coefficients of the Chebyshev recurrence"
+    nu::Vector{T}
+    "the `μ̃ⱼ` coefficients of the Chebyshev recurrence"
+    mutilde::Vector{T}
+    "the `γ̃ⱼ` coefficients of the Chebyshev recurrence"
+    gammatilde::Vector{T}
+    "the stage times, as fractions of the step size"
+    c::Vector{T}
+    "the stability boundaries, `boundary[s] = rkc_stability_boundary(s, damping)` (0 = unset)"
+    boundary::Vector{T}
+end
+
+RKCCoeffCache(::Type{T}, damping, smax::Int) where {T} =
+    RKCCoeffCache(T(damping), 0, T[], T[], T[], T[], T[], zeros(T, max(smax, 0)))
+
+function cached_stability_boundary!(cache::RKCCoeffCache{T}, s::Int) where {T}
+    checkbounds(Bool, cache.boundary, s) ||
+        return rkc_stability_boundary(s, cache.damping)
+    @inbounds begin
+        cache.boundary[s] > 0 && return cache.boundary[s]
+        b = rkc_stability_boundary(s, cache.damping)
+        cache.boundary[s] = b
+        return b
+    end
+end
+
+function cached_coeffs!(cache::RKCCoeffCache{T}, s::Int) where {T}
+    if cache.s != s
+        cache.mu, cache.nu, cache.mutilde, cache.gammatilde, cache.c =
+            rkc_coeffs(T, s, cache.damping)
+        cache.s = s
+    end
+    return cache.mu, cache.nu, cache.mutilde, cache.gammatilde, cache.c
+end
+
 # Smallest stage count (clamped to [2, smax]) whose exact stability boundary
 # covers `safety * dt * lambda_max`, seeded by the closed-form asymptotic
 # `β(s) ≈ 0.65 s²` (roadmap §2.2/§5) and refined against the exact boundary
-# (`rkc_stability_boundary`) so the result is correct regardless of how
-# accurate that seed constant is — a bad seed only costs a few extra integer
+# (`rkc_stability_boundary`, via `cache`) so the result is correct regardless of
+# how accurate that seed constant is — a bad seed only costs a few extra integer
 # increments here, utterly negligible next to the RHS evaluations the chosen
 # `s` will cost. If `smax` is reached and still insufficient, `s = smax` is
 # returned anyway and the ordinary error-based reject/shrink cycle (not a
 # special code path here) drives `dt` down on retry.
 function rkc_choose_stages(
+    cache::RKCCoeffCache{T},
     dt,
     lambda_max::T,
-    damping::T,
     smax::Int;
     safety::T = T(1.2),
 ) where {T}
     z = safety * dt * lambda_max
     z <= 0 && return 2
     s = clamp(ceil(Int, sqrt(z / T(0.65))), 2, smax)
-    while s < smax && rkc_stability_boundary(s, damping) < z
+    while s < smax && cached_stability_boundary!(cache, s) < z
         s += 1
     end
     return s
@@ -759,40 +849,72 @@ end
 # -----------------------------------------------------------------------------
 
 """
-    RKCIntegratorState
+$(TYPEDSIGNATURES)
 
 Mutable state and O(1) (independent of stage count) work arrays for `RKCIntegrator`.
 The rolling Chebyshev recurrence needs only three grid-sized buffers for the
 `Y_{j-2}, Y_{j-1}, Y_j` sequence (`ym2`, `ym1`, `unew`, cycled by reference
 swap — no per-step allocation) plus `F0` (the RHS at `Y_0`, constant through a
-step) and `Fj` (the RHS at the current stage). The per-step coefficient
-vectors from `rkc_coeffs` are small (`O(s)` scalars, `s <= smax`, a few KB at
-most) and are *not* part of this O(1)-work-array guarantee, which concerns the
-grid-sized state only.
+step) and `Fj` (the RHS at the current stage). The stage-coefficient vectors are
+small (`O(s)` scalars, `s <= smax`, a few KB at most), live in the `cache` field
+and are rebuilt only when the stage count changes; they are *not* part of this
+O(1)-work-array guarantee, which concerns the grid-sized state only.
+
+# Fields
+$(TYPEDFIELDS)
 """
-mutable struct RKCIntegratorState{A,T,F,P} <: AbstractIntegratorState
+mutable struct RKCIntegratorState{A,T,F,P,Alg<:RKCIntegrator} <: AbstractIntegratorState
+    "the in-place right-hand side `f!(du, u, p, t)`"
     f!::F
+    "the parameter object passed to `f!`, typically a [`Simulation`](@ref)"
     p::P
-    alg::RKCIntegrator
+    """
+    the [`RKCIntegrator`](@ref) defining the method and its settings. Concretely
+    typed, exactly like `TableauIntegratorState.alg`: as the bare `RKCIntegrator`
+    (a UnionAll) every `alg.damping`/`alg.safety`/`alg.reltol` read inside
+    `perform_step!` inferred as `Any`.
+    """
+    alg::Alg
+    "the current time"
     t::T
+    "the current step size"
     dt::T
-    u::A                 # current solution (== uprev during a step)
-    unew::A              # candidate solution of the current step
-    ym1::A                # Y_{j-1} rolling buffer
-    ym2::A                # Y_{j-2} rolling buffer
-    F0::A                 # f(Y_0), constant through a step
-    Fj::A                 # f(Y_{j-1}), refreshed every stage
-    atmp::A               # error-estimate / scaling temporary
-    lambda_max::T          # cached spectral-radius estimate
-    s::Int                 # stage count used by the most recent step
+    "the current solution (equal to the previous solution during a step)"
+    u::A
+    "the candidate solution of the current step"
+    unew::A
+    "the rolling buffer holding `Y_{j-1}`"
+    ym1::A
+    "the rolling buffer holding `Y_{j-2}`"
+    ym2::A
+    "`f(Y_0)`, constant through a step"
+    F0::A
+    "`f(Y_{j-1})`, refreshed at every stage"
+    Fj::A
+    "an error-estimate and scaling temporary"
+    atmp::A
+    "the cached estimate of the spectral radius"
+    lambda_max::T
+    "the stage count used by the most recent step"
+    s::Int
+    "the relative tolerance of the step-size control"
     reltol::T
+    "the absolute tolerance of the step-size control"
     abstol::T
+    "the smallest step size allowed"
     dtmin::T
+    "the largest step size allowed"
     dtmax::T
+    "the memory of the PI controller, i.e. the error of the previous accepted step"
     facold::T
+    "the number of accepted steps"
     naccept::Int
+    "the number of rejected steps"
     nreject::Int
+    "the number of right-hand-side evaluations"
     nf::Int
+    "the memoised stage coefficients and stability boundaries"
+    cache::RKCCoeffCache{T}
 end
 
 # `lambda_maxiter`/`lambda_tol` stay keywords: they tune the power iteration that
@@ -845,6 +967,7 @@ function init_integrator(
         0,
         0,
         nf0[],
+        RKCCoeffCache(T, alg.damping, alg.smax),
     )
 end
 
@@ -862,14 +985,14 @@ function perform_step!(integ::RKCIntegratorState, dt)
     T = eltype(u)
 
     s = rkc_choose_stages(
+        integ.cache,
         T(dt),
         integ.lambda_max,
-        T(alg.damping),
         alg.smax;
         safety = T(alg.safety),
     )
     integ.s = s
-    mu, nu, mutilde, gammatilde, c = rkc_coeffs(T, s, T(alg.damping))
+    mu, nu, mutilde, gammatilde, c = cached_coeffs!(integ.cache, s)
 
     F0, Fj = integ.F0, integ.Fj
     integ.f!(F0, u, p, t)
@@ -1175,8 +1298,8 @@ function _next_simobs_time(sim)
     return t
 end
 
-# Next pending output time across the native, netCDF and simulated-observable
-# streams.
+# Next pending output time across the native, netCDF, simulated-observable and
+# restart streams.
 function _next_output_time(sim)
     tn =
         (length(sim.nout.t) >= 1 && sim.nout.k <= length(sim.nout.t)) ?
@@ -1185,9 +1308,13 @@ function _next_output_time(sim)
         (length(sim.ncout.t) >= 1 && sim.ncout.k <= length(sim.ncout.t)) ?
         sim.ncout.t[sim.ncout.k] : nothing
     ts = _next_simobs_time(sim)
-    t = tn === nothing ? tc : (tc === nothing ? tn : min(tn, tc))
-    return t === nothing ? ts : (ts === nothing ? t : min(t, ts))
+    tr = next_restart_time(sim.restartout)
+    t = _min_or_nothing(tn, tc)
+    t = _min_or_nothing(t, ts)
+    return _min_or_nothing(t, tr)
 end
+
+_min_or_nothing(a, b) = a === nothing ? b : (b === nothing ? a : min(a, b))
 
 # Advance the integrator up to `target`, stopping exactly on every output time
 # in between and writing output there.
@@ -1222,6 +1349,7 @@ function advance_with_output!(
         for so in sim.simobs
             next_simobs_time(so) == te && record!(so, sim)
         end
+        next_restart_time(sim.restartout) == te && restart_affect!(sim, progress)
     end
 end
 

@@ -112,6 +112,34 @@ InteractiveSealevelLoad
 columnanom_water!
 ```
 
+### BSL formalism
+
+How the barystatic contribution of the domain is computed. The two formalisms are
+alternative decompositions of the same quantity, so they sit on one axis rather
+than being mixed term by term.
+
+```@docs
+AbstractBSLFormalism
+GoelzerBSLFormalism
+AdhikariBSLFormalism
+```
+
+The three terms of the Goelzer decomposition, selected through
+[`GoelzerBSLFormalism`](@ref):
+
+```@docs
+AbstractBarystaticContribution
+AbstractVolumeContribution
+NoVolumeContribution
+GoelzerVolumeContribution
+AbstractDensityContribution
+NoDensityContribution
+GoelzerDensityContribution
+AbstractAdjustmentContribution
+NoAdjustmentContribution
+GoelzerAdjustmentContribution
+```
+
 ## Solid Earth
 
 ```@docs
@@ -138,7 +166,9 @@ AbstractMantle
 RigidMantle
 RelaxedMantle
 ViscousMantle
-TransientCreepMantle
+TransientViscousMantle
+ViscoElasticMantle
+TransientViscoElasticMantle
 BurgersMantle
 ExtendedBurgersMantle
 update_dudt!
@@ -199,4 +229,7 @@ fit_prony_series
 load_dataset
 NetcdfOutput
 NativeOutput
+RestartOutput
+write_restart
+read_restart!
 ```

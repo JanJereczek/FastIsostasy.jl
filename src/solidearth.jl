@@ -45,15 +45,19 @@ $(TYPEDSIGNATURES)
 The rheology of the mantle. This axis describes *what is modelled*; how the
 spectral step is computed is the orthogonal [`AbstractFFTBackend`](@ref) axis.
 
-Note that none of these subtypes carries the unrelaxed elastic response: that is
-computed separately by the Farrell Green's-function convolution, which dispatches
-on [`AbstractLithosphere`](@ref).
+Most subtypes carry no unrelaxed elastic response: that is computed separately by
+the Farrell Green's-function convolution, which dispatches on
+[`AbstractLithosphere`](@ref). The two `*ViscoElastic*` subtypes are the
+exception. They put the elastic spring in series with the viscous elements of
+a homogeneous half-space, so that elastic and viscous deformation are coupled.
 
 Available subtypes are:
 - [`RigidMantle`](@ref)
 - [`RelaxedMantle`](@ref)
 - [`ViscousMantle`](@ref)
-- [`TransientCreepMantle`](@ref)
+- [`TransientViscousMantle`](@ref)
+- [`ViscoElasticMantle`](@ref)
+- [`TransientViscoElasticMantle`](@ref)
 """
 abstract type AbstractMantle end
 
@@ -96,27 +100,26 @@ offers the best performance. It is the default mantle model used in the solver.
 struct ViscousMantle <: AbstractMantle end
 
 """
-    TransientCreepMantle(; shearmodulus, relaxation_strength, kelvin_time)
+    TransientViscousMantle(; shearmodulus, relaxation_strength, kelvin_time)
 
 Transient (primary) creep on top of the steady creep of [`ViscousMantle`](@ref):
 the steady Maxwell dashpot (viscosity `η₁`, taken from `SolidEarth`) in series
 with `N` Kelvin-Voigt branches forming a Prony series, so that the total viscous
 displacement splits as `u = u_M + Σⱼ u_K[j]`. `N = 1` is the classic Burgers
-body; `N ≈ 3-5` log-spaced branches approximate the extended Burgers /
-Faul-Jackson relaxation spectrum of Ivins & Caron (2021).
+body. `N ≈ 6` log-spaced branches approximate the extended Burgers /
+Faul-Jackson relaxation spectrum of Ivins & Caron (2021), see
+[`ExtendedBurgersMantle`](@ref).
 
-Named for the phenomenon rather than for one rheological body, because the
-`N`-branch Prony form is the general case and Burgers is only its `N = 1` member.
-
-Note that, unlike [`ViscousMantle`](@ref), this model *does* carry shear moduli:
-each branch has `μ₂ⱼ = shearmodulus / Δⱼ` and `η₂ⱼ = τⱼ μ₂ⱼ`. These are internal
-to the transient band and remain distinct from the unrelaxed elastic response,
-which the Farrell convolution keeps handling as for every other mantle. It
-*extends* `ViscousMantle` rather than replacing it: as `Δⱼ → 0` the Kelvin
-branches lock (`u_K → 0`) and the model reduces to it exactly.
+Each branch has `μ₂ⱼ = shearmodulus / Δⱼ` and `η₂ⱼ = τⱼ μ₂ⱼ`. The unrelaxed
+elastic spring `μ₁ = shearmodulus` itself is *not* in series with these
+branches: as for [`ViscousMantle`](@ref), the elastic response is computed apart
+by the Farrell convolution and added to the viscous one. That is the difference
+with [`TransientViscoElasticMantle`](@ref), which couples the spring in. As
+`Δⱼ → 0` the Kelvin branches lock (`u_K → 0`) and the model reduces to
+`ViscousMantle` exactly.
 
 Scalar (laterally constant) parameters only, and supported solely on the
-semi-implicit path — [`LaterallyConstantLithosphere`](@ref) or
+semi-implicit path: [`LaterallyConstantLithosphere`](@ref) or
 [`RigidLithosphere`](@ref) with [`ComplexFFTBackend`](@ref) and a fixed step
 (`SolverOptions(integ = EulerIntegrator(dt = ...))`).
 
@@ -128,16 +131,16 @@ Classic Burgers body with the Ivins & Caron (2021) Fig. 8 parameters:
 ```jldoctest
 julia> using FastIsostasy
 
-julia> m = TransientCreepMantle(shearmodulus = 67e9, relaxation_strength = 1.2,
+julia> m = TransientViscousMantle(shearmodulus = 67e9, relaxation_strength = 1.2,
            kelvin_time = 7.14);
 
 julia> FastIsostasy.nbranches(m)
 1
 ```
 
-See `roadmaps/burgers.md` for the design and derivation.
+See `fastisostasy-roadmap/burgers.md` for the design and derivation.
 """
-struct TransientCreepMantle{T<:AbstractFloat,N} <: AbstractMantle
+struct TransientViscousMantle{T<:AbstractFloat,N} <: AbstractMantle
     "unrelaxed shear modulus `μ₁` of the mantle [Pa]"
     shearmodulus::T
     "relaxation strength `Δⱼ = μ₁/μ₂ⱼ` of each Kelvin branch"
@@ -146,25 +149,123 @@ struct TransientCreepMantle{T<:AbstractFloat,N} <: AbstractMantle
     kelvin_time::NTuple{N,T}
 end
 
-function TransientCreepMantle(; shearmodulus, relaxation_strength, kelvin_time)
+TransientViscousMantle(; shearmodulus, relaxation_strength, kelvin_time) =
+    TransientViscousMantle(_prony_params(shearmodulus, relaxation_strength,
+        kelvin_time)...)
+
+"""
+$(TYPEDSIGNATURES)
+
+Maxwell mantle: the elastic spring (`shearmodulus`, `μ`) in series with the
+viscous dashpot (viscosity `η`, taken from `SolidEarth`) of a homogeneous,
+incompressible half-space. Per Fourier mode of wavenumber `k`, the vertical
+response to a surface load is `1/(β + 2k μ̃(s))` with `1/μ̃(s) = 1/μ + 1/(ηs)`
+and `β = ρg + Dk⁴`.
+
+Unlike [`ViscousMantle`](@ref), where the elastic displacement comes from the
+Farrell convolution and is simply added to the viscous one, the spring here is
+coupled to the dashpot: the elastic displacement `ue` relaxes as the viscous one
+grows, and the viscous relaxation time becomes `η/μ + 2ηk/β` instead of `2ηk/β`.
+`ue` is therefore computed by the mantle, every time step, and the Farrell
+convolution is bypassed. For the same reason the load does not include the
+lithospheric column anomaly `ρ_litho · ue`, whose buoyancy is already part of `β`.
+
+Scalar (laterally constant) parameters only, on the same semi-implicit path as
+[`TransientViscousMantle`](@ref).
+
+# Fields
+$(TYPEDFIELDS)
+
+# Example
+```jldoctest
+julia> using FastIsostasy
+
+julia> m = ViscoElasticMantle(shearmodulus = 67e9);
+
+julia> FastIsostasy.nbranches(m)
+0
+```
+"""
+Base.@kwdef struct ViscoElasticMantle{T<:AbstractFloat} <: AbstractMantle
+    "unrelaxed shear modulus `μ` of the mantle [Pa]"
+    shearmodulus::T
+end
+
+"""
+    TransientViscoElasticMantle(; shearmodulus, relaxation_strength, kelvin_time)
+    TransientViscoElasticMantle(mantle::TransientViscousMantle)
+
+Transient creep with the elastic spring coupled in: the viscoelastic
+counterpart of [`TransientViscousMantle`](@ref), exactly as
+[`ViscoElasticMantle`](@ref) is that of [`ViscousMantle`](@ref). The spring
+(`μ₁ = shearmodulus`), the Maxwell dashpot (`η₁`, from `SolidEarth`) and the `N`
+Kelvin-Voigt branches (`μ₂ⱼ = μ₁/Δⱼ`, `η₂ⱼ = τⱼ μ₂ⱼ`) are all in series, i.e.
+the creep function is
+
+    J(t) = [1 + t/τ_M + Σⱼ Δⱼ (1 − exp(−t/τⱼ))] / μ₁,   τ_M = η₁/μ₁
+
+which is the Prony-series form of the extended Burgers model of Ivins & Caron
+(2021). The elastic displacement `ue` is computed by the mantle, as described in
+[`ViscoElasticMantle`](@ref).
+
+The second method converts a [`TransientViscousMantle`](@ref), e.g. one built by
+[`ExtendedBurgersMantle`](@ref), keeping its parameters.
+
+# Fields
+$(TYPEDFIELDS)
+
+# Example
+```jldoctest
+julia> using FastIsostasy
+
+julia> m = TransientViscoElasticMantle(ExtendedBurgersMantle(shearmodulus = 67e9,
+           relaxation_strength = 1.2, alpha = 0.5, tau_L = 1e-4, tau_H = 7.14,
+           nbranches = 6));
+
+julia> FastIsostasy.nbranches(m)
+6
+```
+"""
+struct TransientViscoElasticMantle{T<:AbstractFloat,N} <: AbstractMantle
+    "unrelaxed shear modulus `μ₁` of the mantle [Pa]"
+    shearmodulus::T
+    "relaxation strength `Δⱼ = μ₁/μ₂ⱼ` of each Kelvin branch"
+    relaxation_strength::NTuple{N,T}
+    "retardation time `τⱼ = η₂ⱼ/μ₂ⱼ` of each Kelvin branch [yr]"
+    kelvin_time::NTuple{N,T}
+end
+
+TransientViscoElasticMantle(; shearmodulus, relaxation_strength, kelvin_time) =
+    TransientViscoElasticMantle(_prony_params(shearmodulus, relaxation_strength,
+        kelvin_time)...)
+TransientViscoElasticMantle(m::TransientViscousMantle) =
+    TransientViscoElasticMantle(m.shearmodulus, m.relaxation_strength, m.kelvin_time)
+
+function _prony_params(shearmodulus, relaxation_strength, kelvin_time)
     Δ, τ = _branch_tuple(relaxation_strength), _branch_tuple(kelvin_time)
     length(Δ) == length(τ) || throw(DimensionMismatch(
         "relaxation_strength has $(length(Δ)) branch(es) but kelvin_time has " *
         "$(length(τ)); a Prony series needs one Δⱼ per τⱼ."))
     all(>(0), Δ) || throw(ArgumentError(
         "every relaxation strength Δⱼ must be > 0 (got $Δ). Δ → 0 is the " *
-        "ViscousMantle limit — use that type instead."))
+        "ViscousMantle (or ViscoElasticMantle) limit — use that type instead."))
     all(>(0), τ) || throw(ArgumentError(
         "every retardation time τⱼ must be > 0 (got $τ)."))
     shearmodulus > 0 || throw(ArgumentError("shearmodulus must be > 0."))
     T = float(promote_type(typeof(shearmodulus), eltype(Δ), eltype(τ)))
     N = length(Δ)
-    return TransientCreepMantle{T,N}(
-        T(shearmodulus),
-        NTuple{N,T}(Δ),
-        NTuple{N,T}(τ),
-    )
+    return T(shearmodulus), NTuple{N,T}(Δ), NTuple{N,T}(τ)
 end
+
+# Mantles solved by the coupled (N+1)-field semi-implicit spectral step, and
+# the subset of them whose elastic spring is coupled into that step.
+const ElasticSpringMantle = Union{ViscoElasticMantle,TransientViscoElasticMantle}
+const SpectralCreepMantle = Union{TransientViscousMantle,ElasticSpringMantle}
+
+# Kelvin branches as (Δⱼ, τⱼ) pairs; empty for a pure Maxwell body.
+kelvin_branches(m::Union{TransientViscousMantle,TransientViscoElasticMantle}) =
+    zip(m.relaxation_strength, m.kelvin_time)
+kelvin_branches(::ViscoElasticMantle{T}) where {T} = zip((), ())
 
 _branch_tuple(x::Real) = (x,)
 _branch_tuple(x) = Tuple(x)
@@ -172,20 +273,20 @@ _branch_tuple(x) = Tuple(x)
 """
 $(TYPEDSIGNATURES)
 
-Classic Burgers body: the `N = 1` member of [`TransientCreepMantle`](@ref), a
+Classic Burgers body: the `N = 1` member of [`TransientViscousMantle`](@ref), a
 Maxwell dashpot in series with a single Kelvin-Voigt element. Thin naming
-convenience over `TransientCreepMantle(; shearmodulus, relaxation_strength,
+convenience over `TransientViscousMantle(; shearmodulus, relaxation_strength,
 kelvin_time)` for when `(Δ, τ)` are already known (e.g. from a published fit),
 as opposed to [`ExtendedBurgersMantle`](@ref), which fits them from a
 continuous relaxation-time spectrum.
 """
 BurgersMantle(; shearmodulus, relaxation_strength, kelvin_time) =
-    TransientCreepMantle(; shearmodulus, relaxation_strength, kelvin_time)
+    TransientViscousMantle(; shearmodulus, relaxation_strength, kelvin_time)
 
 """
 $(TYPEDSIGNATURES)
 
-Extended Burgers mantle: a [`TransientCreepMantle`](@ref) with `nbranches`
+Extended Burgers mantle: a [`TransientViscousMantle`](@ref) with `nbranches`
 Kelvin branches fit, via [`fit_prony_series`](@ref), to the continuous
 Faul-Jackson absorption-band spectrum of the extended Burgers model (EBM) of
 Ivins & Caron (2021). See [`fit_prony_series`](@ref) for the fitting procedure
@@ -197,7 +298,7 @@ function ExtendedBurgersMantle(; shearmodulus, relaxation_strength, alpha,
         tau_L, tau_H, nbranches)
     Δ, τ, _ = fit_prony_series(; relaxation_strength, alpha, tau_L, tau_H,
         nbranches)
-    return TransientCreepMantle(; shearmodulus, relaxation_strength = Δ,
+    return TransientViscousMantle(; shearmodulus, relaxation_strength = Δ,
         kelvin_time = τ)
 end
 
@@ -209,7 +310,12 @@ displacement fields `sim.now.u_K` must hold. Zero for every rheology whose creep
 is purely steady-state.
 """
 nbranches(::AbstractMantle) = 0
-nbranches(::TransientCreepMantle{T,N}) where {T,N} = N
+nbranches(::TransientViscousMantle{T,N}) where {T,N} = N
+nbranches(::TransientViscoElasticMantle{T,N}) where {T,N} = N
+
+# Number of complex buffers the coupled elastic spring needs (see `PreAllocated`).
+nsprings(::AbstractMantle) = 0
+nsprings(::ElasticSpringMantle) = 1
 
 ################################################################
 # Lithosphere behaviour in column anomaly
@@ -263,11 +369,14 @@ lv = [1e19, 1e21]
 solidearth = SolidEarth(domain, layer_boundaries = lb, layer_viscosities = lv)
 ```
 
-which initializes a lithosphere of thickness ``T_1 = 100 \\mathrm{km}``, a viscous
-channel between ``T_1``and ``T_2 = 300 \\mathrm{km}``and a viscous halfspace starting
-at ``T_2``. This represents a homogenous case. For heterogeneous ones, simply make
+which initializes a lithosphere of thickness `T₁ = 100 km`, a viscous
+channel between `T₁` and `T₂ = 300 km` and a viscous halfspace starting
+at `T₂`. This represents a homogenous case. For heterogeneous ones, simply make
 `lb::Vector{Matrix}`, `lv::Vector{Matrix}` such that the vector elements represent the
 lateral variability of each layer on the grid of `domain::RegionalDomain`.
+
+# Fields
+$(TYPEDFIELDS)
 """
 mutable struct SolidEarth{
     T,  # <:AbstractFloat,
@@ -277,28 +386,48 @@ mutable struct SolidEarth{
     MA, # <:AbstractMantle,
     CA, # <:AbstractCalibration,
     CO, # <:AbstractCompressibility,
-    LU, # <:AbstractLumping,
+    LU, # <:AbstractViscosityLumping,
     LC, # <:AbstractLithosphereColumn,
 }
+    "the [`AbstractLithosphere`](@ref) defining the rheology of the lithosphere"
     lithosphere::LI
+    "the [`AbstractMantle`](@ref) defining the rheology of the mantle"
     mantle::MA
+    "the [`AbstractCalibration`](@ref) applied to the effective viscosity"
     calibration::CA
+    "the `AbstractCompressibility` applied to the effective viscosity"
     compressibility::CO
+    "the [`AbstractViscosityLumping`](@ref) lumping the layered viscosity into an effective one"
     lumping::LU
+    "the `AbstractLithosphereColumn` deciding how the lithosphere contributes to the column anomaly"
     lithosphere_column::LC
+    "the effective mantle viscosity (Pa s)"
     effective_viscosity::M
+    "the scaling of the pseudo-differential operator resulting from the viscosity lumping (1)"
     pseudodiff_scaling::M
+    "the inverse of the scaled pseudo-differential operator, precomputed for the viscous update"
     scaled_pseudodiff_inv::M
+    "the lithospheric thickness (m)"
     litho_thickness::M
+    "the flexural rigidity of the lithosphere (N m)"
     litho_rigidity::M
+    "the mask of the cells where the load is active"
     maskactive::B
+    "the Poisson ratio of the lithosphere (1)"
     litho_poissonratio::T
+    "the Poisson ratio of the mantle (1)"
     mantle_poissonratio::T
+    "the relaxation time of the mantle (yr), used by the [`RelaxedMantle`](@ref)"
     tau::M
+    "the scaling of the ELRA length, following LeMeur (1996, text below Eq. 3) (1)"
     scale_elralength::T
+    "the Young modulus of the lithosphere (N m⁻²)"
     litho_youngmodulus::T
+    "the shear modulus of the lithosphere (N m⁻²)"
     litho_shearmodulus::T
+    "the mean density of the topmost upper mantle (kg m⁻³)"
     rho_uppermantle::T
+    "the mean density of the lithosphere (kg m⁻³)"
     rho_litho::T
 end
 
@@ -411,8 +540,5 @@ function Base.show(io::IO, ::MIME"text/plain", se::SolidEarth)
             [se.litho_poissonratio, se.mantle_poissonratio],
         "rho_uppermantle, rho_litho" => [se.rho_uppermantle, se.rho_litho],
     ]
-    padlen = maximum(length(d[1]) for d in descriptors) + 2
-    for (desc, val) in descriptors
-        println(io, rpad(" $(desc): ", padlen), val)
-    end
+    show_descriptors(io, descriptors)
 end

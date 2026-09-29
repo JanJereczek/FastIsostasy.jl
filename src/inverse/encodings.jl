@@ -143,11 +143,18 @@ many orders of magnitude (metres of thickness, metres of position, decades of
 viscosity) — essential for L-BFGS conditioning. With the default ones, θ is the
 physical parameter vector directly. The mapping is a plain broadcast, so it stays
 Enzyme-legal.
+
+# Fields
+$(TYPEDFIELDS)
 """
 struct Test1Encoding{T} <: AbstractEncoding{T}
+    "the K times (yr) at which the ice thickness is interpolated"
     knot_times::Vector{T}
+    "the fixed radii `Lᵢ` of the 3 Vialov domes (m)"
     radii::NTuple{3, T}     # TODO: replace 3 by N1
+    "the fixed log10 amplitudes of the 2 viscosity anomalies (decades)"
     visc_amps::NTuple{2, T} # TODO: replace 2 by N2
+    "the scale mapping `θ` to the physical parameters, `θ[i] * scale[i]`"
     scale::Vector{T}
 end
 
@@ -209,8 +216,12 @@ optimization variable `θ` be dimensionless and O(1) even though the physical
 parameters span decades of viscosity, metres of anomaly position/width and
 thousands of kg/m³ of density — essential for L-BFGS conditioning. The mapping is
 a plain broadcast, so it stays Enzyme-legal.
+
+# Fields
+$(TYPEDFIELDS)
 """
 struct Test2Encoding <: AbstractEncoding{Float64}
+    "the scale mapping `θ` to the physical parameters, `θ[i] * scale[i]`"
     scale::Vector{Float64}
 end
 

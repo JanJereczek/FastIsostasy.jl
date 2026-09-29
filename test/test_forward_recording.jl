@@ -46,7 +46,7 @@ end
 function snapshots_match(a::StateSnapshot, b::StateSnapshot)
     for f in fieldnames(typeof(a.now))
         va, vb = getfield(a.now, f), getfield(b.now, f)
-        if va isa FastIsostasy.ColumnAnomalies
+        if va isa FastIsostasy.ColumnAnomalies || va isa KinematicBSL
             for cf in fieldnames(typeof(va))
                 getfield(va, cf) == getfield(vb, cf) || return false
             end

@@ -42,6 +42,7 @@ include("io.jl")
 include("integrators.jl")
 include("progress.jl")
 include("simulation.jl")
+include("restart.jl")
 include("loads.jl")
 include("topography.jl")
 include("utils.jl")
@@ -105,7 +106,7 @@ export GIATools
 export AbstractFFTBackend, ComplexFFTBackend, RealFFTBackend
 
 # state.jl
-export CurrentState, ReferenceState
+export CurrentState, ReferenceState, KinematicBSL
 
 # snapshot.jl
 export StateSnapshot, snapshot!, restore!
@@ -142,6 +143,8 @@ export RegionalSeaLevel
 export AbstractSeaSurface, AbstractSealevelLoad
 export NoSealevelLoad, InteractiveSealevelLoad
 export LaterallyConstantSeaSurface, LaterallyVariableSeaSurface, ImposedSeaSurface
+export AbstractBSLFormalism, GoelzerBSLFormalism, AdhikariBSLFormalism
+export AbstractBarystaticContribution
 export AbstractVolumeContribution, GoelzerVolumeContribution, NoVolumeContribution
 export AbstractAdjustmentContribution,
     GoelzerAdjustmentContribution, NoAdjustmentContribution
@@ -166,7 +169,8 @@ export absorption_band_density, fit_prony_series
 export SolidEarth
 export AbstractLithosphere, AbstractMantle
 export RigidLithosphere, LaterallyConstantLithosphere, LaterallyVariableLithosphere
-export RigidMantle, RelaxedMantle, ViscousMantle, TransientCreepMantle
+export RigidMantle, RelaxedMantle, ViscousMantle, TransientViscousMantle
+export ViscoElasticMantle, TransientViscoElasticMantle
 export BurgersMantle, ExtendedBurgersMantle
 export AbstractLithosphereColumn,
     IncompressibleLithosphereColumn, CompressibleLithosphereColumn
@@ -189,6 +193,9 @@ export load_latychev_test3, load_latychev2023_ICE6G
 # simulation.jl
 export SolverOptions, Simulation, run!, init_integrator
 export update_diagnostics!, step!
+
+# restart.jl
+export RestartOutput, write_restart, read_restart!
 
 # integrators.jl
 export AbstractIntegrator,

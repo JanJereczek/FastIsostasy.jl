@@ -15,7 +15,7 @@
 #    laterally-variable Maxwell configuration): asserts zero runtime dispatch
 #    and no captured-variable boxes. This is the path Enzyme differentiates;
 #    dynamic dispatch there is both a perf bug and an AD hazard
-#    (see roadmaps/ad_inversion.md). Baseline on adoption (2026-07-15): clean.
+#    (see fastisostasy-roadmap/ad_inversion.md). Baseline on adoption (2026-07-15): clean.
 
 using JET
 

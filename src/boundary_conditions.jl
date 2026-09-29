@@ -20,13 +20,14 @@ $(TYPEDSIGNATURES)
 Update the ice thickness based on a time interpolation.
 
 # Fields
-- `t_vec`: a vector of time points at which the ice thickness is defined.
-- `H_vec`: a vector of ice thickness values corresponding to `t_vec`.
-- `H_itp`: a function that interpolates the ice thickness based on time.
+$(TYPEDFIELDS)
 """
 struct TimeInterpolatedIceThickness{T,M,I<:TimeInterpolation2D} <: AbstractIceThickness
+    "a sorted vector of time points at which the ice thickness is defined"
     t_vec::Vector{T}
+    "a vector of ice thickness fields corresponding to `t_vec`"
     H_vec::Vector{M}
+    "the [`TimeInterpolation2D`](@ref) interpolating `H_vec` over `t_vec`"
     H_itp::I
 end
 
@@ -118,13 +119,22 @@ $(TYPEDSIGNATURES)
 Apply an offset to the values at the boundaries of a computational domain.
 
 # Fields
-- `space`: the [`AbstractBCSpace`](@ref) in which the boundary condition is defined.
-- `x_border`: the offset value to be applied at the boundaries.
-- `W`: a weight matrix to apply the boundary condition according to some [`AbstractBC`](@ref).
+$(TYPEDFIELDS)
+
+`space` is a type parameter rather than an abstract field: it is the argument
+`samesize_conv!` dispatches on (in `update_elasticresponse!` and `update_dz_ss!`),
+so an abstract field type would turn each of those into a runtime dispatch on the
+sparse-diagnostics path.
 """
-struct OffsetBC{T,M} <: AbstractBC
-    space::AbstractBCSpace
+struct OffsetBC{S<:AbstractBCSpace,T,M} <: AbstractBC
+    "the [`AbstractBCSpace`](@ref) in which the boundary condition is defined"
+    space::S
+    "the offset value to be applied at the boundaries"
     x_border::T
+    """
+    the normalised weight matrix selecting which cells the condition is imposed on,
+    per the [`AbstractBC`](@ref) it was built from
+    """
     W::M
 end
 
@@ -159,9 +169,14 @@ end
 $(TYPEDSIGNATURES)
 
 Impose a Dirichlet-like boundary condition at the corners of the computational domain.
+
+# Fields
+$(TYPEDFIELDS)
 """
 struct CornerBC{B,T}
-    space::B               # <:AbstractBCSpace
+    "the [`AbstractBCSpace`](@ref) on which the boundary condition is imposed"
+    space::B
+    "the value imposed by the boundary condition"
     x_border::T
 end
 
@@ -169,9 +184,14 @@ end
 $(TYPEDSIGNATURES)
 
 Impose a Dirichlet-like boundary condition at the borders of the computational domain.
+
+# Fields
+$(TYPEDFIELDS)
 """
 struct BorderBC{B,T}
-    space::B               # <:AbstractBCSpace
+    "the [`AbstractBCSpace`](@ref) on which the boundary condition is imposed"
+    space::B
+    "the value imposed by the boundary condition"
     x_border::T
 end
 
@@ -180,9 +200,14 @@ $(TYPEDSIGNATURES)
 
 Impose a Dirichlet-like boundary condition at the borders of the computational domain,
 weighted by the distance from the center of the domain.
+
+# Fields
+$(TYPEDFIELDS)
 """
 struct DistanceWeightedBC{B,T}
-    space::B               # <:AbstractBCSpace
+    "the [`AbstractBCSpace`](@ref) on which the boundary condition is imposed"
+    space::B
+    "the value imposed by the boundary condition"
     x_border::T
 end
 
@@ -191,10 +216,15 @@ end
 $(TYPEDSIGNATURES)
 
 Impose a mean value for the field.
+
+# Fields
+$(TYPEDFIELDS)
 """
 struct MeanBC{B,T}
-    space::B               # <:AbstractBCSpace
-    x_border::Any
+    "the [`AbstractBCSpace`](@ref) on which the boundary condition is imposed"
+    space::B
+    "the value imposed by the boundary condition"
+    x_border::T
 end
 
 function corner_ones(T, nx, ny)
@@ -224,71 +254,36 @@ function norm!(W)
     return nothing
 end
 
+# The grid a BC's weights live on: the computation domain itself, or the larger
+# one a convolution produces.
+bc_gridsize(::RegularBCSpace, domain) = (domain.nx, domain.ny)
+bc_gridsize(::ExtendedBCSpace, domain) = (2*domain.nx-1, 2*domain.ny-1)
+
+# Unnormalised weights per BC flavour, on a grid of size `(nx, ny)`. `domain` is
+# only needed by `DistanceWeightedBC`, which weights by distance from the centre
+# and therefore has no `ExtendedBCSpace` counterpart.
+bc_weights(::CornerBC, T, nx, ny, domain) = corner_ones(T, nx, ny)
+bc_weights(::BorderBC, T, nx, ny, domain) = border_ones(T, nx, ny)
+bc_weights(::MeanBC, T, nx, ny, domain) = ones(T, nx, ny)
+bc_weights(::DistanceWeightedBC, T, nx, ny, domain) =
+    border_ones(T, nx, ny) .* domain.R
+
 """
 $(TYPEDSIGNATURES)
 
-Precompute the boundary condition for the given computation domain.
+Precompute the boundary condition for the given computation domain, i.e. resolve
+it into the normalised weight matrix `W` of an [`OffsetBC`](@ref).
 """
-function precompute_bc(bc::CornerBC, sp::RegularBCSpace, domain::RegionalDomain)
+function precompute_bc(bc, sp::AbstractBCSpace, domain::RegionalDomain)
     T = eltype(domain.R)
-    W = kernelpromote(corner_ones(T, domain.nx, domain.ny), domain.backend)
+    nx, ny = bc_gridsize(sp, domain)
+    W = kernelpromote(bc_weights(bc, T, nx, ny, domain), domain.backend)
     norm!(W)
     return OffsetBC(bc.space, bc.x_border, W)
 end
 
-function precompute_bc(bc::CornerBC, sp::ExtendedBCSpace, domain::RegionalDomain)
-    T = eltype(domain.R)
-    W = kernelpromote(corner_ones(T, 2*domain.nx-1, 2*domain.ny-1), domain.backend)
-    norm!(W)
-    return OffsetBC(bc.space, bc.x_border, W)
-end
-
-function precompute_bc(bc::BorderBC, sp::RegularBCSpace, domain::RegionalDomain)
-    T = eltype(domain.R)
-    W = kernelpromote(border_ones(T, domain.nx, domain.ny), domain.backend)
-    norm!(W)
-    return OffsetBC(bc.space, bc.x_border, W)
-end
-
-function precompute_bc(bc::BorderBC, sp::ExtendedBCSpace, domain::RegionalDomain)
-    T = eltype(domain.R)
-    W = kernelpromote(border_ones(T, 2*domain.nx-1, 2*domain.ny-1), domain.backend)
-    norm!(W)
-    return OffsetBC(bc.space, bc.x_border, W)
-end
-
-function precompute_bc(
-    bc::DistanceWeightedBC,
-    sp::RegularBCSpace,
-    domain::RegionalDomain,
-)
-    T = eltype(domain.R)
-    W = kernelpromote(border_ones(T, domain.nx, domain.ny) .* domain.R, domain.backend)
-    norm!(W)
-    return OffsetBC(bc.space, bc.x_border, W)
-end
-
-function precompute_bc(
-    bc::DistanceWeightedBC,
-    sp::ExtendedBCSpace,
-    domain::RegionalDomain,
-)
+precompute_bc(bc::DistanceWeightedBC, sp::ExtendedBCSpace, domain::RegionalDomain) =
     error("DistanceWeightedBC is not implemented for ExtendedBCSpace")
-end
-
-function precompute_bc(bc::MeanBC, sp::RegularBCSpace, domain::RegionalDomain)
-    T = eltype(domain.R)
-    W = kernelpromote(ones(T, domain.nx, domain.ny), domain.backend)
-    norm!(W)
-    return OffsetBC(bc.space, bc.x_border, W)
-end
-
-function precompute_bc(bc::MeanBC, sp::ExtendedBCSpace, domain::RegionalDomain)
-    T = eltype(domain.R)
-    W = kernelpromote(ones(T, 2*domain.nx-1, 2*domain.ny-1), domain.backend)
-    norm!(W)
-    return OffsetBC(bc.space, bc.x_border, W)
-end
 
 #########################################################################
 # Simulation level
@@ -300,20 +295,27 @@ $(TYPEDSIGNATURES)
 Define the boundary conditions of the problem.
 
 # Fields
-- `ice_thickness`: an instance of [`AbstractIceThickness`](@ref) that defines how the ice thickness is updated.
-- `viscous_displacement`: a boundary condition for the viscous displacement, defined as an [`OffsetBC`](@ref).
-- `elastic_displacement`: a boundary condition for the elastic displacement, defined as an [`OffsetBC`](@ref).
-- `sea_surface_perturbation`: a boundary condition for the sea surface perturbation, defined as an [`OffsetBC`](@ref).
+$(TYPEDFIELDS)
+
+There is one type parameter per boundary condition rather than a shared
+`OffsetBC{T,M}`: each carries its own [`AbstractBCSpace`](@ref) in its type, and
+they genuinely differ — the viscous BC is regular while the other two default to
+extended.
 """
 struct BoundaryConditions{
-    T,      # <:AbstractFloat,
-    M,      # <:AbstractMatrix{T},
     IT,     # <:AbstractIceThickness,
+    VD,     # <:OffsetBC, always on a RegularBCSpace
+    ED,     # <:OffsetBC
+    SS,     # <:OffsetBC
 }
+    "an [`AbstractIceThickness`](@ref) defining how the ice thickness is updated"
     ice_thickness::IT
-    viscous_displacement::OffsetBC{T,M}
-    elastic_displacement::OffsetBC{T,M}
-    sea_surface_perturbation::OffsetBC{T,M}
+    "an [`OffsetBC`](@ref) for the viscous displacement, on a [`RegularBCSpace`](@ref)"
+    viscous_displacement::VD
+    "an [`OffsetBC`](@ref) for the elastic displacement"
+    elastic_displacement::ED
+    "an [`OffsetBC`](@ref) for the sea-surface perturbation"
+    sea_surface_perturbation::SS
 end
 
 function BoundaryConditions(
@@ -324,8 +326,12 @@ function BoundaryConditions(
     sea_surface_perturbation = CornerBC(ExtendedBCSpace(), T(0)),
 ) where {T<:AbstractFloat,L,M}
 
-    # viscous_displacement must be defined on a regular grid
-    @assert isa(viscous_displacement.space, RegularBCSpace)
+    # The viscous displacement is not convolved, so it has no extended grid to
+    # impose a BC on. `ArgumentError`, not `@assert`: this validates user input and
+    # `@assert` may be elided.
+    viscous_displacement.space isa RegularBCSpace || throw(ArgumentError(
+        "`viscous_displacement` must use a `RegularBCSpace`, got " *
+        "$(typeof(viscous_displacement.space))."))
 
     return BoundaryConditions(
         ice_thickness,

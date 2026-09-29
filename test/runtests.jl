@@ -16,6 +16,7 @@ const TEST_AD = lowercase(get(ENV, "FASTISOSTASY_TEST_AD", "true")) in ("1", "tr
 include("test_aqua.jl")
 include("test_jet.jl")
 include("test_barystatic_sea_level.jl")
+include("test_adhikari_bsl.jl")
 include("test_convolution.jl")
 include("test_dataloaders.jl")
 include("test_derivatives.jl")
@@ -25,6 +26,7 @@ include("test_integrators.jl")
 include("test_stability_diagnostics.jl")
 include("test_simulated_observable.jl")
 include("test_snapshot.jl")
+include("test_restart.jl")
 include("test_progress.jl")
 include("test_transient_creep.jl")
 include("test_prony_fit.jl")
@@ -42,22 +44,3 @@ else
     @warn "FASTISOSTASY_TEST_AD is false: skipping Enzyme AD test files (rules, " *
         "validity, adjoint, AD-based inversions)."
 end
-
-# const SAVE_PLOTS = true
-
-# include("helpers/benchmark_constants.jl")
-# include("helpers/compute.jl")
-# include("helpers/plot.jl")
-# include("helpers/cases.jl")
-# include("../publication_v1.0/helpers_computation.jl")
-
-# include("test_benchmarks.jl")
-# @testset "benchmarks" begin
-#     benchmark1()
-#     benchmark1_float32()
-#     benchmark1_external_loadupdate()
-#     benchmark1_gpu()
-#     benchmark2()
-#     benchmark3()
-#     benchmark5()
-# end

@@ -30,8 +30,12 @@ Forward-mode (tangent) differentiation. Cost scales with the number of
 parameters, so it **requires a low number of parameter to estimate**
 (which can be achieved via a low-dimensional encoding). `batch` is the
 number of tangent directions propagated together (chunking).
+
+# Fields
+$(TYPEDFIELDS)
 """
 struct TangentMode <: AbstractDiffMode
+    "the number of tangent directions propagated together"
     batch::Int
 end
 TangentMode(; batch::Int = 8) = TangentMode(batch)
@@ -43,8 +47,12 @@ Reverse-mode (adjoint) differentiation with periodic checkpointing. Cost is
 roughly independent of the parameter dimension, so full 2-D fields can be
 inverted without an encoding. `checkpoint_every` is the number of save/output
 intervals between stored state snapshots.
+
+# Fields
+$(TYPEDFIELDS)
 """
 struct AdjointMode <: AbstractDiffMode
+    "the number of save/output intervals between stored state snapshots"
     checkpoint_every::Int
 end
 AdjointMode(; checkpoint_every::Int = 10) = AdjointMode(checkpoint_every)

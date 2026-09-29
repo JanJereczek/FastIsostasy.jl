@@ -37,11 +37,18 @@ interval. The entry type `E` follows `prob.sim.opts.integ` via
 `src/integrators.jl`), so `push!`ing whatever `steplog_entry` a given
 algorithm's integrator produces always matches the buffer's element type.
 Reusable across recordings — step vectors are emptied, snapshots overwritten.
+
+# Fields
+$(TYPEDFIELDS)
 """
 struct ForwardRecord{T, SS, E}
-    checkpoints::Vector{SS}      # [i] = state at the start of interval i;
-                                 # [end] = state at the end of the run
-    steps::Vector{Vector{E}}     # accepted steplog entries per interval
+    """
+    the state snapshots: `[i]` is the state at the start of interval `i`, `[end]`
+    the state at the end of the run
+    """
+    checkpoints::Vector{SS}
+    "the accepted steplog entries of each interval"
+    steps::Vector{Vector{E}}
 end
 
 function ForwardRecord(prob::AbstractInversion)

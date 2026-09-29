@@ -14,12 +14,14 @@ abstract type AbstractLayering{T<:AbstractFloat} end
 $(TYPEDSIGNATURES)
 
 Struct to enforce uniform layering when passed to [`get_layer_boundaries`](@ref).
-Contains:
-- `n_layers`: the number of layers in the model.
-- `boundaries`: the layer boundaries, which are constant across the domain.
+
+# Fields
+$(TYPEDFIELDS)
 """
 @kwdef struct UniformLayering{T} <: AbstractLayering{T}
+    "the number of layers in the model"
     n_layers::Int = 2
+    "the layer boundaries (m), constant across the domain"
     boundaries::Vector{T} = [88e3, 400e3]
 end
 
@@ -27,14 +29,16 @@ end
 $(TYPEDSIGNATURES)
 
 Struct to enforce parallel layering when passed to [`get_layer_boundaries`](@ref).
-Contains:
-- `n_layers`: the number of layers in the model.
-- `thickness`: the thickness of each layer.
-- `tol`: a tolerance value to add to the layer boundaries.
+
+# Fields
+$(TYPEDFIELDS)
 """
 @kwdef struct ParallelLayering{T} <: AbstractLayering{T}
+    "the number of layers in the model"
     n_layers::Int = 5
+    "the thickness of each layer (m)"
     thickness::Vector{T} = fill(20e3, n_layers)
+    "a tolerance added to the layer boundaries (m)"
     tol::T = 0.0
 end
 
@@ -43,14 +47,16 @@ end
 $(TYPEDSIGNATURES)
 
 Struct to enforce equalized layering when passed to [`get_layer_boundaries`](@ref).
-Contains:
-- `n_layers`: the number of layers in the model.
-- `boundaries`: the layer boundaries.
-- `tol`: a tolerance value to add to the layer boundaries.
+
+# Fields
+$(TYPEDFIELDS)
 """
 @kwdef struct EqualizedLayering{T} <: AbstractLayering{T}
+    "the number of layers in the model"
     n_layers::Int = 3
+    "the layer boundaries (m)"
     boundaries::Vector{T} = [88e3, 400e3]
+    "a tolerance added to the layer boundaries (m)"
     tol::T = 0.0
 end
 
@@ -58,14 +64,16 @@ end
 $(TYPEDSIGNATURES)
 
 Struct to enforce folded layering when passed to [`get_layer_boundaries`](@ref).
-Contains:
-- `n_layers`: the number of layers in the model.
-- `max_depth`: the maximum depth of the layers.
-- `tol`: a tolerance value to add to the layer boundaries.
+
+# Fields
+$(TYPEDFIELDS)
 """
 @kwdef struct FoldedLayering{T} <: AbstractLayering{T}
+    "the number of layers in the model"
     n_layers::Int = 5
+    "the maximum depth of the layers (m)"
     max_depth::T = 350.0e3
+    "a tolerance added to the layer boundaries (m)"
     tol::T = 0.0
 end
 

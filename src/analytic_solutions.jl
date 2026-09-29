@@ -67,13 +67,13 @@ function analytic_integrand(
 end
 
 # ViscousMantle (Maxwell dashpot): single-exponential step response
-# û(t) = û_eq (1 - exp(-βt/(2ηk))), see `roadmaps/burgers.md` §2.1. This is also
+# û(t) = û_eq (1 - exp(-βt/(2ηk))), see `fastisostasy-roadmap/burgers.md` §2.1. This is also
 # the fallback for any mantle not handled below (matches the historical
 # behaviour of this function, which never checked the mantle type).
 relaxation_minus_1(kappa, beta, t, solidearth, mantle) =
     exp(-beta * t / (2 * mean(solidearth.effective_viscosity) * kappa)) - 1
 
-# TransientCreepMantle, N = 1 (classic Burgers body): two-exponential step
+# TransientViscousMantle, N = 1 (classic Burgers body): two-exponential step
 # response from roadmap `burgers.md` §2.4, derived by partial-fractioning the
 # Laplace-domain transfer function û(s) = F̂(s)/(β + 2k μ̃(s)) with the
 # correspondence-principle modulus of a Maxwell dashpot (η₁) in series with a
@@ -103,7 +103,7 @@ function relaxation_minus_1(
     beta::T,
     t::T,
     solidearth,
-    mantle::TransientCreepMantle{MT,1},
+    mantle::TransientViscousMantle{MT,1},
 ) where {T<:AbstractFloat,MT}
     eta1 = mean(solidearth.effective_viscosity)
     mu1 = T(mantle.shearmodulus)
@@ -126,8 +126,14 @@ function relaxation_minus_1(
     return -1 + Aa * exp(sa * t) + Ab * exp(sb * t)
 end
 
-relaxation_minus_1(kappa, beta, t, solidearth, mantle::TransientCreepMantle) = error(
-    "The analytic disc-load solution is only implemented for TransientCreepMantle " *
+relaxation_minus_1(kappa, beta, t, solidearth, mantle::ElasticSpringMantle) = error(
+    "No analytic disc-load solution is implemented for $(nameof(typeof(mantle))): " *
+    "its elastic spring couples to the viscous response, which the viscous-only " *
+    "closed forms here do not cover.",
+)
+
+relaxation_minus_1(kappa, beta, t, solidearth, mantle::TransientViscousMantle) = error(
+    "The analytic disc-load solution is only implemented for TransientViscousMantle " *
     "with N = 1 Kelvin branch (roadmap burgers.md §5, Phase 3). Got N = " *
     "$(nbranches(mantle)).",
 )

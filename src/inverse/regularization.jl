@@ -95,8 +95,12 @@ Regularization target: the raw parameter vector `θ` (encoded space), or a
 subset of it selected by `idx` (anything that indexes a vector — `Colon()`,
 `UnitRange`, `Vector{Int}`). Only meaningful with `Order0()` — `θ` has no
 spatial structure to take a gradient of.
+
+# Fields
+$(TYPEDFIELDS)
 """
 struct ThetaTarget{I} <: AbstractRegTarget
+    "the indices of `θ` to regularize, anything that indexes a vector"
     idx::I
 end
 ThetaTarget() = ThetaTarget(Colon())
@@ -107,8 +111,12 @@ ThetaTarget() = ThetaTarget(Colon())
 Regularization target: a decoded field or scalar, `decoded(quantity, sim)`.
 `quantity` is one of the `BoundedQuantity` selectors shared with
 `DecodedBounds` (`Log10Viscosity`, `UpperMantleDensity`, `LithoDensity`).
+
+# Fields
+$(TYPEDFIELDS)
 """
 struct FieldTarget{Q<:BoundedQuantity} <: AbstractRegTarget
+    "the `BoundedQuantity` selecting the decoded field or scalar"
     quantity::Q
 end
 
@@ -164,11 +172,18 @@ end
 One configurable Tikhonov-style regularizer; see the module docstring above for
 `target`/`order`. `weights`, if given, must match the target's shape/length and
 only applies under `Order0()`.
+
+# Fields
+$(TYPEDFIELDS)
 """
 struct TikhonovReg{Ta<:AbstractRegTarget, O<:AbstractRegOrder, T<:Real, W} <: AbstractRegularization
+    "the [`AbstractRegTarget`](@ref) that is penalized"
     target::Ta
+    "the [`AbstractRegOrder`](@ref): magnitude (`Order0`) or gradient (`Order1`)"
     order::O
+    "the weight of the penalty"
     λ::T
+    "the per-entry weights, or `nothing`; only used under `Order0()`"
     weights::W
 end
 
@@ -234,11 +249,18 @@ Soft two-sided hinge penalty keeping a decoded quantity within `[lo, hi]`:
 `λ · Σ [relu(lo − d)² + relu(d − hi)²]`, where `d = decoded(quantity, sim)` is
 either a field or a scalar. `quantity` is a `BoundedQuantity`
 (`Log10Viscosity`, `UpperMantleDensity`, `LithoDensity`).
+
+# Fields
+$(TYPEDFIELDS)
 """
 struct DecodedBounds{Q<:BoundedQuantity, T<:Real} <: AbstractRegularization
+    "the `BoundedQuantity` selecting the decoded field or scalar"
     quantity::Q
+    "the lower bound"
     lo::T
+    "the upper bound"
     hi::T
+    "the weight of the penalty"
     λ::T
 end
 

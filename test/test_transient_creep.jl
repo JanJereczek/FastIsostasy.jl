@@ -1,4 +1,4 @@
-# TransientCreepMantle (roadmaps/burgers.md Phases 1-3): the N-branch Kelvin
+# TransientViscousMantle (fastisostasy-roadmap/burgers.md Phases 1-3): the N-branch Kelvin
 # solve on the semi-implicit Crank-Nicolson path, plus Phase 3 validation
 # (analytic disc-load solution, sanity checks).
 #
@@ -34,21 +34,21 @@ end
 
 final_u(mantle; kw...) = (s = build_creep_sim(mantle; kw...); run!(s); copy(s.now.u))
 
-burgers(Δ, τ) = TransientCreepMantle(
+burgers(Δ, τ) = TransientViscousMantle(
     shearmodulus = 67e9, relaxation_strength = Δ, kelvin_time = τ)
 
-@testset "TransientCreepMantle" begin
+@testset "TransientViscousMantle" begin
 
     @testset "construction" begin
         m = burgers(1.2, 7.14)
         @test FI.nbranches(m) == 1
         @test FI.nbranches(ViscousMantle()) == 0
-        @test m isa TransientCreepMantle{Float64,1}
+        @test m isa TransientViscousMantle{Float64,1}
         # N branches: one Δⱼ per τⱼ, and the tuple length sets N
-        m3 = TransientCreepMantle(shearmodulus = 67e9,
+        m3 = TransientViscousMantle(shearmodulus = 67e9,
             relaxation_strength = (0.4, 0.4, 0.4), kelvin_time = (1.0, 10.0, 100.0))
         @test FI.nbranches(m3) == 3
-        @test_throws DimensionMismatch TransientCreepMantle(
+        @test_throws DimensionMismatch TransientViscousMantle(
             shearmodulus = 67e9, relaxation_strength = (1.0, 2.0), kelvin_time = 7.0)
         # Δ = 0 is the ViscousMantle limit, not a valid Kelvin branch
         @test_throws ArgumentError burgers(0.0, 7.14)
@@ -123,7 +123,7 @@ burgers(Δ, τ) = TransientCreepMantle(
         # strength 2Δ. This cross-checks the general-N O(N) solve against the
         # independently-derived, already-validated N = 1 closed form.
         s1 = build_creep_sim(burgers(0.6, 7.14))
-        s2 = build_creep_sim(TransientCreepMantle(shearmodulus = 67e9,
+        s2 = build_creep_sim(TransientViscousMantle(shearmodulus = 67e9,
             relaxation_strength = (0.3, 0.3), kelvin_time = (7.14, 7.14)))
         run!(s1); run!(s2)
         @test all(isfinite, s2.now.u)
@@ -133,7 +133,7 @@ burgers(Δ, τ) = TransientCreepMantle(
         @test s2.now.u_K[:, :, 1] == s2.now.u_K[:, :, 2]
 
         # N = 3, distinct branches: shape, finiteness, and purity at fixed t.
-        m3 = TransientCreepMantle(shearmodulus = 67e9,
+        m3 = TransientViscousMantle(shearmodulus = 67e9,
             relaxation_strength = (0.4, 0.6, 0.3), kelvin_time = (1.0, 10.0, 100.0))
         s3 = build_creep_sim(m3)
         @test size(s3.now.u_K, 3) == 3
@@ -154,7 +154,7 @@ burgers(Δ, τ) = TransientCreepMantle(
         # Δⱼ → 0 for every branch still reproduces ViscousMantle (permanent
         # regression, generalised from the N = 1 case above to N = 3).
         uv = final_u(ViscousMantle())
-        m3_locked = TransientCreepMantle(shearmodulus = 67e9,
+        m3_locked = TransientViscousMantle(shearmodulus = 67e9,
             relaxation_strength = (1e-9, 1e-9, 1e-9), kelvin_time = (1.0, 10.0, 100.0))
         u0 = final_u(m3_locked)
         @test maximum(abs, u0 .- uv) < 1f-5 * maximum(abs, uv)
@@ -305,5 +305,63 @@ burgers(Δ, τ) = TransientCreepMantle(
             @test all(>=(0), tail_increments)
             @test issorted(tail_increments, rev = true)
         end
+    end
+end
+
+# ViscoElasticMantle / TransientViscoElasticMantle: the elastic spring coupled in
+# series (fastisostasy-roadmap/burgers.md §5b). Same semi-implicit solve with
+# F → γF, β → γβ, γ = 2kμ/(2kμ + β), and ue computed by the mantle.
+@testset "ViscoElasticMantle and TransientViscoElasticMantle" begin
+
+    @testset "construction" begin
+        m = ViscoElasticMantle(shearmodulus = 67e9)
+        @test FI.nbranches(m) == 0
+        tv = TransientViscousMantle(shearmodulus = 67e9,
+            relaxation_strength = (0.4, 0.8), kelvin_time = (1.0, 10.0))
+        tve = TransientViscoElasticMantle(tv)
+        @test tve isa TransientViscoElasticMantle{Float64,2}
+        @test tve.relaxation_strength == tv.relaxation_strength
+        @test tve.kelvin_time == tv.kelvin_time
+        @test_throws ArgumentError TransientViscoElasticMantle(
+            shearmodulus = 67e9, relaxation_strength = 0.0, kelvin_time = 7.0)
+    end
+
+    @testset "spring buffer allocated only when coupled" begin
+        @test size(build_creep_sim(ViscoElasticMantle(shearmodulus = 67e9)
+            ).tools.prealloc.fftE, 3) == 1
+        @test size(build_creep_sim(ViscousMantle()).tools.prealloc.fftE, 3) == 0
+    end
+
+    @testset "μ → ∞ reproduces ViscousMantle without elastic response" begin
+        # γ → 1 and ue → 0, i.e. a rigid spring and no Farrell response.
+        u_ref = final_u(ViscousMantle(); litho = RigidLithosphere())
+        u_ve = final_u(ViscoElasticMantle(shearmodulus = 1e30);
+            litho = RigidLithosphere())
+        @test maximum(abs, u_ve .- u_ref) < 1f-4 * maximum(abs, u_ref)
+    end
+
+    @testset "Δ → 0 reproduces ViscoElasticMantle" begin
+        u_ve = final_u(ViscoElasticMantle(shearmodulus = 67e9))
+        u_tve = final_u(TransientViscoElasticMantle(shearmodulus = 67e9,
+            relaxation_strength = 1e-9, kelvin_time = 7.14))
+        @test maximum(abs, u_tve .- u_ve) < 1f-4 * maximum(abs, u_ve)
+    end
+
+    @testset "coupled elastic displacement relaxes" begin
+        # ue = (F − βu)/(2kμ + β) shrinks as the viscous displacement grows,
+        # unlike the constant Farrell response of the viscous family.
+        m = ViscoElasticMantle(shearmodulus = 67e9)
+        early = build_creep_sim(m; tend = 200f0)
+        late = build_creep_sim(m; tend = 10f3)
+        run!(early)
+        run!(late)
+        @test maximum(abs, early.now.ue) > 0
+        @test maximum(abs, late.now.ue) < maximum(abs, early.now.ue)
+    end
+
+    @testset "unsupported combinations error clearly" begin
+        s = build_creep_sim(ViscoElasticMantle(shearmodulus = 67e9);
+            litho = LaterallyVariableLithosphere())
+        @test_throws ErrorException run!(s)
     end
 end

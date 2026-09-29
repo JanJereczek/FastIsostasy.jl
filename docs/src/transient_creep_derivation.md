@@ -1,6 +1,6 @@
 # Transient creep: derivation
 
-This page derives [`TransientCreepMantle`](@ref) step by step, from the steady
+This page derives [`TransientViscousMantle`](@ref) step by step, from the steady
 [`ViscousMantle`](@ref) response you may already be familiar with, up to the
 closed-form solver FastIsostasy actually runs and the analytic solution used to
 validate it. For the physical motivation (why transient creep matters, how it
@@ -39,7 +39,7 @@ t/(2\eta k)})``. Real mantle rock does not do this — laboratory creep
 experiments and geodetic observations (post-seismic flow, tidal response, the
 first years after a rapid ice-mass change) all show a faster, partly-recoverable
 *transient* (primary) creep on top of the steady one. Capturing that is what
-`TransientCreepMantle` adds, without touching the elastic part of the model
+`TransientViscousMantle` adds, without touching the elastic part of the model
 (the Farrell convolution) at all — see the note at the end of §2.
 
 ## 2. The Burgers body: one Kelvin branch
@@ -65,7 +65,7 @@ Two numbers describe the Kelvin branch relative to the Maxwell one:
 where ``\mu_1`` is the *unrelaxed* shear modulus of the whole body — a
 rheological parameter fixing the scale of ``\mu_2 = \mu_1/\Delta``, **not** the
 same ``\mu`` used by the Farrell elastic Green's function. The two stay
-conceptually and numerically separate: `TransientCreepMantle` only ever adds a
+conceptually and numerically separate: `TransientViscousMantle` only ever adds a
 *transient anelastic band* on top of whatever the elastic convolution already
 computes. This is also why ``\Delta \to 0`` (equivalently ``\mu_2 \to \infty``)
 must reduce the model to plain `ViscousMantle` exactly — the Kelvin branch locks
@@ -123,7 +123,7 @@ log-spaced bins gives closed-form ``\Delta_j`` (the exact probability mass of
 bin ``j``, so ``\sum_j \Delta_j = \Delta`` for any ``N``) and ``\tau_j`` (the
 ``F``-weighted mean retardation time within it). [`BurgersMantle`](@ref) and
 [`ExtendedBurgersMantle`](@ref) wrap this — and the plain ``N=1`` case — into
-ready-to-use [`TransientCreepMantle`](@ref) constructors.
+ready-to-use [`TransientViscousMantle`](@ref) constructors.
 
 `fit_prony_series` also returns `fit_error`: the largest relative deviation
 between the ``N``-branch sum and the continuous integral above, evaluated by
@@ -215,6 +215,32 @@ anything else — both checked in the test suite, alongside a direct comparison
 against `ViscousMantle` for two *identical* Kelvin branches, which must equal
 one branch of doubled relaxation strength (compliances add).
 
+### Coupling the elastic spring
+
+`TransientViscousMantle` keeps the unrelaxed spring out of the rheology and
+adds the Farrell elastic displacement to the viscous one. A homogeneous
+half-space with the spring in series, as in [ivins_notes_2021](@citet), responds
+differently, because the transfer function ``1/(\beta + 2k\tilde\mu(s))`` is not
+linear in the compliance. [`ViscoElasticMantle`](@ref) and
+[`TransientViscoElasticMantle`](@ref) solve that coupled problem. Write the total
+displacement as ``w = w_E + S``, with ``S`` the viscous part (Maxwell plus Kelvin
+branches). The spring carries the same stress as every other element,
+``2k\mu\, w_E = F - \beta w``, and eliminating ``w_E`` gives
+
+```math
+F - \beta w = \gamma\,(F - \beta S), \qquad
+\gamma = \frac{2k\mu}{2k\mu + \beta}, \qquad
+w_E = \frac{F - \beta S}{2k\mu + \beta}.
+```
+
+The viscous system of §§4–5 is therefore unchanged apart from ``F \to \gamma F``
+and ``\beta \to \gamma\beta``. The elastic displacement ``w_E`` is computed
+alongside, in every step, and replaces the Farrell response. A pure Maxwell body
+(``N = 0``) then relaxes with ``\eta/\mu + 2\eta k/\beta`` instead of
+``2\eta k/\beta``. At ``1000 \, \mathrm{km}`` scales this halves the viscous
+subsidence of the first decades. The transient-creep example compares both
+families against the digitised Fig. 8 of [ivins_notes_2021](@citet).
+
 ## 6. Scope: laterally constant parameters only
 
 Every coefficient in §§4–5 depends only on ``k``, which is what makes the
@@ -224,7 +250,7 @@ Sherman–Morrison solve exact — it relies on ``\mu_1``, ``\Delta_j`` and
 different trick — an effective-viscosity field folded into a scaled pseudo-
 differential operator [swierczek-jereczek_fastisostasy_2024](@citet) — and
 that trick has no proven analogue for the coupled ``(N+1)``-field system yet.
-`TransientCreepMantle` therefore requires
+`TransientViscousMantle` therefore requires
 [`LaterallyConstantLithosphere`](@ref) or [`RigidLithosphere`](@ref), and
 errors clearly otherwise.
 
@@ -323,7 +349,7 @@ validate the solver.
   ``N \approx 3\text{-}5`` branches to any given ``(\Delta, \alpha, \tau_L,
   \tau_H)`` band; what remains open is a *literature-calibrated* preset — the
   actual published values from [ivins_notes_2021](@citet) have not yet been
-  entered into the package (roadmaps/burgers.md §6).
+  entered into the package (fastisostasy-roadmap/burgers.md §6).
 - **Laterally constant parameters only** (§6).
 - **Requires** [`EulerIntegrator`](@ref) (a fixed step; the semi-implicit solve
   has no adaptive-step variant) with `SolverOptions(fft = ComplexFFTBackend())`

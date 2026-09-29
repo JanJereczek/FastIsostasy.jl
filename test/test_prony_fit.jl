@@ -1,12 +1,12 @@
-# fit_prony_series (roadmaps/burgers.md Phase 4): discretise the continuous
+# fit_prony_series (fastisostasy-roadmap/burgers.md Phase 4): discretise the continuous
 # Faul-Jackson absorption-band spectrum underlying I&C 2021's extended Burgers
-# model into an N-branch Prony series for TransientCreepMantle.
+# model into an N-branch Prony series for TransientViscousMantle.
 #
 # The load-bearing checks are (a) the N log-spaced bins exactly partition the
 # band, so sum(Δⱼ) == relaxation_strength for any N (b) fit_error decreases
 # monotonically as N grows, converging on the N ≈ 3-5 the roadmap expects to
 # land within a few percent, and (c) BurgersMantle/ExtendedBurgersMantle wire
-# the fit into TransientCreepMantle correctly.
+# the fit into TransientViscousMantle correctly.
 
 using FastIsostasy
 using Test
@@ -28,7 +28,7 @@ const FI = FastIsostasy
     end
 
     @testset "fit_error vs N (nbranches-vs-cost study)" begin
-        # α = 1/2 is the spectrum shape roadmaps/burgers.md §5 calls out for the
+        # α = 1/2 is the spectrum shape fastisostasy-roadmap/burgers.md §5 calls out for the
         # I&C 2021 comparison; τ_L, τ_H span two decades (years to a century),
         # matching the "years to centuries" range in §1's design table.
         errors = [fit_prony_series(relaxation_strength = 1.2, alpha = 0.5,
@@ -57,7 +57,7 @@ const FI = FastIsostasy
     @testset "BurgersMantle / ExtendedBurgersMantle wire the fit through" begin
         m1 = BurgersMantle(shearmodulus = 67e9, relaxation_strength = 1.2,
             kelvin_time = 7.14)
-        @test m1 isa FI.TransientCreepMantle{Float64,1}
+        @test m1 isa FI.TransientViscousMantle{Float64,1}
         @test FI.nbranches(m1) == 1
 
         m2 = ExtendedBurgersMantle(shearmodulus = 67e9, relaxation_strength = 1.2,

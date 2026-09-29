@@ -22,9 +22,20 @@ nextfastfft(ns::Tuple{Vararg{Integer}}) = nextfastfft.(ns)
 $(TYPEDSIGNATURES)
 
 An unnormalized inverse FFT plan (the `bfft`/`brfft` inside a `ScaledPlan`) paired
-with the exact normalization `S` that the `ScaledPlan` (`ifft`/`irfft`) would apply. `S` is carried as a TYPE PARAMETER — a compile-time constant, hence invisible to Enzyme. A `Float64` *field* here would be spuriously treated as differentiable when the plan lives inside an autodiff'd `Simulation`, corrupting gradients (the plan's scale is a constant, not a differentiable quantity). `mul!(y, np, x)` reproduces the `ScaledPlan` result bit-for-bit: `(raw_inverse * x) * S`, matching `lmul!(S, …)`.
+with the exact normalization `S` that the `ScaledPlan` (`ifft`/`irfft`) would apply.
+`mul!(y, np, x)` reproduces the `ScaledPlan` result bit-for-bit: `(raw_inverse * x) * S`.
+
+`S` is carried as a TYPE PARAMETER rather than a field, so that it is a
+compile-time constant and hence invisible to Enzyme. As a `Float64` field it would
+be treated as differentiable whenever the plan lives inside an autodiff'd
+[`Simulation`](@ref), corrupting gradients — the plan's scale is a constant, not a
+differentiable quantity.
+
+# Fields
+$(TYPEDFIELDS)
 """
 struct NormalizedPlan{P,S}
+    "the unnormalized inverse FFT plan"
     p::P
 end
 NormalizedPlan(p, scale::Real) = NormalizedPlan{typeof(p),Float64(scale)}(p)
@@ -60,29 +71,30 @@ $(TYPEDSIGNATURES)
 A helper for convolution plans.
 
 # Fields
-- `nx`: number of rows in the kernel
-- `ny`: number of columns in the kernel
-- `p_rfft`: the real-valued FFT plan
-- `p_irfft`: the real-valued inverse FFT plan (including scaling)
-- `nffts`: the padded size of the FFTs
-- `kernel_padded`: the padded kernel to convolve the input with
-- `input_padded`: the padded input
-- `output_padded`: the padded output
-- `output_cropped`: the cropped output
-- `input_fft`: the transformed (padded) input
-- `pad_val`: the value used to pad the input and kernel
+$(TYPEDFIELDS)
 """
 struct ConvolutionPlanHelpers{T,M,C,FP,IP}
+    "number of rows in the kernel"
     nx::Int
+    "number of columns in the kernel"
     ny::Int
+    "the real-valued FFT plan"
     p_rfft::FP
+    "the real-valued inverse FFT plan (including scaling)"
     p_irfft::IP
+    "the padded size of the FFTs"
     nffts::Tuple{Int64,Int64}
+    "the padded kernel to convolve the input with"
     kernel_padded::M
+    "the padded input"
     input_padded::M
+    "the padded output"
     output_padded::M
+    "the cropped output"
     output_cropped::M
+    "the transformed (padded) input"
     input_fft::C
+    "the value used to pad the input and kernel"
     pad_val::T
 end
 
@@ -132,11 +144,12 @@ instead of `conv!`. The `samesize_conv` function will automatically crop the out
 to the same size as the input, and apply boundary conditions if provided.
 
 # Fields
-- `kernel`: the kernel to convolve the input with
-- `kernel_fft`: the transformed (padded) kernel
+$(TYPEDFIELDS)
 """
 struct ConvolutionPlan{M,C}
+    "the kernel to convolve the input with"
     kernel::M
+    "the transformed (padded) kernel"
     kernel_fft::C
 end
 
@@ -185,15 +198,8 @@ function samesize_conv!(output, input, p::EmptyConvolution, h, domain)
     return nothing
 end
 
-function samesize_conv!(
-    output::M,
-    input::M,
-    p::ConvolutionPlan,
-    h::ConvolutionPlanHelpers,
-    domain,
-) where {M}
-
-    conv!(input, p, h)
+# Crop the (2n-1)-sized convolution result back onto the computation grid.
+function crop_conv!(output, h::ConvolutionPlanHelpers, domain)
     output .= view(
         h.output_cropped,
         (domain.i1+domain.convo_offset):(domain.i2+domain.convo_offset),
@@ -208,17 +214,30 @@ function samesize_conv!(
     p::ConvolutionPlan,
     h::ConvolutionPlanHelpers,
     domain,
+) where {M}
+
+    conv!(input, p, h)
+    crop_conv!(output, h, domain)
+    return nothing
+end
+
+# The two BC-carrying methods differ only in *when* the BC is applied: on the
+# extended grid the convolution produced (before cropping), or on the computation
+# grid (after). That ordering is the whole point of `AbstractBCSpace`, so they
+# cannot collapse into one.
+function samesize_conv!(
+    output::M,
+    input::M,
+    p::ConvolutionPlan,
+    h::ConvolutionPlanHelpers,
+    domain,
     bc,
     bc_space::ExtendedBCSpace,
 ) where {M}
 
     conv!(input, p, h)
     apply_bc!(h.output_cropped, bc)
-    output .= view(
-        h.output_cropped,
-        (domain.i1+domain.convo_offset):(domain.i2+domain.convo_offset),
-        (domain.j1-domain.convo_offset):(domain.j2-domain.convo_offset),
-    )
+    crop_conv!(output, h, domain)
     return nothing
 end
 
@@ -233,11 +252,7 @@ function samesize_conv!(
 ) where {M}
 
     conv!(input, p, h)
-    output .= view(
-        h.output_cropped,
-        (domain.i1+domain.convo_offset):(domain.i2+domain.convo_offset),
-        (domain.j1-domain.convo_offset):(domain.j2-domain.convo_offset),
-    )
+    crop_conv!(output, h, domain)
     apply_bc!(output, bc)
     return nothing
 end

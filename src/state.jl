@@ -1,10 +1,26 @@
+"""
+$(TYPEDSIGNATURES)
+
+Anomalies of the vertical columns, relative to the `ReferenceState`, that
+load the solid Earth. Each is a density times a thickness anomaly.
+
+# Fields
+$(TYPEDFIELDS)
+"""
 mutable struct ColumnAnomalies{M}
+    "Ice column anomaly (kg m⁻²)"
     ice::M
+    "Seawater column anomaly (kg m⁻²)"
     seawater::M
+    "Sediment column anomaly (kg m⁻²)"
     sediment::M
+    "Lithospheric column anomaly from the elastic displacement (kg m⁻²)"
     litho::M
+    "Mantle column anomaly from the viscous displacement (kg m⁻²)"
     mantle::M
+    "Surface load anomaly: ice + seawater + sediment, within the active mask (kg m⁻²)"
     load::M
+    "Full anomaly: load + lithosphere + mantle, within the active mask (kg m⁻²)"
     full::M
 end
 
@@ -14,27 +30,87 @@ function ColumnAnomalies(domain)
     return ColumnAnomalies(zero_columnanoms...)
 end
 
+"""
+$(TYPEDSIGNATURES)
+
+Two-time-level buffers of the kinematic barystatic-sea-level formalism of
+[adhikari_kinematic_2020](@citet), held by [`CurrentState`](@ref).
+
+The formalism is intrinsically incremental: it needs the ice thickness, the
+(signed) height above floatation and the land mask at the **start** of the
+coupling interval, which no other part of the state keeps around (`sim.ref` is
+the fixed reference, `sim.now` the current time). It writes its two per-cell
+increments here as well, so the whole thing is one allocation-free broadcast.
+
+# Fields
+$(TYPEDFIELDS)
+
+All five arrays are zero-size unless the simulation runs an
+[`AdhikariBSLFormalism`](@ref), so [`GoelzerBSLFormalism`](@ref) pays nothing for them —
+the same trick `u_K` uses for the Kelvin branches.
+"""
+struct KinematicBSL{M}
+    "`H(t)`, ice thickness at the start of the interval (m)"
+    H_ice_prev::M
+    "`H_F(t)`, height above floatation at the start of the interval (m)"
+    H_F_prev::M
+    "`ℒ(t)`, land mask at the start of the interval"
+    maskland_prev::M
+    "`ΔH_M`, the component changing ocean **mass and volume** (their Eq. 11)"
+    delta_H_M::M
+    "`ΔH_V`, the component changing ocean **volume only** (their Eq. 12)"
+    delta_H_V::M
+end
+
+function KinematicBSL(domain::RegionalDomain, active::Bool)
+    T = eltype(domain.x)
+    nx, ny = active ? (domain.nx, domain.ny) : (0, 0)
+    return KinematicBSL(
+        ntuple(_ -> kernelzeros(domain.backend, T, nx, ny), 5)...,
+    )
+end
+
+# The zero-size arrays of an inactive `KinematicBSL` must not be written to with
+# grid-sized data, so every writer that runs unconditionally checks this first.
+kinematic_active(k::KinematicBSL) = length(k.H_ice_prev) > 0
+
 abstract type AbstractState end
 
 """
 $(TYPEDSIGNATURES)
 
 Return a struct containing the reference state.
+
+# Fields
+$(TYPEDFIELDS)
 """
 struct ReferenceState{T,M,B} <: AbstractState
-
-    u::M                    # viscous displacement
-    ue::M                   # elastic displacement
-    H_ice::M                # ref height of ice column
-    H_af::M                 # ref height of ice column above floatation
-    H_water::M              # ref height of water column
-    z_b::M                  # ref bedrock position
-    z_ss::M                 # ref z_ss field
-    V_af::T                 # ref sl-equivalent of ice volume above floatation
-    V_pov::T                # ref potential ocean volume
-    V_den::T                # ref potential ocean volume associated with V_den
-    maskgrounded::B         # mask for grounded ice
-    maskocean::B            # mask for ocean
+    "Viscous displacement (m)"
+    u::M
+    "Elastic displacement (m)"
+    ue::M
+    "Ice thickness (m)"
+    H_ice::M
+    "Ice thickness above flotation (m)"
+    H_af::M
+    "Signed height above flotation (m, Adhikari eq. 8)"
+    H_F::M
+    "Seawater thickness (m)"
+    H_water::M
+    "Bedrock elevation (m)"
+    z_b::M
+    "Sea-surface elevation (m)"
+    z_ss::M
+    "SLE ice volume above floatation (m^3)"
+    V_af::T
+    "SLE potential ocean volume (m^3)"
+    V_pov::T
+    "SLE volume associated with density difference (m^3)"
+    V_den::T
+    "Grounded ice mask (Bool)"
+    maskgrounded::B
+    "Ocean mask (Bool)"
+    maskocean::B
 end
 
 # `maskgrounded`/`maskocean` are crisp `Bool` under `SharpTransition` but a
@@ -53,10 +129,7 @@ function Base.show(io::IO, ::MIME"text/plain", ref::ReferenceState)
         "grounded area" => percent_string(ref.maskgrounded),
         "ocean area" => percent_string(ref.maskocean),
     ]
-    padlen = maximum(length(d[1]) for d in descriptors) + 2
-    for (desc, val) in descriptors
-        println(io, rpad(" $(desc): ", padlen), val)
-    end
+    show_descriptors(io, descriptors)
 end
 
 """
@@ -64,41 +137,77 @@ $(TYPEDSIGNATURES)
 
 Return a mutable struct containing the geostate which will be updated over the simulation.
 The geostate contains all the states of the [`Simulation`] to be solved.
+
+# Fields
+$(TYPEDFIELDS)
+
+Total viscous displacement `u` is the sum of the transient Kelvin-branch displacements `u_K` and the viscous displacement `u_M` from the Maxwell branch, which is not stored separately.
 """
 mutable struct CurrentState{T,M,K,B} <: AbstractState
-
-    u::M                        # viscous displacement (total, = u_M + sum_j u_K[j])
-    u_K::K                      # transient Kelvin-branch displacements at t_K, (nx, ny, N)
-    u_K_next::K                 # same, pending for the end of the current step
-    t_K::T                      # time at which u_K is valid
-    ue::M                       # elastic displacement
-    u_x::M                      # horizontal displacement in x
-    u_y::M                      # horizontal displacement in y
-    dudt::M                     # viscous displacement rate
-    u_eq::M                     # equilibrium dispalcement
-    H_ice::M                    # current height of ice column
-    H_af::M                     # current height of ice column above floatation
-    H_water::M                  # current height of water column
-    columnanoms::ColumnAnomalies{M}             # column anomalies
-    z_b::M                      # vertical bedrock position
-    dz_ss::M                    # current z_ss perturbation
-    z_ss::M                     # current z_ss field
-    V_af::T                     # V contribution from ice above floatation
-    V_pov::T                    # V contribution from bedrock adjustment
-    V_den::T                    # V contribution from diff between melt- and saltwater density
-    delta_V::T                  # change in volume
-    z_bsl::T                    # ocean surface change
-    maskgrounded::B             # mask for grounded ice
-    maskocean::B                # mask for ocean
-    count_sparse_updates::Int   # count the updates that are sparser in time
+    "Viscous displacement (m)"
+    u::M
+    "Kelvin-branch displacements at t_K, (nx, ny, N)"
+    u_K::K
+    "Kelvin-branch displacements at t_K + Δt, (nx, ny, N)"
+    u_K_next::K
+    "Time at which u_K is valid"
+    t_K::T
+    "Elastic displacement (m)"
+    ue::M
+    "Horizontal displacement in x (m)"
+    u_x::M
+    "Horizontal displacement in y (m)"
+    u_y::M
+    "Viscous displacement rate"
+    dudt::M
+    "Equilibrium viscous displacement (m)"
+    u_eq::M
+    "Ice thickness (m)"
+    H_ice::M
+    "Ice thickness above flotation (m)"
+    H_af::M
+    "Signed ice thickness above flotation (m)"
+    H_F::M
+    "Seawater thickness (m)"
+    H_water::M
+    "Column anomalies (kg m⁻²)"
+    columnanoms::ColumnAnomalies{M}
+    "Bedrock elevation (m)"
+    z_b::M
+    "SSH perturbation (m)"
+    dz_ss::M
+    "SSH (m)"
+    z_ss::M
+    "SLE ice volume above flotation (m^3)"
+    V_af::T
+    "SLE potential ocean volume (m^3)"
+    V_pov::T
+    "SLE volume associated with density difference (m^3)"
+    V_den::T
+    "Change in ocean volume over the last sparse update (m^3)"
+    delta_V::T
+    "Barystatic sea level (m)"
+    z_bsl::T
+    "Grounded ice mask (Bool)"
+    maskgrounded::B
+    "Ocean mask (Bool)"
+    maskocean::B
+    "Two-time-level buffers of the [`AdhikariBSLFormalism`](@ref)"
+    kinematic::KinematicBSL{M}
+    "Number of sparse diagnostic updates performed so far"
+    count_sparse_updates::Int
 end
 
-# Initialise CurrentState from ReferenceState
-# `nbranches` is 0 for every steady-creep rheology, giving a zero-size `u_K` that
-# costs nothing; `TransientCreepMantle` asks for one grid per Kelvin branch. A 3D
-# array rather than a vector of matrices so that `u_K` is a single `AbstractArray`
-# — snapshot/restore, GPU transfer and AD all then treat it like any other field.
-function CurrentState(domain::RegionalDomain, ref::ReferenceState, z_bsl, nbranch::Int = 0)
+# Initialise CurrentState from ReferenceState. `u_K` is a 3D array rather than a
+# vector of matrices so that snapshot/restore, GPU transfer and AD treat it like
+# any other field; see `KinematicBSL` above for the zero-size-when-unused trick.
+function CurrentState(
+    domain::RegionalDomain,
+    ref::ReferenceState,
+    z_bsl,
+    nbranch::Int = 0,
+    kinematic::Bool = false,
+)
     T = eltype(domain.x)
     u_K = kernelzeros(domain.backend, T, domain.nx, domain.ny, nbranch)
     return CurrentState(
@@ -113,6 +222,7 @@ function CurrentState(domain::RegionalDomain, ref::ReferenceState, z_bsl, nbranc
         copy(ref.u),                # u_eq
         copy(ref.H_ice),            # H_ice
         copy(ref.H_af),             # H_af
+        copy(ref.H_F),              # H_F
         copy(ref.H_water),          # H_water
         ColumnAnomalies(domain),    # columnanoms
         copy(ref.z_b),              # z_b
@@ -125,8 +235,26 @@ function CurrentState(domain::RegionalDomain, ref::ReferenceState, z_bsl, nbranc
         T(z_bsl),                   # z_bsl
         copy(ref.maskgrounded),     # maskgrounded
         copy(ref.maskocean),        # maskocean
+        KinematicBSL(domain, kinematic),    # kinematic
         0,                          # count_sparse_updates
     )
+end
+
+"""
+$(TYPEDSIGNATURES)
+
+(Re)initialise the two-time-level buffers of [`AdhikariBSLFormalism`](@ref) from the
+reference state, so that the first coupling interval is well defined. A no-op
+when the buffers are inactive, i.e. under [`GoelzerBSLFormalism`](@ref).
+"""
+function reset_kinematic!(k::KinematicBSL, ref::ReferenceState)
+    kinematic_active(k) || return nothing
+    k.H_ice_prev .= ref.H_ice
+    k.H_F_prev .= ref.H_F
+    k.maskland_prev .= not.(ref.maskocean)
+    k.delta_H_M .= 0
+    k.delta_H_V .= 0
+    return nothing
 end
 
 function Base.show(io::IO, ::MIME"text/plain", now::CurrentState)
@@ -145,10 +273,7 @@ function Base.show(io::IO, ::MIME"text/plain", now::CurrentState)
         "ocean area" => percent_string(now.maskocean),
         "count_sparse_updates" => now.count_sparse_updates,
     ]
-    padlen = maximum(length(d[1]) for d in descriptors) + 2
-    for (desc, val) in descriptors
-        println(io, rpad(" $(desc): ", padlen), val)
-    end
+    show_descriptors(io, descriptors)
 end
 
 """
@@ -175,6 +300,7 @@ function reset_state!(sim)
     now.u_eq .= ref.u
     now.H_ice .= ref.H_ice
     now.H_af .= ref.H_af
+    now.H_F .= ref.H_F
     now.H_water .= ref.H_water
     for f in fieldnames(ColumnAnomalies)
         getfield(now.columnanoms, f) .= 0
@@ -189,8 +315,10 @@ function reset_state!(sim)
     now.z_bsl = T(sim.sealevel.bsl.z)
     now.maskgrounded .= ref.maskgrounded
     now.maskocean .= ref.maskocean
+    reset_kinematic!(now.kinematic, ref)
     now.count_sparse_updates = 0
     sim.timer.t = sim.timer.t_span[1]
+    sim.timer.t_sparse0 = sim.timer.t_span[1]
     empty!(sim.timer.t_computation)
     empty!(sim.timer.t_vec)
     return nothing

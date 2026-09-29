@@ -110,3 +110,50 @@ function update_Haf!(H_af, H_ice, z_b, z_ss, c, tr::SmoothTransition)
     @. H_af = srelu(H_ice + snegrelu(z_b - z_ss, e) * c.rho_sw_ice, e)
     return nothing
 end
+
+"""
+$(TYPEDSIGNATURES)
+
+Update the height above floatation `H_F` in the sense of
+[adhikari_kinematic_2020](@citet) (their Eqs. 7 and 8),
+
+    H_0 = (ρ_o/ρ_i) max(z_ss - z_b, 0)
+    H_F = 𝒢 (H_ice - H_0)
+
+with `𝒢 = sim.now.maskgrounded` the grounded-ice mask. This is *not* the same
+field as `H_af`, which clamps the ice column at floatation with `max(⋅, 0)` and
+is what feeds the ice load through `columnanom_ice!`: `H_F` is restricted
+to the grounded domain but left signed inside it, because Adhikari's bookkeeping
+needs cells that can *take up* ocean water (`H_F < 0`) to contribute to sea-level
+fall.
+
+Note that the two fields coincide as long as the ocean mask is evaluated
+pointwise, as it is here: a cell is only ever grounded where `H_ice > H_0`. They
+part ways once the ocean mask is repaired for connectivity (their Eq. 3), which
+turns isolated below-floatation regions — subglacial troughs, proglacial lakes —
+into land and so admits `H_F < 0`. `H_F` is therefore written as their Eq. (8)
+rather than as an alias of `H_af`, so that the repair is the only change needed.
+"""
+function update_HF!(sim::Simulation)
+    update_HF!(
+        sim.now.H_F,
+        sim.now.H_ice,
+        sim.now.z_b,
+        sim.now.z_ss,
+        sim.now.maskgrounded,
+        sim.c,
+        sim.opts.transition,
+    )
+    return nothing
+end
+
+function update_HF!(H_F, H_ice, z_b, z_ss, maskgrounded, c, ::SharpTransition)
+    @. H_F = maskgrounded * (H_ice - c.rho_sw_ice * max(z_ss - z_b, 0))
+    return nothing
+end
+
+function update_HF!(H_F, H_ice, z_b, z_ss, maskgrounded, c, tr::SmoothTransition)
+    e = tr.eps
+    @. H_F = maskgrounded * (H_ice - c.rho_sw_ice * srelu(z_ss - z_b, e))
+    return nothing
+end

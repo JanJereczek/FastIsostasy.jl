@@ -1,8 +1,8 @@
-# GPU counterpart of test_transient_creep.jl (roadmaps/burgers.md Phase 3: GPU
-# validation). `TransientCreepMantle`'s state (`u_K`, 3D) and solver buffers
+# GPU counterpart of test_transient_creep.jl (fastisostasy-roadmap/burgers.md Phase 3: GPU
+# validation). `TransientViscousMantle`'s state (`u_K`, 3D) and solver buffers
 # (`PreAllocated.fftK`, 3D) were designed to be GPU-compatible from the start
 # (roadmap §1, "State layout"), but this is the first time the general-N
-# closed-form solve (`update_dudt!(..., ::TransientCreepMantle{MT,N}, ...)` in
+# closed-form solve (`update_dudt!(..., ::TransientViscousMantle{MT,N}, ...)` in
 # src/deformation.jl) actually runs on a `CuArray`: every per-branch buffer is a
 # `view` into a 3D array and every update is a broadcast, so this exercises that
 # GPU broadcasting over 3D-array views behaves the same as on CPU, for both
@@ -27,10 +27,10 @@ function build_gpu_creep_sim(mantle, backend; tend = 5f3, dt = 25f0, n = 5)
         nout = nout, opts = opts)
 end
 
-burgers(Δ, τ) = TransientCreepMantle(
+burgers(Δ, τ) = TransientViscousMantle(
     shearmodulus = 67e9, relaxation_strength = Δ, kelvin_time = τ)
 
-@testset "gpu TransientCreepMantle" begin
+@testset "gpu TransientViscousMantle" begin
     @testset "N = 1: CPU and GPU agree" begin
         mantle = burgers(1.2, 7.14)
         sim_cpu = build_gpu_creep_sim(mantle, CPU())
@@ -52,7 +52,7 @@ burgers(Δ, τ) = TransientCreepMantle(
         # Exercises the general-N branch loops (not just the N = 1 case above)
         # on GPU: per-branch views into the 3D `u_K`/`fftK` buffers, broadcast
         # over CuArray slices.
-        mantle3 = TransientCreepMantle(shearmodulus = 67e9,
+        mantle3 = TransientViscousMantle(shearmodulus = 67e9,
             relaxation_strength = (0.4, 0.6, 0.3), kelvin_time = (1.0, 10.0, 100.0))
         sim_cpu = build_gpu_creep_sim(mantle3, CPU())
         run!(sim_cpu)
